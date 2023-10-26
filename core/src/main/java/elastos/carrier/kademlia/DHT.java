@@ -325,10 +325,6 @@ public class DHT {
 		});
 	}
 
-	public void bootstrap(NodeInfo bootstrapNode) {
-		bootstrap(Arrays.asList(bootstrapNode));
-	}
-
 	public void bootstrap(Collection<NodeInfo> bootstrapNodes) {
 		int added = 0;
 
