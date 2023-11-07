@@ -64,6 +64,7 @@ public class ProxySession implements AutoCloseable {
 	private Id clientNodeId;
 	private PublicKey clientPk;
 	private String domain;
+	private int maxConnections;
 
 	private KeyPair keyPair;
 
@@ -98,7 +99,8 @@ public class ProxySession implements AutoCloseable {
 	 * @param nonce the encryption nonce for the new session
 	 * @throws CryptoException
 	 */
-	public ProxySession(ProxyServer server, Id clientNodeId, PublicKey clientPk, String domain) throws CryptoException {
+	public ProxySession(ProxyServer server, Id clientNodeId, PublicKey clientPk,
+			int maxConnections, String domain) throws CryptoException {
 		this.name = clientNodeId.toString();
 
 		this.server = server;
@@ -106,6 +108,8 @@ public class ProxySession implements AutoCloseable {
 		this.clientNodeId = clientNodeId;
 		this.clientPk = clientPk;
 		this.domain = domain == null || domain.isEmpty() ? null : domain;
+
+		this.maxConnections = maxConnections;
 
 		this.keyPair = CryptoBox.KeyPair.random();
 
@@ -143,6 +147,10 @@ public class ProxySession implements AutoCloseable {
 
 	public int getPort() {
 		return port;
+	}
+
+	public boolean reachLimit() {
+		return this.connections.size() >= maxConnections;
 	}
 
 	private Vertx getVertx() {
@@ -228,7 +236,7 @@ public class ProxySession implements AutoCloseable {
 	}
 
 	private void establish2(ProxyConnection connection, boolean domainEnabled, Handler<AsyncResult<ProxySession>> startHandler) {
-		connection.sendAuthAck(clientNodeId, keyPair.publicKey(), port, domainEnabled, ar -> {
+		connection.sendAuthAck(clientNodeId, keyPair.publicKey(), port, maxConnections, domainEnabled, ar -> {
 			if (ar.succeeded()) {
 				log.info("Session {} server started.", getName());
 

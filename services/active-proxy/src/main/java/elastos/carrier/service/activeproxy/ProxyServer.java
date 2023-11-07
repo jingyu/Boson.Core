@@ -45,6 +45,8 @@ import elastos.carrier.CarrierException;
 import elastos.carrier.Id;
 import elastos.carrier.Node;
 import elastos.carrier.PeerInfo;
+import elastos.carrier.access.AccessManager;
+import elastos.carrier.access.Permission;
 import elastos.carrier.crypto.CryptoBox;
 import elastos.carrier.crypto.CryptoException;
 import elastos.carrier.service.CarrierServiceException;
@@ -59,6 +61,7 @@ public class ProxyServer extends AbstractVerticle {
 	private Node node;
 
 	private Configuration config;
+	private AccessManager accessManager;
 
 	private NetServer server;
 
@@ -83,6 +86,7 @@ public class ProxyServer extends AbstractVerticle {
 		this.node = context.getNode();
 		this.sessions = new ConcurrentHashMap<>();
 		this.connections = new ConcurrentHashMap<>();
+		this.accessManager = context.getAccessManager();
 
 		try {
 			this.config = new Configuration(context.getConfiguration());
@@ -279,6 +283,13 @@ public class ProxyServer extends AbstractVerticle {
 	void authenticate(ProxyConnection connection, Id nodeId, CryptoBox.PublicKey clientPk, String domain) {
 		log.debug("Authenticating connection {} from {}...", connection.getName(), connection.upstreamAddress());
 
+		if (!accessManager.allow(nodeId, ActiveProxy.ID)) {
+			log.info("Reject connection {} from {} - denied by the access manager.",
+					connection.getName(), connection.upstreamAddress());
+			connection.close();
+			return;
+		}
+
 		if (sessions.containsKey(nodeId)) {
 			log.error("Authenticate connection {} from {} failed - session {} already exists.",
 					connection.getName(), connection.upstreamAddress(), nodeId);
@@ -286,9 +297,28 @@ public class ProxyServer extends AbstractVerticle {
 			return;
 		}
 
+		int maxConnections = config.getConnections();
+		Permission perm = context.getAccessManager().getPermission(nodeId, ActiveProxy.ID);
+		if (perm != null) {
+			maxConnections = (int)perm.getProperties().getOrDefault("connections", maxConnections);
+
+			if (domain != null) {
+				boolean domainEnabled = (boolean)perm.getProperties().getOrDefault("domain", true);
+				if (!domainEnabled) {
+					log.warn("Authenticate connection {} from {} - ignore the domain due disabled by the access manager.",
+							connection.getName(), connection.upstreamAddress());
+
+					domain = null;
+				}
+			}
+		}
+
+		if (maxConnections > config.getMaxConnections())
+			maxConnections = config.getMaxConnections();
+
 		ProxySession session;
 		try {
-			session = new ProxySession(this, nodeId, clientPk, domain);
+			session = new ProxySession(this, nodeId, clientPk, maxConnections, domain);
 		} catch (CryptoException e) {
 			log.error("Authenticate connection {} from {} failed - session id {} is invalid.",
 					connection.getName(), connection.upstreamAddress(), nodeId);
@@ -329,6 +359,13 @@ public class ProxyServer extends AbstractVerticle {
 		} else {
 			if (!session.getClientPublicKey().equals(clientPk)) {
 				log.error("Attach connection {} from {} failed - invalid public key.",
+						connection.getName(), connection.upstreamAddress(), clientNodeId);
+				connection.close();
+				return;
+			}
+
+			if (session.reachLimit()) {
+				log.error("Attach connection {} from {} failed - reach the limit of connections.",
 						connection.getName(), connection.upstreamAddress(), clientNodeId);
 				connection.close();
 				return;

@@ -25,11 +25,21 @@ package elastos.carrier.access;
 import elastos.carrier.Id;
 
 public interface AccessManager {
-	default public boolean allow(Id subjectNode, String targetServiceId) {
-		return true;
+	public static AccessManager getDefault() {
+		return new AccessManager() {
+			@Override
+			public boolean allow(Id subjectNode, String targetServiceId) {
+				return true;
+			}
+
+			@Override
+			public Permission getPermission(Id subjectNode, String targetServiceId) {
+				return null;
+			}
+		};
 	}
 
-	default public Permission getPermission(Id subjectNode, String targetServiceId) {
-		return null;
-	}
+	public boolean allow(Id subjectNode, String targetServiceId);
+
+	public Permission getPermission(Id subjectNode, String targetServiceId);
 }

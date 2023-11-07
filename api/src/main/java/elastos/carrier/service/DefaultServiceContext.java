@@ -5,14 +5,17 @@ import java.util.Map;
 
 import elastos.carrier.Id;
 import elastos.carrier.Node;
+import elastos.carrier.access.AccessManager;
 
 public class DefaultServiceContext implements ServiceContext {
 	private Node node;
+	private AccessManager accessManager;
 	private Map<String, Object> configuration;
 	private Map<String, Object> properties;
 
-	public DefaultServiceContext(Node node, Map<String, Object> configuration) {
+	public DefaultServiceContext(Node node, AccessManager accessManager, Map<String, Object> configuration) {
 		this.node = node;
+		this.accessManager = accessManager != null ? accessManager : AccessManager.getDefault();
 		this.configuration = configuration;
 		this.properties = new HashMap<>();
 	}
@@ -25,6 +28,11 @@ public class DefaultServiceContext implements ServiceContext {
 	@Override
 	public Id getNodeId() {
 		return node.getId();
+	}
+
+	@Override
+	public AccessManager getAccessManager() {
+		return accessManager;
 	}
 
 	@Override

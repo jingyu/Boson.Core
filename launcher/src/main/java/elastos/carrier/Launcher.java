@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import elastos.carrier.access.AccessManager;
 import elastos.carrier.kademlia.Node;
 import elastos.carrier.service.CarrierService;
 import elastos.carrier.service.CarrierServiceException;
@@ -43,12 +44,17 @@ public class Launcher {
 	private static Object shutdown = new Object();
 
 	private static Node node;
+	private static AccessManager accessManager;
 	private static List<CarrierService> services = new ArrayList<>();
 
 	private static void initCarrierNode() {
 		try {
 			shutdown = new Object();
 			node = new Node(config);
+
+			// TODO: initialize the user defined access manager
+			accessManager = AccessManager.getDefault();
+
 			node.addStatusListener(new NodeStatusListener() {
 				@Override
 				public void stopped() {
@@ -84,7 +90,7 @@ public class Launcher {
 			}
 
 			CarrierService svc = (CarrierService)o;
-			ServiceContext ctx = new DefaultServiceContext(node, configuration);
+			ServiceContext ctx = new DefaultServiceContext(node, accessManager, configuration);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), className);
 

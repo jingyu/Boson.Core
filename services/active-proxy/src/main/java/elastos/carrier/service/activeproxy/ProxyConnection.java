@@ -192,21 +192,24 @@ public class ProxyConnection implements AutoCloseable {
 	 *   - port[uint16]
 	 *   - domainEnabled[uint8]
 	 */
-	void sendAuthAck(Id clientNodeId, PublicKey sessionPk, int port, boolean domainEnabled,
-			Handler<AsyncResult<Void>> handler) {
+	void sendAuthAck(Id clientNodeId, PublicKey sessionPk, int port, int maxConnections,
+			boolean domainEnabled, Handler<AsyncResult<Void>> handler) {
 		log.trace("Connection {} sending AUTH ACK to {}@{}",
 				getName(), clientNodeId, upstreamSocket.remoteAddress());
 
 
 		// Vert.x Buffer or ByteBuffer both are too heavy,
 		// so we just use the plain byte array
-		byte[] payload = new byte[PublicKey.BYTES + Short.BYTES + Byte.BYTES];
+		byte[] payload = new byte[PublicKey.BYTES + Short.BYTES + Short.BYTES + Byte.BYTES];
 
 		int pos = 0;
 		System.arraycopy(sessionPk.bytes(), 0, payload, pos, PublicKey.BYTES);
 
 		pos += PublicKey.BYTES;
 		shortToNetwork(port, payload, pos);
+
+		pos += Short.BYTES;
+		shortToNetwork(maxConnections, payload, pos);
 
 		pos += Short.BYTES;
 		payload[pos] = (byte)(domainEnabled ? 1 : 0);

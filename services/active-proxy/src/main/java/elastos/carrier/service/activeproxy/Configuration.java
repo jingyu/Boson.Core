@@ -34,11 +34,17 @@ import elastos.carrier.utils.Hex;
 public class Configuration {
 	private static final int DEFAULT_PORT = 8090;
 	private static final String DEFAULT_PORT_MAPPING_RANGE = "32768-65535";
-	public static final int	DEFAULT_HELPER_UPDATE_INTERVAL = 8; // minutes
+	private static final int DEFAULT_HELPER_UPDATE_INTERVAL = 8; // minutes
+
+	private static final int CONNECTIONS_PER_SESSION = 8;
+	private static final int MAX_CONNECTIONS_PER_SESSION = 64;
 
 	private String host;
 	private int port;
 	private String portMappingRange;
+
+	private int connections;
+	private int maxConnections;
 
 	private String helperServer;
 	private int helperPort;
@@ -52,6 +58,9 @@ public class Configuration {
 		host = (String)config.getOrDefault("host", NetServerOptions.DEFAULT_HOST);
 		port = (int)config.getOrDefault("port", DEFAULT_PORT);
 		portMappingRange = (String)config.getOrDefault("portMappingRange", DEFAULT_PORT_MAPPING_RANGE);
+
+		connections = (int)config.getOrDefault("connections", CONNECTIONS_PER_SESSION);
+		maxConnections = (int)config.getOrDefault("maxConnections", MAX_CONNECTIONS_PER_SESSION);
 
 		String helper = (String)config.get("helper");
 		if (helper != null) {
@@ -94,6 +103,14 @@ public class Configuration {
 
 	public String getPortMappingRange() {
 		return portMappingRange;
+	}
+
+	public int getConnections() {
+		return connections;
+	}
+
+	public int getMaxConnections() {
+		return maxConnections;
 	}
 
 	public boolean isHelperEnabled() {

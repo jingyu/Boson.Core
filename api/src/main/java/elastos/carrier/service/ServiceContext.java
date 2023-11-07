@@ -26,11 +26,14 @@ import java.util.Map;
 
 import elastos.carrier.Id;
 import elastos.carrier.Node;
+import elastos.carrier.access.AccessManager;
 
 public interface ServiceContext {
 	public Node getNode();
 
 	public Id getNodeId();
+
+	public AccessManager getAccessManager();
 
 	public Map<String, Object> getConfiguration();
 

@@ -109,7 +109,7 @@ public class ActiveProxyTest {
 				"peerPrivateKey", proxyServerPeerKey
 			);
 
-		ServiceContext ctx = new DefaultServiceContext(superNode, proxyConfig.getMap());
+		ServiceContext ctx = new DefaultServiceContext(superNode, null, proxyConfig.getMap());
 		proxyServer = new ActiveProxy();
 		proxyServer.init(ctx);
 		proxyServer.start().get();
