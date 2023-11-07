@@ -47,6 +47,7 @@
     <module>dependencies</module>    
     <module>api</module>
     <module>core</module>
+    <module>accesscontrol</module>
     <module>services</module>
     <module>shell</module>
     <module>launcher</module>

@@ -20,39 +20,27 @@
  * SOFTWARE.
  */
 
-package elastos.carrier.access;
+package elastos.carrier.access.impl;
 
-import java.util.Map;
+public enum Subscription {
+	Blocked, Free, Professional, Premium;
 
-public interface Permission {
-	public enum Access {
-		Allow, Deny;
+	public static Subscription of(String value) {
+		switch (value.toLowerCase()) {
+		case "blocked":
+			return Blocked;
 
-		public static Access of(String value) {
-			switch (value.toLowerCase()) {
-			case "allow":
-				return Allow;
+		case "free":
+			return Free;
 
-			case "deny":
-				return Deny;
+		case "professional":
+			return Professional;
 
-			default:
-				throw new IllegalArgumentException("Unknown: " + value);
-			}
+		case "premium":
+			return Premium;
+
+		default:
+			throw new IllegalArgumentException("Unknown subscription: " + value);
 		}
 	}
-
-	public String getTargetServiceId();
-
-	public Access getAccess();
-
-	default public boolean isAllow() {
-		return getAccess() == Access.Allow;
-	}
-
-	default public boolean isDeny() {
-		return getAccess() == Access.Deny;
-	}
-
-	public Map<String, Object> getProperties();
 }
