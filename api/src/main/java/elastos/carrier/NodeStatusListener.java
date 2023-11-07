@@ -26,7 +26,13 @@ public interface NodeStatusListener {
 	public default void statusChanged(NodeStatus newStatus, NodeStatus oldStatus) {
 	}
 
+	public default void starting() {
+	}
+
 	public default void started() {
+	}
+
+	public default void stopping() {
 	}
 
 	public default void stopped() {

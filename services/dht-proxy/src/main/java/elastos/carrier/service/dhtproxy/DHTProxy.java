@@ -33,6 +33,7 @@ import elastos.carrier.service.CarrierServiceException;
 import elastos.carrier.service.ServiceContext;
 
 public class DHTProxy implements CarrierService {
+	static final String ID = "elastos.carrier.dhtproxy";
 	private static final String NAME = "DHT Proxy";
 	private static final int DEFAULT_PORT = 8088;
 
@@ -40,6 +41,11 @@ public class DHTProxy implements CarrierService {
 	private ProxyServer server;
 	private Vertx vertx;
 	private String deploymentId;
+
+	@Override
+	public String getId() {
+		return ID;
+	}
 
 	@Override
 	public String getName() {

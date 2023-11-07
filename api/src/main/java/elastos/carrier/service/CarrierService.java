@@ -25,6 +25,8 @@ package elastos.carrier.service;
 import java.util.concurrent.CompletableFuture;
 
 public interface CarrierService {
+	public String getId();
+
 	public String getName();
 
 	public boolean isRunning();

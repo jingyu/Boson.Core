@@ -32,6 +32,7 @@ import elastos.carrier.service.CarrierServiceException;
 import elastos.carrier.service.ServiceContext;
 
 public class ActiveProxy implements CarrierService {
+	static final String ID = "elastos.carrier.activeproxy";
 	static final String NAME = "ActiveProxy";
 
 	@SuppressWarnings("unused")
@@ -39,6 +40,11 @@ public class ActiveProxy implements CarrierService {
 	private ProxyServer server;
 	private Vertx vertx;
 	private String deploymentId;
+
+	@Override
+	public String getId() {
+		return ID;
+	}
 
 	@Override
 	public String getName() {

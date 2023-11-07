@@ -28,6 +28,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 
 public class ThreadLocals {
@@ -46,6 +47,10 @@ public class ThreadLocals {
 		return factory;
 	});
 
+	private static ThreadLocal<ObjectMapper> localObjectMapper = ThreadLocal.withInitial(() -> {
+		return new ObjectMapper();
+	});
+
 	public static ThreadLocalRandom random() {
 		return ThreadLocalRandom.current();
 	}
@@ -56,5 +61,9 @@ public class ThreadLocals {
 
 	public static CBORFactory CBORFactory() {
 		return localCBORFactory.get();
+	}
+
+	public static ObjectMapper ObjectMapper() {
+		return localObjectMapper.get();
 	}
 }

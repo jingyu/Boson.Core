@@ -286,8 +286,16 @@ public class Node implements elastos.carrier.Node {
 					l.statusChanged(newStatus, old);
 
 					switch (newStatus) {
+					case Starting:
+						l.starting();
+						break;
+
 					case Running:
 						l.started();
+						break;
+
+					case Stopping:
+						l.stopping();
 						break;
 
 					case Stopped:
@@ -382,7 +390,7 @@ public class Node implements elastos.carrier.Node {
 		if (status != NodeStatus.Stopped)
 			return;
 
-		setStatus(NodeStatus.Stopped, NodeStatus.Initializing);
+		setStatus(NodeStatus.Stopped, NodeStatus.Starting);
 		log.info("Carrier node {} is starting...", id);
 
 		try {
@@ -423,10 +431,10 @@ public class Node implements elastos.carrier.Node {
 				numDHTs++;
 			}
 
-			setStatus(NodeStatus.Initializing, NodeStatus.Running);
+			setStatus(NodeStatus.Starting, NodeStatus.Running);
 			log.info("Carrier Kademlia node {} started", id);
 		} catch (KadException e) {
-			setStatus(NodeStatus.Initializing, NodeStatus.Stopped);
+			setStatus(NodeStatus.Starting, NodeStatus.Stopped);
 			throw e;
 		}
 
@@ -437,8 +445,10 @@ public class Node implements elastos.carrier.Node {
 
 	@Override
 	public synchronized void stop() {
-		if (status == NodeStatus.Stopped)
+		if (status == NodeStatus.Stopping || status == NodeStatus.Stopped)
 			return;
+
+		setStatus(NodeStatus.Running, NodeStatus.Stopping);
 
 		log.info("Carrier Kademlia node {} is stopping...", id);
 
@@ -469,7 +479,8 @@ public class Node implements elastos.carrier.Node {
 			dht6 = null;
 		}
 
-		networkEngine = null;
+		scheduler.shutdown();
+
 		try {
 			storage.close();
 		} catch (Exception e) {
@@ -477,8 +488,9 @@ public class Node implements elastos.carrier.Node {
 		}
 
 		storage = null;
+		networkEngine = null;
 
-		setStatus(NodeStatus.Running, NodeStatus.Stopped);
+		setStatus(NodeStatus.Stopping, NodeStatus.Stopped);
 		log.info("Carrier Kademlia node {} stopped", id);
 	}
 
