@@ -114,7 +114,7 @@ To officially launch the Carrier Service and improve the health of the Carrier n
     // carrier-node4
     {
       "id": "4A6UDpARbKBJZmW5s6CmGDgeNmTxWFoGUi2Z5C4z7E41",
-      "address": "107.191.62.45",
+      "address": "66.42.74.13",
       "port": 39001
     }
   ] 
