@@ -22,6 +22,7 @@
 
 package elastos.carrier;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
@@ -31,7 +32,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import elastos.carrier.access.AccessManager;
+import elastos.carrier.access.impl.AccessManager;
 import elastos.carrier.kademlia.Node;
 import elastos.carrier.service.CarrierService;
 import elastos.carrier.service.CarrierServiceException;
@@ -53,7 +54,9 @@ public class Launcher {
 			node = new Node(config);
 
 			// TODO: initialize the user defined access manager
-			accessManager = AccessManager.getDefault();
+			accessManager = new elastos.carrier.access.impl.AccessManager(
+					new File(config.storagePath().getAbsoluteFile(), "accesscontrol"));
+			accessManager.init(node);
 
 			node.addStatusListener(new NodeStatusListener() {
 				@Override

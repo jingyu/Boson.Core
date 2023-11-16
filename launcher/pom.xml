@@ -24,6 +24,12 @@
       <version>${project.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>elastos.carrier</groupId>
+      <artifactId>carrier-access-control</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Provided dependencies -->
     <!-- The following provided dependencies ONLY for the debug purpose in development time -->
     <dependency>
@@ -173,12 +179,23 @@
                   </mapper>
                 </data>
                 <data>
+                  <src>${basedir}/src/deb/accesscontrol</src>
+                  <type>directory</type>
+                  <mapper>
+                    <type>perm</type>
+                    <prefix>var/lib/carrier/accesscontrol</prefix>
+                    <user>root</user>
+                    <group>carrier</group>
+                    <filemode>644</filemode>
+                  </mapper>
+                </data>
+                <data>
                   <type>template</type>
                   <paths>
-                    <path>etc/carrier</path>
-                    <path>var/lib/carrier</path>
-                    <path>var/log/carrier</path>
-                    <path>var/run/carrier</path>
+                    <path>/etc/carrier</path>
+                    <path>/var/lib/carrier</path>
+                    <path>/var/log/carrier</path>
+                    <path>/var/run/carrier</path>
                   </paths>
                   <mapper>
                     <type>perm</type>

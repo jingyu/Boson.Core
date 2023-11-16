@@ -1,0 +1,25 @@
+{
+	"subscription": "Premium",
+
+	"permissions": [
+		{
+			"service": "elastos.carrier.activeproxy",
+			"access": "Allow",
+			"properties": {
+				"connections": 48,
+				"domain": true,
+				"trafficPerDay": 5120
+			}
+		}, 
+		{
+			"service": "elastos.carrier.dhtproxy",
+			"access": "Allow",
+			"properties": {
+				"ratePerMinute": 8,
+				"ratePerHour": 120,
+				"ratePerDay": 2048,
+				"lookup": "optimistic"
+			}
+		}
+	]
+}

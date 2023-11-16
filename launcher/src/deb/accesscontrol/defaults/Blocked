@@ -1,0 +1,14 @@
+{
+	"subscription": "Blocked",
+	
+	"permissions": [
+		{
+			"service": "elastos.carrier.activeproxy",
+			"access": "Deny"
+		}, 
+		{
+			"service": "elastos.carrier.dhtproxy",
+			"access": "Deny"
+		}
+	]
+}
