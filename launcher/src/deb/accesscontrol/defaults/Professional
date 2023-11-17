@@ -6,8 +6,8 @@
 			"service": "elastos.carrier.activeproxy",
 			"access": "Allow",
 			"properties": {
-				"connections": 16,
 				"domain": true,
+				"connections": 16,
 				"trafficPerDay": 1024
 			}
 		}, 
