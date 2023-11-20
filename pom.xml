@@ -49,8 +49,7 @@
     <module>core</module>
     <module>accesscontrol</module>
     <module>services</module>
-    <module>shell</module>
-    <module>launcher</module>
+    <module>cmds</module>
   </modules>
 
   <build>
