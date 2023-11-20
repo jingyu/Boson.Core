@@ -102,6 +102,7 @@
                   <includes>
                     <include>carrier-launcher</include>
                     <include>carrier-shell</include>
+                    <include>carrier-am</include>
                   </includes>
                 </resource>
               </resources>
@@ -155,7 +156,7 @@
                     <filemode>644</filemode>
                   </mapper>
                 </data>
-                 <data>
+                <data>
                   <src>${basedir}/src/deb/scripts/carrier-shell</src>
                   <type>file</type>
                   <mapper>
@@ -171,6 +172,23 @@
                   <symlink>true</symlink>
                   <linkName>/usr/bin/carrier-shell</linkName>
                   <linkTarget>/usr/lib/carrier/bin/carrier-shell</linkTarget>
+                </data>
+                <data>
+                  <src>${basedir}/src/deb/scripts/carrier-am</src>
+                  <type>file</type>
+                  <mapper>
+                    <type>perm</type>
+                    <prefix>/usr/lib/carrier/bin</prefix>
+                    <user>root</user>
+                    <group>root</group>
+                    <filemode>755</filemode>
+                  </mapper>
+                </data>
+                <data>
+                  <type>link</type>
+                  <symlink>true</symlink>
+                  <linkName>/usr/bin/carrier-am</linkName>
+                  <linkTarget>/usr/lib/carrier/bin/carrier-am</linkTarget>
                 </data>
                 <data>
                   <src>${basedir}/src/deb/scripts/carrier</src>

@@ -303,7 +303,7 @@ public class AccessManager implements elastos.carrier.access.AccessManager {
 	public AccessControlList get(Id subjectNode) throws IOException {
 		File aclFile = acls.resolve(subjectNode.toString()).toFile();
 		if (!aclFile.exists())
-			throw new IOException("ACL for " + subjectNode + " not exists");
+			return null;
 
 		AccessControlList acl = loadACL(aclFile);
 		acl.seal();
