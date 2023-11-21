@@ -1,7 +1,5 @@
 #!/bin/sh
 
-PRGDIR=`dirname $0`
-
-[ -f "$CARRIER_HOME"/bin/carrier-launcher ] || CARRIER_HOME=`cd "$PRGDIR/.." ; pwd`
+CARRIER_HOME=/usr/lib/carrier
 
 java -cp "$CARRIER_HOME/lib/*" $JAVA_OPTS elastos.carrier.am.Main $*
