@@ -35,7 +35,6 @@ import java.util.Random;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.Id;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
 

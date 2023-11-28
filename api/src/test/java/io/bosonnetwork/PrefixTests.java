@@ -33,9 +33,6 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.Id;
-import io.bosonnetwork.Prefix;
-
 public class PrefixTests {
 	@Test
 	public void testIsPrefixOf() {

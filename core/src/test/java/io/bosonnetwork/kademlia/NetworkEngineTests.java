@@ -51,11 +51,10 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-
-import io.bosonnetwork.kademlia.NetworkEngine;
-import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 @TestMethodOrder(OrderAnnotation.class)

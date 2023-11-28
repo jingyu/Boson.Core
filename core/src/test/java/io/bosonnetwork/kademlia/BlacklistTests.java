@@ -39,7 +39,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.kademlia.Blacklist;
 import io.bosonnetwork.kademlia.Blacklist.ObservationData;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")

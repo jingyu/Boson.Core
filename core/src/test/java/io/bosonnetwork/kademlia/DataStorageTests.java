@@ -55,11 +55,9 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.DataStorage;
-import io.bosonnetwork.kademlia.SQLiteStorage;
 import io.bosonnetwork.kademlia.exceptions.CasFail;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class DataStorageTests {
 	private static ScheduledExecutorService scheduler;

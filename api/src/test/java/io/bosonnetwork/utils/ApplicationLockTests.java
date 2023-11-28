@@ -9,8 +9,6 @@ import java.io.IOException;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.ApplicationLock;
-
 public class ApplicationLockTests {
 	private static final String tmpDir = System.getProperty("java.io.tmpdir");
 

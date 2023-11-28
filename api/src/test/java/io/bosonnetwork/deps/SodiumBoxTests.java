@@ -34,7 +34,6 @@ import org.apache.tuweni.crypto.sodium.Signature;
 import org.apache.tuweni.crypto.sodium.Sodium;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.utils.Hex;

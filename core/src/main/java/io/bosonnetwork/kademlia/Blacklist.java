@@ -43,7 +43,6 @@ public class Blacklist {
 	private Cache<Object, ObservationData> observations;
 	private Cache<Object, Object> banned;
 
-	@SuppressWarnings("unused")
 	private long observationPeriod;
 	private long observationHits;
 	@SuppressWarnings("unused")

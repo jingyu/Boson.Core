@@ -36,12 +36,9 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.messages.FindPeerRequest;
-import io.bosonnetwork.kademlia.messages.FindPeerResponse;
-import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class FindPeerTests extends MessageTests {
 	@Test

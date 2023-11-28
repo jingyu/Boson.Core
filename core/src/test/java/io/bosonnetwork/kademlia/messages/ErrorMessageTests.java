@@ -31,11 +31,9 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.messages.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class ErrorMessageTests extends MessageTests {
 

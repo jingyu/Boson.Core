@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.tasks.ClosestCandidates;
 
 public class ClosestCandidatesTests {
 	@Test

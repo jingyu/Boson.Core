@@ -35,12 +35,9 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.messages.FindNodeRequest;
-import io.bosonnetwork.kademlia.messages.FindNodeResponse;
-import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class FindNodeTests extends MessageTests {
 	@Test

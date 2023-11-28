@@ -33,12 +33,9 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.messages.Message;
-import io.bosonnetwork.kademlia.messages.StoreValueRequest;
-import io.bosonnetwork.kademlia.messages.StoreValueResponse;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class StoreValueTests extends MessageTests {
 	@Test

@@ -56,7 +56,6 @@ public class ProxyServer extends AbstractVerticle {
 	private static final int PERIODIC_CHECK_INTERVAL = 60000; // 1 minute
 	private static final int RE_ANNOUNCE_INTERVAL = 60 * 60 * 1000;
 
-	@SuppressWarnings("unused")
 	private ServiceContext context;
 	private Node node;
 

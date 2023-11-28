@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.AddressUtils.NetMask;
 
 public class AddressUtilsTests {

@@ -43,12 +43,9 @@ import io.bosonnetwork.Configuration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.utils.AddressUtils;
-import io.bosonnetwork.kademlia.Node;
-import io.bosonnetwork.kademlia.RPCCall;
-import io.bosonnetwork.kademlia.RPCCallListener;
 import io.bosonnetwork.kademlia.messages.FindNodeRequest;
 import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.utils.AddressUtils;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 public class SybilTests {

@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.ThreadLocals;
 

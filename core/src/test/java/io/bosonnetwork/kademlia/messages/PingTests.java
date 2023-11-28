@@ -29,12 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.kademlia.messages.Message;
-import io.bosonnetwork.kademlia.messages.PingRequest;
-import io.bosonnetwork.kademlia.messages.PingResponse;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class PingTests extends MessageTests {
 	@Test

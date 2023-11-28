@@ -37,6 +37,7 @@ public class DHTProxy implements BosonService {
 	private static final String NAME = "DHT Proxy";
 	private static final int DEFAULT_PORT = 8088;
 
+	@SuppressWarnings("unused")
 	private ServiceContext context;
 	private ProxyServer server;
 	private Vertx vertx;

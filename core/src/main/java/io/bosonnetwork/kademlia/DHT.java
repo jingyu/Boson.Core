@@ -27,7 +27,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -58,8 +57,6 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.utils.AddressUtils;
-
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.messages.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.messages.AnnouncePeerResponse;
@@ -86,6 +83,7 @@ import io.bosonnetwork.kademlia.tasks.TaskListener;
 import io.bosonnetwork.kademlia.tasks.TaskManager;
 import io.bosonnetwork.kademlia.tasks.ValueAnnounce;
 import io.bosonnetwork.kademlia.tasks.ValueLookup;
+import io.bosonnetwork.utils.AddressUtils;
 
 public class DHT {
 	private Network type;

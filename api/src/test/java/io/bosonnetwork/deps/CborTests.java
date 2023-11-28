@@ -123,7 +123,6 @@ public class CborTests {
 
 		Pojo pojo = new Pojo(1024, (byte)8, 'c', "Hello World!", true, IA, CA, BA);
 
-		@SuppressWarnings("unused")
 		String json = null;
 		long start = System.currentTimeMillis();
 
@@ -160,7 +159,6 @@ public class CborTests {
 
 		Pojo pojo = new Pojo(1024, (byte)8, 'c', "Hello World!", true, IA, CA, BA);
 
-		@SuppressWarnings("unused")
 		byte[] cbor = null;
 		long start = System.currentTimeMillis();
 
@@ -222,6 +220,7 @@ public class CborTests {
 		long end = System.currentTimeMillis();
 		System.out.format("CBOR stream serialize: %d ms, size %d bytes\n", end - start, cbor.length);
 
+		@SuppressWarnings("unused")
 		Pojo pojo2 = new CBORMapper().readValue(cbor, Pojo.class);
 	}
 

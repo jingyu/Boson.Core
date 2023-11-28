@@ -30,7 +30,6 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.kademlia.TimeoutSampler;
 import io.bosonnetwork.kademlia.TimeoutSampler.Snapshot;
 
 public class TimeoutSamplerTest {

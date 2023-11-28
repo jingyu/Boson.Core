@@ -25,9 +25,9 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.bosonnetwork.DefaultConfiguration;
+import io.bosonnetwork.kademlia.Node;
 import io.bosonnetwork.service.DefaultServiceContext;
 import io.bosonnetwork.service.ServiceContext;
-import io.bosonnetwork.service.activeproxy.ActiveProxy;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Hex;
 import io.vertx.core.Vertx;
@@ -42,7 +42,6 @@ import io.vertx.junit5.Checkpoint;
 import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
-import io.bosonnetwork.kademlia.Node;
 
 @ExtendWith(VertxExtension.class)
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
@@ -105,6 +104,8 @@ public class ActiveProxyTest {
 
 		JsonObject proxyConfig = JsonObject.of(
 				"port", activeProxyPort,
+				"connections", maxConnections,
+				"maxConnections", maxConnections,
 				"portMappingRange", "20000-21000",
 				"peerPrivateKey", proxyServerPeerKey
 			);

@@ -34,7 +34,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.access.impl.Permission;
 import io.bosonnetwork.utils.ThreadLocals;
 
 public class PermissionTests {

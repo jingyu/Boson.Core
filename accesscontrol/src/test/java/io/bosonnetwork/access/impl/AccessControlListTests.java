@@ -39,9 +39,6 @@ import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.google.common.collect.Maps;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.access.impl.AccessControlList;
-import io.bosonnetwork.access.impl.Permission;
-import io.bosonnetwork.access.impl.Subscription;
 import io.bosonnetwork.utils.ThreadLocals;
 
 public class AccessControlListTests {

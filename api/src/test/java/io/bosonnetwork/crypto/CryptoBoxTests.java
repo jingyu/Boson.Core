@@ -35,9 +35,6 @@ import java.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.crypto.CryptoException;
-import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.ThreadLocals;
 

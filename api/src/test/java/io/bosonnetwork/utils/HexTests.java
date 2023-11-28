@@ -31,8 +31,6 @@ import java.util.Arrays;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.Hex;
-
 public class HexTests {
 	private static byte[] BIN;
 	private static String TEXT;
