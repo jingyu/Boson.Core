@@ -284,15 +284,15 @@ public class ProxyServer extends AbstractVerticle {
 		log.debug("Authenticating connection {} from {}...", connection.getName(), connection.upstreamAddress());
 
 		if (!accessManager.allow(nodeId, ActiveProxy.ID)) {
-			log.info("Reject connection {} from {} - denied by the access manager.",
-					connection.getName(), connection.upstreamAddress());
+			log.info("Reject connection {}/{} from {} - denied by the access manager.",
+					nodeId, connection.getName(), connection.upstreamAddress());
 			connection.close();
 			return;
 		}
 
 		if (sessions.containsKey(nodeId)) {
-			log.error("Authenticate connection {} from {} failed - session {} already exists.",
-					connection.getName(), connection.upstreamAddress(), nodeId);
+			log.error("Authenticate connection {}/{} from {} failed - session {} already exists.",
+					nodeId, connection.getName(), connection.upstreamAddress(), nodeId);
 			connection.close();
 			return;
 		}
@@ -305,8 +305,8 @@ public class ProxyServer extends AbstractVerticle {
 			if (domain != null) {
 				boolean domainEnabled = (boolean)perm.getProperties().getOrDefault("domain", true);
 				if (!domainEnabled) {
-					log.warn("Authenticate connection {} from {} - ignore the domain due disabled by the access manager.",
-							connection.getName(), connection.upstreamAddress());
+					log.warn("Authenticate connection {}/{} from {} - ignore the domain due disabled by the access manager.",
+							nodeId, connection.getName(), connection.upstreamAddress());
 
 					domain = null;
 				}
@@ -320,13 +320,14 @@ public class ProxyServer extends AbstractVerticle {
 		try {
 			session = new ProxySession(this, nodeId, clientPk, maxConnections, domain);
 		} catch (CryptoException e) {
-			log.error("Authenticate connection {} from {} failed - session id {} is invalid.",
-					connection.getName(), connection.upstreamAddress(), nodeId);
+			log.error("Authenticate connection {}/{} from {} failed - session id {} is invalid.",
+					nodeId, connection.getName(), connection.upstreamAddress(), nodeId);
 			connection.close();
 			return;
 		}
 
-		log.debug("Authenticating connection {} from {} success.", connection.getName(), connection.upstreamAddress());
+		log.debug("Authenticating connection {}/{} from {} success.",
+				nodeId, connection.getName(), connection.upstreamAddress());
 
 		session.stopHandler(asyncResult -> {
 			ProxySession s = sessions.remove(nodeId);
