@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2022 - 2023 trinity-tech.io
+ * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
