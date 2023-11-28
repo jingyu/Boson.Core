@@ -6,15 +6,15 @@
 
   <parent>
     <relativePath>../</relativePath>
-    <groupId>elastos.carrier</groupId>
-    <artifactId>carrier-parent</artifactId>
+    <groupId>io.bosonnetwork</groupId>
+    <artifactId>boson-parent</artifactId>
     <version>${revision}</version>
   </parent>
 
-  <artifactId>carrier-services</artifactId>
+  <artifactId>boson-services</artifactId>
   <packaging>pom</packaging>
 
-  <name>Carrier Services</name>
+  <name>Boson Services</name>
 
   <modules>
     <module>dht-proxy</module>

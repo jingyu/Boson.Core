@@ -6,21 +6,21 @@
 
   <parent>
     <relativePath>../</relativePath>
-    <groupId>elastos.carrier</groupId>
-    <artifactId>carrier-parent</artifactId>
+    <groupId>io.bosonnetwork</groupId>
+    <artifactId>boson-parent</artifactId>
     <version>${revision}</version>
   </parent>
 
-  <artifactId>carrier-api</artifactId>
+  <artifactId>boson-api</artifactId>
   <packaging>jar</packaging>
 
-  <name>Carrier API</name>
+  <name>Boson API</name>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>elastos.carrier</groupId>
-        <artifactId>carrier-dependencies</artifactId>
+        <groupId>io.bosonnetwork</groupId>
+        <artifactId>boson-dependencies</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>

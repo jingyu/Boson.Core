@@ -3,7 +3,7 @@
 
 	"permissions": [
 		{
-			"service": "elastos.carrier.activeproxy",
+			"service": "io.bosonnetwork.activeproxy",
 			"access": "Allow",
 			"properties": {
 				"domain": true,
@@ -12,7 +12,7 @@
 			}
 		}, 
 		{
-			"service": "elastos.carrier.dhtproxy",
+			"service": "io.bosonnetwork.dhtproxy",
 			"access": "Allow",
 			"properties": {
 				"ratePerMinute": 8,

@@ -4,26 +4,26 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>elastos.carrier</groupId>
-  <artifactId>carrier-parent</artifactId>
+  <groupId>io.bosonnetwork</groupId>
+  <artifactId>boson-parent</artifactId>
   <version>${revision}</version>
   <packaging>pom</packaging>
 
-  <name>Elastos Carrier</name>
-  <url>https://github.com/elastos/Elastos.Carrier.Java</url>
+  <name>Boson</name>
+  <url>https://github.com/trinity-tech-io/Boson.Java</url>
 
   <licenses>
     <license>
       <name>MIT License</name>
-      <url>https://github.com/elastos/Elastos.Carrier.Java/blob/master/LICENSE</url>
+      <url>https://github.com/trinity-tech-io/Boson.Java/blob/master/LICENSE</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
 
   <scm>
-    <connection>scm:git:git@github.com:elastos/Elastos.Carrier.Java.git</connection>
-    <developerConnection>scm:git:git@github.com:elastos/Elastos.Carrier.Java.git</developerConnection>
-    <url>git@github.com:elastos/Elastos.Carrier.Java.git</url>
+    <connection>scm:git:git@github.com:trinity-tech-io/Boson.Java.git</connection>
+    <developerConnection>scm:git:git@github.com:trinity-tech-io/Boson.Java.git</developerConnection>
+    <url>git@github.com:trinity-tech-io/Boson.Java.git</url>
   </scm>
 
   <properties>

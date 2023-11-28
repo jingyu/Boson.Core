@@ -6,21 +6,21 @@
 
   <parent>
     <relativePath>../</relativePath>
-    <groupId>elastos.carrier</groupId>
-    <artifactId>carrier-services</artifactId>
+    <groupId>io.bosonnetwork</groupId>
+    <artifactId>boson-services</artifactId>
     <version>${revision}</version>
   </parent>
 
-  <artifactId>carrier-active-proxy</artifactId>
+  <artifactId>boson-active-proxy</artifactId>
   <packaging>jar</packaging>
 
-  <name>Carrier Active Proxy</name>
+  <name>Boson Active Proxy</name>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>elastos.carrier</groupId>
-        <artifactId>carrier-dependencies</artifactId>
+        <groupId>io.bosonnetwork</groupId>
+        <artifactId>boson-dependencies</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
@@ -31,8 +31,8 @@
   <dependencies>
     <!-- Provided dependencies -->
     <dependency>
-      <groupId>elastos.carrier</groupId>
-      <artifactId>carrier-api</artifactId>
+      <groupId>io.bosonnetwork</groupId>
+      <artifactId>boson-api</artifactId>
       <version>${project.version}</version>
       <scope>provided</scope>
     </dependency>
@@ -82,8 +82,8 @@
 
     <!-- Test dependencies -->
     <dependency>
-      <groupId>elastos.carrier</groupId>
-      <artifactId>carrier-core</artifactId>
+      <groupId>io.bosonnetwork</groupId>
+      <artifactId>boson-core</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>

@@ -6,15 +6,15 @@
 
   <parent>
     <relativePath>../</relativePath>
-    <groupId>elastos.carrier</groupId>
-    <artifactId>carrier-parent</artifactId>
+    <groupId>io.bosonnetwork</groupId>
+    <artifactId>boson-parent</artifactId>
     <version>${revision}</version>
   </parent>
 
-  <artifactId>carrier-dependencies</artifactId>
+  <artifactId>boson-dependencies</artifactId>
   <packaging>pom</packaging>
 
-  <name>Carrier dependencies versions</name>
+  <name>Boson dependencies versions</name>
 
   <properties>
     <vertx.version>4.3.4</vertx.version>

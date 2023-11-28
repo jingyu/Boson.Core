@@ -3,11 +3,11 @@
 	
 	"permissions": [
 		{
-			"service": "elastos.carrier.activeproxy",
+			"service": "io.bosonnetwork.activeproxy",
 			"access": "Deny"
 		}, 
 		{
-			"service": "elastos.carrier.dhtproxy",
+			"service": "io.bosonnetwork.dhtproxy",
 			"access": "Deny"
 		}
 	]

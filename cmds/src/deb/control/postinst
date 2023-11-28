@@ -16,25 +16,25 @@ chperms() {
 
 case "$1" in
   configure)
-    if ! getent passwd carrier > /dev/null; then
+    if ! getent passwd boson > /dev/null; then
         adduser --system \
                 --quiet \
                 --group \
                 --no-create-home \
                 --disabled-password \
-                --home /var/lib/carrier \
-                carrier
+                --home /var/lib/boson \
+                boson
     fi
 
-    chperms carrier root 0775 /var/lib/carrier
+    chperms boson root 0775 /var/lib/boson
 
-    chperms carrier root 0775 /var/log/carrier
+    chperms boson root 0775 /var/log/boson
 
-    chperms root carrier 0755 /etc/carrier
+    chperms root boson 0755 /etc/boson
 
-    chperms root carrier 0644 /etc/carrier/logback.xml
+    chperms root boson 0644 /etc/boson/logback.xml
 
-    chperms root carrier 0644 /etc/carrier/default.conf
+    chperms root boson 0644 /etc/boson/default.conf
 
   ;;
 esac
@@ -42,17 +42,17 @@ esac
 # Begin postinst_systemd_enable
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask 'carrier.service' >/dev/null || true
+	deb-systemd-helper unmask 'boson.service' >/dev/null || true
 
 	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled 'carrier.service'; then
+	if deb-systemd-helper --quiet was-enabled 'boson.service'; then
 		# Enables the unit on first installation, creates new
 		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable 'carrier.service' >/dev/null || true
+		deb-systemd-helper enable 'boson.service' >/dev/null || true
 	else
 		# Update the statefile to add new symlinks (if any), which need to be
 		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state 'carrier.service' >/dev/null || true
+		deb-systemd-helper update-state 'boson.service' >/dev/null || true
 	fi
 fi
 # End postinst_systemd_enable
@@ -61,16 +61,16 @@ fi
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
-		deb-systemd-invoke start 'carrier.service' >/dev/null || true
+		deb-systemd-invoke start 'boson.service' >/dev/null || true
 	fi
 fi
 # End postinst_systemd_start
 
 # Begin postinst_init
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if [ -x "/etc/init.d/carrier" ]; then
-		update-rc.d carrier defaults >/dev/null
-		invoke-rc.d carrier start || exit $?
+	if [ -x "/etc/init.d/boson" ]; then
+		update-rc.d boson defaults >/dev/null
+		invoke-rc.d boson start || exit $?
 	fi
 fi
 # End postinst_init

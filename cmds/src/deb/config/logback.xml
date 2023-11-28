@@ -9,10 +9,10 @@
   -->
 
   <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>/var/log/carrier/carrier.log</file>
+    <file>/var/log/boson/boson.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
       <!-- rollover daily -->
-      <fileNamePattern>/var/log/carrier/carrier-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <fileNamePattern>/var/log/boson/boson-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
        <!-- each file should be at most 100MB, keep 60 days worth of history, but at most 20GB -->
        <maxFileSize>100MB</maxFileSize>    
        <maxHistory>60</maxHistory>
@@ -23,8 +23,8 @@
     </encoder>
   </appender>
 
-  <logger name="elastos.carrier.kademlia.NetworkEngine" level="OFF"/>
-  <logger name="elastos.carrier.kademlia.RPCServer" level="OFF"/>
+  <logger name="io.bosonnetwork.kademlia.NetworkEngine" level="OFF"/>
+  <logger name="io.bosonnetwork.kademlia.RPCServer" level="OFF"/>
 
   <root level="INFO">
     <!-- <appender-ref ref="STDOUT" /> -->
