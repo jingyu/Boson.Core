@@ -1,5 +1,0 @@
-#!/bin/sh
-
-BOSON_HOME=/usr/lib/boson
-
-java -cp "$BOSON_HOME/lib/*" $JAVA_OPTS io.bosonnetwork.am.Main $*

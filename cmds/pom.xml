@@ -12,17 +12,21 @@
 
   <groupId>io.bosonnetwork</groupId>
   <artifactId>boson-cmds</artifactId>
-  <version>2.0.7-SNAPSHOT</version>
+  <version>${boson.version}</version>
   <packaging>jar</packaging>
 
   <name>Boson command line utils</name>
+
+  <properties>
+    <boson.version>2.0.7-SNAPSHOT</boson.version>
+  </properties>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>io.bosonnetwork</groupId>
         <artifactId>boson-dependencies</artifactId>
-        <version>2.0.7-SNAPSHOT</version>
+        <version>${boson.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -34,19 +38,16 @@
     <dependency>
       <groupId>io.bosonnetwork</groupId>
       <artifactId>boson-api</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.bosonnetwork</groupId>
       <artifactId>boson-dht</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.bosonnetwork</groupId>
       <artifactId>boson-access-control</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <!-- Provided dependencies -->
@@ -115,150 +116,6 @@
                   </includes>
                 </resource>
               </resources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy-libs</id>
-            <phase>package</phase>
-            <goals>
-              <goal>exec</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <executable>${basedir}/scripts/copy-libs.sh</executable>
-        </configuration>
-      </plugin>
-
-      <plugin>
-        <groupId>org.vafer</groupId>
-        <artifactId>jdeb</artifactId>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>jdeb</goal>
-            </goals>
-            <configuration>
-			  <deb>${project.build.directory}/boson-${version}-all.deb</deb>
-              <verbose>false</verbose>
-              <snapshotExpand>true</snapshotExpand>
-              <!-- expand "SNAPSHOT" to what is in the "USER" env variable -->
-              <!-- <snapshotEnv>USER</snapshotEnv> -->
-              <controlDir>${basedir}/src/deb/control</controlDir>
-              <dataSet>
-                <data>
-                  <src>${project.build.directory}/lib</src>
-                  <type>directory</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/usr/lib/boson/lib</prefix>
-                    <user>root</user>
-                    <group>root</group>
-                    <filemode>644</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/scripts/boson-shell</src>
-                  <type>file</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/usr/lib/boson/bin</prefix>
-                    <user>root</user>
-                    <group>root</group>
-                    <filemode>755</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <type>link</type>
-                  <symlink>true</symlink>
-                  <linkName>/usr/bin/boson-shell</linkName>
-                  <linkTarget>/usr/lib/boson/bin/boson-shell</linkTarget>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/scripts/boson-am</src>
-                  <type>file</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/usr/lib/boson/bin</prefix>
-                    <user>root</user>
-                    <group>root</group>
-                    <filemode>755</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <type>link</type>
-                  <symlink>true</symlink>
-                  <linkName>/usr/bin/boson-am</linkName>
-                  <linkTarget>/usr/lib/boson/bin/boson-am</linkTarget>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/scripts/boson</src>
-                  <type>file</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/etc/init.d</prefix>
-                    <user>root</user>
-                    <group>root</group>
-                    <filemode>644</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/scripts/boson.service</src>
-                  <type>file</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/usr/lib/systemd/system</prefix>
-                    <user>root</user>
-                    <group>root</group>
-                    <filemode>644</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/config</src>
-                  <type>directory</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>/etc/boson</prefix>
-                    <user>root</user>
-                    <group>boson</group>
-                    <filemode>644</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <src>${basedir}/src/deb/accesscontrol</src>
-                  <type>directory</type>
-                  <mapper>
-                    <type>perm</type>
-                    <prefix>var/lib/boson/accesscontrol</prefix>
-                    <user>root</user>
-                    <group>boson</group>
-                    <filemode>644</filemode>
-                  </mapper>
-                </data>
-                <data>
-                  <type>template</type>
-                  <paths>
-                    <path>/etc/boson</path>
-                    <path>/var/lib/boson</path>
-                    <path>/var/log/boson</path>
-                    <path>/var/run/boson</path>
-                  </paths>
-                  <mapper>
-                    <type>perm</type>
-                    <user>boson</user>
-                    <group>boson</group>
-                    <filemode>750</filemode>
-                  </mapper>
-                </data>
-              </dataSet>
             </configuration>
           </execution>
         </executions>

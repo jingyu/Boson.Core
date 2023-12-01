@@ -12,6 +12,7 @@
 
   <groupId>io.bosonnetwork</groupId>
   <artifactId>boson-core</artifactId>
+  <version>${boson.version}</version>
   <packaging>pom</packaging>
 
   <name>Boson Core</name>
@@ -24,6 +25,10 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <properties>
+    <boson.version>2.0.7-SNAPSHOT</boson.version>
+  </properties>
 
   <scm>
     <connection>scm:git:git@github.com:bosonnetwork/Boson.Core.git</connection>
