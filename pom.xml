@@ -16,6 +16,9 @@
   <packaging>pom</packaging>
 
   <name>Boson Core</name>
+  <description>
+    Boson is a decentralized and encrypted peer-to-peer (P2P)  communication framework that facilitates network traffic routing between virtual machines and decentralized Applications (dApps).  Boson Java is a Java distribution designed to run on VPS servers with a public IP address, serving as a super Boson Node service.
+  </description>
   <url>https://github.com/bosonnetwork/Boson.Core</url>
 
   <licenses>
@@ -25,6 +28,23 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
+  <developers>
+    <developer>
+      <id>boson-network-dev</id>
+      <name>Boson Network</name>
+      <email>support@bosonnetwork.io</email>
+      <organization>BosonNetwork</organization>
+      <organizationUrl>https://github.com/bosonnetwork</organizationUrl>
+      <roles>
+        <role>architect</role>
+        <role>developer</role>
+      </roles>
+      <properties>
+        <picUrl>https://avatars.githubusercontent.com/u/152134507</picUrl>
+      </properties>
+    </developer>
+  </developers>
 
   <properties>
     <boson.version>2.0.7-SNAPSHOT</boson.version>
@@ -42,4 +62,16 @@
     <module>accesscontrol</module>
     <module>cmds</module>
   </modules>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>
