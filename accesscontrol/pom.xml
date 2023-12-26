@@ -8,11 +8,12 @@
     <groupId>io.bosonnetwork</groupId>
     <artifactId>boson-parent</artifactId>
     <version>3-SNAPSHOT</version>
+    <relativePath/>
   </parent>
 
   <groupId>io.bosonnetwork</groupId>
   <artifactId>boson-access-control</artifactId>
-  <version>${boson.version}</version>
+  <version>2.0.8-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Boson Access Control</name>
@@ -52,16 +53,12 @@
     <url>git@github.com:bosonnetwork/Boson.Core.git</url>
   </scm>
 
-  <properties>
-    <boson.version>2.0.8-SNAPSHOT</boson.version>
-  </properties>
-
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>io.bosonnetwork</groupId>
         <artifactId>boson-dependencies</artifactId>
-        <version>${boson.version}</version>
+        <version>2.0.8-SNAPSHOT</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
