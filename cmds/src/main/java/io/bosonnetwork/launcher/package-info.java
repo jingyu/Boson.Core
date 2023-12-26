@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * The default Boson launcher implementation.
+ */
 package io.bosonnetwork.launcher;

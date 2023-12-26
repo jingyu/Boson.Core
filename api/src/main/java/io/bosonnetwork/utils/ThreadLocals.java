@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022 - 2023 trinity-tech.io
- * Copyright (c) 2023 -      bosonnetwork.io
+ * Copyright (c) 2023 -	  bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +32,9 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 
+/**
+ * Thread local objects factory.
+ */
 public class ThreadLocals {
 	private static ThreadLocal<MessageDigest> localSha256 = ThreadLocal.withInitial(() -> {
 		try {
@@ -52,18 +55,46 @@ public class ThreadLocals {
 		return new ObjectMapper();
 	});
 
+	/**
+	 * Returns the current thread's {@code ThreadLocalRandom} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's {@code ThreadLocalRandom}
+	 */
 	public static ThreadLocalRandom random() {
 		return ThreadLocalRandom.current();
 	}
 
+	/**
+	 * Returns the current thread's SHA256 {@code MessageDigest} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's SHA256 {@code MessageDigest}
+	 */
 	public static MessageDigest sha256() {
 		return localSha256.get();
 	}
 
+	/**
+	 * Returns the current thread's Jackson {@code CBORFactory} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's Jackson {@code CBORFactory}
+	 */
 	public static CBORFactory CBORFactory() {
 		return localCBORFactory.get();
 	}
 
+	/**
+	 * Returns the current thread's Jackson {@code ObjectMapper} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's Jackson {@code ObjectMapper}
+	 */
 	public static ObjectMapper ObjectMapper() {
 		return localObjectMapper.get();
 	}

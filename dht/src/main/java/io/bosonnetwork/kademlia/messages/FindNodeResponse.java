@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+/**
+ * @hidden
+ */
 public class FindNodeResponse extends LookupResponse {
 	public FindNodeResponse(int txid) {
 		super(Method.FIND_NODE, txid);

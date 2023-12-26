@@ -26,6 +26,10 @@ package io.bosonnetwork;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ *  A representation of a version information for a Boson node. A version information
+ *  consists of short software name and a version number.
+ */
 public final class Version {
 	private static final String VERSION_NOT_AVAILABLE = "N/A";
 
@@ -35,6 +39,13 @@ public final class Version {
 	    put("MK", "Meerkat");	// Native regular node
 	}};
 
+	/**
+	 * Build a version from the software name and version number.
+	 *
+	 * @param name the Boson node software name
+	 * @param version the Boson node software version
+	 * @return a int that represent the version information
+	 */
 	public static int build(String name, int version) {
 		byte[] nameBytes = name.getBytes();
 
@@ -44,6 +55,12 @@ public final class Version {
 				(version & 0x000000FF);
 	}
 
+	/**
+	 * Convert the integer version information to readable string.
+	 *
+	 * @param version the integer version infomation.
+	 * @return a readable string version.
+	 */
 	public static String toString(int version) {
 		if (version == 0)
 			return VERSION_NOT_AVAILABLE;

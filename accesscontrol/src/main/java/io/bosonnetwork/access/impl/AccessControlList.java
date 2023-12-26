@@ -35,13 +35,15 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-
-import io.bosonnetwork.access.Permission.Access;
-
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSetter;
 
+import io.bosonnetwork.access.Permission.Access;
+
+/**
+ * @hidden
+ */
 @JsonPropertyOrder({ "subscription", "permissions" })
 @JsonAutoDetect(
 		fieldVisibility = Visibility.NONE,

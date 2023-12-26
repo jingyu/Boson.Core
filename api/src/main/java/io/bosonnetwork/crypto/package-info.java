@@ -21,4 +21,8 @@
  * SOFTWARE.
  */
 
+/**
+ * The Ed25591 and Curve25519 crypto wrappers based on libsodium. See
+ * https://www.libsodium.org/
+ */
 package io.bosonnetwork.crypto;

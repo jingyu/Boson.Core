@@ -29,34 +29,55 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 
+/**
+ * The Configuration interface used to customize the Boson DHT node upon initialization.
+ * Configuration contains various parameters used to setup DHT node.
+ */
 public interface Configuration {
+	/**
+	 * IPv4 address for the DHT node. Null IPv4 address will disable the DHT on IPv4.
+	 *
+	 * @return the InetSocketAddress object of the IPv4 address.
+	 */
 	default public InetSocketAddress IPv4Address() {
 		return null;
 	}
 
+	/**
+	 * IPv6 address for the DHT node. Null IPv6 address will disable the DHT on IPv6.
+	 *
+	 * @return the InetSocketAddress object of the IPv6 address.
+	 */
 	default public InetSocketAddress IPv6Address() {
 		return null;
 	}
 
 	/**
-	 * If a Path that points to an existing, writable directory is returned then the routing table
-	 * will be persisted to that directory periodically and during shutdown
+	 * If a Path that points to a writable directory is returned then the node info and
+	 * the routing table will be persisted to that directory periodically and during shutdown.
+	 *
+	 * Null path will disable the DHT persist it's data.
+	 *
+	 * @return a File object point to the storage path.
 	 */
 	default public File storagePath() {
 		return null;
 	}
 
 	/**
-	 * if true then attempt to bootstrap through well-known nodes is made.
-	 * you either must have a persisted routing table which can be loaded or
-	 * manually seed the routing table by calling {@link DHT#addDHTNode(String, int)}
+	 * The bootstrap nodes for the new DHT node.
+	 *
+	 * @return a Collection for the bootstrap nodes.
 	 */
-	//public boolean routerBootstrap();
-
 	default public Collection<NodeInfo> bootstrapNodes() {
 		return Collections.emptyList();
 	}
 
+	/**
+	 * The Boson services to be loaded within the DHT node.
+	 *
+	 * @return a Map object of service class(FQN) and service configuration.
+	 */
 	default public  Map<String, Map<String, Object>> services() {
 		return Collections.emptyMap();
 	}

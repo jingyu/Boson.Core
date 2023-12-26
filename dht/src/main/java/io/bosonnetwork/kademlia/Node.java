@@ -83,6 +83,9 @@ import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.kademlia.tasks.TaskFuture;
 import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * @hidden
+ */
 public class Node implements io.bosonnetwork.Node {
 	private Configuration config;
 

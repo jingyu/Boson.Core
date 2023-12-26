@@ -23,16 +23,41 @@
 
 package io.bosonnetwork;
 
+/**
+ * Boson node connection status listener interface. Receives the connection status change events.
+ */
 public interface ConnectionStatusListener {
+	/**
+	 * Called when the Boson node connection status changed.
+	 *
+	 * @param network the DHT network, IPv4 or IPv6.
+	 * @param newStatus the new connection status.
+	 * @param oldStatus the old connection status.
+	 */
 	public default void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
 	}
 
+	/**
+	 * Called when the Boson node connected to the Boson network.
+	 *
+	 * @param network the DHT network, IPv4 or IPv6.
+	 */
 	public default void connected(Network network) {
 	}
 
+	/**
+	 * Called when the Boson node profound-connected to the Boson network.
+	 *
+	 * @param network the DHT network, IPv4 or IPv6.
+	 */
 	public default void profound(Network network) {
 	}
 
+	/**
+	 * Called when the Boson node disconnected from the Boson network.
+	 *
+	 * @param network the DHT network, IPv4 or IPv6.
+	 */
 	public default void disconnected(Network network) {
 	}
 }

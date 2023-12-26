@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the expected sequence number not equals the value's current sequence number.
+ */
 public class CasFail extends KadException {
 	private static final long serialVersionUID = 3450451642376582940L;
 

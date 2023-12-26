@@ -23,36 +23,73 @@
 
 package io.bosonnetwork.utils;
 
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
+/**
+ * This class is a simple holder for a pair of values.
+ *
+ * @param <A> type for value a.
+ * @param <B> type for value b.
+ */
 public class Pair<A, B> {
-	public final A a;
-	public final B b;
+	private final A a;
+	private final B b;
 
+	/**
+	 * Create a value pair object from the given values.
+	 *
+	 * @param <C> type for value a.
+	 * @param <D>type for value b.
+	 * @param a value a.
+	 * @param b value b.
+	 * @return the new Pair object.
+	 */
 	public static <C, D> Pair<C, D> of(C a, D b) {
 		return new Pair<C, D>(a, b);
 	}
 
-	public static <C, D> Function<D, Pair<C, D>> of(C a) {
-		return b -> new Pair<C, D>(a, b);
-	}
-
-	public static <C, D> Consumer<Pair<C, D>> consume(final BiConsumer<C, D> cons) {
-		return pair -> cons.accept(pair.a, pair.b);
-	};
-
+	/**
+	 * Create a value pair object from the given values.
+	 *
+	 * @param a value a.
+	 * @param b value b.
+	 */
 	public Pair(A a, B b) {
 		this.a = a;
 		this.b = b;
 	}
 
+	/**
+	 * Gets the value a from the pair object.
+	 *
+	 * @return the value a.
+	 */
 	public A a() {
 		return a;
 	}
 
+	/**
+	 * Gets the value b from the pair object.
+	 *
+	 * @return the value b.
+	 */
 	public B b() {
 		return b;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder repr = new StringBuilder();
+
+		Function<Object, String> valueOf = (v) ->
+			(v != null && v instanceof String) ? "\"" + v + "\"" : String.valueOf(v);
+
+		repr.append("<")
+			.append(valueOf.apply(a))
+			.append(", ")
+			.append(valueOf.apply(b))
+			.append(">");
+
+		return repr.toString();
 	}
 }

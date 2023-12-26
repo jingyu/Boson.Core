@@ -25,7 +25,16 @@ package io.bosonnetwork.access;
 
 import io.bosonnetwork.Id;
 
+/**
+ * Provides the access management capabilities. These capabilities include the access control
+ * to the specified service, and also the detailed permissions.
+ */
 public interface AccessManager {
+	/**
+	 * Creates a default {@code AccessManager} implementation.
+	 *
+	 * @return the default {@code AccessManager} implementation.
+	 */
 	public static AccessManager getDefault() {
 		return new AccessManager() {
 			@Override
@@ -40,7 +49,21 @@ public interface AccessManager {
 		};
 	}
 
+	/**
+	 * Checks if the subject node allowed to access the service with the target service id.
+	 *
+	 * @param subjectNode the subject node id.
+	 * @param targetServiceId the target service id.
+	 * @return true if the subject node allowed to access the service, false otherwise.
+	 */
 	public boolean allow(Id subjectNode, String targetServiceId);
 
+	/**
+	 * Gets the {@link Permission} of the subject node to the target service.
+	 *
+	 * @param subjectNode the subject node id.
+	 * @param targetServiceId the target service id.
+	 * @return the {@link Permission} object.
+	 */
 	public Permission getPermission(Id subjectNode, String targetServiceId);
 }

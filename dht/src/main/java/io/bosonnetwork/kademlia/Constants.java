@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia;
 
 import io.bosonnetwork.Version;
 
+/**
+ * @hidden
+ */
 public final class Constants {
 	///////////////////////////////////////////////////////////////////////////
 	// Default DHT port

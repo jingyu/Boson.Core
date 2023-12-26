@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * This package defined the exception objects that will be thrown by the Kademila implementation.
+ */
 package io.bosonnetwork.kademlia.exceptions;

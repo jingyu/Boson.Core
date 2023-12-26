@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * This package defined the RPC messages for the Kademlia DHT.
+ */
 package io.bosonnetwork.kademlia.messages;

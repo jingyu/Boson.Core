@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
-
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KBucketEntry;
@@ -43,6 +42,9 @@ import io.bosonnetwork.kademlia.messages.FindNodeRequest;
 import io.bosonnetwork.kademlia.messages.FindNodeResponse;
 import io.bosonnetwork.kademlia.messages.Message;
 
+/**
+ * @hidden
+ */
 public class NodeLookup extends LookupTask {
 	private boolean bootstrap = false;
 	private boolean wantToken = false;

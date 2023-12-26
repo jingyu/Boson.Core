@@ -30,10 +30,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.PeerInfo;
-
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.messages.AnnouncePeerRequest;
 
+/**
+ * @hidden
+ */
 public class PeerAnnounce extends Task {
 	private Deque<CandidateNode> todo;
 	private PeerInfo peer;

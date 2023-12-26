@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+/**
+ * @hidden
+ */
 public class AnnouncePeerResponse extends Message {
 	public AnnouncePeerResponse(int txid) {
 		super(Type.RESPONSE, Method.ANNOUNCE_PEER, txid);

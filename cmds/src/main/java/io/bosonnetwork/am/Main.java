@@ -30,6 +30,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Spec;
 
+/**
+ * @hidden
+ */
 @Command(name = "am", mixinStandardHelpOptions = true, version = "Boson access manager 2.0",
 		description = "Boson access manager.",
 		subcommands = {

@@ -38,12 +38,14 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Version;
-import io.bosonnetwork.utils.ThreadLocals;
-import io.bosonnetwork.utils.Functional.ThrowingSupplier;
-
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.RPCServer;
+import io.bosonnetwork.utils.Functional.ThrowingSupplier;
+import io.bosonnetwork.utils.ThreadLocals;
 
+/**
+ * @hidden
+ */
 public abstract class Message {
 	private static final int READ_LIMIT = 2048;
 
@@ -65,6 +67,9 @@ public abstract class Message {
 	private RPCServer server;
 	private RPCCall associatedCall;
 
+	/**
+	 * @hidden
+	 */
 	public static enum Method {
 		UNKNOWN(0x00),
 		PING(0x01),
@@ -118,6 +123,9 @@ public abstract class Message {
 		}
 	}
 
+	/**
+	 * @hidden
+	 */
 	public static enum Type {
 		REQUEST(0x20),
 		RESPONSE(0x40),

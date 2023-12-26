@@ -32,6 +32,9 @@ import io.bosonnetwork.NodeInfo;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "bootstrap", mixinStandardHelpOptions = true, version = "Boson bootstrap 2.0",
 		description = "Bootstrap from the node.")
 public class BootstrapCommand implements Callable<Integer> {

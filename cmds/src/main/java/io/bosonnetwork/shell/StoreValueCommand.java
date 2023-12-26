@@ -34,6 +34,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "storevalue", mixinStandardHelpOptions = true, version = "Boson storevalue 2.0",
 		description = "Store a value to the DHT.")
 public class StoreValueCommand implements Callable<Integer> {

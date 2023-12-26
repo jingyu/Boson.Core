@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.utils;
 
+/**
+ * Converts between binary bytes and hexadecimal Strings.
+ */
 public class Hex {
 	private static final byte[] EMPTY_BYTES = {};
 	private static final char[] HEX_CHARS = {
@@ -46,6 +49,13 @@ public class Hex {
 		return -1;
 	}
 
+	/**
+	 * Converts one byte from a String representing hexadecimal values.
+	 *
+	 * @param chars the {@code CharSequence} of the string.
+	 * @param offset the offset within the char sequence to decode.
+	 * @return the decoded byte.
+	 */
 	public static byte decodeByte(CharSequence chars, int offset) {
 		int hi = decodeNibble(chars.charAt(offset));
 		int lo = decodeNibble(chars.charAt(offset + 1));
@@ -58,6 +68,15 @@ public class Hex {
 		return (byte) ((hi << 4) + lo);
 	}
 
+	/**
+	 * Converts a String representing hexadecimal values into an array of bytes of
+	 * those same values.
+	 *
+	 * @param chars the {@code CharSequence} of the string.
+	 * @param offset the offset within the char sequence to decode.
+	 * @param length the number of chars to decode.
+	 * @return a byte array containing binary data decoded from the supplied char array.
+	 */
 	public static byte[] decode(CharSequence chars, int offset, int length) {
 		if (length < 0 || (length & 1) != 0)
 			throw new IllegalArgumentException("Invalid length: " + length);
@@ -72,10 +91,26 @@ public class Hex {
 		return bytes;
 	}
 
+	/**
+	 * Converts a String representing hexadecimal values into an array of bytes of
+	 * those same values.
+	 *
+	 * @param chars the {@code CharSequence} of the string.
+	 * @return a byte array containing binary data decoded from the supplied char array.
+	 */
 	public static byte[] decode(CharSequence chars) {
 		return decode(chars, 0, chars.length());
 	}
 
+	/**
+	 * Converts an array of bytes into an array of characters representing
+	 * the hexadecimal values of each byte in order.
+	 *
+	 * @param bytes the byte array to convert to hex characters.
+	 * @param offset the offset in byte array to start encoding from.
+	 * @param length the number of bytes to encode.
+	 * @return a String represent the hexadecimal values of the given byte array.
+	 */
 	public static String encode(byte[] bytes, int offset, int length) {
 		char[] chars = new char[length * 2];
 
@@ -88,6 +123,13 @@ public class Hex {
 		return new String(chars);
 	}
 
+	/**
+	 * Converts an array of bytes into an array of characters representing
+	 * the hexadecimal values of each byte in order.
+	 *
+	 * @param bytes the byte array to convert to hex characters.
+	 * @return a String represent the hexadecimal values of the given byte array.
+	 */
 	public static String encode(byte[] bytes) {
 		return encode(bytes, 0, bytes.length);
 	}

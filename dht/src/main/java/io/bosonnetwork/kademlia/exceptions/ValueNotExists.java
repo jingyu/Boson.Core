@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the target value not exists.
+ */
 public class ValueNotExists extends KadException {
 	private static final long serialVersionUID = 1286047880243439501L;
 

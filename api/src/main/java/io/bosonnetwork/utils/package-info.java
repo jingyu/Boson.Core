@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * Contains the basic utility and support classes.
+ */
 package io.bosonnetwork.utils;

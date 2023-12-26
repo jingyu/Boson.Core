@@ -38,6 +38,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @hidden
+ */
 public class NetworkEngine {
 	private Queue<Selectable> registrations;
 	private Queue<Selectable> interestUpdates;
@@ -48,6 +51,9 @@ public class NetworkEngine {
 
 	private static final Logger log = LoggerFactory.getLogger(NetworkEngine.class);
 
+	/**
+	 * @hidden
+	 */
 	public interface Selectable {
 		public SelectableChannel getChannel();
 

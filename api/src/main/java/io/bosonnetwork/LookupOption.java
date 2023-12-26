@@ -23,9 +23,32 @@
 
 package io.bosonnetwork;
 
+/**
+ * Defines the DHT lookup options.
+ */
 public enum LookupOption {
-	LOCAL, /* Reserved */
+	/**
+	 * Local lookup only.
+	 *
+	 * Reserved for the future use.
+	 */
+	LOCAL,
+
+	/**
+	 * Lookup local first then DHT network, will stop lookup and return the result when
+	 * the local have the result or lookup get the result first time.
+	 */
 	ARBITRARY,
+
+	/**
+	 * Lookup the DHT network, will stop lookup and return the result when
+	 * the lookup get the result first time.
+	 */
 	OPTIMISTIC,
+
+	/**
+	 * Lookup the DHT network, will finish the full lookup iteration then get the
+	 * final accurate result.
+	 */
 	CONSERVATIVE
 }

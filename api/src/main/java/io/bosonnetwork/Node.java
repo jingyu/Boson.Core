@@ -28,84 +28,298 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * The public interface for Boson DHT node.
+ */
 public interface Node {
+	/**
+	 * Gets the ID of the node.
+	 *
+	 * @return the ID of the node.
+	 */
 	public Id getId();
 
+	/**
+	 * Gets information about the node.
+	 *
+	 * @return a {@code Result} containing the node information on IPv4 and IPv6.
+	 */
 	public Result<NodeInfo> getNodeInfo();
 
+	/**
+	 * Checks if the given ID corresponds to the local node.
+	 *
+	 * @param id the ID to check.
+	 * @return {@code true} if the ID corresponds to the local node, {@code false} otherwise.
+	 */
 	public boolean isLocalId(Id id);
 
+	/**
+	 * Gets the {@code Configuration} of the node.
+	 *
+	 * @return the {@code Configuration} of the node.
+	 */
 	public Configuration getConfig();
 
+	/**
+	 * Sets the default lookup option for the node.
+	 *
+	 * @param option the default lookup option.
+	 */
 	public void setDefaultLookupOption(LookupOption option);
 
+	/**
+	 * Adds a status listener to the node.
+	 *
+	 * @param listener the status listener to add.
+	 */
 	public void addStatusListener(NodeStatusListener listener);
 
+	/**
+	 * Removes a status listener from the node.
+	 *
+	 * @param listener the status listener to remove.
+	 */
 	public void removeStatusListener(NodeStatusListener listener);
 
+	/**
+	 * Adds a connection status listener to the node.
+	 *
+	 * @param listener the connection status listener to add.
+	 */
 	public void addConnectionStatusListener(ConnectionStatusListener listener);
 
+	/**
+	 * Removes a connection status listener from the node.
+	 *
+	 * @param listener the connection status listener to remove.
+	 */
 	public void removeConnectionStatusListener(ConnectionStatusListener listener);
 
+	/**
+	 * Gets the {@code ScheduledExecutorService} used by the node.
+	 *
+	 * @return the scheduled executor service.
+	 */
 	public ScheduledExecutorService getScheduler();
 
+	/**
+	 * Sets the {@code ScheduledExecutorService} for the node.
+	 *
+	 * @param scheduler the scheduled executor service to set.
+	 */
 	public void setScheduler(ScheduledExecutorService scheduler);
 
+	/**
+	 * Bootstraps the node from the specified node.
+	 *
+	 * @param node the node information to bootstrap with.
+	 * @throws BosonException if an error occurs during bootstrap.
+	 */
 	public void bootstrap(NodeInfo node) throws BosonException;
 
+	/**
+	 * Bootstraps the node from multiple nodes.
+	 *
+	 * @param bootstrapNodes the collection of nodes to bootstrap with.
+	 * @throws BosonException if an error occurs during bootstrap.
+	 */
 	public void bootstrap(Collection<NodeInfo> bootstrapNodes) throws BosonException;
 
+	/**
+	 * Starts the node.
+	 *
+	 * @throws BosonException if an error occurs during startup.
+	 */
 	public void start() throws BosonException;
 
+	/**
+	 * Stops the node.
+	 */
 	public void stop();
 
+	/**
+	 * Gets the current status of the node.
+	 *
+	 * @return the status of the node.
+	 */
 	public NodeStatus getStatus();
 
+	/**
+	 * Checks if the node is running.
+	 *
+	 * @return {@code true} if the node is running, {@code false} otherwise.
+	 */
 	public boolean isRunning();
 
+	/**
+	 * Encrypts the given data for a specific recipient.
+	 *
+	 * @param recipient the ID of the recipient.
+	 * @param data the data to encrypt.
+	 * @return the encrypted data.
+	 * @throws BosonException if an error occurs during encryption.
+	 */
 	public byte[] encrypt(Id recipient, byte[] data) throws BosonException;
 
+	/**
+	 * Decrypts the given data from a specific sender.
+	 *
+	 * @param sender the ID of the sender.
+	 * @param data the data to decrypt.
+	 * @return the decrypted data.
+	 * @throws BosonException if an error occurs during decryption.
+	 */
 	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
 
+	/**
+	 * Signs the given data.
+	 *
+	 * @param data the data to sign.
+	 * @return the signature.
+	 * @throws BosonException if an error occurs during signing.
+	 */
 	public byte[] sign(byte[] data) throws BosonException;
 
+	/**
+	 * Verifies the signature of the given data.
+	 *
+	 * @param data the data to verify.
+	 * @param signature the signature to verify.
+	 * @return {@code true} if the signature is valid, {@code false} otherwise.
+	 * @throws BosonException if an error occurs during verification.
+	 */
 	public boolean verify(byte[] data, byte[] signature) throws BosonException;
 
+	/**
+	 * Lookup the information about a node with the given ID.
+	 *
+	 * @param id the ID of the node to find.
+	 * @return a {@code CompletableFuture} object to retrieve the result of the node lookup.
+	 */
 	public default CompletableFuture<Result<NodeInfo>> findNode(Id id) {
 		return findNode(id, null);
 	}
-
+	/**
+	 * Lookup the information about a node with the given ID.
+	 *
+	 * @param id the ID of the node to find.
+	 * @param option the lookup option to use.
+	 * @return a {@code CompletableFuture} object to retrieve the result of the node lookup.
+	 */
 	public CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option);
 
+	/**
+	 * Lookup the value with the given ID on the Boson network.
+	 *
+	 * @param id the ID of the value to lookup.
+	 * @return a {@code CompletableFuture} object to retrieve the result of the value lookup.
+	 */
 	public default CompletableFuture<Value> findValue(Id id) {
 		return findValue(id, null);
 	}
 
+	/**
+	 * Lookup the value with the given ID on the Boson network.
+	 *
+	 * @param id the ID of the value to lookup.
+	 * @param option the lookup option to use.
+	 * @return a {@code CompletableFuture} object to retrieve the result of the value lookup.
+	 */
 	public CompletableFuture<Value> findValue(Id id, LookupOption option);
 
+	/**
+	 * Stores a value in the network.
+	 *
+	 * @param value the value to store.
+	 * @param persistent {@code true} if the value should be stored persistently, {@code false} otherwise.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 */
 	public CompletableFuture<Void> storeValue(Value value, boolean persistent);
 
+	/**
+	 * Stores a value in the network without persistency.
+	 *
+	 * @param value the value to store.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 */
 	public default CompletableFuture<Void> storeValue(Value value) {
 		return storeValue(value, false);
 	}
 
+	/**
+	 * Lookup peers in the network with the given ID.
+	 *
+	 * @param id the ID to find peers for.
+	 * @param expected the expected number of peers to lookup.
+	 * @return a {@code CompletableFuture} object to retrieve the the list of peers found.
+	 */
 	public default CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected) {
 		return findPeer(id, expected, null);
 	}
 
+	/**
+	 * Lookup peers in the network with the given ID.
+	 *
+	 * @param id the ID to find peers for.
+	 * @param expected the expected number of peers to lookup.
+	 * @param option the lookup option to use.
+	 * @return a {@code CompletableFuture} object to retrieve the the list of peers found.
+	 */
 	public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option);
 
+	/**
+	 * Announces a peer in the network.
+	 *
+	 * @param peer the peer to announce.
+	 * @param persistent {@code true} if the peer should be announced persistently, {@code false} otherwise.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 */
 	public CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent);
 
+	/**
+	 * Announces a peer in the network without persistency.
+	 *
+	 * @param peer the peer to announce.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 */
 	public default CompletableFuture<Void> announcePeer(PeerInfo peer) {
 		return announcePeer(peer, false);
 	}
 
+	/**
+	 * Gets the value associated with the given ID from the node's storage.
+	 *
+	 * @param valueId the ID of the value to retrieve.
+	 * @return the value associated with the ID.
+	 * @throws BosonException if an error occurs during value retrieval.
+	 */
 	public Value getValue(Id valueId) throws BosonException;
 
+	/**
+	 * Removes the value with the given ID from the node's storage.
+	 *
+	 * @param valueId the ID of the value to remove.
+	 * @return {@code true} if the value is successfully removed, {@code false} otherwise.
+	 * @throws BosonException if an error occurs during value removal.
+	 */
 	public boolean removeValue(Id valueId) throws BosonException;;
 
+	/**
+	 * Gets the peer information with the given ID from the node's storage.
+	 *
+	 * @param peerId the ID of the peer to retrieve information for.
+	 * @return the peer information associated with the ID.
+	 * @throws BosonException if an error occurs during peer information retrieval.
+	 */
 	public PeerInfo getPeer(Id peerId) throws BosonException;
 
+	/**
+	 * Removes the peer entry with the given ID from the node's storage.
+	 *
+	 * @param peerId the ID of the peer to remove.
+	 * @return {@code true} if the peer information is successfully removed, {@code false} otherwise.
+	 * @throws BosonException if an error occurs during peer information removal.
+	 */
 	public boolean removePeer(Id peerId) throws BosonException;
 }

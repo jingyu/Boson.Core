@@ -23,6 +23,10 @@
 
 package io.bosonnetwork;
 
+/**
+ * The class {@code BosonException} is the superclass of all checked exceptions
+ * that can be thrown by the Boson library.
+ */
 public class BosonException extends Exception {
 	private static final long serialVersionUID = 7113857681570350392L;
 

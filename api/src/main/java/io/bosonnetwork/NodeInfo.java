@@ -27,11 +27,21 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
+/**
+ * THis class represent the node information in the Boson network, it contains
+ * basic node network information.
+ */
 public class NodeInfo {
 	private final Id id;
 	private final InetSocketAddress addr;
 	private int version;
 
+	/**
+	 * Construct a {@code NodeInfo} object.
+	 *
+	 * @param id the node id.
+	 * @param addr the node socket address.
+	 */
 	public NodeInfo(Id id, InetSocketAddress addr) {
 		if (id == null)
 			throw new IllegalArgumentException("Invalid node id: null");
@@ -43,6 +53,13 @@ public class NodeInfo {
 		this.addr = addr;
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object.
+	 *
+	 * @param id the node id.
+	 * @param addr the node IP address.
+	 * @param port the node port number.
+	 */
 	public NodeInfo(Id id, InetAddress addr, int port) {
 		if (id == null)
 			throw new IllegalArgumentException("Invalid node id: null");
@@ -57,6 +74,13 @@ public class NodeInfo {
 		this.addr = new InetSocketAddress(addr, port);
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object.
+	 *
+	 * @param id the node id.
+	 * @param addr the node IP address.
+	 * @param port the node port number.
+	 */
 	public NodeInfo(Id id, String addr, int port) {
 		if (id == null)
 			throw new IllegalArgumentException("Invalid node id: null");
@@ -71,6 +95,13 @@ public class NodeInfo {
 		this.addr = new InetSocketAddress(addr, port);
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object.
+	 *
+	 * @param id the node id.
+	 * @param addr the node raw IP address.
+	 * @param port the node port number.
+	 */
 	public NodeInfo(Id id, byte[] addr, int port) {
 		if (id == null)
 			throw new IllegalArgumentException("Invalid node id: null");
@@ -87,7 +118,12 @@ public class NodeInfo {
 		}
 	}
 
-	public NodeInfo(NodeInfo ni) {
+	/**
+	 * Copy constructor, create a {@code NodeInfo} from the given object.
+	 *
+	 * @param ni another node info object.
+	 */
+	protected NodeInfo(NodeInfo ni) {
 		if (ni == null)
 			throw new IllegalArgumentException("Invalid node info: null");
 
@@ -96,30 +132,66 @@ public class NodeInfo {
 		this.version = ni.version;
 	}
 
+	/**
+	 * Gets the node id.
+	 *
+	 * @return the node id.
+	 */
 	public Id getId() {
 		return id;
 	}
 
+	/**
+	 * Gets the socket address of the node.
+	 *
+	 * @return the socket address.
+	 */
 	public InetSocketAddress getAddress() {
 		return addr;
 	}
 
+	/**
+	 * Get the IP address of the node.
+	 *
+	 * @return the IP address.
+	 */
 	public InetAddress getInetAddress() {
 		return addr.getAddress();
 	}
 
+	/**
+	 * Get the port number of the node.
+	 *
+	 * @return the port number.
+	 */
 	public int getPort() {
 		return addr.getPort();
 	}
 
+	/**
+	 * Sets the node version number.
+	 *
+	 * @param version the version number.
+	 */
 	public void setVersion(int version) {
 		this.version = version;
 	}
 
+	/**
+	 * Gets the node version.
+	 *
+	 * @return the version number.
+	 */
 	public int getVersion() {
 		return version;
 	}
 
+	/**
+	 * Checks if the node information is identical with the other one.
+	 *
+	 * @param other another node info object to check
+	 * @return true if the two node info object is identical, false otherwise.
+	 */
 	public boolean matches(NodeInfo other) {
 		if (other != null)
 			return this.id.equals(other.id) || this.addr.equals(other.addr);

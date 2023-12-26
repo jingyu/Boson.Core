@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+/**
+ * @hidden
+ */
 public class PingResponse extends Message {
 	public PingResponse(int txid) {
 		super(Type.RESPONSE, Method.PING, txid);

@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia;
 
+/**
+ * @hidden
+ */
 public class ExponentialWeightendMovingAverage {
 	private double weight = 0.3;
 	private double average = Double.NaN;

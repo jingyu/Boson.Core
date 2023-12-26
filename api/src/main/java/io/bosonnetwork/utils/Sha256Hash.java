@@ -17,7 +17,6 @@
 
 package io.bosonnetwork.utils;
 
-
 import java.io.Serializable;
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -25,13 +24,21 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 /**
- * A Sha256Hash just wraps a byte[] so that equals and hashcode work correctly, allowing it to be used as keys in a
- * map. It also checks that the length is correct and provides a bit more type safety.
+ * A Sha256Hash just wraps a byte[] so that equals and hashcode work correctly,
+ * allowing it to be used as keys in a map. It also checks that the length is correct
+ * and provides a bit more type safety.
  */
 public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	private static final long serialVersionUID = 538197488884042091L;
 
-	public static final int LENGTH = 32; // bytes
+	/**
+	 * The number of bytes used to represent a SHA-256 hash code.
+	 */
+	public static final int LENGTH = 32;
+
+	/**
+	 * Zero hash code.
+	 */
 	public static final Sha256Hash ZERO_HASH = wrap(new byte[LENGTH]);
 
 	private final byte[] bytes;
@@ -160,8 +167,13 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	}
 
 	/**
-	 * Calculates the hash of hash on the given chunks of bytes. This is equivalent to concatenating the two
+	 * Calculates the hash of hash on the given chunks of bytes.
+	 * This is equivalent to concatenating the two
 	 * chunks and then passing the result to {@link #hashTwice(byte[])}.
+	 *
+	 * @param input1 the bytes chunk1 to hash
+	 * @param input2 the bytes chunk2 to hash
+	 * @return the double-hash (in big-endian order)
 	 */
 	public static byte[] hashTwice(byte[] input1, byte[] input2) {
 		MessageDigest digest = newDigest();
@@ -188,6 +200,14 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	/**
 	 * Calculates the hash of hash on the given byte ranges. This is equivalent to
 	 * concatenating the two ranges and then passing the result to {@link #hashTwice(byte[])}.
+	 *
+	 * @param input1 the array containing the bytes chunk1 to hash
+	 * @param offset1 the offset within the array of the bytes chunk1 to hash
+	 * @param length1 the number of bytes chunk1 to hash
+	 * @param input2 the array containing the bytes chunk2 to hash
+	 * @param offset2 the offset within the array of the bytes chunk2 to hash
+	 * @param length2 the number of bytes chunk2 to hash
+	 * @return the double-hash (in big-endian order)
 	 */
 	public static byte[] hashTwice(byte[] input1, int offset1, int length1,
 			byte[] input2, int offset2, int length2) {
@@ -205,9 +225,10 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	}
 
 	/**
-	 * Returns the last four bytes of the wrapped hash. This should be unique enough to be a suitable hash code even for
-	 * blocks, where the goal is to try and get the first bytes to be zeros (i.e. the value as a big integer lower
-	 * than the target value).
+	 * Returns the last four bytes of the wrapped hash.
+	 * This should be unique enough to be a suitable hash code even for blocks,
+	 * where the goal is to try and get the first bytes to be zeros
+	 * (i.e. the value as a big integer lower than the target value).
 	 */
 	@Override
 	public int hashCode() {
@@ -223,13 +244,18 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	/**
 	 * Returns the bytes interpreted as a positive integer.
+	 *
+	 * @return the {@code BigInteger} that represents the hash bytes.
 	 */
 	public BigInteger toBigInteger() {
 		return new BigInteger(1, bytes);
 	}
 
 	/**
-	 * Returns the internal byte array, without defensively copying. Therefore do NOT modify the returned array.
+	 * Returns the internal byte array, without defensively copying.
+	 * Therefore do NOT modify the returned array.
+	 *
+	 * @return the raw hash bytes
 	 */
 	public byte[] getBytes() {
 		return bytes;
@@ -237,6 +263,8 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	/**
 	 * Returns a reversed copy of the internal byte array.
+	 *
+	 * @return the reversed bytes.
 	 */
 	public byte[] getReversedBytes() {
 		return reverseBytes(bytes);
@@ -244,6 +272,8 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	/**
 	 * Returns a copy of the given byte array in reverse order.
+	 *
+	 * @return the reversed bytes of the given bytes. ddd
 	 */
 	private static byte[] reverseBytes(byte[] bytes) {
 		// We could use the XOR trick here but it's easier to understand if we don't. If we find this is really a

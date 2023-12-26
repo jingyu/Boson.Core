@@ -25,6 +25,10 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the node is not the value owner, it means the node does not have the
+ * private key for the value.
+ */
 public class NotValueOwner extends KadException {
 	private static final long serialVersionUID = -7371954332788603314L;
 

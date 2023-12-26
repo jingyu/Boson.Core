@@ -30,6 +30,9 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
+/**
+ * @hidden
+ */
 public class ErrorMessage extends Message {
 	private static final Charset utf8 = Charset.forName("UTF-8");
 

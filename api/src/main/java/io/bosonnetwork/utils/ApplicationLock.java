@@ -8,16 +8,48 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * File based application instance exclusive lock, guarantee the application can only run
+ * in single instance mode.
+ */
 public class ApplicationLock implements AutoCloseable {
 	private Path lockFile;
 	private FileChannel fc;
 	private FileLock lock;
 
+	/**
+	 * Creates a {@code ApplicationLock} on the specified path, and try to acquire the
+	 * lock at the same time.
+	 *
+	 * @param lockFile the path to the lock file.
+	 * @throws IOException if the I/O error occurred.
+	 * @throws IllegalStateException if another application instance already took the lock.
+	 */
 	public ApplicationLock(Path lockFile) throws IOException, IllegalStateException {
 		this.lockFile = lockFile;
 		tryLock();
 	}
 
+	/**
+	 * Creates a {@code ApplicationLock} on the specified path, and try to acquire the
+	 * lock at the same time.
+	 *
+	 * @param lockFile the path to the lock file.
+	 * @throws IOException if the I/O error occurred.
+	 * @throws IllegalStateException if another application instance already took the lock.
+	 */
+	public ApplicationLock(File lockFile) throws IOException, IllegalStateException {
+		this(lockFile.getAbsoluteFile().toPath());
+	}
+
+	/**
+	 * Creates a {@code ApplicationLock} on the specified path, and try to acquire the
+	 * lock at the same time.
+	 *
+	 * @param lockFile the path to the lock file.
+	 * @throws IOException if the I/O error occurred.
+	 * @throws IllegalStateException if another application instance already took the lock.
+	 */
 	public ApplicationLock(String lockFile) throws IOException, IllegalStateException {
 		this(Path.of(lockFile));
 	}

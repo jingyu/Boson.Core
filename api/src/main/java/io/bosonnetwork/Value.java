@@ -34,6 +34,10 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.ThreadLocals;
 
+/**
+ * Represents a value in the Boson network. Values can be immutable, mutable or encrypted,
+ * and they are identified by their public key or SHA-256 hash.
+ */
 public class Value {
 	private Id publicKey;
 	private byte[] privateKey;
@@ -43,6 +47,17 @@ public class Value {
 	private byte[] signature;
 	private byte[] data;
 
+	/**
+	 * Private constructor to create a new Value object.
+	 *
+	 * @param publicKey the public key associated with the value.
+	 * @param privateKey the private key associated with the value.
+	 * @param recipient  the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the sequence number of the value.
+	 * @param signature the signature of the value.
+	 * @param data the data of the value.
+	 */
 	private Value(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
 		if (publicKey != null) {
 			if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
@@ -70,6 +85,16 @@ public class Value {
 		this.data = data;
 	}
 
+	/**
+	 * Private constructor to create a new Value object.
+	 *
+	 * @param keypair the signing key pair associated with the value.
+	 * @param recipient  the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the sequence number of the value.
+	 * @param data the data of the value.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
 	private Value(Signature.KeyPair keypair, Id recipient, CryptoBox.Nonce nonce, int sequenceNumber, byte[] data) throws CryptoException {
 		if (keypair == null)
 			throw new IllegalArgumentException("Invalid keypair");
@@ -101,37 +126,109 @@ public class Value {
 		this.signature = Signature.sign(getSignData(), keypair.privateKey());
 	}
 
+	/**
+	 * Rebuilds a immutable {@code Value} object from the data.
+	 *
+	 * @param data the data of the value.
+	 * @return a new immutable {@code Value} object.
+	 */
 	public static Value of(byte[] data) {
 		return new Value(null, null, null, null, -1, null, data);
 	}
 
+	/**
+	 * Rebuilds a mutable {@code Value} object from the data.
+	 *
+	 * @param publicKey the public key associated with the value.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the sequence number of the value.
+	 * @param signature the signature of the value.
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 */
 	public static Value of(Id publicKey, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
 		return new Value(publicKey, null, null, nonce, sequenceNumber, signature, data);
 	}
 
+	/**
+	 * Rebuilds a encrypted {@code Value} object from the data.
+	 *
+	 * @param publicKey the public key associated with the value.
+	 * @param recipient the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the sequence number of the value.
+	 * @param signature the signature of the value.
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 */
 	public static Value of(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber,
 			byte[] signature, byte[] data) {
 		return new Value(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
 
+	/**
+	 * Rebuilds a encrypted {@code Value} object from the data.
+	 *
+	 * @param publicKey the public key associated with the value.
+	 * @param privateKey the private key associated with the value.
+	 * @param recipient the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the sequence number of the value.
+	 * @param signature the signature of the value.
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 */
 	public static Value of(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce,
 			int sequenceNumber, byte[] signature, byte[] data) {
 		return new Value(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 	}
 
+	/**
+	 * Creates a immutable {@code Value} object from the data.
+	 *
+	 * @param data the data of the value.
+	 * @return a new immutable {@code Value} object.
+	 */
 	public static Value createValue(byte[] data) {
 		return new Value(null, null, null, null, -1, null, data);
 	}
 
+	/**
+	 * Creates a mutable {@code Value} object from the data. The new value will be signed
+	 * by a new generated random key pair.
+	 *
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
 	public static Value createSignedValue(byte[] data) throws CryptoException {
 		return createSignedValue(null, null, 0, data);
 	}
 
+	/**
+	 * Creates a mutable {@code Value} object from the data with the given key pair and nonce.
+	 *
+	 * @param keypair the key pair to sign the {@code Value}
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
 	public static Value createSignedValue(Signature.KeyPair keypair, CryptoBox.Nonce nonce,
 			byte[] data) throws CryptoException {
 		return createSignedValue(keypair, nonce, 0, data);
 	}
 
+	/**
+	 * Creates a mutable {@code Value} object from the data with the given key pair and nonce.
+	 *
+	 * @param keypair the key pair to sign the {@code Value}
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the initial sequence number of the value.
+	 * @param data the data of the value.
+	 * @return a new mutable {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
 	public static Value createSignedValue(Signature.KeyPair keypair, CryptoBox.Nonce nonce,
 			int sequenceNumber, byte[] data) throws CryptoException {
 		if (keypair == null)
@@ -143,15 +240,47 @@ public class Value {
 		return new Value(keypair, null, nonce, sequenceNumber, data);
 	}
 
+	/**
+	 * Creates a encrypted {@code Value} object from the data. The new value will be encrypted
+	 * and signed by a new generated random key pair.
+	 *
+	 * @param recipient the recipient's ID if the value is encrypted.
+	 * @param data the data of the value.
+	 * @return a new encrypted {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
 	public static Value createEncryptedValue(Id recipient, byte[] data) throws CryptoException {
 		return createEncryptedValue(null, recipient, null, 0, data);
 	}
 
-	public static Value createEncryptedValue(Signature.KeyPair keypair, Id recipient, CryptoBox.Nonce nonce, byte[] data) throws CryptoException {
+	/**
+	 * Creates a encrypted {@code Value} object from the data with the given key pair and nonce.
+	 *
+	 * @param keypair the key pair to sign the {@code Value}
+	 * @param recipient the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param data the data of the value.
+	 * @return a new encrypted {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
+	public static Value createEncryptedValue(Signature.KeyPair keypair, Id recipient,
+			CryptoBox.Nonce nonce, byte[] data) throws CryptoException {
 		return createEncryptedValue(keypair, recipient, nonce, 0, data);
 	}
 
-	public static Value createEncryptedValue(Signature.KeyPair keypair, Id recipient, CryptoBox.Nonce nonce, int sequenceNumber, byte[] data) throws CryptoException {
+	/**
+	 * Creates a encrypted {@code Value} object from the data with the given key pair and nonce.
+	 *
+	 * @param keypair the key pair to sign the {@code Value}
+	 * @param recipient the recipient's ID if the value is encrypted.
+	 * @param nonce the nonce used for encryption or signing.
+	 * @param sequenceNumber the initial sequence number of the value.
+	 * @param data the data of the value.
+	 * @return a new encrypted {@code Value} object.
+	 * @throws CryptoException if a cryptographic error occurs during signing.
+	 */
+	public static Value createEncryptedValue(Signature.KeyPair keypair, Id recipient,
+			CryptoBox.Nonce nonce, int sequenceNumber, byte[] data) throws CryptoException {
 		if (recipient == null)
 			throw new IllegalArgumentException("Invalid recipient");
 
@@ -164,42 +293,95 @@ public class Value {
 		return new Value(keypair, recipient, nonce, sequenceNumber, data);
 	}
 
+	/**
+	 * Gets the ID of the value.
+	 *
+	 * @return the ID of the value.
+	 */
 	public Id getId() {
 		return calculateId(this.publicKey, this.nonce, this.data);
 	}
 
+	/**
+	 * Gets the associated public key of the value.
+	 *
+	 * @return the public key of the value, or null for immutable values.
+	 */
 	public Id getPublicKey() {
 		return publicKey;
 	}
 
+	/**
+	 * Checks if current node has the private key.
+	 *
+	 * @return true if the node has the private key, false otherwise.
+	 */
 	public boolean hasPrivateKey() {
 		return privateKey != null;
 	}
 
+	/**
+	 * Gets the associated private key of the value.
+	 *
+	 * @return the private key of the value, or null if the node does not have the private key.
+	 */
 	public byte[] getPrivateKey() {
 		return privateKey;
 	}
 
+	/**
+	 * Gets the recipient of the value.
+	 *
+	 * @return the recipient of the value, or null if no recipient.
+	 */
 	public Id getRecipient() {
 		return recipient;
 	}
 
+	/**
+	 * Gets the associated nonce of the value.
+	 *
+	 * @return the nonce of the value, or null for immutable values.
+	 */
 	public byte[] getNonce() {
 		return nonce;
 	}
 
+	/**
+	 * Gets the sequence number of the value.
+	 *
+	 * @return the sequence number of the value.
+	 */
 	public int getSequenceNumber() {
 		return sequenceNumber;
 	}
 
+	/**
+	 * Gets the signature of the value.
+	 *
+	 * @return the signature of the value, or null for immutable values.
+	 */
 	public byte[] getSignature() {
 		return signature;
 	}
 
+	/**
+	 * Gets the data of the value.
+	 *
+	 * @return the data of the value.
+	 */
 	public byte[] getData() {
 		return data;
 	}
 
+	/**
+	 * Calculates the ID of the value.
+	 *
+	 * @param publicKey The public key associated with the value.
+	 * @param nonce     The nonce used for encryption or signing.
+	 * @param data      The data contained in the value.
+	 * @return The calculated ID of the value.
+	 */
 	public static Id calculateId(Id publicKey, byte[] nonce, byte[] data) {
 		MessageDigest digest = ThreadLocals.sha256();
 		digest.reset();
@@ -214,10 +396,20 @@ public class Value {
 		return new Id(digest.digest());
 	}
 
+	/**
+	 * Checks if the value is mutable.
+	 *
+	 * @return {@code true} if the value is mutable, {@code false} otherwise.
+	 */
 	public boolean isMutable() {
 		return publicKey != null;
 	}
 
+	/**
+	 * Checks if the value is encrypted.
+	 *
+	 * @return {@code true} if the value is encrypted, {@code false} otherwise.
+	 */
 	public boolean isEncrypted() {
 		return recipient != null;
 	}
@@ -235,6 +427,12 @@ public class Value {
 		return toSign;
 	}
 
+	/**
+	 * Checks if the value is valid, including checks for data integrity and
+	 * signature verification.
+	 *
+	 * @return {@code true} if the value is valid, {@code false} otherwise.
+	 */
 	public boolean isValid() {
 		if (data == null || data.length == 0)
 			return false;
@@ -254,6 +452,13 @@ public class Value {
 		return true;
 	}
 
+	/**
+	 * Decrypts the data using the recipient's private key.
+	 *
+	 * @param recipientSk the recipient's private key.
+	 * @return the decrypted data, or {@code null} if decryption fails.
+	 * @throws CryptoException if a cryptographic error occurs during decryption.
+	 */
 	public byte[] decryptData(Signature.PrivateKey recipientSk) throws CryptoException {
 		if (!isValid())
 			return null;
@@ -267,6 +472,13 @@ public class Value {
 		return CryptoBox.decrypt(data, pk, sk, CryptoBox.Nonce.fromBytes(nonce));
 	}
 
+	/**
+	 * Updates the value with new data, incrementing the sequence number.
+	 *
+	 * @param data the new data to be included in the updated value.
+	 * @return the updated Value object.
+	 * @throws CryptoException if a cryptographic error occurs during the update.
+	 */
 	public Value update(byte[] data) throws CryptoException {
 		if (!isMutable())
 			throw new IllegalStateException("Immutable value " + getId());

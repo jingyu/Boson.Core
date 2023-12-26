@@ -32,6 +32,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.utils.Hex;
 
+/**
+ * @hidden
+ */
 public class FindValueResponse extends LookupResponse {
 	private Id publicKey;
 	private Id recipient;

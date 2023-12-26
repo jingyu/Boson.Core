@@ -27,9 +27,11 @@ import java.util.Comparator;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-
 import io.bosonnetwork.kademlia.KBucketEntry;
 
+/**
+ * @hidden
+ */
 public class CandidateNode extends NodeInfo {
 	private long lastSent;			/* the time of the last unanswered request */
 	private long lastReply;			/* the time of the last reply */
@@ -39,6 +41,9 @@ public class CandidateNode extends NodeInfo {
 
 	private int token;
 
+	/**
+	 * @hidden
+	 */
 	public static final class DistanceOrder implements Comparator<CandidateNode> {
 		final Id target;
 

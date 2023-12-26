@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.OutputStream;
 
+/**
+ * @hidden
+ */
 public class PartialMessage extends Message {
 	public static final PartialMessage BLANK = new PartialMessage();
 

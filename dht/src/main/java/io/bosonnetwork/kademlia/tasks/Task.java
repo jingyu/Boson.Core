@@ -37,13 +37,15 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 
 import io.bosonnetwork.NodeInfo;
-
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.RPCCallListener;
 import io.bosonnetwork.kademlia.messages.Message;
 
+/**
+ * @hidden
+ */
 public abstract class Task implements Comparable<Task> {
 	private final int taskId;
 	private String name;
@@ -65,6 +67,9 @@ public abstract class Task implements Comparable<Task> {
 	private static EnumSet<RPCCall.State> callStatesTobeUpdate = EnumSet.of(RPCCall.State.RESPONDED,
 			RPCCall.State.ERROR, RPCCall.State.STALLED, RPCCall.State.TIMEOUT);
 
+	/**
+	 * @hidden
+	 */
 	public static enum State {
 		INITIAL, QUEUED, RUNNING, FINISHED, CANCELED;
 
@@ -77,6 +82,9 @@ public abstract class Task implements Comparable<Task> {
 		}
 	}
 
+	/**
+	 * @hidden
+	 */
 	public final class CallListener implements RPCCallListener {
 		@Override
 		public void onStateChange(RPCCall call, RPCCall.State previous, RPCCall.State current) {

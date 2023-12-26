@@ -37,6 +37,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 
+/**
+ * @hidden
+ */
 public class FindPeerResponse extends LookupResponse {
 	private List<PeerInfo> peers;
 

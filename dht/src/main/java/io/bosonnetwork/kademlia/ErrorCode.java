@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia;
 
+/**
+ * @hidden
+ */
 public enum ErrorCode {
 	Success(0),
 

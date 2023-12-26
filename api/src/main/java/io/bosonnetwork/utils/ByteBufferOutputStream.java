@@ -30,6 +30,9 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.ReadOnlyBufferException;
 
+/**
+ * Utility to collect data written to an OutputStream in ByteBuffers.
+ */
 public class ByteBufferOutputStream extends OutputStream {
 	/**
 	 * The ByteBuffer object to which data is written.
@@ -86,7 +89,7 @@ public class ByteBufferOutputStream extends OutputStream {
 	 * <p>
 	 * If <code>off</code> is negative, or <code>len</code> is negative, or
 	 * <code>off+len</code> is greater than the length of the array <code>b</code>,
-	 * then an <tt>IndexOutOfBoundsException</tt> is thrown.
+	 * then an <code>IndexOutOfBoundsException</code> is thrown.
 	 *
 	 * @param src    the data
 	 * @param offset the start offset in the data

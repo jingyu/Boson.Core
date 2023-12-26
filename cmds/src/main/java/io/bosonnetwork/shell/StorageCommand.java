@@ -31,15 +31,18 @@ import java.util.stream.Stream;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-
 import io.bosonnetwork.kademlia.DataStorage;
 import io.bosonnetwork.shell.StorageCommand.ListPeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ListValueCommand;
 import io.bosonnetwork.shell.StorageCommand.PeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ValueCommand;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "storage", mixinStandardHelpOptions = true, version = "Boson storage 2.0",
 	description = "Show the local data storage.", subcommands = {
 			ListValueCommand.class,
@@ -48,6 +51,9 @@ import picocli.CommandLine.Parameters;
 			PeerCommand.class
 		})
 public class StorageCommand {
+	/**
+	 * @hidden
+	 */
 	@Command(name = "listvalue", mixinStandardHelpOptions = true, version = "Boson listvalue 2.0",
 			description = "List values from the local storage.")
 	public static class ListValueCommand implements Callable<Integer> {
@@ -68,6 +74,9 @@ public class StorageCommand {
 		}
 	}
 
+	/**
+	 * @hidden
+	 */
 	@Command(name = "value", mixinStandardHelpOptions = true, version = "Boson value 2.0",
 			description = "Display value from the local storage.")
 	public static class ValueCommand implements Callable<Integer> {
@@ -95,6 +104,9 @@ public class StorageCommand {
 		}
 	}
 
+	/**
+	 * @hidden
+	 */
 	@Command(name = "listpeer", mixinStandardHelpOptions = true, version = "Boson listpeer 2.0",
 			description = "List peers from the local storage.")
 	public static class ListPeerCommand implements Callable<Integer> {
@@ -115,6 +127,9 @@ public class StorageCommand {
 		}
 	}
 
+	/**
+	 * @hidden
+	 */
 	@Command(name = "peer", mixinStandardHelpOptions = true, version = "Boson peer 2.0",
 			description = "Display peer info from the local storage.")
 	public static class PeerCommand implements Callable<Integer> {

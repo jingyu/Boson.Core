@@ -43,6 +43,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * Default configuration implementation for the {@link Configuration} interface.
+ */
 public class DefaultConfiguration implements Configuration {
 	private static final int DEFAULT_DHT_PORT = 39001;
 
@@ -58,31 +61,62 @@ public class DefaultConfiguration implements Configuration {
 		this.services = new LinkedHashMap<>();
 	}
 
+	/**
+	 * IPv4 address for the DHT node. Null IPv4 address will disable the DHT on IPv4.
+	 *
+	 * @return the InetSocketAddress object of the IPv4 address.
+	 */
 	@Override
 	public InetSocketAddress IPv4Address() {
 		return addr4;
 	}
 
+	/**
+	 * IPv6 address for the DHT node. Null IPv6 address will disable the DHT on IPv6.
+	 *
+	 * @return the InetSocketAddress object of the IPv6 address.
+	 */
 	@Override
 	public InetSocketAddress IPv6Address() {
 		return addr6;
 	}
 
+	/**
+	 * If a Path that points to a writable directory is returned then the node info and
+	 * the routing table will be persisted to that directory periodically and during shutdown.
+	 *
+	 * Null path will disable the DHT persist it's data.
+	 *
+	 * @return a File object point to the storage path.
+	 */
 	@Override
 	public File storagePath() {
 		return storagePath;
 	}
 
+	/**
+	 * The bootstrap nodes for the new DHT node.
+	 *
+	 * @return a Collection for the bootstrap nodes.
+	 */
 	@Override
 	public Collection<NodeInfo> bootstrapNodes() {
 		return bootstraps;
 	}
 
+	/**
+	 * The Boson services to be loaded within the DHT node.
+	 *
+	 * @return a Map object of service class(FQN) and service configuration.
+	 */
 	@Override
 	public Map<String, Map<String, Object>> services() {
 		return services;
 	}
 
+	/**
+	 * The builder helper class to create a {@link Configuration} object.
+	 */
 	public static class Builder {
 		private static final boolean AUTO_IPV4 = true;
 		private static final boolean AUTO_IPV6 = false;
@@ -103,22 +137,49 @@ public class DefaultConfiguration implements Configuration {
 			return conf;
 		}
 
+		/**
+		 * Set auto detect the IPv4 address. It will disable DHT on IPv4 if there isn't
+		 * an available IPv4 address.
+		 *
+		 * @param auto true to auto detect the IPv4 address, false to disable.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setAutoIPv4Address(boolean auto) {
 			autoAddr4 = auto;
 			return this;
 		}
 
+		/**
+		 * Set auto detect the IPv6 address. It will disable DHT on IPv6 if there isn't
+		 * an available IPv6 address.
+		 *
+		 * @param auto true to auto detect the IPv6 address, false to disable.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setAutoIPv6Address(boolean auto) {
 			autoAddr6 = auto;
 			return this;
 		}
 
+		/**
+		 * Set auto detect the IPv4 and IPv6 addresses. It will disable DHT on IPv4/6
+		 * if there isn't an available IPv4/6 address.
+		 *
+		 * @param auto true to auto detect the IP addresses, false to disable.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setAutoIPAddress(boolean auto) {
 			autoAddr4 = auto;
 			autoAddr6 = auto;
 			return this;
 		}
 
+		/**
+		 * Set the IPv4 address for the DHT node.
+		 *
+		 * @param addr the string IPv4 address.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setIPv4Address(String addr) {
 			try {
 				return setIPv4Address(addr != null ? InetAddress.getByName(addr) : null);
@@ -127,6 +188,12 @@ public class DefaultConfiguration implements Configuration {
 			}
 		}
 
+		/**
+		 * Set the IPv4 address for the DHT node.
+		 *
+		 * @param addr the IPv4 address.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setIPv4Address(InetAddress addr) {
 			if (addr != null && !(addr instanceof Inet4Address))
 				throw new IllegalArgumentException("Invalid IPv4 address: " + addr);
@@ -135,6 +202,12 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Set the IPv6 address for the DHT node.
+		 *
+		 * @param addr the string IPv6 address.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setIPv6Address(String addr) {
 			try {
 				return setIPv6Address(addr != null ? InetAddress.getByName(addr) : null);
@@ -143,6 +216,12 @@ public class DefaultConfiguration implements Configuration {
 			}
 		}
 
+		/**
+		 * Set the IPv6 address for the DHT node.
+		 *
+		 * @param addr the IPv6 address.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setIPv6Address(InetAddress addr) {
 			if (addr != null && !(addr instanceof Inet6Address))
 				throw new IllegalArgumentException("Invalid IPv6 address: " + addr);
@@ -151,6 +230,12 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Set the DHT listen port. IPv4 and IPv6 networks will use same port.
+		 *
+		 * @param port the port to listen.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setListeningPort(int port) {
 			if (port <= 0 || port > 65535)
 				throw new IllegalArgumentException("Invalid port: " + port);
@@ -159,33 +244,83 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Checks if there is a storage path already been set.
+		 *
+		 * @return the Builder instance for method chaining.
+		 */
 		public boolean hasStoragePath() {
 			return getConfiguration().storagePath != null;
 		}
 
+		/**
+		 * Set the storage path for the DHT persistent data.
+		 *
+		 * @param path the string path.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder setStoragePath(String path) {
-			getConfiguration().storagePath = path != null ?  toFile(path) : null;
+			return setStoragePath(toFile(path));
+		}
+
+		/**
+		 * Set the storage path for the DHT persistent data.
+		 *
+		 * @param path the File object to the storage path.
+		 * @return the Builder instance for method chaining.
+		 */
+		public Builder setStoragePath(File path) {
+			getConfiguration().storagePath = path;
 			return this;
 		}
 
+		/**
+		 * Add a new bootstrap node.
+		 *
+		 * @param id the id of the bootstrap node.
+		 * @param addr the string address of the bootstrap node.
+		 * @param port the listen port of the bootstrap node.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addBootstrap(String id, String addr, int port) {
 			NodeInfo node = new NodeInfo(Id.of(id), addr, port);
 			getConfiguration().bootstraps.add(node);
 			return this;
 		}
 
+		/**
+		 * Add a new bootstrap node.
+		 *
+		 * @param id the id of the bootstrap node.
+		 * @param addr the address of the bootstrap node.
+		 * @param port the listen port of the bootstrap node.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addBootstrap(Id id, InetAddress addr, int port) {
 			NodeInfo node = new NodeInfo(id, addr, port);
 			getConfiguration().bootstraps.add(node);
 			return this;
 		}
 
+		/**
+		 * Add a new bootstrap node.
+		 *
+		 * @param id the id of the bootstrap node.
+		 * @param addr the socket address of the bootstrap node.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addBootstrap(Id id, InetSocketAddress addr) {
 			NodeInfo node = new NodeInfo(id, addr);
 			getConfiguration().bootstraps.add(node);
 			return this;
 		}
 
+		/**
+		 * Add a new bootstrap node.
+		 *
+		 * @param node the NodeInfo of the bootstrap node.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addBootstrap(NodeInfo node) {
 			if (node == null)
 				throw new IllegalArgumentException("Invaild node info: null");
@@ -194,6 +329,12 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Add bootstrap nodes.
+		 *
+		 * @param nodes the NodeInfo collection of the bootstrap nodes.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addBootstrap(Collection<NodeInfo> nodes) {
 			if (nodes == null)
 				throw new IllegalArgumentException("Invaild node info: null");
@@ -202,6 +343,13 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Add a new service and it's configuration data.
+		 *
+		 * @param clazz the full qualified class name of the service.
+		 * @param configuration the service configuration data in Map object.
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder addService(String clazz, Map<String, Object> configuration) {
 			if (clazz == null || clazz.isEmpty())
 				throw new IllegalArgumentException("Invaild service class name");
@@ -212,12 +360,30 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Load the configuration data from the JSON file.
+		 *
+		 * @param file the string file path to load.
+		 * @return the Builder instance for method chaining.
+		 * @throws IOException if I/O error occurred during the loading.
+		 */
 		public Builder load(String file) throws IOException {
 			File configFile = toFile(file);
-			if (configFile == null || !configFile.exists() || configFile.isDirectory())
+			return load(configFile);
+		}
+
+		/**
+		 * Load the configuration data from the JSON file.
+		 *
+		 * @param file the File object to load.
+		 * @return the Builder instance for method chaining.
+		 * @throws IOException if I/O error occurred during the loading.
+		 */
+		public Builder load(File file) throws IOException {
+			if (file == null || !file.exists() || file.isDirectory())
 				throw new IllegalArgumentException("Invalid config file: " + String.valueOf(file));
 
-			try (FileInputStream in = new FileInputStream(configFile)) {
+			try (FileInputStream in = new FileInputStream(file)) {
 				ObjectMapper mapper = new ObjectMapper();
 				JsonNode root = mapper.readTree(in);
 
@@ -294,6 +460,12 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Reset the configuration builder object to the initial state,
+		 * clear all existing settings.
+		 *
+		 * @return the Builder instance for method chaining.
+		 */
 		public Builder clear() {
 			autoAddr4 = AUTO_IPV4;
 			autoAddr6 = AUTO_IPV6;
@@ -307,6 +479,13 @@ public class DefaultConfiguration implements Configuration {
 			return this;
 		}
 
+		/**
+		 * Creates the {@link Configuration} instance with current settings in this builder.
+		 * After create the new {@link Configuration} instance, the builder will be reset to the
+		 * initial state.
+		 *
+		 * @return the {@link Configuration} instance.
+		 */
 		public Configuration build() {
 			DefaultConfiguration c = getConfiguration();
 			conf = null;

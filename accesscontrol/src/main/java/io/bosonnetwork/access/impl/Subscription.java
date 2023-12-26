@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.access.impl;
 
+/**
+ * @hidden
+ */
 public enum Subscription {
 	Blocked, Free, Professional, Premium;
 

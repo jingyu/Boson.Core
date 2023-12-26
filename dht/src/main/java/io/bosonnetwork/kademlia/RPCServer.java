@@ -56,15 +56,17 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.utils.AddressUtils;
-
 import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.messages.ErrorMessage;
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.MessageException;
+import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * @hidden
+ */
 public class RPCServer implements Selectable {
 	private final static int WRITE_STATE_INITIAL = -1;
 	private final static int WRITE_STATE_IDLE = 0;
@@ -105,6 +107,9 @@ public class RPCServer implements Selectable {
 
 	private static final Logger log = LoggerFactory.getLogger(RPCServer.class);
 
+	/**
+	 * @hidden
+	 */
 	public enum State {
 		INITIAL,
 		RUNNING,

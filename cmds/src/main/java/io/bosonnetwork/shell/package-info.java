@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * Developer oriented interactive shell for Boson node.
+ */
 package io.bosonnetwork.shell;

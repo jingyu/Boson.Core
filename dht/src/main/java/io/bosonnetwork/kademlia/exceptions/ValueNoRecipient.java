@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the value does not have recipient property.
+ */
 public class ValueNoRecipient extends KadException {
 	private static final long serialVersionUID = -7161033634960228004L;
 

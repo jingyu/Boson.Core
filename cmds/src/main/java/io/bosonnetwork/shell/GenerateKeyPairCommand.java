@@ -9,6 +9,9 @@ import io.bosonnetwork.utils.Hex;
 
 import picocli.CommandLine.Command;
 
+/**
+ * @hidden
+ */
 @Command(name = "keygen", mixinStandardHelpOptions = true, version = "Boson key generator 2.0",
 description = "Create keypair.")
 public class GenerateKeyPairCommand implements Callable<Integer> {

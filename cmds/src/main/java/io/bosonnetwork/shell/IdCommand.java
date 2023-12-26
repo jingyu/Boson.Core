@@ -29,6 +29,9 @@ import io.bosonnetwork.Id;
 
 import picocli.CommandLine.Command;
 
+/**
+ * @hidden
+ */
 @Command(name = "id", mixinStandardHelpOptions = true, version = "Boson id 2.0",
 	description = "Display the ID of current Boson node.")
 public class IdCommand implements Callable<Integer> {

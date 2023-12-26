@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+/**
+ * @hidden
+ */
 public class PingRequest extends Message {
 	public PingRequest() {
 		super(Type.REQUEST, Method.PING);

@@ -12,20 +12,26 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
+import io.bosonnetwork.kademlia.KBucketEntry;
 import io.bosonnetwork.utils.ThreadLocals;
 
-import io.bosonnetwork.kademlia.KBucketEntry;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "displaycache", mixinStandardHelpOptions = true, version = "Boson displaycache 2.0",
 		description = "Display the cached routing table.")
 public class DisplayCacheCommnand implements Callable<Integer> {
 	@ArgGroup(exclusive = true, multiplicity = "0..1")
     AddressFamily af;
 
+	/**
+	 * @hidden
+	 */
     static class AddressFamily {
     	@Option(names = {"-4", "--ipv4-only"}, description = "Diaplay the routing table for IPv4 only.")
     	private boolean ipv4Only = false;

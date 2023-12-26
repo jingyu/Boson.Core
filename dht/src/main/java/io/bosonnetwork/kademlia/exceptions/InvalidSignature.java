@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the signature verification failed.
+ */
 public class InvalidSignature extends KadException {
 	private static final long serialVersionUID = -5069409883215747477L;
 

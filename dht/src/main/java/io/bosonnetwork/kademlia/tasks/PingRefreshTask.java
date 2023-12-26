@@ -31,13 +31,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
-
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KBucket;
 import io.bosonnetwork.kademlia.KBucketEntry;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.messages.PingRequest;
 
+/**
+ * @hidden
+ */
 public class PingRefreshTask extends Task {
 	@SuppressWarnings("unused")
 	private KBucket bucket;
@@ -49,17 +51,13 @@ public class PingRefreshTask extends Task {
 
 	private static final Logger log = LoggerFactory.getLogger(PingRefreshTask.class);
 
+	/**
+	 * @hidden
+	 */
 	public static enum Options {
 		checkAll, removeOnTimeout, probeCache,
 	}
 
-	/**
-	 * @param rpc
-	 * @param node
-	 * @param bucket         the bucket to refresh
-	 * @param cleanOnTimeout if true Nodes that fail to respond are removed. should
-	 *                       be false for normal use.
-	 */
 	public PingRefreshTask(DHT dht, KBucket bucket, EnumSet<Options> options) {
 		super(dht);
 

@@ -33,6 +33,9 @@ import java.util.function.Predicate;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 
+/**
+ * @hidden
+ */
 public class KClosestNodes {
 	private DHT dht;
 	private Id target;
@@ -41,13 +44,6 @@ public class KClosestNodes {
 	private Comparator<KBucketEntry> cmp;
 	private Predicate<KBucketEntry> filter;
 
-	/**
-	 * Constructor sets the key to compare with
-	 *
-	 * @param key         The key to compare with
-	 * @param maxEntries The maximum number of entries can be in the map
-	 * @return
-	 */
 	public KClosestNodes(DHT dht, Id id, int maxEntries) {
 		this(dht, id, maxEntries, KBucketEntry::isEligibleForNodesList);
 	}
@@ -62,7 +58,9 @@ public class KClosestNodes {
 	}
 
 	/**
-	 * @return the Target key of the search
+	 * Gets the target node id.
+	 *
+	 * @return the Target node id of the search
 	 */
 	public Id getTarget() {
 		return target;
@@ -158,6 +156,8 @@ public class KClosestNodes {
 	}
 
 	/**
+	 * Get all closed node entries.
+	 *
 	 * @return a unmodifiable List of the entries
 	 */
 	public List<KBucketEntry> entries() {

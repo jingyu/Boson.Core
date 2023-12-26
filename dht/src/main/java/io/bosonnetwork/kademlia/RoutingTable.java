@@ -59,11 +59,9 @@ import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.Prefix;
-import io.bosonnetwork.utils.ThreadLocals;
-
 import io.bosonnetwork.kademlia.tasks.PingRefreshTask;
 import io.bosonnetwork.kademlia.tasks.Task;
+import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * This is a lock-free routing table implementation.
@@ -79,6 +77,8 @@ import io.bosonnetwork.kademlia.tasks.Task;
  * CAUTION:
  *   All methods name leading with _ means that method will WRITE the
  *   routing table, it can only be called inside the pipeline processing.
+ *
+ * @hidden
  */
 public final class RoutingTable {
 	private DHT dht;
@@ -205,7 +205,7 @@ public final class RoutingTable {
 	/**
 	 * Get the number of entries in the routing table
 	 *
-	 * @return
+	 * @return the number of entries
 	 */
 	public int getNumBucketEntries() {
 		return getBuckets().stream().flatMapToInt(b -> IntStream.of(b.size())).sum();
@@ -538,11 +538,6 @@ public final class RoutingTable {
 			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
 	}
 
-	/**
-	 * Check if a buckets needs to be refreshed, and refresh if necesarry
-	 *
-	 * @param dh_table
-	 */
 	CompletableFuture<Void> fillBuckets() {
 		List<KBucket> bucketsRef = getBuckets();
 		if (bucketsRef.isEmpty())
@@ -575,9 +570,7 @@ public final class RoutingTable {
 	/**
 	 * Loads the routing table from a file
 	 *
-	 * @param file
-	 * @param runWhenLoaded is executed when all load operations are finished
-	 * @throws IOException
+	 * @param file the file that load from
 	 */
 	public void load(File file) {
 		if (!file.exists() || !file.isFile())
@@ -626,10 +619,10 @@ public final class RoutingTable {
 	}
 
 	/**
-	 * Saves the routing table to a file
+	 * Saves the routing table to a file.
 	 *
-	 * @param file to save to
-	 * @throws IOException
+	 * @param file to save to.
+	 * @throws IOException is an I/O error occurred.
 	 */
 	public void save(File file) throws IOException {
 		if (file.isDirectory())

@@ -52,16 +52,19 @@ import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.DefaultConfiguration;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeStatusListener;
-import io.bosonnetwork.utils.ApplicationLock;
-
 import io.bosonnetwork.kademlia.Node;
 import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.utils.ApplicationLock;
+
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.shell.jline3.PicocliCommands;
 import picocli.shell.jline3.PicocliCommands.PicocliCommandsFactory;
 
+/**
+ * @hidden
+ */
 @Command(name = "shell", mixinStandardHelpOptions = true, version = "Boson shell 2.0",
 		description = "Boson command line shell.",
 		subcommands = {

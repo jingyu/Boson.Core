@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.messages;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public class FindNodeRequest extends LookupRequest {
 	public FindNodeRequest(Id targetId, boolean wantToken) {
 		super(Method.FIND_NODE, targetId);

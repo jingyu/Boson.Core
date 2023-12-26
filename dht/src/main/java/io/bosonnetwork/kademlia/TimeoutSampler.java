@@ -30,6 +30,9 @@ import java.util.Formatter;
 
 import io.bosonnetwork.kademlia.messages.Message;
 
+/**
+ * @hidden
+ */
 public class TimeoutSampler {
 	/*
 	static final int MIN_BIN = 0;
@@ -212,6 +215,9 @@ public class TimeoutSampler {
 		}
 	};
 
+	/**
+	 * @hidden
+	 */
 	public static class Snapshot {
 		final long[] values;
 

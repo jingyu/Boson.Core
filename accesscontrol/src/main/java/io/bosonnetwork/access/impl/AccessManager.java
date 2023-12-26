@@ -53,6 +53,9 @@ import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.access.Permission;
 import io.bosonnetwork.utils.ThreadLocals;
 
+/**
+ * @hidden
+ */
 public class AccessManager implements io.bosonnetwork.access.AccessManager {
 	private Path repo;
 	private Path defaults;

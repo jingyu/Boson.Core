@@ -23,9 +23,26 @@
 
 package io.bosonnetwork;
 
+/**
+ * Connection status for the Boson DHT node.
+ */
 public enum ConnectionStatus {
+	/**
+	 * Disconnected to the Boson network. can not handle any DHT request.
+	 */
 	Disconnected,
+	/**
+	 * Connecting to the Boson network.
+	 */
 	Connecting,
+	/**
+	 * Connected to the Boson network. In this status the DHT node learned some nodes,
+	 * can handle the DHT requests.
+	 */
 	Connected,
+	/**
+	 * Connected to the Boson network. and the DHT node already learned enough nodes to
+	 * fill the routing table, also be competent to handle the DHT requests.
+	 */
 	Profound
 }

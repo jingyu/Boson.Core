@@ -23,9 +23,27 @@
 
 package io.bosonnetwork;
 
+/**
+ * Enumeration representing the different statuses of the Boson node.
+ */
 public enum NodeStatus {
+	/**
+	 * Indicates that the node is stopped.
+	 */
 	Stopped,
+
+	/**
+	 * Indicates that the node is in the process of starting.
+	 */
 	Starting,
+
+	/**
+	 * Indicates that the node is running.
+	 */
 	Running,
+
+	/**
+	 * Indicates that the node is in the process of stopping.
+	 */
 	Stopping
 }

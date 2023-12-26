@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * This package is about the DHT lookup tasks and maintenance tasks.
+ */
 package io.bosonnetwork.kademlia.tasks;

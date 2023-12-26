@@ -27,6 +27,9 @@ import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
 
+/**
+ * @hidden
+ */
 @Command(name = "routingtable", mixinStandardHelpOptions = true, version = "Boson routingtable 2.0",
 		description = "Display the routing tables.")
 public class RoutingTableCommand implements Callable<Integer> {

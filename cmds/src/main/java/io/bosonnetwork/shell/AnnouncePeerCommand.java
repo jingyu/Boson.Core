@@ -35,6 +35,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "announcepeer", mixinStandardHelpOptions = true, version = "Boson announcepeer 2.0",
 		description = "Announce a service peer.")
 public class AnnouncePeerCommand implements Callable<Integer> {

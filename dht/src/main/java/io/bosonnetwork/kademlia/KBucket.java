@@ -35,10 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Prefix;
-import io.bosonnetwork.utils.ThreadLocals;
-
 import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * A KBucket is just a list of KBucketEntry objects.
@@ -64,6 +62,8 @@ import io.bosonnetwork.kademlia.messages.Message;
  *   Due the heavy implementation the stream operations are significant
  *   slow than the for-loops. so we should avoid the stream operations
  *   on the KBucket entries and the cache entries, use for-loop instead.
+ *
+ * @hidden
  */
 public class KBucket implements Comparable<KBucket> {
 	private final Prefix prefix;

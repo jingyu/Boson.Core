@@ -33,7 +33,6 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
-
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KClosestNodes;
@@ -42,6 +41,9 @@ import io.bosonnetwork.kademlia.messages.FindValueRequest;
 import io.bosonnetwork.kademlia.messages.FindValueResponse;
 import io.bosonnetwork.kademlia.messages.Message;
 
+/**
+ * @hidden
+ */
 public class ValueLookup extends LookupTask {
 	int expectedSequence = -1;
 	Consumer<Value> resultHandler;

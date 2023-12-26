@@ -28,9 +28,13 @@ import java.util.concurrent.Callable;
 import io.bosonnetwork.access.impl.AccessControlList;
 import io.bosonnetwork.access.impl.AccessManager;
 import io.bosonnetwork.access.impl.Subscription;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "subscription", mixinStandardHelpOptions = true, version = "Boson access manager 2.0",
 		description = "Show access control list for subscription.")
 public class SubscriptionCommand extends AmCommand implements Callable<Integer> {

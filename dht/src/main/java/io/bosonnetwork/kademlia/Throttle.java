@@ -29,6 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * @hidden
+ */
 public class Throttle {
 	private Map<InetAddress, Integer> counter = new ConcurrentHashMap<>();
 	private AtomicLong lastDecayTime = new AtomicLong(System.currentTimeMillis());
@@ -78,9 +81,15 @@ public class Throttle {
 		counter.replaceAll((k, v) -> v - delta);
 	}
 
+	/**
+	 * @hidden
+	 */
 	public static class Eanbled extends Throttle {
 	}
 
+	/**
+	 * @hidden
+	 */
 	public static class Disabled extends Throttle {
 		@Override
 		public boolean saturatingInc(InetAddress addr) {

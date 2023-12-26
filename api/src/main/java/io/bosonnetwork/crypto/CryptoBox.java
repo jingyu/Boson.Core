@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2022 - 2023 trinity-tech.io
- * Copyright (c) 2023 -      bosonnetwork.io
+ * Copyright (c) 2023 -	  bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,15 +28,28 @@ import java.util.Arrays;
 import javax.security.auth.Destroyable;
 
 import org.apache.tuweni.crypto.sodium.Box;
+import org.apache.tuweni.crypto.sodium.Box.Seed;
 import org.apache.tuweni.crypto.sodium.Sodium;
 import org.apache.tuweni.crypto.sodium.SodiumException;
 
+/**
+ * Public-key(Curve 25519) authenticated encryption.
+ */
 public class CryptoBox implements AutoCloseable {
+	/**
+	 * The Message Authentication Code size of the encrypted data in bytes.
+	 */
 	public static final int MAC_BYTES = 16;
 
 	private Box box;
 
+	/**
+	 * The crypto box public key object.
+	 */
 	public static class PublicKey implements Destroyable {
+		/**
+		 * The number of bytes used to represent a public key.
+		 */
 		public static final int BYTES = Box.PublicKey.length();
 
 		private Box.PublicKey key;
@@ -46,11 +59,26 @@ public class CryptoBox implements AutoCloseable {
 			this.key = key;
 		}
 
+		/**
+		 * Create a {@link PublicKey} from an array of bytes.
+		 * The byte array must be of length {@link #BYTES}.
+		 *
+		 * @param key the bytes for the public key.
+		 * @return the public key object.
+		 */
 		public static PublicKey fromBytes(byte[] key) {
 			// no SodiumException raised
 			return new PublicKey(Box.PublicKey.fromBytes(key));
 		}
 
+		/**
+		 * Transforms the Ed25519 signature public key to a Curve25519 public key. See
+		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 *
+		 * @param key the signature public key.
+		 * @return the public key as a Curve25519 public key.
+		 * @throws CryptoException if error to transform the key.
+		 */
 		public static PublicKey fromSignatureKey(Signature.PublicKey key) throws CryptoException {
 			try {
 				return new PublicKey(Box.PublicKey.forSignaturePublicKey(key.raw()));
@@ -63,6 +91,11 @@ public class CryptoBox implements AutoCloseable {
 			return key;
 		}
 
+		/**
+		 * Get the raw bytes of this key.
+		 *
+		 * @return the raw bytes of this key.
+		 */
 		public byte[] bytes() {
 			if (bytes == null)
 				bytes = key.bytesArray();
@@ -89,12 +122,10 @@ public class CryptoBox implements AutoCloseable {
 		}
 
 		/**
-		 * Destroy this {@code Object}.
+		 * Destroy this {@code PublicKey}.
 		 *
-		 * <p> Sensitive information associated with this {@code Object}
-		 * is destroyed or cleared.  Subsequent calls to certain methods
-		 * on this {@code Object} will result in an
-		 * {@code IllegalStateException} being thrown.
+		 * Sensitive information associated with this {@code PublicKey}
+		 * is destroyed or cleared.
 		 */
 		@Override
 		public void destroy() {
@@ -109,10 +140,10 @@ public class CryptoBox implements AutoCloseable {
 		}
 
 		/**
-		 * Determine if this {@code Object} has been destroyed.
+		 * Determine if this {@code PublicKey} has been destroyed.
 		 *
-		 * @return true if this {@code Object} has been destroyed,
-		 *          false otherwise.
+		 * @return true if this {@code PublicKey} has been destroyed,
+		 *		 false otherwise.
 		 */
 		@Override
 		public boolean isDestroyed() {
@@ -120,7 +151,13 @@ public class CryptoBox implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * The crypto box private key object.
+	 */
 	public static class PrivateKey implements Destroyable {
+		/**
+		 * The number of bytes used to represent a public key.
+		 */
 		public static final int BYTES = Box.SecretKey.length();
 
 		private Box.SecretKey key;
@@ -130,11 +167,26 @@ public class CryptoBox implements AutoCloseable {
 			this.key = key;
 		}
 
+		/**
+		 * Create a {@link PrivateKey} from an array of bytes.
+		 * The byte array must be of length {@link #BYTES}.
+		 *
+		 * @param key the bytes for the private key.
+		 * @return the private key.
+		 */
 		public static PrivateKey fromBytes(byte[] key) {
 			// no SodiumException raised
 			return new PrivateKey(Box.SecretKey.fromBytes(key));
 		}
 
+		/**
+		 * Transforms the Ed25519 private key to a Curve25519 private key. See
+		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 *
+		 * @param key the signature secret key
+		 * @return the secret key as a Curve25519 private key
+		 * @throws CryptoException if error to transform the key.
+		 */
 		public static PrivateKey fromSignatureKey(Signature.PrivateKey key) throws CryptoException {
 			try {
 				return new PrivateKey(Box.SecretKey.forSignatureSecretKey(key.raw()));
@@ -147,6 +199,11 @@ public class CryptoBox implements AutoCloseable {
 			return key;
 		}
 
+		/**
+		 * Get the raw bytes of this key.
+		 *
+		 * @return the raw bytes of this key.
+		 */
 		public byte[] bytes() {
 			if (bytes == null)
 				bytes = key.bytesArray();
@@ -173,12 +230,10 @@ public class CryptoBox implements AutoCloseable {
 		}
 
 		/**
-		 * Destroy this {@code Object}.
+		 * Destroy this {@code PrivateKey}.
 		 *
-		 * <p> Sensitive information associated with this {@code Object}
-		 * is destroyed or cleared.  Subsequent calls to certain methods
-		 * on this {@code Object} will result in an
-		 * {@code IllegalStateException} being thrown.
+		 * Sensitive information associated with this {@code PrivateKey}
+		 * is destroyed or cleared.
 		 */
 		@Override
 		public void destroy() {
@@ -193,10 +248,10 @@ public class CryptoBox implements AutoCloseable {
 		}
 
 		/**
-		 * Determine if this {@code Object} has been destroyed.
+		 * Determine if this {@code PrivateKey} has been destroyed.
 		 *
-		 * @return true if this {@code Object} has been destroyed,
-		 *          false otherwise.
+		 * @return true if this {@code PrivateKey} has been destroyed,
+		 *		 false otherwise.
 		 */
 		@Override
 		public boolean isDestroyed() {
@@ -204,7 +259,15 @@ public class CryptoBox implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * The crypto box key pair.
+	 */
 	public static class KeyPair {
+		/**
+		 * The seed length in bytes.
+		 */
+		public int SEED_BYTES = Seed.length();
+
 		private Box.KeyPair keyPair;
 		private PublicKey pk;
 		private PrivateKey sk;
@@ -213,28 +276,61 @@ public class CryptoBox implements AutoCloseable {
 			this.keyPair = keyPair;
 		}
 
+		/**
+		 * Create a {@link KeyPair} from an array of private key bytes.
+		 *
+		 * @param privateKey the raw private key.
+		 * @return the key pair object.
+		 */
 		public static KeyPair fromPrivateKey(byte[] privateKey) {
 			Box.SecretKey sk = Box.SecretKey.fromBytes(privateKey);
 			// Normally, should never raise Exception
 			return new KeyPair(Box.KeyPair.forSecretKey(sk));
 		}
 
+		/**
+		 * Create a {@link KeyPair} from a {@link PrivateKey} object.
+		 *
+		 * @param key the private key object.
+		 * @return the key pair object.
+		 */
 		public static KeyPair fromPrivateKey(PrivateKey key) {
 			// Normally, should never raise Exception
 			return new KeyPair(Box.KeyPair.forSecretKey(key.raw()));
 		}
 
+		/**
+		 * Generate a new key pair using a seed.
+		 * The seed must be of length {@link #SEED_BYTES}.
+		 *
+		 * @param seed the seed bytes.
+		 * @return the new generated key pair.
+		 */
 		public static KeyPair fromSeed(byte[] seed) {
 			Box.Seed sd = Box.Seed.fromBytes(seed);
 			// Normally, should never raise Exception
 			return new KeyPair(Box.KeyPair.fromSeed(sd));
 		}
 
+		/**
+		 * Converts signature key pair (Ed25519) to a box key pair (Curve25519)
+		 * so that the same key pair can be used both for authenticated encryption
+		 * and for signatures. See
+		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 *
+		 * @param keyPair A {@link Signature.KeyPair}.
+		 * @return the new generated box key pair.
+		 */
 		public static KeyPair fromSignatureKeyPair(Signature.KeyPair keyPair)  {
 			// Normally, should never raise Exception
 			return new KeyPair(Box.KeyPair.forSignatureKeyPair(keyPair.raw()));
 		}
 
+		/**
+		 * Generate a new key pair using a random generator.
+		 *
+		 * @return a randomly generated key pair.
+		 */
 		public static KeyPair random() {
 			// Normally, should never raise Exception
 			return new KeyPair(Box.KeyPair.random());
@@ -244,6 +340,11 @@ public class CryptoBox implements AutoCloseable {
 			return keyPair;
 		}
 
+		/**
+		 * Gets the public key of this key pair.
+		 *
+		 * @return the public key of the key pair.
+		 */
 		public PublicKey publicKey() {
 			if (pk == null)
 				pk = new PublicKey(keyPair.publicKey());
@@ -251,6 +352,11 @@ public class CryptoBox implements AutoCloseable {
 			return pk;
 		}
 
+		/**
+		 * Gets the private key of this key pair.
+		 *
+		 * @return the private key of the key pair.
+		 */
 		public PrivateKey privateKey() {
 			if (sk == null)
 				sk = new PrivateKey(keyPair.secretKey());
@@ -277,7 +383,13 @@ public class CryptoBox implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * The nonce object for the crypto box encryption.
+	 */
 	public static class Nonce {
+		/**
+		 * The number of bytes used to represent a public key.
+		 */
 		public static final int BYTES = Box.Nonce.length();
 
 		private Box.Nonce nonce;
@@ -287,14 +399,31 @@ public class CryptoBox implements AutoCloseable {
 			this.nonce = nonce;
 		}
 
+		/**
+		 * Create a Nonce object from an array of bytes.
+		 * The byte array must be of length {@link #BYTES}.
+		 *
+		 * @param nonce the bytes for the nonce.
+		 * @return a nonce object based on these bytes.
+		 */
 		public static Nonce fromBytes(byte[] nonce) {
 			return new Nonce(Box.Nonce.fromBytes(nonce));
 		}
 
+		/**
+		 * Generate a random Nonce object.
+		 *
+		 * @return a randomly generated nonce.
+		 */
 		public static Nonce random() {
 			return new Nonce(Box.Nonce.random());
 		}
 
+		/**
+		 * Create a zero Nonce object.
+		 *
+		 * @return a zero nonce object.
+		 */
 		public static Nonce zero() {
 			return new Nonce(Box.Nonce.zero());
 		}
@@ -303,10 +432,25 @@ public class CryptoBox implements AutoCloseable {
 			return nonce;
 		}
 
+		/**
+		 * Increment this nonce.
+		 *
+		 * <p>
+		 * Note that this is not synchronized. If multiple threads are creating
+		 * encrypted messages and incrementing this nonce, then external synchronization
+		 * is required to ensure no two encrypt operations use the same nonce.
+		 *
+		 * @return A new nonce object.
+		 */
 		public Nonce increment() {
 			return new Nonce(nonce.increment());
 		}
 
+		/**
+		 * Provides the bytes of this nonce object.
+		 *
+		 * @return The bytes of this nonce.
+		 */
 		public byte[] bytes() {
 			if (bytes == null)
 				bytes = nonce.bytesArray();
@@ -337,6 +481,19 @@ public class CryptoBox implements AutoCloseable {
 		this.box = box;
 	}
 
+	/**
+	 * Precompute the shared key for a given sender and receiver.
+	 *
+	 * <p>
+	 * Note that the returned instance of CryptoBox should be closed using
+	 * {@link #close()} (or try-with-resources) to ensure timely release of the shared key,
+	 * which is held in native memory.
+	 *
+	 * @param pk the public key of the receiver.
+	 * @param sk the secret key of the sender.
+	 * @return a precomputed crypto box instance.
+	 * @throws CryptoException if error occurred during the key computing.
+	 */
 	public static CryptoBox fromKeys(PublicKey pk, PrivateKey sk) throws CryptoException {
 		try {
 			return new CryptoBox(Box.forKeys(pk.raw(), sk.raw()));
@@ -345,30 +502,73 @@ public class CryptoBox implements AutoCloseable {
 		}
 	}
 
-	public byte[] encrypt(byte[] plain, Nonce nonce) throws CryptoException {
+	/**
+	 * Encrypt a message with this precomputed box.
+	 *
+	 * @param message the message to encrypt.
+	 * @param nonce a unique nonce object.
+	 * @return the encrypted data.
+	 * @throws CryptoException if error occurred during the encrypting.
+	 */
+	public byte[] encrypt(byte[] message, Nonce nonce) throws CryptoException {
 		try {
-			return box.encrypt(plain, nonce.raw());
+			return box.encrypt(message, nonce.raw());
 		} catch (SodiumException e) {
 			throw new CryptoException(e.getMessage(), e);
 		}
 	}
 
-	public static byte[] encrypt(byte[] plain, PublicKey receiver, PrivateKey sender, Nonce nonce) throws CryptoException {
+	/**
+	 * Encrypt a message with the given keys
+	 * @param message the message to encrypt.
+	 * @param receiver the public key of the receiver.
+	 * @param sender the private key of the sender.
+	 * @param nonce a unique nonce object.
+	 * @return the encrypted data.
+	 * @throws CryptoException if error occurred during the encrypting.
+	 */
+	public static byte[] encrypt(byte[] message, PublicKey receiver, PrivateKey sender, Nonce nonce) throws CryptoException {
 		try {
-			return Box.encrypt(plain, receiver.raw(), sender.raw(), nonce.raw());
+			return Box.encrypt(message, receiver.raw(), sender.raw(), nonce.raw());
 		} catch (SodiumException e) {
 			throw new CryptoException(e.getMessage(), e);
 		}
 	}
 
-	public static byte[] encryptSealed(byte[] plain, PublicKey receiver) throws CryptoException {
+	/**
+	 * Encrypt a sealed message for a given key.
+	 *
+	 * Sealed boxes are designed to anonymously send messages to a recipient given its public key.
+	 * Only the recipient can decrypt these messages, using its private key. While
+	 * the recipient can verify the integrity of the message, it cannot verify
+	 * the identity of the sender.
+	 *
+	 * A message is encrypted using an ephemeral key pair, whose secret part is destroyed
+	 * right after the encryption process. Without knowing the secret key used for a given
+	 * message, the sender cannot decrypt its own message later. And without additional data,
+	 * a message cannot be correlated with the identity of its sender.
+	 *
+	 * @param message the message to encrypt.
+	 * @param receiver the public key of the receiver.
+	 * @return the encrypted data.
+	 * @throws CryptoException if error occurred during the encrypting.
+	 */
+	public static byte[] encryptSealed(byte[] message, PublicKey receiver) throws CryptoException {
 		try {
-			return Box.encryptSealed(plain, receiver.raw());
+			return Box.encryptSealed(message, receiver.raw());
 		} catch (SodiumException e) {
 			throw new CryptoException(e.getMessage(), e);
 		}
 	}
 
+	/**
+	 * Decrypt a message with this precomputed box.
+	 *
+	 * @param cipher the cipher text to decrypt.
+	 * @param nonce the nonce that was used for encryption.
+	 * @return The decrypted data.
+	 * @throws CryptoException if the verification or decryption failed.
+	 */
 	public byte[] decrypt(byte[] cipher, Nonce nonce) throws CryptoException {
 		byte[] plain = box.decrypt(cipher, nonce.raw());
 		if (plain == null)
@@ -377,6 +577,16 @@ public class CryptoBox implements AutoCloseable {
 		return plain;
 	}
 
+	/**
+	 * Decrypt a message using the given keys.
+	 *
+	 * @param cipher the cipher text to decrypt.
+	 * @param sender the public key of the sender.
+	 * @param receiver the private key of the receiver.
+	 * @param nonce the nonce that was used for encryption.
+	 * @return the decrypted data.
+	 * @throws CryptoException if the verification or decryption failed.
+	 */
 	public static byte[] decrypt(byte[] cipher, PublicKey sender, PrivateKey receiver, Nonce nonce) throws CryptoException {
 		byte[] plain = Box.decrypt(cipher, sender.raw(), receiver.raw(), nonce.raw());
 		if (plain == null)
@@ -385,6 +595,15 @@ public class CryptoBox implements AutoCloseable {
 		return plain;
 	}
 
+	/**
+	 * Decrypt a sealed message using the given keys.
+	 *
+	 * @param cipher the cipher text to decrypt.
+	 * @param pk the public key of the sender.
+	 * @param sk the private key of the receiver.
+	 * @return the decrypted data.
+	 * @throws CryptoException if the verification or decryption failed.
+	 */
 	public static byte[] decryptSealed(byte[] cipher, PublicKey pk, PrivateKey sk) throws CryptoException {
 		byte[] plain = Box.decryptSealed(cipher, pk.raw(), sk.raw());
 		if (plain == null)

@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * This package contains the public APIs and types for the Boson node.
+ */
 package io.bosonnetwork;

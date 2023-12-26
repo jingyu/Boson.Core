@@ -23,6 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+/**
+ * @hidden
+ */
 public class StoreValueResponse extends Message {
 	public StoreValueResponse(int txid) {
 		super(Type.RESPONSE, Method.STORE_VALUE, txid);

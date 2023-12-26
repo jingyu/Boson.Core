@@ -30,10 +30,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Value;
-
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.messages.StoreValueRequest;
 
+/**
+ * @hidden
+ */
 public class ValueAnnounce extends Task {
 	private Deque<CandidateNode> todo;
 	private Value value;

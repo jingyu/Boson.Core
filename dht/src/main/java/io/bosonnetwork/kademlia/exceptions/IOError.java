@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that an I/O operation failed.
+ */
 public class IOError extends KadException {
 	private static final long serialVersionUID = -3605755304830468305L;
 

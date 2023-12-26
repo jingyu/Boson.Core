@@ -30,14 +30,16 @@ import java.util.stream.Collectors;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.utils.AddressUtils;
-
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.messages.LookupResponse;
 import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * @hidden
+ */
 public abstract class LookupTask extends Task {
 	private Id target;
 	private ClosestSet closest;

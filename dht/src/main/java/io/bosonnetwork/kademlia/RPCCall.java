@@ -32,10 +32,12 @@ import java.util.concurrent.TimeUnit;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.tasks.CandidateNode;
 
+/**
+ * @hidden
+ */
 public class RPCCall {
 	private Message request;
 	private Message response;
@@ -52,6 +54,9 @@ public class RPCCall {
 	private ScheduledFuture<?> timeoutTimer;
 	private List<RPCCallListener> listeners;
 
+	/**
+	 * @hidden
+	 */
 	public static enum State {
 		UNSENT,
 		SENT,

@@ -85,6 +85,9 @@ import io.bosonnetwork.kademlia.tasks.ValueAnnounce;
 import io.bosonnetwork.kademlia.tasks.ValueLookup;
 import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * @hidden
+ */
 public class DHT {
 	private Network type;
 
@@ -742,7 +745,9 @@ public class DHT {
 	}
 
 	/**
-	 * Increase the failed queries count of the bucket entry we sent the message to
+	 * Increase the failed queries count of the bucket entry we sent the message to.
+	 *
+	 * @param call the RPC call.
 	 */
 	protected void onTimeout(RPCCall call) {
 		// ignore the timeout if the DHT is stopped or the RPC server is offline

@@ -23,11 +23,14 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
+/**
+ * @hidden
+ */
 public interface TaskListener {
 	/**
 	 * The task is finished.
 	 *
-	 * @param t The Task
+	 * @param task the Task object that finished.
 	 */
 	void finished(Task task);
 }

@@ -36,35 +36,53 @@ import java.net.SocketException;
 import java.net.StandardProtocolFamily;
 import java.net.UnknownHostException;
 import java.nio.channels.DatagramChannel;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Stream;
 
+/**
+ * Util class to manipulate the IP addresses.
+ */
 public class AddressUtils {
-	private static final NetMask V4_MAPPED;
+	private static final Subnet V4_MAPPED;
 	// private final static NetMask V4_COMPAT = NetMask.fromString("0000::/96");
 	private final static byte[] LOCAL_BROADCAST = new byte[] { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff };
 
 	static {
 		try {
 			// ::ffff:0:0/96
-			V4_MAPPED = new NetMask(Inet6Address.getByAddress(null, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			V4_MAPPED = new Subnet(Inet6Address.getByAddress(null, new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 					0x00, 0x00, 0x00, 0x00, (byte) 0xff, (byte) 0xff, 0x00, 0x00, 0x00, 0x00, }, null), 96);
 		} catch (Exception e) {
 			throw new RuntimeException("INTERNAL ERROR: should never happen");
 		}
 	}
 
-	public static class NetMask {
+	/**
+	 * The {@code Subnet} class represent a subnetwork -  a logical subdivision of an IP network.
+	 * It's defined by a network id and a net mask.
+	 */
+	public static class Subnet {
 		private byte[] network;
 		private int mask;
 
-		public static NetMask fromString(String toParse) {
-			String[] parts = toParse.split("/");
-			return new NetMask(unchecked(() -> InetAddress.getByName(parts[0])), Integer.valueOf(parts[1]));
+		/**
+		 * Creates a Subnet object from a CIDR network string.
+		 *
+		 * @param cidr the CIDR network string.
+		 * @return the Subnet object to represent the CIDR network string.
+		 */
+		public static Subnet fromString(String cidr) {
+			String[] parts = cidr.split("/");
+			return new Subnet(unchecked(() -> InetAddress.getByName(parts[0])), Integer.valueOf(parts[1]));
 		}
 
-		public NetMask(InetAddress network, int mask) {
+		/**
+		 * Create a Subnet object from a network address and a network mask.
+		 *
+		 * @param network the network address.
+		 * @param mask the network mask bits.
+		 */
+		public Subnet(InetAddress network, int mask) {
 			this.mask = mask;
 			this.network = network.getAddress();
 			if (this.network.length * 8 < mask)
@@ -72,6 +90,12 @@ public class AddressUtils {
 						"mask cannot cover more bits than the length of the network address");
 		}
 
+		/**
+		 * Checks if the address belongs to this subnetwork.
+		 *
+		 * @param addr the address to check.
+		 * @return true if the address belongs to this subnetwork, false otherwise.
+		 */
 		public boolean contains(InetAddress addr) {
 			byte[] other = addr.getAddress();
 			if (network.length != other.length)
@@ -91,18 +115,47 @@ public class AddressUtils {
 		}
 	}
 
-	// https://en.wikipedia.org/wiki/Bogon_filtering
-	// https://en.wikipedia.org/wiki/Reserved_IP_addresses
-	// https://en.wikipedia.org/wiki/Martian_packet
+	/**
+	 * Checks if the socket address is a Bogon address.
+	 *
+	 * References:
+	 *   - https://en.wikipedia.org/wiki/Bogon_filtering
+	 *   - https://en.wikipedia.org/wiki/Reserved_IP_addresses
+	 *   - https://en.wikipedia.org/wiki/Martian_packet
+	 *
+	 * @param addr the address to check.
+	 * @return true if the address is a Bogon address, false otherwise.
+	 */
 	public static boolean isBogon(InetSocketAddress addr) {
 		return isBogon(addr.getAddress(), addr.getPort());
 	}
 
+	/**
+	 * Checks if the IP address and the port is a Bogon address.
+	 *
+	 * References:
+	 *   - https://en.wikipedia.org/wiki/Bogon_filtering
+	 *   - https://en.wikipedia.org/wiki/Reserved_IP_addresses
+	 *   - https://en.wikipedia.org/wiki/Martian_packet
+	 *
+	 * @param addr the address to check.
+	 * @param port the port number to check.
+	 * @return true if the address is a Bogon address, false otherwise.
+	 */
 	public static boolean isBogon(InetAddress addr, int port) {
 		return !(port > 0 && port <= 0xFFFF && isGlobalUnicast(addr));
 	}
 
-	// https://datatracker.ietf.org/doc/html/rfc4380
+	/**
+	 * Check if the address is a Teredo address.
+	 *
+	 * References:
+	 *   - https://datatracker.ietf.org/doc/html/rfc4380
+	 *   - https://en.wikipedia.org/wiki/Teredo_tunneling
+	 *
+	 * @param addr the address to check.
+	 * @return true if the address is Teredo address, false otherwise.
+	 */
 	public static boolean isTeredo(InetAddress addr) {
 		if (!(addr instanceof Inet6Address))
 			return false;
@@ -113,6 +166,12 @@ public class AddressUtils {
 		return raw[0] == 0x20 && raw[1] == 0x01 && raw[2] == 0x00 && raw[3] == 0x00;
 	}
 
+	/**
+	 * Checks if the address is a global unicast address.
+	 *
+	 * @param addr the address to check
+	 * @return true if the address is global unicast address, false otherwise.
+	 */
 	public static boolean isGlobalUnicast(InetAddress addr) {
 		// this would be rejected by a socket with broadcast disabled anyway, but filter
 		// it to reduce exceptions
@@ -127,10 +186,25 @@ public class AddressUtils {
 				|| addr.isMulticastAddress() || addr.isSiteLocalAddress());
 	}
 
+	/**
+	 * Checks if the address is an unicast address.
+	 * Reference:
+	 *   - https://en.wikipedia.org/wiki/Unicast
+	 *
+	 * @param addr the address to check
+	 * @return true if the address is unicast address, false otherwise.
+	 */
 	public static boolean isAnyUnicast(InetAddress addr) {
 		return addr.isSiteLocalAddress() || isGlobalUnicast(addr);
 	}
 
+	/**
+	 * Creates a {@code InetAddress} object from the raw address bytes.
+	 *
+	 * @param raw the raw address bytes.
+	 * @return the {@code InetAddress} object.
+	 * @throws UnknownHostException if the address could not be determined.
+	 */
 	public static InetAddress fromBytesVerbatim(byte[] raw) throws UnknownHostException {
 		// bypass ipv4 mapped address conversion
 		if(raw.length == 16)
@@ -139,6 +213,11 @@ public class AddressUtils {
 		return InetAddress.getByAddress(raw);
 	}
 
+	/**
+	 * Gets all available addresses.
+	 *
+	 * @return a sequential Stream with all addresses.
+	 */
 	public static Stream<InetAddress> getAllAddresses() {
 		try {
 			return Collections.list(NetworkInterface.getNetworkInterfaces()).stream().filter(iface -> {
@@ -155,18 +234,31 @@ public class AddressUtils {
 		}
 	}
 
+	/**
+	 * Gets all non-local addresses.
+	 *
+	 * @return a sequential Stream with all non-local addresses.
+	 */
 	public static Stream<InetAddress> getNonlocalAddresses() {
 		return getAllAddresses().filter(addr -> {
 			return !addr.isAnyLocalAddress() && !addr.isLoopbackAddress();
 		});
 	}
 
+	/*
 	public static Stream<InetAddress> getAvailableGloballyRoutableAddrs(Stream<InetAddress> toFilter,
 			Class<? extends InetAddress> type) {
 		return toFilter.filter(type::isInstance).filter(AddressUtils::isGlobalUnicast)
 				.sorted((a, b) -> Arrays.compareUnsigned(a.getAddress(), b.getAddress()));
 	}
+	*/
 
+	/**
+	 * Checks if the given address is capable for bind.
+	 *
+	 * @param addr the address to check.
+	 * @return true is the address is capable for bind, false otherwise.
+	 */
 	public static boolean isValidBindAddress(InetAddress addr) {
 		// we don't like them them but have to allow them
 		if (addr.isAnyLocalAddress())
@@ -181,6 +273,13 @@ public class AddressUtils {
 		}
 	}
 
+	/**
+	 * Gets the wildcard local address.
+	 *
+	 * @param type the {@code InetAddress} class, could be {@code Inet4Address}
+	 *        or {@code Inet6Address}.
+	 * @return the wildcard local address object for the specified network type.
+	 */
 	public static InetAddress getAnyLocalAddress(Class<? extends InetAddress> type) {
 		try {
 			if (type == Inet6Address.class)
@@ -194,6 +293,13 @@ public class AddressUtils {
 		throw new RuntimeException("INTERNAL ERROR: should never happen");
 	}
 
+	/**
+	 * Gets the address of the default routing interface.
+	 *
+	 * @param type the {@code InetAddress} class, could be {@code Inet4Address}
+	 *        or {@code Inet6Address}.
+	 * @return the address of the default routing interface.
+	 */
 	public static InetAddress getDefaultRoute(Class<? extends InetAddress> type) {
 		InetAddress target = null;
 
@@ -219,6 +325,13 @@ public class AddressUtils {
 		}
 	}
 
+	/**
+	 * Convert the socket address to readable string with align support.
+	 *
+	 * @param sockAddr the socket address object to stringify.
+	 * @param align whether to generate the aligned result.
+	 * @return the stringify socket address.
+	 */
 	public static String toString(InetSocketAddress sockAddr, boolean align) {
 		InetAddress addr = sockAddr.getAddress();
 		int port = sockAddr.getPort();
@@ -233,6 +346,12 @@ public class AddressUtils {
 					+ port;
 	}
 
+	/**
+	 * Convert the socket address to readable string.
+	 *
+	 * @param sockAddr the socket address object to stringify.
+	 * @return the stringify socket address.
+	 */
 	public static String toString(InetSocketAddress sockAddr) {
 		return toString(sockAddr, false);
 	}

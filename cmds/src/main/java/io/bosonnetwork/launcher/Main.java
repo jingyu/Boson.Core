@@ -36,15 +36,17 @@ import java.util.concurrent.ExecutionException;
 import io.bosonnetwork.Configuration;
 import io.bosonnetwork.DefaultConfiguration;
 import io.bosonnetwork.NodeStatusListener;
+import io.bosonnetwork.access.impl.AccessManager;
+import io.bosonnetwork.kademlia.Node;
 import io.bosonnetwork.service.BosonService;
 import io.bosonnetwork.service.BosonServiceException;
 import io.bosonnetwork.service.DefaultServiceContext;
 import io.bosonnetwork.service.ServiceContext;
 import io.bosonnetwork.utils.ApplicationLock;
 
-import io.bosonnetwork.access.impl.AccessManager;
-import io.bosonnetwork.kademlia.Node;
-
+/**
+ * @hidden
+ */
 public class Main {
 	private static Configuration config;
 	private static Object shutdown = new Object();

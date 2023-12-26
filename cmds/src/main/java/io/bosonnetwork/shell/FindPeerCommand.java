@@ -35,6 +35,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "findpeer", mixinStandardHelpOptions = true, version = "Boson findpeer 2.0",
 		description = "Find peer and show the candidate peers if exists.")
 public class FindPeerCommand implements Callable<Integer> {

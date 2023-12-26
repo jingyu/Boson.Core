@@ -33,6 +33,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.utils.Hex;
 
+/**
+ * @hidden
+ */
 public class StoreValueRequest extends Message {
 	private int token;
 	private Id publicKey;

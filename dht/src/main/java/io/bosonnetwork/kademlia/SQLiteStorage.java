@@ -53,7 +53,6 @@ import org.sqlite.SQLiteDataSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-
 import io.bosonnetwork.kademlia.exceptions.CasFail;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
@@ -62,6 +61,9 @@ import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.exceptions.NotValueOwner;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
+/**
+ * @hidden
+ */
 public class SQLiteStorage implements DataStorage {
 	private static final int VERSION = 4;
 	private static final String SET_USER_VERSION = "PRAGMA user_version = " + VERSION;

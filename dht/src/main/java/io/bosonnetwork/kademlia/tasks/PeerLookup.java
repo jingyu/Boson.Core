@@ -35,7 +35,6 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KClosestNodes;
@@ -44,6 +43,9 @@ import io.bosonnetwork.kademlia.messages.FindPeerRequest;
 import io.bosonnetwork.kademlia.messages.FindPeerResponse;
 import io.bosonnetwork.kademlia.messages.Message;
 
+/**
+ * @hidden
+ */
 public class PeerLookup extends LookupTask {
 	Consumer<Collection<PeerInfo>> resultHandler;
 

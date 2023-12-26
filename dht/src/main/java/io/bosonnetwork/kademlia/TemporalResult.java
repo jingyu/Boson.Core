@@ -3,6 +3,9 @@ package io.bosonnetwork.kademlia;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.Result;
 
+/**
+ * @hidden
+ */
 public class TemporalResult<T> extends Result<T> {
 	public TemporalResult(T v4, T v6) {
 		super(v4, v6);

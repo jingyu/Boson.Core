@@ -26,10 +26,16 @@ package io.bosonnetwork.kademlia.messages;
 import io.bosonnetwork.kademlia.ErrorCode;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 
+/**
+ * @hidden
+ */
 public class MessageException extends KadException {
 	private static final long serialVersionUID = -4890520057742428818L;
 	private static final int DEFAULT_CODE = ErrorCode.ProtocolError.value();
 
+	/**
+	 * The default partial message.
+	 */
 	private PartialMessage partialMsg = PartialMessage.BLANK;
 
 	/**

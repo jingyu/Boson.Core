@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.messages;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public class FindPeerRequest extends LookupRequest {
 	public FindPeerRequest(Id target) {
 		super(Method.FIND_PEER, target);

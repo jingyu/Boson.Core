@@ -27,6 +27,9 @@ import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
 
+/**
+ * @hidden
+ */
 @Command(name = "stop", mixinStandardHelpOptions = true, version = "Boson stop command 2.0",
 		description = "Display the ID of current Boson node.")
 public class StopCommand implements Callable<Integer> {

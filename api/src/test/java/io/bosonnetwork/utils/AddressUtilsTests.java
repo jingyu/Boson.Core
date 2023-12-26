@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.AddressUtils.NetMask;
+import io.bosonnetwork.utils.AddressUtils.Subnet;
 
 public class AddressUtilsTests {
 	@Test
@@ -71,10 +71,10 @@ public class AddressUtilsTests {
 
 	@Test
 	public void netMaskTest() throws UnknownHostException {
-		NetMask everything = new NetMask(InetAddress.getByAddress(new byte[] { 0, 0, 0, 0 }), 0);
-		NetMask single = new NetMask(InetAddress.getByAddress(new byte[] { (byte) 0xAA, (byte) 0xAA, (byte) 0xAA, (byte) 0xAA }), 32);
-		NetMask nibbleA = new NetMask(InetAddress.getByAddress(new byte[] { (byte) 0xA0, (byte) 0x00, (byte) 0x00, (byte) 0x00 }), 4);
-		NetMask firstByte = new NetMask(InetAddress.getByAddress(new byte[] { (byte) 0xA5, (byte) 0x00, (byte) 0x00, (byte) 0x00 }), 8);
+		Subnet everything = new Subnet(InetAddress.getByAddress(new byte[] { 0, 0, 0, 0 }), 0);
+		Subnet single = new Subnet(InetAddress.getByAddress(new byte[] { (byte) 0xAA, (byte) 0xAA, (byte) 0xAA, (byte) 0xAA }), 32);
+		Subnet nibbleA = new Subnet(InetAddress.getByAddress(new byte[] { (byte) 0xA0, (byte) 0x00, (byte) 0x00, (byte) 0x00 }), 4);
+		Subnet firstByte = new Subnet(InetAddress.getByAddress(new byte[] { (byte) 0xA5, (byte) 0x00, (byte) 0x00, (byte) 0x00 }), 8);
 
 		assertTrue(everything.contains(InetAddress.getByAddress(new byte[] { 0, 0, 0, 0 })));
 		assertTrue(everything.contains(InetAddress.getByAddress(new byte[] { (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff })));

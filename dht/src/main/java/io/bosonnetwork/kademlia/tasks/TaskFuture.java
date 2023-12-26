@@ -28,6 +28,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * @hidden
+ */
 public class TaskFuture<T> extends CompletableFuture<T> {
 	private volatile List<Task> tasks;
 

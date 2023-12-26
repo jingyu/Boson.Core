@@ -30,6 +30,9 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public class FindValueRequest extends LookupRequest {
 	// Only send the value if the real sequence number greater than this.
 	private int sequenceNumber;

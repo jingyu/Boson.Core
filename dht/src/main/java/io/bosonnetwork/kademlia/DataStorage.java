@@ -31,9 +31,11 @@ import java.util.stream.Stream;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-
 import io.bosonnetwork.kademlia.exceptions.KadException;
 
+/**
+ * @hidden
+ */
 public interface DataStorage extends Closeable {
 	public Value getValue(Id valueId) throws KadException;
 

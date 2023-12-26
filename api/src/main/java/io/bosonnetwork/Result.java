@@ -23,23 +23,50 @@
 
 package io.bosonnetwork;
 
+/**
+ * A generic class representing a result with values for IPv4 and IPv6 networks.
+ *
+ * @param <T> The type of values stored in the result.
+ */
 public class Result<T> {
 	private T v4;
 	private T v6;
 
+	/**
+	 * Constructs a Result object with values for IPv4 and IPv6 networks.
+	 *
+	 * @param v4 the value for the IPv4 network.
+	 * @param v6 the value for the IPv6 network.
+	 */
 	public Result(T v4, T v6) {
 		this.v4 = v4;
 		this.v6 = v6;
 	}
 
+	/**
+	 * Gets the value for the IPv4 network.
+	 *
+	 * @return the value for the IPv4 network.
+	 */
 	public T getV4() {
 		return v4;
 	}
 
+	/**
+	 * Gets the value for the IPv6 network.
+	 *
+	 * @return the value for the IPv6 network.
+	 */
 	public T getV6() {
 		return v6;
 	}
 
+	/**
+	 * Gets the value based on the specified network type.
+	 *
+	 * @param network the network type (IPv4 or IPv6).
+	 * @return the corresponding value for the specified network type.
+	 */
 	public T getValue(Network network) {
 		switch (network) {
 		case IPv4:
@@ -52,6 +79,12 @@ public class Result<T> {
 		return null;
 	}
 
+	/**
+	 * Sets the value for the specified network type.
+	 *
+	 * @param network the network type (IPv4 or IPv6).
+	 * @param value   the value to be set.
+	 */
 	protected void setValue(Network network, T value) {
 		switch (network) {
 		case IPv4:
@@ -62,14 +95,29 @@ public class Result<T> {
 		}
 	}
 
+	/**
+	 * Checks if both IPv4 and IPv6 values are unset.
+	 *
+	 * @return {@code true} if both values are unset, {@code false} otherwise.
+	 */
 	public boolean isEmpty() {
 		return v4 == null && v6 == null;
 	}
 
+	/**
+	 * Checks if at least one of the values is set.
+	 *
+	 * @return {@code true} if at least one value is set, {@code false} otherwise.
+	 */
 	public boolean hasValue() {
 		return v4 != null || v6 != null;
 	}
 
+	/**
+	 * Checks if both IPv4 and IPv6 values are set.
+	 *
+	 * @return {@code true} if both values are set, {@code false} otherwise.
+	 */
 	public boolean isComplete() {
 		return v4 != null && v6 != null;
 	}

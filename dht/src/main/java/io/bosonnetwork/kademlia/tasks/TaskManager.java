@@ -35,6 +35,9 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 
+/**
+ * @hidden
+ */
 public class TaskManager {
 	private DHT dht;
 	private Deque<Task> queued;

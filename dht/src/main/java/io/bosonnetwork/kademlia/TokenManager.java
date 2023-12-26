@@ -32,6 +32,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.utils.ThreadLocals;
 
+/**
+ * @hidden
+ */
 public class TokenManager {
 	private AtomicLong timestamp = new AtomicLong();
 	private volatile long previousTimestamp;

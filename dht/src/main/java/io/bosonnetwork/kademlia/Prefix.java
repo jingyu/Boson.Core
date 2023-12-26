@@ -21,22 +21,28 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.kademlia;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 
+import io.bosonnetwork.Id;
 import io.bosonnetwork.utils.Hex;
 
+/**
+ * @hidden
+ */
 public class Prefix extends Id {
-
 	/**
 	 * identifies the first bit of a key that has to be equal to be considered as
-	 * covered by this prefix -1 = prefix matches whole keyspace 0 = 0th bit must
-	 * match 1 = ...
+	 * covered by this prefix:
+	 *   - -1 = prefix matches whole key-space
+	 *   - 0 = 0th bit must match
+	 *   - 1 = 1th bit must match
+	 *   - ...
 	 */
-	int depth = -1;
+	private int depth = -1;
 
 	public static final Prefix WHOLE_KEYSPACE = new Prefix();
 
@@ -58,11 +64,6 @@ public class Prefix extends Id {
 		return depth;
 	}
 
-	/**
-	 *
-	 * @param KeyTest to be checked
-	 * @return true if this Prefix covers the provided key
-	 */
 	public boolean isPrefixOf(Id id) {
 		return bitsEqual(this, id, depth);
 	}
@@ -72,7 +73,7 @@ public class Prefix extends Id {
 	}
 
 	public Id first() {
-		return new Id(this);
+		return Id.of(this);
 	}
 
 	public Id last() {
@@ -113,6 +114,8 @@ public class Prefix extends Id {
 
 	/**
 	 * Generates a random Id that has falls under this prefix
+	 *
+	 * @return the random id
 	 */
 	public Id createRandomId() {
 		// first generate a random one

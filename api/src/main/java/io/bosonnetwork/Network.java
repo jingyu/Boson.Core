@@ -30,8 +30,18 @@ import java.net.InetSocketAddress;
 import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 
+/**
+ * Defined the supported DHT networks.
+ */
 public enum Network {
+	/**
+	 * IPv4 network.
+	 */
 	IPv4(StandardProtocolFamily.INET, Inet4Address.class, 20 + 8, 1450),
+
+	/**
+	 * IPv6 network.
+	 */
 	IPv6(StandardProtocolFamily.INET6, Inet6Address.class, 40 + 8, 1200);
 
 	private final ProtocolFamily protocolFamily;
@@ -46,34 +56,78 @@ public enum Network {
 		this.maxPacketSize = maxPacketSize;
 	}
 
+	/**
+	 * Checks if the specified socket address can apply for this network.
+	 *
+	 * @param addr the socket address to check.
+	 * @return true is the address can apply for this network, otherwise false.
+	 */
 	public boolean canUseSocketAddress(InetSocketAddress addr) {
 		return canUseAddress(addr.getAddress());
 	}
 
+	/**
+	 * Checks if the specified IP address can apply for this network.
+	 *
+	 * @param addr the IP address to check.
+	 * @return true is the address can apply for this network, otherwise false.
+	 */
 	public boolean canUseAddress(InetAddress addr) {
 		return preferredAddressType.isInstance(addr);
 	}
 
+	/**
+	 * Get the {@link Network} type from the socket address.
+	 *
+	 * @param addr the socket address.
+	 * @return the network type of the specified socket address.
+	 */
 	public static Network of(InetSocketAddress addr) {
 		return of(addr.getAddress());
 	}
 
+	/**
+	 * Get the {@link Network} type from the IP address object.
+	 *
+	 * @param addr the IP address object.
+	 * @return the network type of the specified IP address.
+	 */
 	public static Network of(InetAddress addr) {
 		return (addr instanceof Inet4Address) ? IPv4 : IPv6;
 	}
 
+	/**
+	 * Get the ProtocolFamliy of this network type.
+	 *
+	 * @return the ProtocolFamliy of this network type.
+	 */
 	ProtocolFamily protocolFamily() {
 		return protocolFamily;
 	}
 
+	/**
+	 * Get the UDP protocol header size of this network type.
+	 *
+	 * @return the UDP protocol header size.
+	 */
 	public int protocolHeaderSize() {
 		return protocolHeaderSize;
 	}
 
+	/**
+	 * Get the maximum UDP packet size of this network type.
+	 *
+	 * @return the maximum UDP packet.
+	 */
 	public int maxPacketSize() {
 		return maxPacketSize;
 	}
 
+	/**
+	 * Returns a String object of the network name.
+	 *
+	 * @return the name of the network.
+	 */
 	@Override
 	public String toString() {
 		return name();

@@ -38,6 +38,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 
+/**
+ * @hidden
+ */
 public abstract class LookupResponse extends Message {
 	private List<NodeInfo> nodes4;
 	private List<NodeInfo> nodes6;

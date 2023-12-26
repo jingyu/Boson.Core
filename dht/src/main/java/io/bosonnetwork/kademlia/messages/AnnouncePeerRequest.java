@@ -33,6 +33,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 
+/**
+ * @hidden
+ */
 public class AnnouncePeerRequest extends Message {
 	private int token;
 	private Id peerId;

@@ -31,6 +31,9 @@ import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
 
+/**
+ * @hidden
+ */
 public class RPCStatistics {
 
 	private AtomicLong receivedBytes = new AtomicLong();
@@ -79,7 +82,7 @@ public class RPCStatistics {
 	}
 
 	/**
-	 * @return
+	 * @return the received bytes per second.
 	 */
 	public long getReceivedBytesPerSec() {
 		long now = System.currentTimeMillis();
@@ -93,7 +96,7 @@ public class RPCStatistics {
 	}
 
 	/**
-	 * @return
+	 * @return the sent bytes per second.
 	 */
 	public long getSentBytesPerSec() {
 		long now = System.currentTimeMillis();

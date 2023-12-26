@@ -28,10 +28,13 @@ import java.io.IOException;
 
 import io.bosonnetwork.Configuration;
 import io.bosonnetwork.DefaultConfiguration;
-
 import io.bosonnetwork.access.impl.AccessManager;
+
 import picocli.CommandLine.Option;
 
+/**
+ * @hidden
+ */
 public abstract class AmCommand {
 	private static final String DEFAULT_CONFIG_FILE = "/etc/boson/default.conf";
 

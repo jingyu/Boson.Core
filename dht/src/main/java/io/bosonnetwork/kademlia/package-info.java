@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * This package include the Kademlia DHT implementation for Boson network.
+ */
 package io.bosonnetwork.kademlia;

@@ -35,9 +35,11 @@ import java.util.stream.Stream;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-
 import io.bosonnetwork.kademlia.Constants;
 
+/**
+ * @hidden
+ */
 public class ClosestCandidates {
 	private final Id target;
 	private final int capacity;

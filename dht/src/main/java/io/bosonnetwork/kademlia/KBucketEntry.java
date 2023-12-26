@@ -40,6 +40,8 @@ import io.bosonnetwork.utils.AddressUtils;
 /**
  * Entry in a KBucket, it basically contains an IP address of a node, the UDP
  * port of the node and a node id.
+ *
+ * @hidden
  */
 public class KBucketEntry extends NodeInfo {
 	private static final double RTT_EMA_WEIGHT = 0.3;
@@ -73,6 +75,9 @@ public class KBucketEntry extends NodeInfo {
 	private boolean reachable = false;
 	private int failedRequests;
 
+	/**
+	 * @hidden
+	 */
 	public static final class DistanceOrder implements Comparator<KBucketEntry> {
 		final Id target;
 

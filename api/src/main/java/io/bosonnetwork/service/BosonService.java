@@ -25,16 +25,53 @@ package io.bosonnetwork.service;
 
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Interface BosonService is the basic abstraction for the extensible service on top of
+ * Boson super node. This interface describes the basic information about the service
+ * itself and the life-cycle management methods. All super node services should implement
+ * this interface.
+ */
 public interface BosonService {
+	/**
+	 * The unique identifier for the service.
+	 *
+	 * @return the unique identifier string.
+	 */
 	public String getId();
 
+	/**
+	 * The user friendly service name.
+	 *
+	 * @return the service name.
+	 */
 	public String getName();
 
+	/**
+	 * Get the running status
+	 *
+	 * @return true if the service is running, false otherwise.
+	 */
 	public boolean isRunning();
 
+	/**
+	 * Initialize the service instance with the {@link ServiceContext} object.
+	 *
+	 * @param context the {@link ServiceContext} object to initialize the service.
+	 * @throws BosonServiceException if the error occurred during the initialization.
+	 */
 	public void init(ServiceContext context) throws BosonServiceException;
 
+	/**
+	 * Start the service in asynchronized way.
+	 *
+	 * @return the {@code CompletableFuture} of the starting action.
+	 */
 	public CompletableFuture<Void> start();
 
+	/**
+	 * Stop the service in asynchronized way.
+	 *
+	 * @return the {@code CompletableFuture} of the stopping action.
+	 */
 	public CompletableFuture<Void> stop();
 }

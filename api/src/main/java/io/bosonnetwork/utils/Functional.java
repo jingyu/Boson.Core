@@ -25,26 +25,82 @@ package io.bosonnetwork.utils;
 
 import java.util.function.Consumer;
 
+/**
+ * Some functional helper methods.
+ */
 public class Functional {
+	/**
+	 * Feeds the object to the {@code Consumer} and return the object.
+	 *
+	 * @param <T> the object type.
+	 * @param obj the target object to feed to the {@code Consumer}
+	 * @param c the {@code Consumer}
+	 * @return the object
+	 */
 	public static <T> T tap(T obj, Consumer<T> c) {
 		c.accept(obj);
 		return obj;
 	}
 
-	public static interface ThrowingConsumer<T,E extends Throwable> {
+	/**
+	 * Functional interface for the {@code Consumer} that throws Exception.
+	 *
+	 * @param <T> the parameter type
+	 * @param <E> the exception type to throw
+	 */
+	public static interface ThrowingConsumer<T, E extends Throwable> {
+		/**
+		 * Performs this operation on the given argument.
+		 *
+		 * @param arg the input argument
+		 * @throws E if error occurred.
+		 */
 		void accept(T arg) throws E;
 	}
 
+	/**
+	 * Functional interface for the {@code Supplier} that throws Exception.
+	 *
+	 * @param <R> the return type
+	 * @param <E> the exception type to throw
+	 */
 	@FunctionalInterface
-	public static interface ThrowingSupplier<T,E extends Throwable> {
-		T get() throws E;
+	public static interface ThrowingSupplier<R, E extends Throwable> {
+		/**
+		 * Gets a result.
+		 *
+		 * @return a result.
+		 * @throws E if error occurred.
+		 */
+		R get() throws E;
 	}
 
+	/**
+	 * Functional interface for the {@code Function} that throws Exception.
+	 *
+	 * @param <R> the return type
+	 * @param <T> the parameter type
+	 * @param <E> the exception type to throw
+	 */
 	@FunctionalInterface
 	public static interface ThrowingFunction<R, T, E extends Throwable> {
+		/**
+		 * Applies this function to the given argument.
+		 *
+		 * @param arg the function argument.
+		 * @return the function result.
+		 * @throws E if error occurred.
+		 */
 		R apply(T arg) throws E;
 	}
 
+	/**
+	 * Wrap the checked exception to unchecked exception.
+	 *
+	 * @param <T> the return type.
+	 * @param f the supplier function with throw exceptions.
+	 * @return the result from the supplier.
+	 */
 	public static <T> T unchecked(ThrowingSupplier<? extends T, ?> f) {
 		try {
 			return f.get();

@@ -30,6 +30,10 @@ import java.util.Objects;
 
 import io.bosonnetwork.crypto.Signature;
 
+/**
+ *
+ * Represents peer information in the Boson network.
+ */
 public class PeerInfo {
 	private static final Charset UTF8 = Charset.forName("UTF-8");
 
@@ -88,68 +92,224 @@ public class PeerInfo {
 		this.signature = Signature.sign(getSignData(), keypair.privateKey());
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, Id nodeId, int port, byte[] signature) {
 		return new PeerInfo(peerId, null, nodeId, nodeId, port, null, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param privateKey the private key associated with the peer.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, int port, byte[] signature) {
 		return new PeerInfo(peerId, privateKey, nodeId, nodeId, port, null, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, Id nodeId, int port, String alternativeURL, byte[] signature) {
 		return new PeerInfo(peerId, null, nodeId, nodeId, port, alternativeURL, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param privateKey the private key associated with the peer.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, int port,
 			String alternativeURL, byte[] signature) {
 		return new PeerInfo(peerId, privateKey, nodeId, nodeId, port, alternativeURL, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, Id nodeId, Id origin, int port, byte[] signature) {
 		return new PeerInfo(peerId, null, nodeId, origin, port, null, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param privateKey the private key associated with the peer.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId,  Id origin, int port, byte[] signature) {
 		return new PeerInfo(peerId, privateKey, nodeId, origin, port, null, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, Id nodeId, Id origin, int port, String alternativeURL, byte[] signature) {
 		return new PeerInfo(peerId, null, nodeId, origin, port, alternativeURL, signature);
 	}
 
+	/**
+	 * Rebuilds a PeerInfo object with specified information.
+	 *
+	 * @param peerId the peer ID.
+	 * @param privateKey the private key associated with the peer.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @param signature the signature of the peer info.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, Id origin, int port,
 			String alternativeURL, byte[] signature) {
 		return new PeerInfo(peerId, privateKey, nodeId, origin, port, alternativeURL, signature);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
+	 * be signed by a new generated random key pair.
+	 *
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Id nodeId, int port) {
 		return create(null, nodeId, nodeId, port, null);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information and key pair.
+	 *
+	 * @param keypair the key pair key to sign the peer information.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port) {
 		return create(keypair, nodeId, nodeId, port, null);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
+	 * be signed by a new generated random key pair.
+	 *
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Id nodeId, Id origin, int port) {
 		return create(null, nodeId, origin, port, null);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information and key pair.
+	 *
+	 * @param keypair the key pair key to sign the peer information.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, Id origin, int port) {
 		return create(keypair, nodeId, origin, port, null);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
+	 * be signed by a new generated random key pair.
+	 *
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Id nodeId, int port, String alternativeURL) {
 		return create(null, nodeId, nodeId, port, alternativeURL);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information and key pair.
+	 *
+	 * @param keypair the key pair key to sign the peer information.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port, String alternativeURL) {
 		return create(keypair, nodeId, nodeId, port, alternativeURL);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
+	 * be signed by a new generated random key pair.
+	 *
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Id nodeId, Id origin, int port, String alternativeURL) {
 		return create(null, nodeId, origin, port, alternativeURL);
 	}
 
+	/**
+	 * Creates a PeerInfo object with specified information and key pair.
+	 *
+	 * @param keypair the key pair key to sign the peer information.
+	 * @param nodeId the ID of the node providing the service peer.
+	 * @param origin the node that announces the peer.
+	 * @param port the port on which the peer is available.
+	 * @param alternativeURL an alternative URL for the peer.
+	 * @return a created PeerInfo object.
+	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, Id origin,
 			int port, String alternativeURL) {
 		if (keypair == null)
@@ -158,42 +318,92 @@ public class PeerInfo {
 		return new PeerInfo(keypair, nodeId, origin, port, alternativeURL);
 	}
 
+	/**
+	 * Gets the peer ID.
+	 *
+	 * @return The peer ID.
+	 */
 	public Id getId() {
 		return publicKey;
 	}
 
+	/**
+	 * Checks if the current node has the peer's private key.
+	 *
+	 * @return {@code true} if the node has the private key, {@code false} otherwise.
+	 */
 	public boolean hasPrivateKey() {
 		return privateKey != null;
 	}
 
+	/**
+	 * Gets the private key associated with the peer.
+	 *
+	 * @return The private key.
+	 */
 	public byte[] getPrivateKey() {
 		return privateKey;
 	}
 
+	/**
+	 * Gets the ID of the node providing the service peer.
+	 *
+	 * @return The node ID.
+	 */
 	public Id getNodeId() {
 		return nodeId;
 	}
 
+	/**
+	 * Gets the node that announces the peer.
+	 *
+	 * @return The origin node ID.
+	 */
 	public Id getOrigin() {
 		return origin;
 	}
 
+	/**
+	 * Checks if the peer is delegated (announced by a different node).
+	 *
+	 * @return {@code true} if the peer is delegated, {@code false} otherwise.
+	 */
 	public boolean isDelegated() {
 		return !origin.equals(nodeId);
 	}
 
+	/**
+	 * Gets the port on which the peer is available.
+	 *
+	 * @return The port number.
+	 */
 	public int getPort() {
 		return port;
 	}
 
+	/**
+	 * Gets the alternative URL for the peer.
+	 *
+	 * @return The alternative URL.
+	 */
 	public String getAlternativeURL() {
 		return alternativeURL;
 	}
 
+	/**
+	 * Checks if the peer has an alternative URL.
+	 *
+	 * @return {@code true} if the peer has an alternative URL, {@code false} otherwise.
+	 */
 	public boolean hasAlternativeURL() {
 		return alternativeURL != null && !alternativeURL.isEmpty();
 	}
 
+	/**
+	 * Gets the signature of the peer info.
+	 *
+	 * @return The signature.
+	 */
 	public byte[] getSignature() {
 		return signature;
 	}
@@ -213,6 +423,12 @@ public class PeerInfo {
 		return toSign;
 	}
 
+	/**
+	 * Checks if the PeerInfo object is valid, including checks for data integrity and
+	 * signature verification.
+	 *
+	 * @return {@code true} if the value is valid, {@code false} otherwise.
+	 */
 	public boolean isValid() {
 		if (signature == null || signature.length != Signature.BYTES)
 			return false;

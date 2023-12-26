@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the node try to update an immutable value.
+ */
 public class ImmutableSubstitutionFail extends KadException {
 	private static final long serialVersionUID = 587617284550088252L;
 

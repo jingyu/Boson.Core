@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.kademlia;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
+
+import io.bosonnetwork.Id;
 
 public class PrefixTests {
 	@Test

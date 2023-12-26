@@ -2,6 +2,9 @@ package io.bosonnetwork.crypto;
 
 import io.bosonnetwork.BosonException;
 
+/**
+ * An exception that is thrown when an error occurs using the crypto library.
+ */
 public class CryptoException extends BosonException {
 	private static final long serialVersionUID = 5633767544528399814L;
 

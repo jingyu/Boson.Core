@@ -26,6 +26,9 @@ package io.bosonnetwork.utils;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+/**
+ * Utility to present ByteBuffer data as an InputStream.
+ */
 public class ByteBufferInputStream {
 	/**
 	 * The ByteBuffer object from which data is read.
@@ -89,6 +92,7 @@ public class ByteBufferInputStream {
 	 *
 	 * @return the total number of bytes read into the buffer, or <code>-1</code> if
 	 *         there is no more data because the end of the stream has been reached.
+	 * @throws IOException if an I/O error occurs.
 	 */
 	public int read(byte dest[], int offset, int len) throws IOException {
 		if (dest == null || offset < 0 || len < 0 || offset + len > dest.length) {
@@ -121,11 +125,10 @@ public class ByteBufferInputStream {
 	 * number of bytes skipped is returned. If <code>n</code> is negative, no bytes
 	 * are skipped.
 	 *
-	 * @param n the number of bytes to be skipped
+	 * @param n the number of bytes to be skipped.
 	 *
-	 * @return the actual number of bytes skipped
-	 *
-	 * @exception IOException if an I/O error occurs
+	 * @return the actual number of bytes skipped.
+	 * @throws IOException if an I/O error occurs.
 	 */
 	public long skip(long n) throws IOException {
 		int cb;
@@ -152,6 +155,7 @@ public class ByteBufferInputStream {
 	 *
 	 * @return the number of bytes that can be read from this input stream without
 	 *         blocking.
+	 * @throws IOException if an I/O error occurs.
 	 */
 	public int available() throws IOException {
 		try {

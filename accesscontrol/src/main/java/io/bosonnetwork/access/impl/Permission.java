@@ -35,6 +35,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSetter;
 
+/**
+ * @hidden
+ */
 @JsonPropertyOrder({ "service", "access", "properties" })
 @JsonAutoDetect(
 		fieldVisibility = Visibility.NONE,

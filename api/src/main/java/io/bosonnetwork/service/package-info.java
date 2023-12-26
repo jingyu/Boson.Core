@@ -21,4 +21,7 @@
  * SOFTWARE.
  */
 
+/**
+ * The abstraction layer and APIs for the Boson services.
+ */
 package io.bosonnetwork.service;

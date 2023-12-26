@@ -34,6 +34,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "findvalue", mixinStandardHelpOptions = true, version = "Boson findvalue 2.0",
 		description = "Find value and show the value if exists.")
 public class FindValueCommand implements Callable<Integer> {

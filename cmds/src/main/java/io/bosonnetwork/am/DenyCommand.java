@@ -26,12 +26,15 @@ package io.bosonnetwork.am;
 import java.util.concurrent.Callable;
 
 import io.bosonnetwork.Id;
-
 import io.bosonnetwork.access.impl.AccessControlList;
 import io.bosonnetwork.access.impl.AccessManager;
+
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+/**
+ * @hidden
+ */
 @Command(name = "deny", mixinStandardHelpOptions = true, version = "Boson access manager 2.0",
 		description = "Deny node access.")
 public class DenyCommand extends AmCommand implements Callable<Integer> {

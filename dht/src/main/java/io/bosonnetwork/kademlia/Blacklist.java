@@ -35,6 +35,9 @@ import com.google.common.cache.CacheBuilder;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.utils.AddressUtils;
 
+/**
+ * @hidden
+ */
 public class Blacklist {
 	private static final long OBSERVATION_PERIOD = 20; // minutes
 	private static final int OBSERVATION_HITS = 30;

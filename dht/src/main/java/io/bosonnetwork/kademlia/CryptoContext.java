@@ -27,12 +27,14 @@ import java.util.Arrays;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.CryptoBox.KeyPair;
 import io.bosonnetwork.crypto.CryptoBox.PublicKey;
-
+import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 
+/**
+ * @hidden
+ */
 public class CryptoContext implements AutoCloseable {
 	private CryptoBox box;
 	private CryptoBox.Nonce nonce;

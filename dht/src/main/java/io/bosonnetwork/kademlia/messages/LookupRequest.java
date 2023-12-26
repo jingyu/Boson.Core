@@ -31,6 +31,9 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public abstract class LookupRequest extends Message {
 	private Id target;
 	private boolean want4;

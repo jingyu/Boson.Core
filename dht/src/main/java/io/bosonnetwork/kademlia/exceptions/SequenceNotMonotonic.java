@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 
+/**
+ * Signals that the value's sequence number is less than the required.
+ */
 public class SequenceNotMonotonic extends KadException {
 	private static final long serialVersionUID = -7289165754320345609L;
 

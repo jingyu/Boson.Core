@@ -25,14 +25,23 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.BosonException;
 
+/**
+ * Signals that a Kademlia exception of some sort has occurred.
+ * This class is the general class of exceptions produced by the Kademlia implementation.
+ */
 public class KadException extends BosonException {
 	private static final long serialVersionUID = -2702047825432607326L;
+	/**
+	 * The error code that related with this exception.
+	 */
 	private final int code;
 
 	/**
 	 * Constructs a new Kad exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
+	 *
+	 * @param code the error code.
 	 */
 	public KadException(int code) {
 		super();
@@ -44,6 +53,7 @@ public class KadException extends BosonException {
 	 * cause is not initialized, and may subsequently be initialized by
 	 * a call to {@link #initCause}.
 	 *
+	 * @param   code      the error code.
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
@@ -58,13 +68,13 @@ public class KadException extends BosonException {
 	 * {@code cause} is <i>not</i> automatically incorporated in
 	 * this exception's detail message.
 	 *
+	 * @param   code the error code.
 	 * @param  message the detail message (which is saved for later retrieval
 	 *		 by the {@link #getMessage()} method).
 	 * @param  cause the cause (which is saved for later retrieval by the
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public KadException(int code, String message, Throwable cause) {
 		super(message, cause);
@@ -79,17 +89,22 @@ public class KadException extends BosonException {
 	 * wrappers for other throwables (for example, {@link
 	 * java.security.PrivilegedActionException}).
 	 *
+	 * @param  code the error code.
 	 * @param  cause the cause (which is saved for later retrieval by the
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public KadException(int code, Throwable cause) {
 		super(cause);
 		this.code = code;
 	}
 
+	/**
+	 * Gets the error code.
+	 *
+	 * @return the error code.
+	 */
 	public int getCode() {
 		return code;
 	}

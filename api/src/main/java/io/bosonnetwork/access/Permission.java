@@ -25,12 +25,33 @@ package io.bosonnetwork.access;
 
 import java.util.Map;
 
+/**
+ * The interface that representing the access to the specified service.
+ */
 public interface Permission {
+	/**
+	 * The access permissions: allow and deny.
+	 */
 	public enum Access {
-		Allow, Deny;
+		/**
+		 * Allow access.
+		 */
+		Allow,
 
-		public static Access of(String value) {
-			switch (value.toLowerCase()) {
+		/**
+		 * Deny access.
+		 */
+		Deny;
+
+		/**
+		 * Returns the enum constant of the specified enum type with the specified name.
+		 * The name could be upper-case or low-case.
+		 *
+		 * @param name the name of the constant to return.
+		 * @return the enum constant of the specified enum type with the specified name.
+		 */
+		public static Access of(String name) {
+			switch (name.toLowerCase()) {
 			case "allow":
 				return Allow;
 
@@ -38,22 +59,47 @@ public interface Permission {
 				return Deny;
 
 			default:
-				throw new IllegalArgumentException("Unknown: " + value);
+				throw new IllegalArgumentException("Unknown: " + name);
 			}
 		}
 	}
 
+	/**
+	 * Gets the id of the target service that this permission described.
+	 *
+	 * @return the service id string.
+	 */
 	public String getTargetServiceId();
 
+	/**
+	 * Gets the access type.
+	 *
+	 * @return the access type.
+	 */
 	public Access getAccess();
 
+	/**
+	 * Checks if the access is allowed to the target service.
+	 *
+	 * @return true if allowed, false otherwise.
+	 */
 	default public boolean isAllow() {
 		return getAccess() == Access.Allow;
 	}
 
+	/**
+	 * Checks if the access is denied to the target service.
+	 *
+	 * @return true if denied, false otherwise.
+	 */
 	default public boolean isDeny() {
 		return getAccess() == Access.Deny;
 	}
 
+	/**
+	 * Gets the extra properties that related with the permission.
+	 *
+	 * @return the properties in {@code Map} object.
+	 */
 	public Map<String, Object> getProperties();
 }

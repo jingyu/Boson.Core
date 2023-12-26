@@ -30,6 +30,9 @@ import java.util.stream.Stream;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public class ClosestSet {
 	private final Id target;
 	private final int capacity;
