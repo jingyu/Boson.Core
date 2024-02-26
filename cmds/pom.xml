@@ -87,15 +87,19 @@
     <!--
     <dependency>
       <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-active-proxy</artifactId>
-      <version>${project.version}</version>
+      <artifactId>boson-web-gateway</artifactId>
       <scope>provided</scope>
     </dependency>
 
     <dependency>
       <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-dht-proxy</artifactId>
-      <version>${project.version}</version>
+      <artifactId>boson-active-proxy</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.bosonnetwork</groupId>
+      <artifactId>boson-messaging</artifactId>
       <scope>provided</scope>
     </dependency>
     -->

@@ -43,9 +43,8 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
@@ -73,6 +72,12 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 
 	private static final Logger log = LoggerFactory.getLogger(AccessManager.class);
 
+	public AccessManager() {
+		repo = null;
+		defaults = null;
+		acls = null;
+	}
+
 	public AccessManager(Path repoPath) {
 		repo = repoPath.toAbsolutePath();
 		defaults = repo.resolve("defaults");
@@ -91,69 +96,71 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 		if (node == null)
 			return;
 
-		watchService = FileSystems.getDefault().newWatchService();
-
-		keyDefaults = defaults.register(watchService,
-				StandardWatchEventKinds.ENTRY_CREATE,
-				StandardWatchEventKinds.ENTRY_DELETE,
-				StandardWatchEventKinds.ENTRY_MODIFY);
-
-		keyAcls = acls.register(watchService,
-				StandardWatchEventKinds.ENTRY_CREATE,
-				StandardWatchEventKinds.ENTRY_DELETE,
-				StandardWatchEventKinds.ENTRY_MODIFY);
-
-		log.debug("Registered the watcher for the access control repo");
-
-		cache = CacheBuilder.newBuilder()
+		cache = Caffeine.newBuilder()
 				.initialCapacity(32)
 				.maximumSize(256)
-				.build(new CacheLoader<Id, AccessControlList>() {
-					@Override
-					public AccessControlList load(Id id) {
-						return loadNodeACL(id);
-					}
+				.build(id -> {
+					return loadNodeACL(id);
 				});
 		log.debug("Initialized the access control list cache");
 
-		loadDefaults();
+		if (repo != null) {
+			watchService = FileSystems.getDefault().newWatchService();
 
-		node.addStatusListener(new NodeStatusListener() {
-			ScheduledFuture<?> future;
+			keyDefaults = defaults.register(watchService,
+					StandardWatchEventKinds.ENTRY_CREATE,
+					StandardWatchEventKinds.ENTRY_DELETE,
+					StandardWatchEventKinds.ENTRY_MODIFY);
 
-			@Override
-			public void started() {
-				future = node.getScheduler().scheduleWithFixedDelay(() -> {
-					processRepoChanges();
-				}, 60, 60, TimeUnit.SECONDS);
-			}
+			keyAcls = acls.register(watchService,
+					StandardWatchEventKinds.ENTRY_CREATE,
+					StandardWatchEventKinds.ENTRY_DELETE,
+					StandardWatchEventKinds.ENTRY_MODIFY);
 
-			@Override
-			public void stopping() {
-				future.cancel(false);
-				// none of the scheduled tasks should experience exceptions,
-				// log them if they did
-				try {
-					future.get();
-				} catch (ExecutionException | InterruptedException | CancellationException ignore) {
+			log.debug("Registered the watcher for the access control repo");
+
+			loadDefaults();
+
+			node.addStatusListener(new NodeStatusListener() {
+				ScheduledFuture<?> future;
+
+				@Override
+				public void started() {
+					future = node.getScheduler().scheduleWithFixedDelay(() -> {
+						processRepoChanges();
+					}, 60, 60, TimeUnit.SECONDS);
 				}
 
-				keyDefaults.cancel();
-				keyAcls.cancel();
+				@Override
+				public void stopping() {
+					future.cancel(false);
+					// none of the scheduled tasks should experience exceptions,
+					// log them if they did
+					try {
+						future.get();
+					} catch (ExecutionException | InterruptedException | CancellationException ignore) {
+					}
 
-				try {
-					watchService.close();
-				} catch (IOException ignore) {
+					keyDefaults.cancel();
+					keyAcls.cancel();
+
+					try {
+						watchService.close();
+					} catch (IOException ignore) {
+					}
+
+					cache.invalidateAll();
+					cache.cleanUp();
+
+					log.info("Finished the cleanup");
 				}
+			});
 
-				cache.invalidateAll();
-				cache.cleanUp();
-
-				log.info("Finished the cleanup");
-			}
-		});
-
-		log.info("Initialized @ {}", repo);
+			log.info("Initialized @ {}", repo);
+		} else {
+			initDefaults();
+			log.info("Initialized with defaults");
+		}
 	}
 
 	private AccessControlList loadACL(File file) throws IOException {
@@ -163,6 +170,19 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 
 	private void saveACL(File file, AccessControlList acl) throws IOException {
 		ThreadLocals.ObjectMapper().writeValue(file, acl);
+	}
+
+	private void initDefaults() {
+		log.debug("Initialize the default access control lists...");
+
+		EnumSet<Subscription> subscriptions = EnumSet.allOf(Subscription.class);
+		defaultACLs = new EnumMap<>(Subscription.class);
+
+		for (Subscription subscription : subscriptions) {
+			log.debug("No access control list defined for: {}, using default", subscription);
+			 AccessControlList acl = new AccessControlList(subscription);
+			defaultACLs.put(acl.getSubscription(), acl);
+		}
 	}
 
 	private void loadDefaults() {
@@ -194,6 +214,9 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 
 	private AccessControlList loadNodeACL(Id id) {
 		log.debug("Loading the access control list for: {}", id);
+
+		if (acls == null)
+			return DEFAULT;
 
 		File aclFile = acls.resolve(id.toString()).toFile();
 		if (!aclFile.exists() || aclFile.isDirectory()) {
@@ -254,11 +277,10 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 	@Override
 	public Permission getPermission(Id subjectNode, String targetServiceId) {
 		AccessControlList nodeACL;
-		try {
-			nodeACL = cache.get(subjectNode);
-		} catch (ExecutionException e) {
+
+		nodeACL = cache.get(subjectNode);
+		if (nodeACL == null)
 			nodeACL = DEFAULT;
-		}
 
 		Permission permission = nodeACL.getPermission(targetServiceId);
 		if (permission == null)

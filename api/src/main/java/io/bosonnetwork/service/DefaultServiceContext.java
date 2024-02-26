@@ -1,5 +1,6 @@
 package io.bosonnetwork.service;
 
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,6 +16,7 @@ public class DefaultServiceContext implements ServiceContext {
 	private AccessManager accessManager;
 	private Map<String, Object> configuration;
 	private Map<String, Object> properties;
+	private Path dataPath;
 
 	/**
 	 * Creates a new {@link ServiceContext} instance.
@@ -23,11 +25,13 @@ public class DefaultServiceContext implements ServiceContext {
 	 * @param accessManager the {@link io.bosonnetwork.access.AccessManager} instance that
 	 *        provided by the host node.
 	 * @param configuration the configuration data of the service.
+	 * @param dataPath the persistence data path, or null if not available.
 	 */
-	public DefaultServiceContext(Node node, AccessManager accessManager, Map<String, Object> configuration) {
+	public DefaultServiceContext(Node node, AccessManager accessManager, Map<String, Object> configuration, Path dataPath) {
 		this.node = node;
 		this.accessManager = accessManager != null ? accessManager : AccessManager.getDefault();
 		this.configuration = configuration;
+		this.dataPath = dataPath;
 		this.properties = new HashMap<>();
 	}
 
@@ -39,6 +43,11 @@ public class DefaultServiceContext implements ServiceContext {
 	@Override
 	public Id getNodeId() {
 		return node.getId();
+	}
+
+	@Override
+	public Path getDataPath() {
+		return dataPath;
 	}
 
 	@Override

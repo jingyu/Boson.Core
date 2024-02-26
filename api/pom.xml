@@ -85,7 +85,7 @@
       <artifactId>jnr-ffi</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.tuweni</groupId>
+      <groupId>io.tmio</groupId>
       <artifactId>tuweni-crypto</artifactId>
     </dependency>
 

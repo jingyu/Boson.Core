@@ -23,7 +23,6 @@
 
 package io.bosonnetwork.launcher;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
@@ -61,8 +60,11 @@ public class Main {
 			node = new Node(config);
 
 			// TODO: initialize the user defined access manager
-			accessManager = new io.bosonnetwork.access.impl.AccessManager(
-					new File(config.storagePath().getAbsoluteFile(), "accesscontrol"));
+
+			accessManager = config.accessControlsPath() != null ?
+					new io.bosonnetwork.access.impl.AccessManager(config.accessControlsPath().getAbsoluteFile()) :
+					new io.bosonnetwork.access.impl.AccessManager();
+
 			accessManager.init(node);
 
 			node.addStatusListener(new NodeStatusListener() {
@@ -100,7 +102,9 @@ public class Main {
 			}
 
 			BosonService svc = (BosonService)o;
-			ServiceContext ctx = new DefaultServiceContext(node, accessManager, configuration);
+			Path dataPath = config.storagePath() == null ? null :
+				config.storagePath().getAbsoluteFile().toPath().resolve(svc.getId());
+			ServiceContext ctx = new DefaultServiceContext(node, accessManager, configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), className);
 
@@ -113,7 +117,7 @@ public class Main {
 			System.out.println("Can not load service: " + className);
 			e.printStackTrace(System.err);
 		} catch (BosonServiceException e) {
-			System.out.println("Failed to initialize service: " + className);
+			System.out.println("Failed to start service: " + className);
 			e.printStackTrace(System.err);
 		} catch (InterruptedException | ExecutionException e) {
 			System.out.println("Failed to start service: " + className);

@@ -29,8 +29,8 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.utils.AddressUtils;
@@ -86,11 +86,11 @@ public class Blacklist {
 		this.observationHits = observationHits;
 		this.banDiration = banDiration;
 
-		observations = CacheBuilder.newBuilder()
+		observations = Caffeine.newBuilder()
 			.expireAfterAccess(observationPeriod, TimeUnit.MINUTES)
 			.build();
 
-		banned = CacheBuilder.newBuilder()
+		banned = Caffeine.newBuilder()
 			.expireAfterAccess(banDiration, TimeUnit.MINUTES)
 			.build();
 	}
@@ -193,7 +193,7 @@ public class Blacklist {
 
 	public long getObservationSize() {
 		observations.cleanUp();
-		return observations.size();
+		return observations.estimatedSize();
 	}
 
 	public boolean isBanned(InetSocketAddress addr, Id id) {
@@ -210,6 +210,6 @@ public class Blacklist {
 
 	public long getBannedSize() {
 		banned.cleanUp();
-		return banned.size();
+		return banned.estimatedSize();
 	}
 }

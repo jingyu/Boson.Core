@@ -56,11 +56,11 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
+import com.github.benmanes.caffeine.cache.CacheLoader;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.github.benmanes.caffeine.cache.RemovalListener;
 
 import io.bosonnetwork.BosonException;
 import io.bosonnetwork.Configuration;
@@ -233,12 +233,12 @@ public class Node implements io.bosonnetwork.Node {
 		RemovalListener<Id, CryptoContext> listener;
 		listener = new RemovalListener<Id, CryptoContext>() {
 			@Override
-			public void onRemoval(RemovalNotification<Id, CryptoContext> n) {
-				n.getValue().close();
+			public void onRemoval(Id id, CryptoContext ctx, RemovalCause cause) {
+				ctx.close();
 			}
 		};
 
-		cryptoContexts = CacheBuilder.newBuilder()
+		cryptoContexts = Caffeine.newBuilder()
 				.expireAfterAccess(Constants.KBUCKET_OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS)
 				.removalListener(listener)
 				.build(loader);
@@ -591,7 +591,7 @@ public class Node implements io.bosonnetwork.Node {
 		try {
 			CryptoContext ctx = cryptoContexts.get(recipient);
 			return ctx.encrypt(data);
-		} catch (ExecutionException e) {
+		} catch (Exception e) {
 			throw new CryptoError("can not create the encryption context", e.getCause());
 		}
 	}
@@ -601,7 +601,7 @@ public class Node implements io.bosonnetwork.Node {
 		try {
 			CryptoContext ctx = cryptoContexts.get(sender);
 			return ctx.decrypt(data);
-		} catch (ExecutionException e) {
+		} catch (Exception e) {
 			throw new CryptoError("can not create the encryption context", e.getCause());
 		}
 	}

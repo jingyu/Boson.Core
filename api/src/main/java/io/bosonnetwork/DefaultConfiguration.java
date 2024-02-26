@@ -52,6 +52,7 @@ public class DefaultConfiguration implements Configuration {
 	InetSocketAddress addr4;
 	InetSocketAddress addr6;
 
+	private File accessControlsPath;
 	private File storagePath;
 	private Set<NodeInfo> bootstraps;
 	private Map<String, Map<String, Object>> services;
@@ -79,6 +80,18 @@ public class DefaultConfiguration implements Configuration {
 	@Override
 	public InetSocketAddress IPv6Address() {
 		return addr6;
+	}
+
+	/**
+	 * The access control lists directory.
+	 *
+	 * Null path will use default access control: allow all
+	 *
+	 * @return  a File object point to the access control lists path.
+	 */
+	@Override
+	public File accessControlsPath() {
+		return accessControlsPath;
 	}
 
 	/**
@@ -245,6 +258,36 @@ public class DefaultConfiguration implements Configuration {
 		}
 
 		/**
+		 * Checks if there is a access control list path already been set.
+		 *
+		 * @return the Builder instance for method chaining.
+		 */
+		public boolean hasAccessControlsPath() {
+			return getConfiguration().accessControlsPath != null;
+		}
+
+		/**
+		 * Set the access control list path for the super node.
+		 *
+		 * @param path the string path.
+		 * @return the Builder instance for method chaining.
+		 */
+		public Builder setAccessControlsPath(String path) {
+			return setAccessControlsPath(toFile(path));
+		}
+
+		/**
+		 * Set the access control list path for the super node.
+		 *
+		 * @param path the File object to the access control list directory.
+		 * @return the Builder instance for method chaining.
+		 */
+		public Builder setAccessControlsPath(File path) {
+			getConfiguration().accessControlsPath = path;
+			return this;
+		}
+
+		/**
 		 * Checks if there is a storage path already been set.
 		 *
 		 * @return the Builder instance for method chaining.
@@ -404,6 +447,9 @@ public class DefaultConfiguration implements Configuration {
 				if (root.has("port"))
 					setListeningPort(root.get("port").asInt());
 
+				if (root.has("accessControlsDir"))
+					setAccessControlsPath(root.get("accessControlsDir").asText());
+
 				if (root.has("dataDir"))
 					setStoragePath(root.get("dataDir").asText());
 
@@ -520,7 +566,7 @@ public class DefaultConfiguration implements Configuration {
 			if (file == null || file.isEmpty())
 				return null;
 
-			return file.startsWith("~") ?
+			return file.startsWith("~" + File.separator) || file.equals("~") ?
 				new File(System.getProperty("user.home") + file.substring(1)) :
 			    new File(file);
 		}

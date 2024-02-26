@@ -46,8 +46,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import io.bosonnetwork.ConnectionStatus;
 import io.bosonnetwork.ConnectionStatusListener;
@@ -181,10 +181,9 @@ public class DHT {
 		this.status = ConnectionStatus.Disconnected;
 		this.bootstrapStage = new BootstrapStage();
 
-		this.knownNodes = CacheBuilder.newBuilder()
+		this.knownNodes = Caffeine.newBuilder()
 				.initialCapacity(256)
 				.expireAfterAccess(Constants.KBUCKET_OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS)
-				.concurrencyLevel(4)
 				.build();
 
 		this.taskMan = new TaskManager(this);
@@ -893,9 +892,9 @@ public class DHT {
 		AtomicReference<Value> valueRef = new AtomicReference<>(null);
 		ValueLookup task = new ValueLookup(this, id);
 		task.setResultHandler((v) -> {
-			if (valueRef.get() == null)
+			if (valueRef.get() == null) {
 				valueRef.set(v);
-			else {
+			} else {
 				if (valueRef.get().getSequenceNumber() < v.getSequenceNumber())
 					valueRef.set(v);
 			}

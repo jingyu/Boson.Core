@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.service;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 import io.bosonnetwork.Id;
@@ -47,6 +48,13 @@ public interface ServiceContext {
 	 * @return the host Boson node id.
 	 */
 	public Id getNodeId();
+
+	/**
+	 * Gets the persistence path for the current service.
+	 *
+	 * @return the {@code Path} object.
+	 */
+	public Path getDataPath();
 
 	/**
 	 * Gets the {@link io.bosonnetwork.access.AccessManager} instance that provided by

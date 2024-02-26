@@ -53,6 +53,17 @@ public interface Configuration {
 	}
 
 	/**
+	 * The access control lists directory.
+	 *
+	 * Null path will use default access control: allow all
+	 *
+	 * @return  a File object point to the access control lists path.
+	 */
+	default public File accessControlsPath() {
+		return null;
+	}
+
+	/**
 	 * If a Path that points to a writable directory is returned then the node info and
 	 * the routing table will be persisted to that directory periodically and during shutdown.
 	 *
