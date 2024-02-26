@@ -27,10 +27,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
 /**
  * Thread local objects factory.
@@ -45,14 +44,15 @@ public class ThreadLocals {
 	});
 
 	private static ThreadLocal<CBORFactory> localCBORFactory = ThreadLocal.withInitial(() -> {
-		CBORFactory factory = new CBORFactory();
-		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-		return factory;
+		return Json.createCBORFactory();
 	});
 
 	private static ThreadLocal<ObjectMapper> localObjectMapper = ThreadLocal.withInitial(() -> {
-		return new ObjectMapper();
+		return Json.createObjectMapper();
+	});
+
+	private static ThreadLocal<CBORMapper> localCBORMapper = ThreadLocal.withInitial(() -> {
+		return Json.createCBORMapper();
 	});
 
 	/**
@@ -97,5 +97,16 @@ public class ThreadLocals {
 	 */
 	public static ObjectMapper ObjectMapper() {
 		return localObjectMapper.get();
+	}
+
+	/**
+	 * Returns the current thread's Jackson {@code CBORtMapper} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's Jackson {@code CBORtMapper}
+	 */
+	public static CBORMapper CBORMapper() {
+		return localCBORMapper.get();
 	}
 }
