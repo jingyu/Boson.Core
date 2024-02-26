@@ -28,6 +28,7 @@ import java.util.Arrays;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoBox.KeyPair;
+import io.bosonnetwork.crypto.CryptoBox.Nonce;
 import io.bosonnetwork.crypto.CryptoBox.PublicKey;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
@@ -37,27 +38,35 @@ import io.bosonnetwork.kademlia.exceptions.CryptoError;
  */
 public class CryptoContext implements AutoCloseable {
 	private CryptoBox box;
-	private CryptoBox.Nonce nonce;
+	private Nonce nextNonce;
+	private Nonce lastPeerNonce;
 
 	public CryptoContext(Id id, KeyPair keyPair) throws CryptoError {
 		try {
 			PublicKey pk = id.toEncryptionKey();
 			box = CryptoBox.fromKeys(pk, keyPair.privateKey());
-
-			Id receiver = Id.of(pk.bytes());
-			Id sender = Id.of(keyPair.publicKey().bytes());
-
-			Id dist = Id.distance(sender, receiver);
-
-			nonce = CryptoBox.Nonce.fromBytes(Arrays.copyOf(dist.bytes(), CryptoBox.Nonce.BYTES));
+			nextNonce = Nonce.random();
 		} catch (CryptoException e) {
 			throw new CryptoError(e.getMessage(), e);
 		}
 	}
 
+	private synchronized Nonce getAndIncrementNonce() {
+		Nonce nonce = nextNonce;
+		nextNonce = nonce.increment();
+		return nonce;
+	}
+
 	public byte[] encrypt(byte[] plain) throws CryptoError {
 		try {
-			return box.encrypt(plain, nonce);
+			// TODO: how to avoid the memory copy?!
+			Nonce nonce = getAndIncrementNonce();
+			byte[] cipher = box.encrypt(plain, nonce);
+
+			byte[] buf = new byte[Nonce.BYTES + cipher.length];
+			System.arraycopy(nonce.bytes(), 0, buf, 0, Nonce.BYTES);
+			System.arraycopy(cipher, 0, buf, Nonce.BYTES, cipher.length);
+			return buf;
 		} catch (CryptoException e) {
 			throw new CryptoError(e.getMessage(), e);
 		}
@@ -65,7 +74,20 @@ public class CryptoContext implements AutoCloseable {
 
 	public byte[] decrypt(byte[] cipher) throws CryptoError {
 		try {
-			return box.decrypt(cipher, nonce);
+			if (cipher.length <= Nonce.BYTES + CryptoBox.MAC_BYTES)
+				throw new CryptoError("Invalid cipher size");
+
+			// TODO: how to avoid the memory copy?!
+			byte[] n = Arrays.copyOfRange(cipher, 0, Nonce.BYTES);
+			Nonce nonce = Nonce.fromBytes(n);
+			if (lastPeerNonce != null && nonce.equals(lastPeerNonce))
+				throw new CryptoError("Duplicated nonce");
+
+			lastPeerNonce = nonce;
+
+			byte[] m = Arrays.copyOfRange(cipher, Nonce.BYTES, cipher.length);
+
+			return box.decrypt(m, nonce);
 		} catch (CryptoException e) {
 			throw new CryptoError(e.getMessage(), e);
 		}
