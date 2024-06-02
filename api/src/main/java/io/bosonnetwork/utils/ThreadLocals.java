@@ -43,6 +43,14 @@ public class ThreadLocals {
 		}
 	});
 
+	private static ThreadLocal<MessageDigest> localMD5 = ThreadLocal.withInitial(() -> {
+		try {
+			return MessageDigest.getInstance("MD5");
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException("expected SHA-256 digest to be available", e);
+		}
+	});
+
 	private static ThreadLocal<CBORFactory> localCBORFactory = ThreadLocal.withInitial(() -> {
 		return Json.createCBORFactory();
 	});
@@ -75,6 +83,17 @@ public class ThreadLocals {
 	 */
 	public static MessageDigest sha256() {
 		return localSha256.get();
+	}
+
+	/**
+	 * Returns the current thread's MD5 {@code MessageDigest} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the current thread's MD5 {@code MessageDigest}
+	 */
+	public static MessageDigest md5() {
+		return localMD5.get();
 	}
 
 	/**

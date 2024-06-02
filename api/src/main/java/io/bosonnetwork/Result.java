@@ -62,6 +62,21 @@ public class Result<T> {
 	}
 
 	/**
+	 * Gets the value with preferred network, or null fallback to the other network.
+	 *
+	 * @param preferred the preferred network type (IPv4 or IPv6).
+	 * @return the corresponding value for the specified network type.
+	 */
+	public T get(Network preferred) {
+		T value = getValue(preferred);
+		if (value != null)
+			return value;
+
+		Network another = preferred == Network.IPv4 ? Network.IPv6 : Network.IPv4;
+		return getValue(another);
+	}
+
+	/**
 	 * Gets the value based on the specified network type.
 	 *
 	 * @param network the network type (IPv4 or IPv6).
