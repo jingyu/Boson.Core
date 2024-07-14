@@ -37,18 +37,24 @@ import io.bosonnetwork.kademlia.exceptions.CryptoError;
  * @hidden
  */
 public class CryptoContext implements AutoCloseable {
+	private final Id id;
 	private CryptoBox box;
 	private Nonce nextNonce;
 	private Nonce lastPeerNonce;
 
 	public CryptoContext(Id id, KeyPair keyPair) throws CryptoError {
 		try {
+			this.id = id;
 			PublicKey pk = id.toEncryptionKey();
 			box = CryptoBox.fromKeys(pk, keyPair.privateKey());
 			nextNonce = Nonce.random();
 		} catch (CryptoException e) {
 			throw new CryptoError(e.getMessage(), e);
 		}
+	}
+
+	public Id getId() {
+		return id;
 	}
 
 	private synchronized Nonce getAndIncrementNonce() {
