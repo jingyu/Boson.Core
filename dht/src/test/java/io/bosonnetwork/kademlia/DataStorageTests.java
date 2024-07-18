@@ -279,7 +279,6 @@ public class DataStorageTests {
 		v = ds.getValue(valueId);
 		assertNotNull(v);
 		assertEquals(pk, v.getPublicKey());
-		assertArrayEquals(nonce.bytes(), v.getNonce());
 		assertEquals(seq + 1, v.getSequenceNumber());
 		assertArrayEquals(newData, v.getData());
 		assertTrue(v.isValid());
@@ -352,7 +351,6 @@ public class DataStorageTests {
 		assertNotNull(v);
 		assertEquals(pk, v.getPublicKey());
 		assertEquals(recipient, v.getRecipient());
-		assertArrayEquals(nonce.bytes(), v.getNonce());
 		assertEquals(seq + 1, v.getSequenceNumber());
 		assertArrayEquals(newData, v.decryptData(recKeypair.privateKey()));
 		assertTrue(v.isValid());

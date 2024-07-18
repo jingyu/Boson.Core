@@ -39,13 +39,15 @@ import io.bosonnetwork.utils.ThreadLocals;
  * and they are identified by their public key or SHA-256 hash.
  */
 public class Value {
-	private Id publicKey;
-	private byte[] privateKey;
-	private Id recipient;
-	private byte[] nonce;
-	private int sequenceNumber;
-	private byte[] signature;
-	private byte[] data;
+	private final Id publicKey;
+	private final byte[] privateKey;
+	private final Id recipient;
+	private final byte[] nonce;
+	private final int sequenceNumber;
+	private final byte[] signature;
+	private final byte[] data;
+
+	private transient Id id;
 
 	/**
 	 * Private constructor to create a new Value object.
@@ -299,7 +301,10 @@ public class Value {
 	 * @return the ID of the value.
 	 */
 	public Id getId() {
-		return calculateId(this.publicKey, this.nonce, this.data);
+		if (id == null)
+			id = calculateId(this.publicKey, this.data);
+
+		return id;
 	}
 
 	/**
@@ -378,22 +383,17 @@ public class Value {
 	 * Calculates the ID of the value.
 	 *
 	 * @param publicKey The public key associated with the value.
-	 * @param nonce     The nonce used for encryption or signing.
 	 * @param data      The data contained in the value.
 	 * @return The calculated ID of the value.
 	 */
-	public static Id calculateId(Id publicKey, byte[] nonce, byte[] data) {
-		MessageDigest digest = ThreadLocals.sha256();
-		digest.reset();
-
+	public static Id calculateId(Id publicKey, byte[] data) {
 		if(publicKey != null) {
-			digest.update(publicKey.bytes());
-			digest.update(nonce);
+			return publicKey;
 		} else {
-			digest.update(data);
+			MessageDigest digest = ThreadLocals.sha256();
+			digest.reset();
+			return new Id(digest.digest(data));
 		}
-
-		return new Id(digest.digest());
 	}
 
 	/**
@@ -487,7 +487,7 @@ public class Value {
 			throw new IllegalStateException("Not the owner of the value " + getId());
 
 		Signature.KeyPair kp = Signature.KeyPair.fromPrivateKey(getPrivateKey());
-		CryptoBox.Nonce nonce = CryptoBox.Nonce.fromBytes(getNonce());
+		CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
 
 
 		return new Value(kp, recipient, nonce, sequenceNumber + 1, data);

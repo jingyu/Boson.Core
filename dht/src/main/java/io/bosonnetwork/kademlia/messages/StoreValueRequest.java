@@ -91,7 +91,7 @@ public class StoreValueRequest extends Message {
 	}
 
 	public Id getValueId() {
-		return Value.calculateId(publicKey, nonce, value);
+		return Value.calculateId(publicKey, value);
 	}
 
 	@Override
