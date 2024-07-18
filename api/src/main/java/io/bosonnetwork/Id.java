@@ -56,7 +56,9 @@ public class Id implements Comparable<Id> {
 	public static final Id MAX_ID = Id.ofHex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
 
 	// the performance for raw bytes is much better then BigInteger
-	private byte[] bytes;
+	private final byte[] bytes;
+
+	private String repr;
 
 	/**
 	 * 3-way comparison function, compare the ids by distance.
@@ -603,7 +605,10 @@ public class Id implements Comparable<Id> {
 	 * @return string representation of this id in base58 encoding.
 	 */
 	public String toBase58String() {
-		return Base58.encode(bytes);
+		if (repr == null)
+			repr = Base58.encode(bytes);
+
+		return repr;
 	}
 
 	/**
@@ -629,6 +634,5 @@ public class Id implements Comparable<Id> {
 	@Override
 	public String toString() {
 		return this.toBase58String();
-		//return this.toHexString();
 	}
 }

@@ -29,7 +29,6 @@ import java.util.concurrent.CompletableFuture;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -90,7 +89,7 @@ public class StoreValueCommand implements Callable<Integer> {
 				return -1;
 			}
 
-			value = node.getValue(id);
+			value = node.getValue(id).get();
 			if (value == null) {
 				System.out.println("Value not exists: " + target);
 				return -1;

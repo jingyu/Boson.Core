@@ -74,6 +74,7 @@ import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
@@ -251,8 +252,18 @@ public class Node implements io.bosonnetwork.Node {
 
 	@Override
 	public Result<NodeInfo> getNodeInfo() {
-		NodeInfo n4 = dht4 != null ? new NodeInfo(id, dht4.getAddress()) : null;
-		NodeInfo n6 = dht6 != null ? new NodeInfo(id, dht6.getAddress()) : null;
+		NodeInfo n4 = null;
+		if (dht4 != null) {
+			n4 = new NodeInfo(id, dht4.getAddress());
+			n4.setVersion(Constants.VERSION);
+		}
+
+		NodeInfo n6 = null;
+		if (dht6 != null) {
+			n6 = new NodeInfo(id, dht6.getAddress());
+			n6.setVersion(Constants.VERSION);
+		}
+
 		return new Result<>(n4, n6);
 	}
 
@@ -261,7 +272,6 @@ public class Node implements io.bosonnetwork.Node {
 		return this.id.equals(id);
 	}
 
-	@Override
 	public Configuration getConfig() {
 		return config;
 	}
@@ -335,7 +345,6 @@ public class Node implements io.bosonnetwork.Node {
 		return scheduler;
 	}
 
-	@Override
 	public void setScheduler(ScheduledExecutorService scheduler) {
 		this.scheduler = scheduler;
 	}
@@ -504,11 +513,6 @@ public class Node implements io.bosonnetwork.Node {
 	@Override
 	public NodeStatus getStatus() {
 		return status;
-	}
-
-	@Override
-	public boolean isRunning() {
-		return status == NodeStatus.Running;
 	}
 
 	private void persistentAnnounce() {
@@ -856,31 +860,56 @@ public class Node implements io.bosonnetwork.Node {
 	}
 
 	@Override
-	public Value getValue(Id valueId) throws KadException {
+	public CompletableFuture<Value> getValue(Id valueId) {
 		checkArgument(valueId != null, "Invalid value id");
 
-		return getStorage().getValue(valueId);
+		try {
+			Value result = getStorage().getValue(valueId);
+			return CompletableFuture.completedFuture(result);
+		} catch (Exception e) {
+			return CompletableFuture.failedFuture(e);
+		}
 	}
 
 	@Override
-	public boolean removeValue(Id valueId) throws KadException {
+	public CompletableFuture<Boolean> removeValue(Id valueId) {
 		checkArgument(valueId != null, "Invalid value id");
 
-		return getStorage().removeValue(valueId);
+		try {
+			boolean result = getStorage().removeValue(valueId);
+			return CompletableFuture.completedFuture(result);
+		} catch (Exception e) {
+			return CompletableFuture.failedFuture(e);
+		}
 	}
 
 	@Override
-	public PeerInfo getPeer(Id peerId) throws KadException {
+	public CompletableFuture<PeerInfo> getPeer(Id peerId) {
 		checkArgument(peerId != null, "Invalid peer id");
 
-		return getStorage().getPeer(peerId, this.getId());
+		try {
+			PeerInfo result = getStorage().getPeer(peerId, this.getId());
+			return CompletableFuture.completedFuture(result);
+		} catch (Exception e) {
+			return CompletableFuture.failedFuture(e);
+		}
 	}
 
 	@Override
-	public boolean removePeer(Id peerId) throws KadException {
+	public CompletableFuture<Boolean> removePeer(Id peerId) {
 		checkArgument(peerId != null, "Invalid peer id");
 
-		return getStorage().removePeer(peerId, this.getId());
+		try {
+			boolean result = getStorage().removePeer(peerId, this.getId());
+			return CompletableFuture.completedFuture(result);
+		} catch (Exception e) {
+			return CompletableFuture.failedFuture(e);
+		}
+	}
+
+	@Override
+	public String getVersion() {
+		return Version.toString(Constants.VERSION);
 	}
 
 	@Override

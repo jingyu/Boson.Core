@@ -55,13 +55,6 @@ public interface Node {
 	public boolean isLocalId(Id id);
 
 	/**
-	 * Gets the {@code Configuration} of the node.
-	 *
-	 * @return the {@code Configuration} of the node.
-	 */
-	public Configuration getConfig();
-
-	/**
 	 * Sets the default lookup option for the node.
 	 *
 	 * @param option the default lookup option.
@@ -104,13 +97,6 @@ public interface Node {
 	public ScheduledExecutorService getScheduler();
 
 	/**
-	 * Sets the {@code ScheduledExecutorService} for the node.
-	 *
-	 * @param scheduler the scheduled executor service to set.
-	 */
-	public void setScheduler(ScheduledExecutorService scheduler);
-
-	/**
 	 * Bootstraps the node from the specified node.
 	 *
 	 * @param node the node information to bootstrap with.
@@ -126,6 +112,7 @@ public interface Node {
 	 */
 	public void bootstrap(Collection<NodeInfo> bootstrapNodes) throws BosonException;
 
+	// TODO: start, stop change to async method and return a future
 	/**
 	 * Starts the node.
 	 *
@@ -150,7 +137,9 @@ public interface Node {
 	 *
 	 * @return {@code true} if the node is running, {@code false} otherwise.
 	 */
-	public boolean isRunning();
+	public default boolean isRunning() {
+		return getStatus() == NodeStatus.Running;
+	}
 
 	/**
 	 * Encrypts the given data for a specific recipient.
@@ -291,35 +280,38 @@ public interface Node {
 	 * Gets the value associated with the given ID from the node's storage.
 	 *
 	 * @param valueId the ID of the value to retrieve.
-	 * @return the value associated with the ID.
-	 * @throws BosonException if an error occurs during value retrieval.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public Value getValue(Id valueId) throws BosonException;
+	public CompletableFuture<Value> getValue(Id valueId);
 
 	/**
 	 * Removes the value with the given ID from the node's storage.
 	 *
 	 * @param valueId the ID of the value to remove.
-	 * @return {@code true} if the value is successfully removed, {@code false} otherwise.
-	 * @throws BosonException if an error occurs during value removal.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public boolean removeValue(Id valueId) throws BosonException;;
+	public CompletableFuture<Boolean> removeValue(Id valueId);
 
 	/**
 	 * Gets the peer information with the given ID from the node's storage.
 	 *
 	 * @param peerId the ID of the peer to retrieve information for.
-	 * @return the peer information associated with the ID.
-	 * @throws BosonException if an error occurs during peer information retrieval.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public PeerInfo getPeer(Id peerId) throws BosonException;
+	public CompletableFuture<PeerInfo> getPeer(Id peerId);
 
 	/**
 	 * Removes the peer entry with the given ID from the node's storage.
 	 *
 	 * @param peerId the ID of the peer to remove.
-	 * @return {@code true} if the peer information is successfully removed, {@code false} otherwise.
-	 * @throws BosonException if an error occurs during peer information removal.
+	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public boolean removePeer(Id peerId) throws BosonException;
+	public CompletableFuture<Boolean> removePeer(Id peerId);
+
+	/**
+	 * Get the software version.
+	 *
+	 * @return the version string.
+	 */
+	public String getVersion();
 }
