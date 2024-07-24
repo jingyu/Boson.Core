@@ -31,12 +31,13 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * The public interface for Boson DHT node.
  */
-public interface Node {
+public interface Node extends Identity {
 	/**
 	 * Gets the ID of the node.
 	 *
 	 * @return the ID of the node.
 	 */
+	@Override
 	public Id getId();
 
 	/**
@@ -142,14 +143,33 @@ public interface Node {
 	}
 
 	/**
+	 * Signs the given data.
+	 *
+	 * @param data the data to sign.
+	 * @return the signature.
+	 */
+	@Override
+	public byte[] sign(byte[] data);
+
+	/**
+	 * Verifies the signature of the given data.
+	 *
+	 * @param data the data to verify.
+	 * @param signature the signature to verify.
+	 * @return {@code true} if the signature is valid, {@code false} otherwise.
+	 */
+	@Override
+	public boolean verify(byte[] data, byte[] signature);
+
+	/**
 	 * Encrypts the given data for a specific recipient.
 	 *
 	 * @param recipient the ID of the recipient.
 	 * @param data the data to encrypt.
 	 * @return the encrypted data.
-	 * @throws BosonException if an error occurs during encryption.
 	 */
-	public byte[] encrypt(Id recipient, byte[] data) throws BosonException;
+	@Override
+	public byte[] encrypt(Id recipient, byte[] data);
 
 	/**
 	 * Decrypts the given data from a specific sender.
@@ -159,26 +179,17 @@ public interface Node {
 	 * @return the decrypted data.
 	 * @throws BosonException if an error occurs during decryption.
 	 */
+	@Override
 	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
 
 	/**
-	 * Signs the given data.
+	 * Create {@code CryptoContext} object for the target Id.
 	 *
-	 * @param data the data to sign.
-	 * @return the signature.
-	 * @throws BosonException if an error occurs during signing.
+	 * @param id the target id
+	 * @return the {@code CryptoContext} object for id
 	 */
-	public byte[] sign(byte[] data) throws BosonException;
-
-	/**
-	 * Verifies the signature of the given data.
-	 *
-	 * @param data the data to verify.
-	 * @param signature the signature to verify.
-	 * @return {@code true} if the signature is valid, {@code false} otherwise.
-	 * @throws BosonException if an error occurs during verification.
-	 */
-	public boolean verify(byte[] data, byte[] signature) throws BosonException;
+	@Override
+	public CryptoContext createCryptoContext(Id id);
 
 	/**
 	 * Lookup the information about a node with the given ID.

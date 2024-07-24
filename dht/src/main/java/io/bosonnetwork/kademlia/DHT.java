@@ -235,7 +235,13 @@ public class DHT {
 	}
 
 	public NodeInfo getNode(Id nodeId) {
-		return routingTable.getEntry(nodeId, true);
+		NodeInfo ni = routingTable.getEntry(nodeId, true);
+		if (ni == null && node.isLocalId(nodeId)) {
+			ni = new NodeInfo(nodeId, getAddress());
+			ni.setVersion(Constants.VERSION);
+		}
+
+		return ni;
 	}
 
 	public RoutingTable getRoutingTable() {

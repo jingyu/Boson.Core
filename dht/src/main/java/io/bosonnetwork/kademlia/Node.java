@@ -62,9 +62,9 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 
-import io.bosonnetwork.BosonException;
 import io.bosonnetwork.Configuration;
 import io.bosonnetwork.ConnectionStatusListener;
+import io.bosonnetwork.CryptoContext;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Network;
@@ -227,7 +227,7 @@ public class Node implements io.bosonnetwork.Node {
 		loader = new CacheLoader<>() {
 			@Override
 			public CryptoContext load(Id id) throws CryptoError {
-				return new CryptoContext(id, encryptKeyPair);
+				return createCryptoContext(id);
 			}
 		};
 
@@ -591,13 +591,9 @@ public class Node implements io.bosonnetwork.Node {
 	}
 
 	@Override
-	public byte[] encrypt(Id recipient, byte[] data) throws CryptoError {
-		try {
-			CryptoContext ctx = cryptoContexts.get(recipient);
-			return ctx.encrypt(data);
-		} catch (Exception e) {
-			throw new CryptoError("can not create the encryption context", e.getCause());
-		}
+	public byte[] encrypt(Id recipient, byte[] data) {
+		CryptoContext ctx = cryptoContexts.get(recipient);
+		return ctx.encrypt(data);
 	}
 
 	@Override
@@ -611,12 +607,19 @@ public class Node implements io.bosonnetwork.Node {
 	}
 
 	@Override
-	public byte[] sign(byte[] data) throws BosonException {
+	public CryptoContext createCryptoContext(Id id) {
+		CryptoBox.PublicKey pk = id.toEncryptionKey();
+		CryptoBox box = CryptoBox.fromKeys(pk, encryptKeyPair.privateKey());
+		return new CryptoContext(id, box);
+	}
+
+	@Override
+	public byte[] sign(byte[] data) {
 		return Signature.sign(data, keyPair.privateKey());
 	}
 
 	@Override
-	public boolean verify(byte[] data, byte[] signature) throws BosonException {
+	public boolean verify(byte[] data, byte[] signature) {
 		return Signature.verify(data, signature, keyPair.publicKey());
 	}
 

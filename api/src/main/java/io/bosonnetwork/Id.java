@@ -28,7 +28,6 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 
 import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
@@ -530,9 +529,8 @@ public class Id implements Comparable<Id> {
 	 * Gets the X25519 encryption public key from this id.
 	 *
 	 * @return the X25519 public key object.
-	 * @throws CryptoException if an error occurred when convert the public key.
 	 */
-	public CryptoBox.PublicKey toEncryptionKey() throws CryptoException {
+	public CryptoBox.PublicKey toEncryptionKey() {
 		return CryptoBox.PublicKey.fromSignatureKey(toSignatureKey());
 	}
 

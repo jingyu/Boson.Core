@@ -1,11 +1,12 @@
-package io.bosonnetwork.crypto;
+package io.bosonnetwork;
 
 import java.util.Arrays;
 
-import io.bosonnetwork.Id;
+import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoBox.Nonce;
 import io.bosonnetwork.crypto.CryptoBox.PrivateKey;
 import io.bosonnetwork.crypto.CryptoBox.PublicKey;
+import io.bosonnetwork.crypto.CryptoException;
 
 public class CryptoContext implements AutoCloseable {
 	private final Id id;
@@ -14,16 +15,15 @@ public class CryptoContext implements AutoCloseable {
 	private Nonce nextNonce;
 	private Nonce lastPeerNonce;
 
-	public CryptoContext(Id id, PrivateKey privateKey) throws CryptoException {
+	public CryptoContext(Id id, PrivateKey privateKey) {
 		this.id = id;
 
-		Signature.PublicKey sigPk = Signature.PublicKey.fromBytes(id.bytes());
-		PublicKey publicKey = PublicKey.fromSignatureKey(sigPk);
+		PublicKey publicKey = id.toEncryptionKey();
 		this.box = CryptoBox.fromKeys(publicKey, privateKey);
 		this.nextNonce = Nonce.random();
 	}
 
-	public CryptoContext(Id id, CryptoBox box) throws CryptoException {
+	public CryptoContext(Id id, CryptoBox box) {
 		this.id = id;
 		this.box = box;
 		this.nextNonce = Nonce.random();
@@ -39,7 +39,7 @@ public class CryptoContext implements AutoCloseable {
 		return nonce;
 	}
 
-	public byte[] encrypt(byte[] data) throws CryptoException {
+	public byte[] encrypt(byte[] data) {
 		// TODO: how to avoid the memory copy?!
 		Nonce nonce = getAndIncrementNonce();
 		byte[] cipher = box.encrypt(data, nonce);

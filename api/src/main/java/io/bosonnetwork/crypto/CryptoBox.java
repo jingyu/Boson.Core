@@ -30,7 +30,6 @@ import javax.security.auth.Destroyable;
 import org.apache.tuweni.crypto.sodium.Box;
 import org.apache.tuweni.crypto.sodium.Box.Seed;
 import org.apache.tuweni.crypto.sodium.Sodium;
-import org.apache.tuweni.crypto.sodium.SodiumException;
 
 /**
  * Public-key(Curve 25519) authenticated encryption.
@@ -77,14 +76,9 @@ public class CryptoBox implements AutoCloseable {
 		 *
 		 * @param key the signature public key.
 		 * @return the public key as a Curve25519 public key.
-		 * @throws CryptoException if error to transform the key.
 		 */
-		public static PublicKey fromSignatureKey(Signature.PublicKey key) throws CryptoException {
-			try {
-				return new PublicKey(Box.PublicKey.forSignaturePublicKey(key.raw()));
-			} catch (SodiumException e) {
-				throw new CryptoException(e.getMessage(), e);
-			}
+		public static PublicKey fromSignatureKey(Signature.PublicKey key) {
+			return new PublicKey(Box.PublicKey.forSignaturePublicKey(key.raw()));
 		}
 
 		Box.PublicKey raw() {
@@ -185,14 +179,9 @@ public class CryptoBox implements AutoCloseable {
 		 *
 		 * @param key the signature secret key
 		 * @return the secret key as a Curve25519 private key
-		 * @throws CryptoException if error to transform the key.
 		 */
-		public static PrivateKey fromSignatureKey(Signature.PrivateKey key) throws CryptoException {
-			try {
-				return new PrivateKey(Box.SecretKey.forSignatureSecretKey(key.raw()));
-			} catch (SodiumException e) {
-				throw new CryptoException(e.getMessage(), e);
-			}
+		public static PrivateKey fromSignatureKey(Signature.PrivateKey key) {
+			return new PrivateKey(Box.SecretKey.forSignatureSecretKey(key.raw()));
 		}
 
 		Box.SecretKey raw() {
@@ -492,14 +481,9 @@ public class CryptoBox implements AutoCloseable {
 	 * @param pk the public key of the receiver.
 	 * @param sk the secret key of the sender.
 	 * @return a precomputed crypto box instance.
-	 * @throws CryptoException if error occurred during the key computing.
 	 */
-	public static CryptoBox fromKeys(PublicKey pk, PrivateKey sk) throws CryptoException {
-		try {
-			return new CryptoBox(Box.forKeys(pk.raw(), sk.raw()));
-		} catch (SodiumException e) {
-			throw new CryptoException(e.getMessage(), e);
-		}
+	public static CryptoBox fromKeys(PublicKey pk, PrivateKey sk) {
+		return new CryptoBox(Box.forKeys(pk.raw(), sk.raw()));
 	}
 
 	/**
@@ -508,14 +492,9 @@ public class CryptoBox implements AutoCloseable {
 	 * @param message the message to encrypt.
 	 * @param nonce a unique nonce object.
 	 * @return the encrypted data.
-	 * @throws CryptoException if error occurred during the encrypting.
 	 */
-	public byte[] encrypt(byte[] message, Nonce nonce) throws CryptoException {
-		try {
-			return box.encrypt(message, nonce.raw());
-		} catch (SodiumException e) {
-			throw new CryptoException(e.getMessage(), e);
-		}
+	public byte[] encrypt(byte[] message, Nonce nonce) {
+		return box.encrypt(message, nonce.raw());
 	}
 
 	/**
@@ -525,14 +504,9 @@ public class CryptoBox implements AutoCloseable {
 	 * @param sender the private key of the sender.
 	 * @param nonce a unique nonce object.
 	 * @return the encrypted data.
-	 * @throws CryptoException if error occurred during the encrypting.
 	 */
-	public static byte[] encrypt(byte[] message, PublicKey receiver, PrivateKey sender, Nonce nonce) throws CryptoException {
-		try {
-			return Box.encrypt(message, receiver.raw(), sender.raw(), nonce.raw());
-		} catch (SodiumException e) {
-			throw new CryptoException(e.getMessage(), e);
-		}
+	public static byte[] encrypt(byte[] message, PublicKey receiver, PrivateKey sender, Nonce nonce) {
+		return Box.encrypt(message, receiver.raw(), sender.raw(), nonce.raw());
 	}
 
 	/**
@@ -551,14 +525,9 @@ public class CryptoBox implements AutoCloseable {
 	 * @param message the message to encrypt.
 	 * @param receiver the public key of the receiver.
 	 * @return the encrypted data.
-	 * @throws CryptoException if error occurred during the encrypting.
 	 */
-	public static byte[] encryptSealed(byte[] message, PublicKey receiver) throws CryptoException {
-		try {
-			return Box.encryptSealed(message, receiver.raw());
-		} catch (SodiumException e) {
-			throw new CryptoException(e.getMessage(), e);
-		}
+	public static byte[] encryptSealed(byte[] message, PublicKey receiver) {
+		return Box.encryptSealed(message, receiver.raw());
 	}
 
 	/**

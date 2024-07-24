@@ -459,8 +459,8 @@ public class RPCServer implements Selectable {
 					msg.getAssociatedCall().failed();
 
 				break;
-			} catch (CryptoError e) {
-				log.error("Failed to encrypt message {}/{} to {}: {}", msg.getMethod(), msg.getType(),
+			} catch (Exception e) {
+				log.error("Failed to process message {}/{} to {}: {}", msg.getMethod(), msg.getType(),
 						AddressUtils.toString(msg.getRemoteAddress()), msg);
 			}
 		}
