@@ -25,12 +25,12 @@ package io.bosonnetwork.kademlia;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.kademlia.TimeoutSampler.Snapshot;
+import io.bosonnetwork.utils.ThreadLocals;
 
 public class TimeoutSamplerTest {
 	/*
@@ -71,7 +71,7 @@ public class TimeoutSamplerTest {
 		TimeoutSampler f = new TimeoutSampler();
 
 		IntStream.range(0, 2000).forEach(i -> {
-			f.update((long) (ThreadLocalRandom.current().nextGaussian() * 100 + 5000));
+			f.update((long) (ThreadLocals.random().nextGaussian() * 100 + 5000));
 			if((i % 10) == 0)
 				f.decay();
 		});
@@ -125,7 +125,7 @@ public class TimeoutSamplerTest {
 		TimeoutSampler s = new TimeoutSampler();
 
 		IntStream.range(0, 2000).forEach(i -> {
-			s.update((long) (ThreadLocalRandom.current().nextGaussian() * 100 + 5000));
+			s.update((long) (ThreadLocals.random().nextGaussian() * 100 + 5000));
 			if ((i % 10) == 0)
 				s.decay();
 		});

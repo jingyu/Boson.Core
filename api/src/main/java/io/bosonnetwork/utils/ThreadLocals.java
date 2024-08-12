@@ -25,6 +25,7 @@ package io.bosonnetwork.utils;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +36,8 @@ import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
  * Thread local objects factory.
  */
 public class ThreadLocals {
+	private static SecureRandom random = new SecureRandom();
+
 	private static ThreadLocal<MessageDigest> localSha256 = ThreadLocal.withInitial(() -> {
 		try {
 			return MessageDigest.getInstance("SHA-256");
@@ -72,6 +75,17 @@ public class ThreadLocals {
 	 */
 	public static ThreadLocalRandom random() {
 		return ThreadLocalRandom.current();
+	}
+
+	/**
+	 * Returns the thread-safe {@code SecureRandom} object.
+	 * Methods of this object should be called only by the current thread,
+	 * not by other threads.
+	 *
+	 * @return the thread-safe {@code SecureRandom} object.
+	 */
+	public static SecureRandom secureRandom() {
+		return random;
 	}
 
 	/**

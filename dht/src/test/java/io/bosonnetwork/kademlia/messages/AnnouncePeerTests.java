@@ -78,8 +78,8 @@ public class AnnouncePeerTests extends MessageTests {
 	public void testAnnouncePeerRequest() throws Exception {
 		Id nodeId = Id.random();
 		Id peerId = Id.random();
-		int txid = ThreadLocals.random().nextInt(1, 0x7FFFFFFF);
-		int port = ThreadLocals.random().nextInt(1, 65535);
+		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int port = ThreadLocals.random().nextInt(1, 0xFFFF);
 		int token = ThreadLocals.random().nextInt();
 		byte[] sig = new byte[64];
 		new SecureRandom().nextBytes(sig);
@@ -117,8 +117,8 @@ public class AnnouncePeerTests extends MessageTests {
 		Id nodeId = Id.random();
 		Id origin = Id.random();
 		Id peerId = Id.random();
-		int txid = ThreadLocals.random().nextInt(1, 0x7FFFFFFF);
-		int port = ThreadLocals.random().nextInt(1, 65535);
+		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int port = ThreadLocals.random().nextInt(1, 0xFFFF);
 		int token = ThreadLocals.random().nextInt();
 		byte[] sig = new byte[64];
 		new SecureRandom().nextBytes(sig);

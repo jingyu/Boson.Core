@@ -419,6 +419,9 @@ public class SQLiteStorage implements DataStorage {
 		PreparedStatement stmt = null;
 		ResultSet rs = null;
 
+		// TODO: improve - the stream should not hold the resultset during the life time.
+		//       we should use the query pagination, fetch the results batch by batch into
+		//       a intermediate container then drop the resultset immediately.
 		try {
 			stmt = getConnection().prepareStatement("SELECT * FROM valores WHERE persistent = true AND announced <= ?");
 			stmt.setLong(1, lastAnnounceBefore);
@@ -495,6 +498,9 @@ public class SQLiteStorage implements DataStorage {
 		PreparedStatement stmt = null;
 		ResultSet rs = null;
 
+		// TODO: improve - the stream should not hold the resultset during the life time.
+		//       we should use the query pagination, fetch the results batch by batch into
+		//       a intermediate container then drop the resultset immediately.
 		try {
 			stmt = getConnection().prepareStatement("SELECT DISTINCT id from peers WHERE timestamp >= ? ORDER BY id");
 			stmt.closeOnCompletion();
@@ -693,6 +699,9 @@ public class SQLiteStorage implements DataStorage {
 		PreparedStatement stmt = null;
 		ResultSet rs = null;
 
+		// TODO: improve - the stream should not hold the resultset during the life time.
+		//       we should use the query pagination, fetch the results batch by batch into
+		//       a intermediate container then drop the resultset immediately.
 		try {
 			stmt = getConnection().prepareStatement("SELECT * FROM peers WHERE persistent = true AND announced <= ?");
 			stmt.setLong(1, lastAnnounceBefore);

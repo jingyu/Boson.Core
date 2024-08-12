@@ -40,10 +40,10 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -243,7 +243,7 @@ public final class RoutingTable {
 		AtomicInteger flatIndex = new AtomicInteger(0);
 		final int totalEntries = total;
 
-		ThreadLocalRandom rnd = ThreadLocals.random();
+		Random rnd = ThreadLocals.random();
 		return IntStream.generate(() -> rnd.nextInt(totalEntries))
 				.distinct()
 				.limit(expect)

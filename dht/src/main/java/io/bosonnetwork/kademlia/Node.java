@@ -43,6 +43,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -369,9 +370,17 @@ public class Node implements io.bosonnetwork.Node {
 					corePoolSize);
 
 			ScheduledThreadPoolExecutor s = new ScheduledThreadPoolExecutor(corePoolSize, factory, (r, e) -> {
-				log.error("Scheduler rejected {} exception because the thread bounds and queue capacities are reached.",
-						r.toString());
+				if (e.isShutdown() || e.isTerminated())
+					log.warn("Scheduler rejected the task execution because executor is shutdown or terminated: {}", r.toString());
+				else if (e.getQueue().remainingCapacity() == 0)
+					log.error("Scheduler rejected the task execution because task queue is full: {}", r.toString());
+				else
+					log.error("Scheduler rejected the task execution because unknown reason: {}", r.toString());
+
+				// TODO: check me!!!
+				throw new RejectedExecutionException("Task " + r.toString() + " rejected from " + e.toString());
 			});
+
 			s.setKeepAliveTime(20, TimeUnit.SECONDS);
 			s.allowCoreThreadTimeOut(true);
 			defaultScheduler = s;

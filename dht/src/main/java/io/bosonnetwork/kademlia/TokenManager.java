@@ -41,7 +41,7 @@ public class TokenManager {
 	private byte[] sessionSecret = new byte[32];
 
 	TokenManager() {
-		ThreadLocals.random().nextBytes(sessionSecret);
+		ThreadLocals.secureRandom().nextBytes(sessionSecret);
 	}
 
 	void updateTokenTimestamps() {

@@ -108,7 +108,7 @@ public class StoreValueTests extends MessageTests {
 	@Test
 	public void testStoreValueRequest() throws Exception {
 		Id nodeId = Id.random();
-		int txid = ThreadLocals.random().nextInt(1, 0x7FFFFFFF);
+		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
 		int token = ThreadLocals.random().nextInt();
 		byte[] data = new byte[1025];
 		ThreadLocals.random().nextBytes(data);
@@ -144,11 +144,11 @@ public class StoreValueTests extends MessageTests {
 	@Test
 	public void testStoreSignedValueRequest() throws Exception {
 		Id nodeId = Id.random();
-		int txid = ThreadLocals.random().nextInt(1, 0x7FFFFFFF);
+		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
 		Id pk = Id.random();
 		byte[] nonce = new byte[24];
 		ThreadLocals.random().nextBytes(nonce);
-		int cas = ThreadLocals.random().nextInt(0, 0x7FFFFFFF);
+		int cas = ThreadLocals.random().nextInt(0x7FFFFFFF);
 		int seq = cas + 1;
 		byte[] sig = new byte[64];
 		ThreadLocals.random().nextBytes(sig);
@@ -188,12 +188,12 @@ public class StoreValueTests extends MessageTests {
 	@Test
 	public void testStoreEncryptedValueRequest() throws Exception {
 		Id nodeId = Id.random();
-		int txid = ThreadLocals.random().nextInt(1, 0x7FFFFFFF);
+		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
 		Id pk = Id.random();
 		Id recipient = Id.random();
 		byte[] nonce = new byte[24];
 		ThreadLocals.random().nextBytes(nonce);
-		int cas = ThreadLocals.random().nextInt(0, 0x7FFFFFFF);
+		int cas = ThreadLocals.random().nextInt(0x7FFFFFFF);
 		int seq = cas + 1;
 		byte[] sig = new byte[64];
 		ThreadLocals.random().nextBytes(sig);

@@ -41,7 +41,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
@@ -51,10 +50,10 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.LoggerFactory;
 
-import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
-
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
+import io.bosonnetwork.utils.ThreadLocals;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 @TestMethodOrder(OrderAnnotation.class)
@@ -114,9 +113,9 @@ public class NetworkEngineTests {
 		private int writeEventCalls = 0;
 
 		protected void writeEvent() throws IOException {
-			int size = ThreadLocalRandom.current().nextInt(16, 1400);
+			int size = ThreadLocals.random().nextInt(16, 1400);
 			byte[] data = new byte[size];
-			ThreadLocalRandom.current().nextBytes(data);
+			ThreadLocals.random().nextBytes(data);
 
 			int sent = channel.send(ByteBuffer.wrap(data), remote);
 			assertEquals(size, sent);
@@ -250,11 +249,11 @@ public class NetworkEngineTests {
 				if (i != 0 && (i & 0x0F) == 0)
 					System.out.println(name + ": sent " + i + " datagrams" );
 
-				int idx = ThreadLocalRandom.current().nextInt(0, 32);
+				int idx = ThreadLocals.random().nextInt(32);
 				selectables.get(idx).setInterestOnWritable(true);
 
 				try {
-					Thread.sleep(ThreadLocalRandom.current().nextInt(1, 100));
+					Thread.sleep(ThreadLocals.random().nextInt(1, 100));
 				} catch(Exception ignore) {
 
 				}

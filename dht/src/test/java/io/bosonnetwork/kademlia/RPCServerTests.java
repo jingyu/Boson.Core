@@ -35,7 +35,6 @@ import java.nio.channels.DatagramChannel;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -44,6 +43,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import io.bosonnetwork.DefaultConfiguration;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
@@ -55,9 +56,7 @@ import io.bosonnetwork.kademlia.messages.PingRequest;
 import io.bosonnetwork.kademlia.messages.PingResponse;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.ByteBufferOutputStream;
-
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
+import io.bosonnetwork.utils.ThreadLocals;
 
 //@Disabled()
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
@@ -243,7 +242,7 @@ public class RPCServerTests {
 						break;
 					}
 
-					int delay = ThreadLocalRandom.current().nextInt(100, 200);
+					int delay = ThreadLocals.random().nextInt(100, 200);
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
@@ -273,12 +272,10 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
-				for (int i = 0; i < rnd.nextInt(16, 32); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(16, 32); i++) {
 					Message msg = new PingRequest();
 					try {
-						Thread.sleep(rnd.nextInt(100, 500));
+						Thread.sleep(ThreadLocals.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -366,12 +363,10 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
-				for (int i = 0; i < rnd.nextInt(16, 32); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(16, 32); i++) {
 					Message msg = new InvalidMessage();
 					try {
-						Thread.sleep(rnd.nextInt(100, 500));
+						Thread.sleep(ThreadLocals.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -480,12 +475,10 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
-				for (int i = 0; i < rnd.nextInt(16, 32); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(16, 32); i++) {
 					Message msg = new PingRequest();
 					try {
-						Thread.sleep(rnd.nextInt(100, 500));
+						Thread.sleep(ThreadLocals.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -569,7 +562,7 @@ public class RPCServerTests {
 						break;
 					}
 
-					int delay = ThreadLocalRandom.current().nextInt(100, 200);
+					int delay = ThreadLocals.random().nextInt(100, 200);
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
@@ -599,9 +592,7 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
-				for (int i = 0; i < rnd.nextInt(20, 32); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(20, 32); i++) {
 					Message msg = new PingRequest();
 					RPCCall call = new RPCCall(node.peer.getInfo(), msg);
 					msg.setRemote(node.peer.getId(), node.peer.getAddress());
@@ -675,7 +666,7 @@ public class RPCServerTests {
 						break;
 					}
 
-					int delay = ThreadLocalRandom.current().nextInt(100, 200);
+					int delay = ThreadLocals.random().nextInt(100, 200);
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
@@ -705,11 +696,9 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
 				ByteBuffer writeBuffer = ByteBuffer.allocate(2048);
 				// oughly send messages through the raw socket
-				for (int i = 0; i < rnd.nextInt(20, 32); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(20, 32); i++) {
 					Message msg = new PingRequest();
 					msg.setId(node.getId());
 					msg.setRemote(node.peer.getId(), node.peer.getAddress());
@@ -789,7 +778,7 @@ public class RPCServerTests {
 						break;
 					}
 
-					int delay = ThreadLocalRandom.current().nextInt(100, Constants.RPC_CALL_TIMEOUT_MAX + 2000);
+					int delay = ThreadLocals.random().nextInt(100, Constants.RPC_CALL_TIMEOUT_MAX + 2000);
 					if (delay >= Constants.RPC_CALL_TIMEOUT_MAX) {
 						System.out.println("Delay a response to make the call timeout");
 						manualTimeouts.incrementAndGet();
@@ -824,12 +813,10 @@ public class RPCServerTests {
 		class MyRoutine extends TestRoutine {
 			@Override
 			public void run() {
-				ThreadLocalRandom rnd = ThreadLocalRandom.current();
-
-				for (int i = 0; i < rnd.nextInt(256, 512); i++) {
+				for (int i = 0; i < ThreadLocals.random().nextInt(256, 512); i++) {
 					Message msg = new PingRequest();
 					try {
-						Thread.sleep(rnd.nextInt(200, 500));
+						Thread.sleep(ThreadLocals.random().nextInt(200, 500));
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}

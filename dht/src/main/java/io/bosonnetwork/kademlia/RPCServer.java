@@ -44,7 +44,6 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -63,6 +62,7 @@ import io.bosonnetwork.kademlia.messages.ErrorMessage;
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.MessageException;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * @hidden
@@ -103,7 +103,7 @@ public class RPCServer implements Selectable {
 	private static final ThreadLocal<ByteBuffer> writeBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(1500));
 	private static final ThreadLocal<ByteBuffer> readBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(Constants.RECEIVE_BUFFER_SIZE));
 
-	private int nextTxid = ThreadLocalRandom.current().nextInt(1, 32768);
+	private int nextTxid = ThreadLocals.random().nextInt(1, 32768);
 
 	private static final Logger log = LoggerFactory.getLogger(RPCServer.class);
 
@@ -286,7 +286,7 @@ public class RPCServer implements Selectable {
 
 			int delay = outboundThrottle.estimateDeplayAndInc(call.getRequest().getRemoteAddress().getAddress());
 			if(delay > 0) {
-				delay += ThreadLocalRandom.current().nextInt(10, 50);
+				delay += ThreadLocals.random().nextInt(10, 50);
 				log.info("Throttled(delay {}ms) the RPCCall to remote peer {}@{}, {}", delay,
 						call.getTargetId(), AddressUtils.toString(call.getRequest().getRemoteAddress()), call.getRequest());
 				getScheduler().schedule(() -> {
@@ -298,8 +298,8 @@ public class RPCServer implements Selectable {
 			}
 
 			int txid = nextTxid++;
-			if (txid == 0) // 0 is invalid txid, skip
-				txid = nextTxid++;
+			// if (txid == 0) // 0 is invalid txid, skip
+			//	txid = nextTxid++;
 
 			call.getRequest().setTxid(txid);
 
@@ -558,6 +558,7 @@ public class RPCServer implements Selectable {
 		stats.receivedMessage(msg);
 		msg.setOrigin(sa);
 
+		/*
 		// transaction id should be a non-zero integer
 		if (msg.getType() != Message.Type.ERROR && msg.getTxid() == 0) {
 			log.warn("Received a message with invalid transaction id.");
@@ -567,6 +568,7 @@ public class RPCServer implements Selectable {
 			sendMessage(err);
 			return;
 		}
+		*/
 
 		// just respond to incoming requests, no need to match them to pending requests
 		if(msg.getType() == Message.Type.REQUEST) {
