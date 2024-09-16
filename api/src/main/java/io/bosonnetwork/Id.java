@@ -57,7 +57,7 @@ public class Id implements Comparable<Id> {
 	// the performance for raw bytes is much better then BigInteger
 	private final byte[] bytes;
 
-	private String repr;
+	private String b58;
 
 	/**
 	 * 3-way comparison function, compare the ids by distance.
@@ -603,10 +603,10 @@ public class Id implements Comparable<Id> {
 	 * @return string representation of this id in base58 encoding.
 	 */
 	public String toBase58String() {
-		if (repr == null)
-			repr = Base58.encode(bytes);
+		if (b58 == null)
+			b58 = Base58.encode(bytes);
 
-		return repr;
+		return b58;
 	}
 
 	/**

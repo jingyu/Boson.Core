@@ -245,4 +245,13 @@ public class Json {
 
 		return mapper;
 	}
+
+	// Helper method for debugging
+	public static String toString(Object object) {
+		try {
+			return createObjectMapper().writeValueAsString(object);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("object can not be serialized", e);
+		}
+	}
 }
