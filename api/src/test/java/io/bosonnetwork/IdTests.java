@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.Random;
 
 import org.junit.jupiter.api.Disabled;
@@ -162,6 +163,37 @@ public class IdTests {
 			int n = id1.toInteger().xor(id2.toInteger()).bitLength();
 			assertEquals(n, d);
 		}
+	}
+
+	@Test
+	public void testCompare() {
+		byte[] binId = new byte[Id.BYTES];
+
+		Arrays.fill(binId, (byte)1);
+		Id id1 = Id.of(binId);
+
+		Arrays.fill(binId, (byte)2);
+		Id id2 = Id.of(binId);
+
+		var rc = Id.compare(id1, id2);
+		assertEquals(-1, rc);
+		rc = id1.compareTo(id2);
+		assertEquals(-1, rc);
+
+		id1 = Id.of(binId);
+
+		rc = Id.compare(id1, id2);
+		assertEquals(0, rc);
+		rc = id1.compareTo(id2);
+		assertEquals(0, rc);
+
+		Arrays.fill(binId, (byte)3);
+		id1 = Id.of(binId);
+
+		rc = Id.compare(id1, id2);
+		assertEquals(1, rc);
+		rc = id1.compareTo(id2);
+		assertEquals(1, rc);
 	}
 
 	@Test

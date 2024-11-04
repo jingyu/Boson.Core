@@ -109,10 +109,10 @@ public class SQLiteStorage implements DataStorage {
 	private static final String UPSERT_VALUE = "INSERT INTO valores(" +
 			"id, persistent, publicKey, privateKey, recipient, nonce, signature, sequenceNumber, data, timestamp, announced) " +
 			"VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET " +
-			"publicKey=excluded.publicKey, privateKey=excluded.privateKey, " +
-			"recipient=excluded.recipient, nonce=excluded.nonce, " +
-			"signature=excluded.signature, sequenceNumber=excluded.sequenceNumber, " +
-			"data=excluded.data, timestamp=excluded.timestamp";
+			"publicKey=EXCLUDED.publicKey, privateKey=EXCLUDED.privateKey, " +
+			"recipient=EXCLUDED.recipient, nonce=EXCLUDED.nonce, " +
+			"signature=EXCLUDED.signature, sequenceNumber=EXCLUDED.sequenceNumber, " +
+			"data=EXCLUDED.data, timestamp=EXCLUDED.timestamp";
 
 	private static final String SELECT_VALUE = "SELECT * from valores " +
 			"WHERE id = ? and timestamp >= ?";
@@ -123,10 +123,10 @@ public class SQLiteStorage implements DataStorage {
 	private static final String UPSERT_PEER = "INSERT INTO peers(" +
 			"id, nodeId, origin, persistent, privateKey, port, alternativeURL, signature, timestamp, announced) " +
 			"VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id, nodeId, origin) DO UPDATE SET " +
-			"persistent=excluded.persistent, privateKey=excluded.privateKey, " +
-			"port=excluded.port, alternativeURL=excluded.alternativeURL, " +
-			"signature=excluded.signature, timestamp=excluded.timestamp, " +
-			"announced=excluded.announced";
+			"persistent=EXCLUDED.persistent, privateKey=EXCLUDED.privateKey, " +
+			"port=EXCLUDED.port, alternativeURL=EXCLUDED.alternativeURL, " +
+			"signature=EXCLUDED.signature, timestamp=EXCLUDED.timestamp, " +
+			"announced=EXCLUDED.announced";
 
 	private static final String SELECT_PEER = "SELECT * from peers " +
 			"WHERE id = ? and timestamp >= ? " +

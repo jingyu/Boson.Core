@@ -163,6 +163,10 @@ public class Signature {
 			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromBytes(key));
 		}
 
+		public static PrivateKey fromSeed(byte[] seed) {
+			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromSeed(Seed.fromBytes(seed)));
+		}
+
 		org.apache.tuweni.crypto.sodium.Signature.SecretKey raw() {
 			return key;
 		}

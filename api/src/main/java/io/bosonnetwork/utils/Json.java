@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -152,6 +153,40 @@ public class Json {
 		}
 	}
 
+	static class BytesSerializer extends StdSerializer<byte[]> {
+		private static final long serialVersionUID = -3272555472993394308L;
+
+		protected BytesSerializer() {
+			this(null);
+		}
+
+		protected BytesSerializer(Class<byte[]> t) {
+			super(t);
+		}
+
+		@Override
+		public void serialize(byte[] value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value, 0, value.length);
+		}
+	}
+
+	static class BytesDeserializer extends StdDeserializer<byte[]> {
+		private static final long serialVersionUID = 1859211926952692672L;
+
+		public BytesDeserializer() {
+			this(null);
+		}
+
+		public BytesDeserializer(Class<?> t) {
+			super(t);
+		}
+
+		@Override
+		public byte[] deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+			return p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+		}
+	}
+
 	/**
 	 * Creates the default date and time format object with ISO8601 format.
 	 *
@@ -208,6 +243,8 @@ public class Json {
 		module.addDeserializer(Date.class, new DateDeserializer());
 		module.addSerializer(Id.class, new IdStringSerializer());
 		module.addDeserializer(Id.class, new IdStringDeserializer());
+		module.addSerializer(byte[].class, new BytesSerializer());
+		module.addDeserializer(byte[].class, new BytesDeserializer());
 
 		ObjectMapper mapper = JsonMapper.builder(createJSONFactory()).disable(
 				MapperFeature.AUTO_DETECT_CREATORS,

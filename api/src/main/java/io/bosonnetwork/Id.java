@@ -46,9 +46,13 @@ public class Id implements Comparable<Id> {
 	 */
 	public static final int BYTES = SIZE / Byte.SIZE;
 	/**
+	 * A constant holding the zero Id.
+	 */
+	public static final Id ZERO_ID = new Id();
+	/**
 	 * A constant holding the minimum Id.
 	 */
-	public static final Id MIN_ID = Id.zero();
+	public static final Id MIN_ID = ZERO_ID;
 	/**
 	 * A constant holding the maximum Id.
 	 */
@@ -232,7 +236,7 @@ public class Id implements Comparable<Id> {
 	 * @return the new created id.
 	 */
 	public static Id zero() {
-		return new Id();
+		return ZERO_ID;
 	}
 
 	/**
@@ -534,6 +538,9 @@ public class Id implements Comparable<Id> {
 		return CryptoBox.PublicKey.fromSignatureKey(toSignatureKey());
 	}
 
+	public static int compare(Id id1, Id id2) {
+		return Arrays.compareUnsigned(id1.bytes, id2.bytes);
+	}
 	/**
 	 * Compares this id with the specified id for ordering.
 	 *
@@ -543,7 +550,7 @@ public class Id implements Comparable<Id> {
 	 */
 	@Override
 	public int compareTo(Id o) {
-		return Arrays.compareUnsigned(bytes, o.bytes);
+		return compare(this, o);
 	}
 
 	/**

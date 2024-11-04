@@ -94,12 +94,26 @@
       <artifactId>vertx-core</artifactId>
       <optional>true</optional>
     </dependency>
+
     <dependency>
       <groupId>com.github.ben-manes.caffeine</groupId>
       <artifactId>caffeine</artifactId>
       <optional>true</optional>
     </dependency>
-    
+
+    <dependency>
+      <groupId>org.jdbi</groupId>
+      <artifactId>jdbi3-core</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <!--
+    <dependency>
+      <groupId>org.jdbi</groupId>
+      <artifactId>jdbi3-sqlobject</artifactId>
+      <optional>true</optional>
+    </dependency>
+    -->
+
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
