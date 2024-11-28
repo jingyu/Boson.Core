@@ -160,6 +160,16 @@ public class NodeInfo {
 	}
 
 	/**
+	 * Returns the String form of the IP address or hostname.
+	 * This method will <b>not</b> attempt to do a reverse lookup.
+	 *
+	 * @return the String of IP address or hostname.
+	 */
+	public String getHost() {
+		return addr.getHostString();
+	}
+
+	/**
 	 * Get the port number of the node.
 	 *
 	 * @return the port number.

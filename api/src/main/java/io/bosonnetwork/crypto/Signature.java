@@ -104,7 +104,7 @@ public class Signature {
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x63; // + 'c' - Boson
+			return key.hashCode() + 0x62; // + 'b' - Boson
 		}
 
 		/**
@@ -208,7 +208,7 @@ public class Signature {
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x63; // + 'c' - Boson
+			return key.hashCode() + 0x62; // + 'b' - Boson
 		}
 
 		/**
@@ -347,7 +347,7 @@ public class Signature {
 
 		@Override
 		public int hashCode() {
-			return keyPair.hashCode() + 0x63; // + 'c' - Boson key pair
+			return keyPair.hashCode() + 0x62; // + 'b' - Boson key pair
 		}
 	}
 

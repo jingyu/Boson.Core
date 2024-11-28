@@ -26,11 +26,17 @@ import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
 import io.bosonnetwork.Id;
+import io.vertx.core.json.jackson.DatabindCodec;
 
 /**
  * Common JSON utility methods for JSON process.
  */
 public class Json {
+	private final static ObjectMapper objectMapper = createObjectMapper();
+	private final static CBORMapper cborMapper = createCBORMapper();
+	private final static JsonFactory jsonFactory = createJSONFactory();
+	private final static CBORFactory cborFactory = createCBORFactory();
+
 	private final static TimeZone UTC = TimeZone.getTimeZone("UTC");
 	private final static String ISO_8601 = "yyyy-MM-dd'T'HH:mm:ss'Z'";
 	private final static String ISO_8601_WITH_MILLISECONDS = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
@@ -214,7 +220,7 @@ public class Json {
 	 *
 	 * @return the {@code JsonFactory} object.
 	 */
-	public static JsonFactory createJSONFactory() {
+	protected static JsonFactory createJSONFactory() {
 		JsonFactory factory = new JsonFactory();
 		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
 		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
@@ -226,7 +232,7 @@ public class Json {
 	 *
 	 * @return the {@code CBORFactory} object.
 	 */
-	public static CBORFactory createCBORFactory() {
+	protected static CBORFactory createCBORFactory() {
 		CBORFactory factory = new CBORFactory();
 		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
 		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
@@ -238,7 +244,7 @@ public class Json {
 	 *
 	 * @return the new {@code ObjectMapper} object.
 	 */
-	public static ObjectMapper createObjectMapper() {
+	protected static ObjectMapper createObjectMapper() {
 		SimpleModule module = new SimpleModule();
 		module.addDeserializer(Date.class, new DateDeserializer());
 		module.addSerializer(Id.class, new IdStringSerializer());
@@ -264,7 +270,7 @@ public class Json {
 	 *
 	 * @return the new {@code CBORMapper} object.
 	 */
-	public static CBORMapper createCBORMapper() {
+	protected static CBORMapper createCBORMapper() {
 		SimpleModule module = new SimpleModule();
 		module.addDeserializer(Date.class, new DateDeserializer());
 		module.addSerializer(Id.class, new IdBytesSerializer());
@@ -286,9 +292,47 @@ public class Json {
 	// Helper method for debugging
 	public static String toString(Object object) {
 		try {
-			return createObjectMapper().writeValueAsString(object);
+			return objectMapper.writeValueAsString(object);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
+	}
+
+	public static String toPrettyString(Object object) {
+		try {
+			return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(object);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("object can not be serialized", e);
+		}
+
+	}
+
+	public static void initializeVertxJson() {
+		String name = "io.bosonnetwork.utils.json.module";
+
+		if (DatabindCodec.mapper().getRegisteredModuleIds().stream().anyMatch(id -> id.equals(name)))
+			return; // already registered
+
+		SimpleModule module = new SimpleModule(name);
+		module.addDeserializer(Date.class, new DateDeserializer());
+		module.addSerializer(Id.class, new IdStringSerializer());
+		module.addDeserializer(Id.class, new IdStringDeserializer());
+		DatabindCodec.mapper().registerModule(module);
+	}
+
+	public static ObjectMapper objectMapper() {
+		return objectMapper;
+	}
+
+	public static CBORMapper cborMapper() {
+		return cborMapper;
+	}
+
+	public static JsonFactory jsonFactory() {
+		return jsonFactory;
+	}
+
+	public static CBORFactory cborFactory() {
+		return cborFactory;
 	}
 }

@@ -10,6 +10,7 @@ import io.vertx.core.Vertx;
 
 public class VertxBackedCaffeine {
 	public static Caffeine<Object, Object> newBuilder(Vertx vertx) {
+		// Executor vertxExecutor = (r) -> vertx.runOnContext(() -> {
 		Executor vertxExecutor = (r) -> vertx.executeBlocking(() -> {
 			r.run();
 			return null;

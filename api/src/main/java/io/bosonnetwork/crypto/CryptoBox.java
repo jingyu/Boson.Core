@@ -112,7 +112,7 @@ public class CryptoBox implements AutoCloseable {
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x63; // + 'c' - Boson
+			return key.hashCode() + 0x62; // + 'b' - Boson
 		}
 
 		/**
@@ -215,7 +215,7 @@ public class CryptoBox implements AutoCloseable {
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x63; // + 'c' - Boson
+			return key.hashCode() + 0x62; // + 'b' - Boson
 		}
 
 		/**
@@ -368,7 +368,7 @@ public class CryptoBox implements AutoCloseable {
 
 		@Override
 		public int hashCode() {
-			return keyPair.hashCode() + 0x63; // + 'c' - Boson key pair
+			return keyPair.hashCode() + 0x62; // + 'b' - Boson key pair
 		}
 	}
 
@@ -462,7 +462,7 @@ public class CryptoBox implements AutoCloseable {
 
 		@Override
 		public int hashCode() {
-			return nonce.hashCode() + 0x63; // + 'c' - Boson
+			return nonce.hashCode() + 0x62; // + 'b' - Boson
 		}
 	}
 

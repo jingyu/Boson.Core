@@ -115,8 +115,9 @@ public class Hex {
 		char[] chars = new char[length * 2];
 
 		for (int i = 0; i < length; i++) {
-			int v = bytes[offset + i] & 0xFF;
-			chars[i << 1] = HEX_CHARS[v >>> 4];
+			//int v = bytes[offset + i] & 0xFF;
+			int v = bytes[offset + i];
+			chars[i << 1] = HEX_CHARS[(v >>> 4) & 0x0F];
 			chars[(i << 1) + 1] = HEX_CHARS[v & 0x0F];
 		}
 
@@ -132,5 +133,60 @@ public class Hex {
 	 */
 	public static String encode(byte[] bytes) {
 		return encode(bytes, 0, bytes.length);
+	}
+
+	public static String encode(byte value) {
+		char[] chars = new char[2];
+		chars[0] = HEX_CHARS[(value >>> 4) & 0x0F];
+		chars[1] = HEX_CHARS[value & 0x0F];
+		return new String(chars);
+	}
+
+	public static String encode(short value) {
+		char[] chars = new char[4];
+		chars[0] = HEX_CHARS[(value >>> 12) & 0x0F];
+		chars[1] = HEX_CHARS[(value >>> 8) & 0x0F];
+		chars[2] = HEX_CHARS[(value >>> 4) & 0x0F];
+		chars[3] = HEX_CHARS[value & 0x0F];
+		return new String(chars);
+	}
+
+	public static String encode(int value) {
+		char[] chars = new char[8];
+		chars[0] = HEX_CHARS[(value >>> 28) & 0x0F];
+		chars[1] = HEX_CHARS[(value >>> 24) & 0x0F];
+		chars[2] = HEX_CHARS[(value >>> 20) & 0x0F];
+		chars[3] = HEX_CHARS[(value >>> 16) & 0x0F];
+		chars[4] = HEX_CHARS[(value >>> 12) & 0x0F];
+		chars[5] = HEX_CHARS[(value >>> 8) & 0x0F];
+		chars[6] = HEX_CHARS[(value >>> 4) & 0x0F];
+		chars[7] = HEX_CHARS[value & 0x0F];
+		return new String(chars);
+	}
+
+	public static String encode(long value) {
+		char[] chars = new char[16];
+
+		int v = (int)(value >>> 32);
+		chars[0] = HEX_CHARS[(v >>> 28) & 0x0F];
+		chars[1] = HEX_CHARS[(v >>> 24) & 0x0F];
+		chars[2] = HEX_CHARS[(v >>> 20) & 0x0F];
+		chars[3] = HEX_CHARS[(v >>> 16) & 0x0F];
+		chars[4] = HEX_CHARS[(v >>> 12) & 0x0F];
+		chars[5] = HEX_CHARS[(v >>> 8) & 0x0F];
+		chars[6] = HEX_CHARS[(v >>> 4) & 0x0F];
+		chars[7] = HEX_CHARS[v & 0x0F];
+
+		v = (int)(value & 0xFFFFFFFF);
+		chars[8] = HEX_CHARS[(v >>> 28) & 0x0F];
+		chars[9] = HEX_CHARS[(v >>> 24) & 0x0F];
+		chars[10] = HEX_CHARS[(v >>> 20) & 0x0F];
+		chars[11] = HEX_CHARS[(v >>> 16) & 0x0F];
+		chars[12] = HEX_CHARS[(v >>> 12) & 0x0F];
+		chars[13] = HEX_CHARS[(v >>> 8) & 0x0F];
+		chars[14] = HEX_CHARS[(v >>> 4) & 0x0F];
+		chars[15] = HEX_CHARS[v & 0x0F];
+
+		return new String(chars);
 	}
 }
