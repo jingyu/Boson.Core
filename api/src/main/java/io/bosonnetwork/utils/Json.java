@@ -5,6 +5,8 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TimeZone;
 
 import com.fasterxml.jackson.core.Base64Variants;
@@ -14,6 +16,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +35,8 @@ import io.vertx.core.json.jackson.DatabindCodec;
  * Common JSON utility methods for JSON process.
  */
 public class Json {
+	public static final TypeReference<HashMap<String, Object>> MAP_TYPE = new TypeReference<HashMap<String, Object>>() {};
+
 	private final static ObjectMapper objectMapper = createObjectMapper();
 	private final static CBORMapper cborMapper = createCBORMapper();
 	private final static JsonFactory jsonFactory = createJSONFactory();
@@ -289,7 +294,6 @@ public class Json {
 		return mapper;
 	}
 
-	// Helper method for debugging
 	public static String toString(Object object) {
 		try {
 			return objectMapper.writeValueAsString(object);
@@ -305,6 +309,46 @@ public class Json {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
 
+	}
+
+	public static byte[] toBytes(Object object) {
+		try {
+			return cborMapper.writeValueAsBytes(object);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("object can not be serialized", e);
+		}
+	}
+
+	public static Map<String, Object> parse(String json) {
+		try {
+			return objectMapper.readValue(json, MAP_TYPE);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("json can not be parsed", e);
+		}
+	}
+
+	public static <T> T parse(String json, Class<T> clazz) {
+		try {
+			return objectMapper.readValue(json, clazz);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("json can not be parsed", e);
+		}
+	}
+
+	public static Map<String, Object> parse(byte[] cbor) {
+		try {
+			return cborMapper.readValue(cbor, MAP_TYPE);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
+	}
+
+	public static <T> T parse(byte[] cbor, Class<T> clazz) {
+		try {
+			return cborMapper.readValue(cbor, clazz);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
 	}
 
 	public static void initializeVertxJson() {

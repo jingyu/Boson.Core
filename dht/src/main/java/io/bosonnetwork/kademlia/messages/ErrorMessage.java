@@ -23,8 +23,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
-import java.nio.charset.Charset;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
@@ -34,8 +35,6 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
  * @hidden
  */
 public class ErrorMessage extends Message {
-	private static final Charset utf8 = Charset.forName("UTF-8");
-
 	private int code;
 	private String message;
 
@@ -93,7 +92,7 @@ public class ErrorMessage extends Message {
 
 	@Override
 	public int estimateSize() {
-		return super.estimateSize() + 16 + (message != null ? message.getBytes(utf8).length : 0);
+		return super.estimateSize() + 16 + (message != null ? message.getBytes(UTF_8).length : 0);
 	}
 
 	@Override

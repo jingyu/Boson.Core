@@ -35,6 +35,10 @@ import io.bosonnetwork.utils.Hex;
 /**
  * The Boson Identifiers. On the Boson network, all objects are identified through Id,
  * including nodes, values, peers...
+ *
+ * <p>This class is immutable and thread-safe. All instances of this class are
+ * guaranteed to have a valid byte array of length {@link #BYTES}. The internal state
+ * cannot be modified after construction.</p>
  */
 public class Id implements Comparable<Id> {
 	/**
@@ -61,7 +65,9 @@ public class Id implements Comparable<Id> {
 	// the performance for raw bytes is much better then BigInteger
 	private final byte[] bytes;
 
-	private String b58;
+	// Cache fields for expensive computations
+	private String b58;			// Cache for base58 string representation
+	private Integer hashCode;	// Cache for hash code
 
 	/**
 	 * 3-way comparison function, compare the ids by distance.
@@ -253,7 +259,7 @@ public class Id implements Comparable<Id> {
 	/**
 	 * Returns an array of bytes representing the id object.
 	 *
-	 * @return an array of bytes
+	 * @return a copy of the internal bytes
 	 */
 	public byte[] getBytes() {
 		return bytes.clone();
@@ -263,12 +269,16 @@ public class Id implements Comparable<Id> {
 	 * @hidden
 	 *
 	 * Returns the internal byte array of the id object.
-	 *
-	 * !!! NOTICE: internal only, will be removed later.
+	 * IMPORTANT: The returned array MUST NOT be modified.
 	 *
 	 * @return an array of bytes
+	 *
+	 * REMARK: This method exposes internal state and will be removed in a future version.
+	 *         Use {@link #getBytes()} instead.
 	 */
-	public byte[] bytes() {
+	public final byte[] bytes() {
+		// Performance critical method: returns internal array directly
+		// IMPORTANT: Callers must not modify the returned array
 		return bytes;
 	}
 
@@ -580,12 +590,16 @@ public class Id implements Comparable<Id> {
 	 */
 	@Override
 	public int hashCode() {
-		byte[] b = bytes;
+		if (hashCode == null) {
+			byte[] b = bytes;
 
-		return (((b[0] ^ b[1] ^ b[2] ^ b[3] ^ b[4] ^ b[5] ^ b[6] ^ b[7]) & 0xff) << 24)
-				| (((b[8] ^ b[9] ^ b[10] ^ b[11] ^ b[12] ^ b[13] ^ b[14] ^ b[15]) & 0xff) << 16)
-				| (((b[16] ^ b[17] ^ b[18] ^ b[19] ^ b[20] ^ b[21] ^ b[22] ^ b[23]) & 0xff) << 8)
-				| ((b[24] ^ b[25] ^ b[26] ^ b[27] ^ b[28] ^ b[29] ^ b[30] ^ b[31]) & 0xff);
+			hashCode = (((b[0] ^ b[1] ^ b[2] ^ b[3] ^ b[4] ^ b[5] ^ b[6] ^ b[7]) & 0xff) << 24)
+					| (((b[8] ^ b[9] ^ b[10] ^ b[11] ^ b[12] ^ b[13] ^ b[14] ^ b[15]) & 0xff) << 16)
+					| (((b[16] ^ b[17] ^ b[18] ^ b[19] ^ b[20] ^ b[21] ^ b[22] ^ b[23]) & 0xff) << 8)
+					| ((b[24] ^ b[25] ^ b[26] ^ b[27] ^ b[28] ^ b[29] ^ b[30] ^ b[31]) & 0xff);
+		}
+
+		return hashCode;
 	}
 
 	/**

@@ -23,8 +23,9 @@
 
 package io.bosonnetwork;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.text.Normalizer;
 import java.util.Objects;
 
@@ -35,8 +36,6 @@ import io.bosonnetwork.crypto.Signature;
  * Represents peer information in the Boson network.
  */
 public class PeerInfo {
-	private static final Charset UTF8 = Charset.forName("UTF-8");
-
 	private Id publicKey;			// Peer ID
 	private byte[] privateKey;		// Private key to sign the peer info
 	private Id nodeId;				// The node that provide the service peer
@@ -410,7 +409,7 @@ public class PeerInfo {
 
 	private byte[] getSignData() {
 		byte[] alt = alternativeURL == null || alternativeURL.isEmpty() ?
-				null : alternativeURL.getBytes(UTF8);
+				null : alternativeURL.getBytes(UTF_8);
 
 		byte[] toSign = new byte[Id.BYTES * 2 + Short.BYTES + (alt == null ? 0 : alt.length)];
 		ByteBuffer buf = ByteBuffer.wrap(toSign);

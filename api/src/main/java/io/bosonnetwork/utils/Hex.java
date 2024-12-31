@@ -23,6 +23,8 @@
 
 package io.bosonnetwork.utils;
 
+import java.util.Objects;
+
 /**
  * Converts between binary bytes and hexadecimal Strings.
  */
@@ -57,6 +59,7 @@ public class Hex {
 	 * @return the decoded byte.
 	 */
 	public static byte decodeByte(CharSequence chars, int offset) {
+		Objects.requireNonNull(chars, "Input chars cannot be null");
 		int hi = decodeNibble(chars.charAt(offset));
 		int lo = decodeNibble(chars.charAt(offset + 1));
 		if (hi == -1 || lo == -1) {
@@ -78,6 +81,8 @@ public class Hex {
 	 * @return a byte array containing binary data decoded from the supplied char array.
 	 */
 	public static byte[] decode(CharSequence chars, int offset, int length) {
+		Objects.requireNonNull(chars, "Input chars cannot be null");
+
 		if (length < 0 || (length & 1) != 0)
 			throw new IllegalArgumentException("Invalid length: " + length);
 
@@ -112,11 +117,13 @@ public class Hex {
 	 * @return a String represent the hexadecimal values of the given byte array.
 	 */
 	public static String encode(byte[] bytes, int offset, int length) {
+		Objects.requireNonNull(bytes, "Input bytes cannot be null");
+
 		char[] chars = new char[length * 2];
 
 		for (int i = 0; i < length; i++) {
-			//int v = bytes[offset + i] & 0xFF;
-			int v = bytes[offset + i];
+			int v = bytes[offset + i] & 0xFF;
+			//int v = bytes[offset + i];
 			chars[i << 1] = HEX_CHARS[(v >>> 4) & 0x0F];
 			chars[(i << 1) + 1] = HEX_CHARS[v & 0x0F];
 		}
