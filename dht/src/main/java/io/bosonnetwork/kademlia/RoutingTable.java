@@ -40,10 +40,10 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -59,9 +59,10 @@ import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.tasks.PingRefreshTask;
 import io.bosonnetwork.kademlia.tasks.Task;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.utils.Json;
 
 /**
  * This is a lock-free routing table implementation.
@@ -218,7 +219,7 @@ public final class RoutingTable {
 	public KBucketEntry getRandomEntry() {
 		List<KBucket> bucketsRef = getBuckets();
 
-		int offset = ThreadLocals.random().nextInt(bucketsRef.size());
+		int offset = Random.random().nextInt(bucketsRef.size());
 		return bucketsRef.get(offset).random();
 	}
 
@@ -243,7 +244,7 @@ public final class RoutingTable {
 		AtomicInteger flatIndex = new AtomicInteger(0);
 		final int totalEntries = total;
 
-		Random rnd = ThreadLocals.random();
+		ThreadLocalRandom rnd = Random.random();
 		return IntStream.generate(() -> rnd.nextInt(totalEntries))
 				.distinct()
 				.limit(expect)
@@ -635,7 +636,7 @@ public final class RoutingTable {
 
 		Path tempFile = Files.createTempFile(file.getParentFile().toPath(), file.getName(), "-" + String.valueOf(System.currentTimeMillis()));
 		try (FileOutputStream out = new FileOutputStream(tempFile.toFile())) {
-			CBORGenerator gen = ThreadLocals.CBORFactory().createGenerator(out);
+			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			gen.writeStartObject();
 
 			gen.writeFieldName("timestamp");

@@ -38,9 +38,9 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class FindValueTests extends MessageTests {
 	@Test
@@ -51,7 +51,7 @@ public class FindValueTests extends MessageTests {
 		msg.setVersion(VERSION);
 		msg.setWant4(true);
 		msg.setWant6(true);
-		msg.setSequenceNumber(ThreadLocals.random().nextInt(0x7fffffff));
+		msg.setSequenceNumber(Random.random().nextInt(0x7fffffff));
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 		assertTrue(bin.length <= msg.estimateSize());
@@ -61,8 +61,8 @@ public class FindValueTests extends MessageTests {
 	public void testFindValueRequest4() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int seq = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt();
+		int seq = Random.random().nextInt(0x7FFFFFFF);
 
 		FindValueRequest msg = new FindValueRequest(target);
 		msg.setId(id);
@@ -97,8 +97,8 @@ public class FindValueTests extends MessageTests {
 	public void testFindValueRequest6() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int seq = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt();
+		int seq = Random.random().nextInt(0x7FFFFFFF);
 
 		FindValueRequest msg = new FindValueRequest(target);
 		msg.setId(id);
@@ -131,8 +131,8 @@ public class FindValueTests extends MessageTests {
 	public void testFindValueRequest46() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int seq = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt();
+		int seq = Random.random().nextInt(0x7FFFFFFF);
 
 		FindValueRequest msg = new FindValueRequest(target);
 		msg.setId(id);
@@ -207,18 +207,18 @@ public class FindValueTests extends MessageTests {
 	@Test
 	public void testFindValueResponse4() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt(0x7FFFFFFF);
 		Id pk = Id.random();
 		Id recipient = Id.random();
 		byte[] nonce = new byte[24];
-		ThreadLocals.random().nextBytes(nonce);
-		int cas = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		Random.random().nextBytes(nonce);
+		int cas = Random.random().nextInt(0x7FFFFFFF);
 		int seq = cas + 1;
 		byte[] sig = new byte[64];
-		ThreadLocals.random().nextBytes(sig);
-		int token = ThreadLocals.random().nextInt();
+		Random.random().nextBytes(sig);
+		int token = Random.random().nextInt();
 		byte[] data = new byte[1025];
-		ThreadLocals.random().nextBytes(data);
+		Random.random().nextBytes(data);
 
 		Value value = Value.of(pk, recipient, nonce, seq, sig, data);
 
@@ -265,10 +265,10 @@ public class FindValueTests extends MessageTests {
 	@Test
 	public void testFindValueResponse4Immutable() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt(0x7FFFFFFF);
+		int token = Random.random().nextInt();
 		byte[] data = new byte[1025];
-		ThreadLocals.random().nextBytes(data);
+		Random.random().nextBytes(data);
 
 		Value value = Value.of(data);
 
@@ -315,18 +315,18 @@ public class FindValueTests extends MessageTests {
 	@Test
 	public void testFindValueResponse6() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt(0x7FFFFFFF);
 		Id pk = Id.random();
 		Id recipient = Id.random();
 		byte[] nonce = new byte[24];
-		ThreadLocals.random().nextBytes(nonce);
-		int cas = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		Random.random().nextBytes(nonce);
+		int cas = Random.random().nextInt(0x7FFFFFFF);
 		int seq = cas + 1;
 		byte[] sig = new byte[64];
-		ThreadLocals.random().nextBytes(sig);
-		int token = ThreadLocals.random().nextInt();
+		Random.random().nextBytes(sig);
+		int token = Random.random().nextInt();
 		byte[] data = new byte[1025];
-		ThreadLocals.random().nextBytes(data);
+		Random.random().nextBytes(data);
 
 		Value value = Value.of(pk, recipient, nonce, seq, sig, data);
 
@@ -373,18 +373,18 @@ public class FindValueTests extends MessageTests {
 	@Test
 	public void testFindValueResponse46() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		int txid = Random.random().nextInt(0x7FFFFFFF);
 		Id pk = Id.random();
 		Id recipient = Id.random();
 		byte[] nonce = new byte[24];
-		ThreadLocals.random().nextBytes(nonce);
-		int cas = ThreadLocals.random().nextInt(0x7FFFFFFF);
+		Random.random().nextBytes(nonce);
+		int cas = Random.random().nextInt(0x7FFFFFFF);
 		int seq = cas + 1;
 		byte[] sig = new byte[64];
-		ThreadLocals.random().nextBytes(sig);
-		int token = ThreadLocals.random().nextInt();
+		Random.random().nextBytes(sig);
+		int token = Random.random().nextInt();
 		byte[] data = new byte[1025];
-		ThreadLocals.random().nextBytes(data);
+		Random.random().nextBytes(data);
 
 		Value value = Value.of(pk, recipient, nonce, seq, sig, data);
 

@@ -30,9 +30,9 @@ import java.util.Objects;
 
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
+import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * Represents a value in the Boson network. Values can be immutable, mutable or encrypted,
@@ -390,7 +390,7 @@ public class Value {
 		if(publicKey != null) {
 			return publicKey;
 		} else {
-			MessageDigest digest = ThreadLocals.sha256();
+			MessageDigest digest = Hash.sha256();
 			digest.reset();
 			return new Id(digest.digest(data));
 		}

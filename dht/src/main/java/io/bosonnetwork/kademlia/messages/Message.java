@@ -41,7 +41,7 @@ import io.bosonnetwork.Version;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.RPCServer;
 import io.bosonnetwork.utils.Functional.ThrowingSupplier;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.utils.Json;
 
 /**
  * @hidden
@@ -262,7 +262,7 @@ public abstract class Message {
 
 	public void serialize(OutputStream out) throws MessageException {
 		try {
-			CBORGenerator gen = ThreadLocals.CBORFactory().createGenerator(out);
+			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			serializeInternal(gen);
 			gen.close();
 		} catch (IOException e) {
@@ -304,7 +304,7 @@ public abstract class Message {
 	public static Message parse(byte[] data) throws MessageException {
 		checkArgument(data != null && data.length >= MIN_SIZE, "Invalid data");
 
-		return parse(() -> (ThreadLocals.CBORFactory().createParser(data)));
+		return parse(() -> (Json.cborFactory().createParser(data)));
 	}
 
 	public static Message parse(InputStream in) throws MessageException {
@@ -314,7 +314,7 @@ public abstract class Message {
 		return parse(() -> {
 			in.reset();
 			in.mark(READ_LIMIT);
-			return ThreadLocals.CBORFactory().createParser(in);
+			return Json.cborFactory().createParser(in);
 		});
 	}
 

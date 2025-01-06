@@ -39,7 +39,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.google.common.collect.Maps;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.utils.Json;
 
 public class AccessControlListTests {
 	@Test
@@ -171,17 +171,17 @@ public class AccessControlListTests {
 			AccessControlList acl = new AccessControlList(subscription, permissions);
 			acl.seal();
 
-			var json = ThreadLocals.ObjectMapper().writeValueAsString(acl);
+			var json = Json.objectMapper().writeValueAsString(acl);
 			System.out.println(json);
 
-			var n = ThreadLocals.ObjectMapper().readTree(json);
+			var n = Json.objectMapper().readTree(json);
 			assertEquals(2, n.size());
 			assertEquals(subscription.toString(), n.get("subscription").asText());
 			var perms = n.get("permissions");
 			assertEquals(JsonNodeType.ARRAY, perms.getNodeType());
 			assertEquals(3, perms.size());
 
-			var acl2 = ThreadLocals.ObjectMapper().readValue(json, AccessControlList.class);
+			var acl2 = Json.objectMapper().readValue(json, AccessControlList.class);
 			acl2.seal();
 			assertEquals(subscription, acl2.getSubscription());
 

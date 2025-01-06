@@ -32,13 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class SignatureTests {
 	@Test
 	public void keyPairFromSeed() {
 		byte[] seed = new byte[32];
-		ThreadLocals.random().nextBytes(seed);
+		Random.random().nextBytes(seed);
 
 		Signature.KeyPair kp = Signature.KeyPair.fromSeed(seed);
 		Signature.KeyPair kp2 = Signature.KeyPair.fromSeed(seed);

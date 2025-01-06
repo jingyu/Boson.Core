@@ -33,9 +33,9 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class AnnouncePeerTests extends MessageTests {
 	@Test
@@ -78,9 +78,9 @@ public class AnnouncePeerTests extends MessageTests {
 	public void testAnnouncePeerRequest() throws Exception {
 		Id nodeId = Id.random();
 		Id peerId = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
-		int port = ThreadLocals.random().nextInt(1, 0xFFFF);
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt(0x7FFFFFFF);
+		int port = Random.random().nextInt(1, 0xFFFF);
+		int token = Random.random().nextInt();
 		byte[] sig = new byte[64];
 		new SecureRandom().nextBytes(sig);
 
@@ -117,9 +117,9 @@ public class AnnouncePeerTests extends MessageTests {
 		Id nodeId = Id.random();
 		Id origin = Id.random();
 		Id peerId = Id.random();
-		int txid = ThreadLocals.random().nextInt(0x7FFFFFFF);
-		int port = ThreadLocals.random().nextInt(1, 0xFFFF);
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt(0x7FFFFFFF);
+		int port = Random.random().nextInt(1, 0xFFFF);
+		int token = Random.random().nextInt();
 		byte[] sig = new byte[64];
 		new SecureRandom().nextBytes(sig);
 
@@ -167,7 +167,7 @@ public class AnnouncePeerTests extends MessageTests {
 	@Test
 	public void testAnnouncePeerResponse() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		AnnouncePeerResponse msg = new AnnouncePeerResponse(txid);
 		msg.setId(id);

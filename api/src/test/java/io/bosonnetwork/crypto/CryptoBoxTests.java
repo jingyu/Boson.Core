@@ -36,7 +36,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class CryptoBoxTests {
 	private CryptoBox.Nonce nonce;
@@ -64,7 +63,7 @@ public class CryptoBoxTests {
 	@Test
 	public void keyPairFromSeed() {
 		byte[] seed = new byte[32];
-		ThreadLocals.random().nextBytes(seed);
+		Random.random().nextBytes(seed);
 
 		CryptoBox.KeyPair kp = CryptoBox.KeyPair.fromSeed(seed);
 		CryptoBox.KeyPair kp2 = CryptoBox.KeyPair.fromSeed(seed);

@@ -35,9 +35,9 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class FindNodeTests extends MessageTests {
 	@Test
@@ -58,7 +58,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest4() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -93,7 +93,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest4WithToken() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -128,7 +128,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest6() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -160,7 +160,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest6WithToken() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -193,7 +193,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest46() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -225,7 +225,7 @@ public class FindNodeTests extends MessageTests {
 	public void testFindNodeRequest46WithToken() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindNodeRequest msg = new FindNodeRequest(target);
 		msg.setId(id);
@@ -291,7 +291,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse4() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));
@@ -331,7 +331,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse4WithToken() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));
@@ -372,7 +372,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse6() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes6 = new ArrayList<>();
 		nodes6.add(new NodeInfo(Id.random(), "2001:0db8:85a3:8070:6543:8a2e:0370:7334", 65535));
@@ -412,7 +412,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse6WithToken() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes6 = new ArrayList<>();
 		nodes6.add(new NodeInfo(Id.random(), "2001:0db8:85a3:8070:6543:8a2e:0370:7334", 65535));
@@ -453,7 +453,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse46() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));
@@ -503,7 +503,7 @@ public class FindNodeTests extends MessageTests {
 	@Test
 	public void testFindNodeResponse46WithToken() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));

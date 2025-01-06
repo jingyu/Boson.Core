@@ -35,8 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message;
-import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * A KBucket is just a list of KBucketEntry objects.
@@ -178,7 +178,7 @@ public class KBucket implements Comparable<KBucket> {
 	public KBucketEntry random() {
 		List<KBucketEntry> entriesRef = getEntries();
 
-		return entriesRef.isEmpty() ? null : entriesRef.get(ThreadLocals.random().nextInt(entriesRef.size()));
+		return entriesRef.isEmpty() ? null : entriesRef.get(Random.random().nextInt(entriesRef.size()));
 	}
 
 	private KBucketEntry findAny(Predicate<KBucketEntry> predicate) {

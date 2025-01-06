@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.crypto.CryptoBox;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
@@ -62,7 +63,6 @@ import io.bosonnetwork.kademlia.messages.ErrorMessage;
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.messages.MessageException;
 import io.bosonnetwork.utils.AddressUtils;
-import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * @hidden
@@ -103,7 +103,7 @@ public class RPCServer implements Selectable {
 	private static final ThreadLocal<ByteBuffer> writeBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(1500));
 	private static final ThreadLocal<ByteBuffer> readBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(Constants.RECEIVE_BUFFER_SIZE));
 
-	private int nextTxid = ThreadLocals.random().nextInt(1, 32768);
+	private int nextTxid = Random.random().nextInt(1, 32768);
 
 	private static final Logger log = LoggerFactory.getLogger(RPCServer.class);
 
@@ -286,7 +286,7 @@ public class RPCServer implements Selectable {
 
 			int delay = outboundThrottle.estimateDeplayAndInc(call.getRequest().getRemoteAddress().getAddress());
 			if(delay > 0) {
-				delay += ThreadLocals.random().nextInt(10, 50);
+				delay += Random.random().nextInt(10, 50);
 				log.info("Throttled(delay {}ms) the RPCCall to remote peer {}@{}, {}", delay,
 						call.getTargetId(), AddressUtils.toString(call.getRequest().getRemoteAddress()), call.getRequest());
 				getScheduler().schedule(() -> {

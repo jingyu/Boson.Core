@@ -51,7 +51,8 @@ import io.bosonnetwork.DefaultConfiguration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.utils.Json;
 
 public class AccessManagerTests {
 	private static String repoPath = System.getProperty("java.io.tmpdir") + File.separator + "AccessManagerTests";
@@ -128,7 +129,7 @@ public class AccessManagerTests {
 		var acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		ThreadLocals.ObjectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
 
 		// Professional
 		permissions = new HashMap<>();
@@ -169,7 +170,7 @@ public class AccessManagerTests {
 		acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		ThreadLocals.ObjectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
 
 		// Premium
 		permissions = new HashMap<>();
@@ -210,7 +211,7 @@ public class AccessManagerTests {
 		acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		ThreadLocals.ObjectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
 	}
 
 	static void setupTestACLs() throws IOException {
@@ -218,7 +219,7 @@ public class AccessManagerTests {
 
 		subscriptions = new EnumMap<>(Subscription.class);
 		for (var s : EnumSet.allOf(Subscription.class)) {
-			int total = ThreadLocals.random().nextInt(1, 16);
+			int total = Random.random().nextInt(1, 16);
 			List<Id> nodes = new ArrayList<>(total);
 
 			for (var i = 0; i < total; i++) {
@@ -512,7 +513,7 @@ public class AccessManagerTests {
 		var subscription = Subscription.Free;
 		var acl = new AccessControlList(subscription, permissions);
 		acl.seal();
-		ThreadLocals.ObjectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
 		return acl;
 	}
 

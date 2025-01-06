@@ -30,7 +30,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.crypto.Hash;
+import io.bosonnetwork.crypto.Random;
 
 /**
  * @hidden
@@ -41,7 +42,7 @@ public class TokenManager {
 	private byte[] sessionSecret = new byte[32];
 
 	TokenManager() {
-		ThreadLocals.secureRandom().nextBytes(sessionSecret);
+		Random.secureRandom().nextBytes(sessionSecret);
 	}
 
 	void updateTokenTimestamps() {
@@ -68,7 +69,7 @@ public class TokenManager {
 		bb.putLong(timestamp);
 		bb.put(sessionSecret);
 
-		byte[] digest = ThreadLocals.sha256().digest(tokData);
+		byte[] digest = Hash.sha256().digest(tokData);
 		int pos = (digest[0] & 0xff) & 0x1f; // mod 32
 		int token = ((digest[pos] & 0xff) << 24) |
 				((digest[(pos + 1) & 0x1f] & 0xff) << 16) |

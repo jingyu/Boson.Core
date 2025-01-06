@@ -31,9 +31,9 @@ import java.util.concurrent.TimeUnit;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.kademlia.tasks.CandidateNode;
-import io.bosonnetwork.utils.ThreadLocals;
 
 /**
  * @hidden
@@ -195,7 +195,7 @@ public class RPCCall {
 		scheduler = server.getScheduler();
 
 		// spread out the stalls by +- 1ms to reduce lock contention
-		int smear = ThreadLocals.random().nextInt(-1000, 1000);
+		int smear = Random.random().nextInt(-1000, 1000);
 		timeoutTimer = scheduler.schedule(this::checkTimeout,
 				expectedRTT * 1000 + smear, TimeUnit.MICROSECONDS);
 	}

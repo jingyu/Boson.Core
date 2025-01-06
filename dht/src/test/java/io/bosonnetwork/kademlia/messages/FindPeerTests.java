@@ -36,9 +36,9 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class FindPeerTests extends MessageTests {
 	@Test
@@ -58,7 +58,7 @@ public class FindPeerTests extends MessageTests {
 	public void testFindPeerRequest4() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindPeerRequest msg = new FindPeerRequest(target);
 		msg.setId(id);
@@ -91,7 +91,7 @@ public class FindPeerTests extends MessageTests {
 	public void testFindPeerRequest6() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindPeerRequest msg = new FindPeerRequest(target);
 		msg.setId(id);
@@ -122,7 +122,7 @@ public class FindPeerTests extends MessageTests {
 	public void testFindPeerRequest46() throws Exception {
 		Id id = Id.random();
 		Id target = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		FindPeerRequest msg = new FindPeerRequest(target);
 		msg.setId(id);
@@ -175,7 +175,7 @@ public class FindPeerTests extends MessageTests {
 		byte[] sig = new byte[64];
 		Id pid = Id.random();
 		for (int i = 0; i < 8; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), 65535 - i, sig));
 		}
 
@@ -218,7 +218,7 @@ public class FindPeerTests extends MessageTests {
 		byte[] sig = new byte[64];
 		Id pid = Id.random();
 		for (int i = 0; i < 8; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), Id.random(), 65535 - i, "http://abc.pc2.net", sig));
 		}
 
@@ -238,8 +238,8 @@ public class FindPeerTests extends MessageTests {
 	@Test
 	public void testFindPeerResponse4() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
+		int token = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));
@@ -252,7 +252,7 @@ public class FindPeerTests extends MessageTests {
 		byte[] sig = new byte[64];
 		Id pid = Id.random();
 		for (int i = 0; i < 8; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), 65535 - i, sig));
 		}
 
@@ -293,8 +293,8 @@ public class FindPeerTests extends MessageTests {
 	@Test
 	public void testFindPeerResponse6() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
+		int token = Random.random().nextInt();
 
 		List<NodeInfo> nodes6 = new ArrayList<>();
 		nodes6.add(new NodeInfo(Id.random(), "2001:0db8:85a3:8070:6543:8a2e:0370:7334", 65535));
@@ -307,7 +307,7 @@ public class FindPeerTests extends MessageTests {
 		byte[] sig = new byte[64];
 		Id pid = Id.random();
 		for (int i = 0; i < 8; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), Id.random(), 65535 - i, "http://abc.pc2.net", sig));
 		}
 
@@ -348,8 +348,8 @@ public class FindPeerTests extends MessageTests {
 	@Test
 	public void testFindPeerResponse46() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
-		int token = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
+		int token = Random.random().nextInt();
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
 		nodes4.add(new NodeInfo(Id.random(), "251.251.251.251", 65535));
@@ -370,12 +370,12 @@ public class FindPeerTests extends MessageTests {
 		Id pid = Id.random();
 
 		for (int i = 0; i < 4; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), 65535 - i, sig));
 		}
 
 		for (int i = 0; i < 4; i++) {
-			ThreadLocals.random().nextBytes(sig);
+			Random.random().nextBytes(sig);
 			peers.add(PeerInfo.of(pid, Id.random(), Id.random(), 65535 - i, "http://abc.pc2.net", sig));
 		}
 

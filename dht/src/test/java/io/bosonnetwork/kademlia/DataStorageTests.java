@@ -54,10 +54,10 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.CasFail;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class DataStorageTests {
 	private static ScheduledExecutorService scheduler;
@@ -112,7 +112,7 @@ public class DataStorageTests {
 
 		System.out.println("Writing values...");
 		for (int i = 1; i <= 256; i++) {
-			ThreadLocals.random().nextBytes(data);
+			Random.random().nextBytes(data);
 			data[0] = (byte)(i % (126 - 32) + 33);
 			Value v = Value.of(data);
 
@@ -161,7 +161,7 @@ public class DataStorageTests {
 
 		System.out.println("Writing values...");
 		for (int i = 1; i <= 256; i++) {
-			ThreadLocals.random().nextBytes(data);
+			Random.random().nextBytes(data);
 			data[0] = (byte)(i % (126 - 32) + 33);
 			Value v = Value.of(data);
 

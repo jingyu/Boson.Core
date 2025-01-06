@@ -50,7 +50,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.access.Permission;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.utils.Json;
 
 /**
  * @hidden
@@ -165,11 +165,11 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 
 	private AccessControlList loadACL(File file) throws IOException {
 		log.trace("Loading the access control list from: {}", file);
-		return ThreadLocals.ObjectMapper().readValue(file, AccessControlList.class);
+		return Json.objectMapper().readValue(file, AccessControlList.class);
 	}
 
 	private void saveACL(File file, AccessControlList acl) throws IOException {
-		ThreadLocals.ObjectMapper().writeValue(file, acl);
+		Json.objectMapper().writeValue(file, acl);
 	}
 
 	private void initDefaults() {

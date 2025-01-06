@@ -29,9 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class PingTests extends MessageTests {
 	@Test
@@ -48,7 +48,7 @@ public class PingTests extends MessageTests {
 	@Test
 	public void testPingRequest() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		PingRequest msg = new PingRequest();
 		msg.setId(id);
@@ -86,7 +86,7 @@ public class PingTests extends MessageTests {
 	@Test
 	public void testPingResponse() throws Exception {
 		Id id = Id.random();
-		int txid = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
 
 		PingResponse msg = new PingResponse(txid);
 		msg.setId(id);

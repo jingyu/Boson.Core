@@ -31,9 +31,9 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.utils.ThreadLocals;
 
 public class ErrorMessageTests extends MessageTests {
 
@@ -52,8 +52,8 @@ public class ErrorMessageTests extends MessageTests {
 
 	@Test
 	public void testErrorMessage() throws Exception {
-		int txid = ThreadLocals.random().nextInt();
-		int code = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
+		int code = Random.random().nextInt();
 		String error = "Test error message";
 
 		ErrorMessage msg = new ErrorMessage(Method.PING, txid, code, error);
@@ -79,8 +79,8 @@ public class ErrorMessageTests extends MessageTests {
 
 	@Test
 	public void testErrorMessagei18n() throws Exception {
-		int txid = ThreadLocals.random().nextInt();
-		int code = ThreadLocals.random().nextInt();
+		int txid = Random.random().nextInt();
+		int code = Random.random().nextInt();
 		String error = "错误信息；エラーメッセージ；에러 메시지；Message d'erreur";
 
 		ErrorMessage msg = new ErrorMessage(Method.UNKNOWN, txid, code, error);

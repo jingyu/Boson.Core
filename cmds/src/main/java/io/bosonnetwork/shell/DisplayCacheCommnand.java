@@ -13,8 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
 import io.bosonnetwork.kademlia.KBucketEntry;
-import io.bosonnetwork.utils.ThreadLocals;
-
+import io.bosonnetwork.utils.Json;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -45,7 +44,7 @@ public class DisplayCacheCommnand implements Callable<Integer> {
 	private String cachePath = null;
 
 	private void print(File cache) {
-		CBORMapper mapper = new CBORMapper(ThreadLocals.CBORFactory());
+		CBORMapper mapper = Json.cborMapper();
 		long now = System.currentTimeMillis();
 		try {
 			JsonNode node = mapper.readTree(cache);

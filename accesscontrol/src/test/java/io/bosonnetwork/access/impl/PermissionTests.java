@@ -34,7 +34,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.utils.ThreadLocals;
+import io.bosonnetwork.utils.Json;
 
 public class PermissionTests {
 	@Test
@@ -76,13 +76,13 @@ public class PermissionTests {
 
 		var perm = new Permission(serviceId, Access.Allow, props);
 
-		var json = ThreadLocals.ObjectMapper().writeValueAsString(perm);
+		var json = Json.objectMapper().writeValueAsString(perm);
 		System.out.println(json);
 
-		var n = ThreadLocals.ObjectMapper().readTree(json);
+		var n = Json.objectMapper().readTree(json);
 		assertEquals(3, n.size());
 
-		var perm2 = ThreadLocals.ObjectMapper().readValue(json, Permission.class);
+		var perm2 = Json.objectMapper().readValue(json, Permission.class);
 
 		assertEquals(serviceId, perm2.getTargetServiceId());
 		assertEquals(Access.Allow, perm2.getAccess());
@@ -90,7 +90,7 @@ public class PermissionTests {
 		assertFalse(perm2.isDeny());
 		assertEquals(props.size(), perm2.getProperties().size());
 
-		var json2 = ThreadLocals.ObjectMapper().writeValueAsString(perm2);
+		var json2 = Json.objectMapper().writeValueAsString(perm2);
 		assertEquals(json, json2);
 	}
 
@@ -99,13 +99,13 @@ public class PermissionTests {
 		var serviceId = "test.service";
 		var perm = new Permission(serviceId, Access.Deny);
 
-		var json = ThreadLocals.ObjectMapper().writeValueAsString(perm);
+		var json = Json.objectMapper().writeValueAsString(perm);
 		System.out.println(json);
 
-		var n = ThreadLocals.ObjectMapper().readTree(json);
+		var n = Json.objectMapper().readTree(json);
 		assertEquals(2, n.size());
 
-		var perm2 = ThreadLocals.ObjectMapper().readValue(json, Permission.class);
+		var perm2 = Json.objectMapper().readValue(json, Permission.class);
 
 		assertEquals(serviceId, perm2.getTargetServiceId());
 		assertEquals(Access.Deny, perm2.getAccess());
@@ -113,7 +113,7 @@ public class PermissionTests {
 		assertTrue(perm2.isDeny());
 		assertTrue(perm2.getProperties().isEmpty());
 
-		var json2 = ThreadLocals.ObjectMapper().writeValueAsString(perm2);
+		var json2 = Json.objectMapper().writeValueAsString(perm2);
 		assertEquals(json, json2);
 	}
 }

@@ -1,8 +1,7 @@
 package io.bosonnetwork.crypto;
 
 import java.security.SecureRandom;
-
-import io.netty.util.internal.ThreadLocalRandom;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Random {
 	private static final boolean SECURE_RANDOM_THREAD_SAFE = isSecureRandomThreadSafe();
