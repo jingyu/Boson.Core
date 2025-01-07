@@ -4,6 +4,8 @@
 |:-:|
 |[![CI](https://github.com/trinity-tech-io/Boson.Java/actions/workflows/maven.yml/badge.svg)](https://github.com/trinity-tech-io/Boson.Java/actions/workflows/maven.yml)|
 
+We use Bugsnag for error tracking. thanks for [![Bugsnag](https://images.typeform.com/images/QKuaAssrFCq7/image/default)](http://www.bugsnag.com/)
+
 Boson is a decentralized and encrypted peer-to-peer (P2P)  communication framework that facilitates network traffic routing between virtual machines and decentralized Applications (dApps).  Boson Java is a Java distribution designed to run on VPS servers with a public IP address, serving as a super Boson Node service.
 
 Boson is a new two-layered architecture that features a unified DHT network as the bottom layer and facilitates various application-oriented services on top of the DHT network, where a list of services includes, but is not limited to:
