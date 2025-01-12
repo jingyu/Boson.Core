@@ -26,13 +26,10 @@ package io.bosonnetwork.kademlia;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.nio.file.Files;
-import java.util.Comparator;
+import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -46,6 +43,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.messages.FindNodeRequest;
 import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.FileUtils;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 public class SybilTests {
@@ -58,38 +56,24 @@ public class SybilTests {
 				.orElse(null);
 	}
 
-	private void deleteDir(File dir) throws IOException {
-		Files.walk(dir.toPath())
-			.sorted(Comparator.reverseOrder())
-			.forEach(path -> {
-				try {
-					Files.delete(path);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			});
-	}
-
 	@Test
 	public void TestAddresses() throws Exception {
 		Configuration targetNodeConfig = new Configuration() {
 			@Override
-			public InetSocketAddress IPv4Address() {
-				 InetAddress ip = getIPv4Address();
-				 return ip != null ? new InetSocketAddress(ip, 39001) : null;
+			public Inet4Address address4() {
+				 return (Inet4Address)getIPv4Address();
 			}
 		};
 
 		Node target = new Node(targetNodeConfig);
 		target.start();
 
-		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.IPv4Address());
+		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.address4(), targetNodeConfig.port());
 
 		Node sybil;
-		String tmpDir = System.getProperty("java.io.tmpdir");
-		File sybilDir = new File(tmpDir, "sybil");
-		if (!sybilDir.exists())
-			sybilDir.mkdirs();
+		Path sybilDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "sybil");
+		if (Files.notExists(sybilDir))
+			Files.createDirectories(sybilDir);
 
 		for (int i = 0; i < 36; i++) {
 			System.out.format("\n\n======== Testing request #%d ...\n\n", i);
@@ -97,13 +81,17 @@ public class SybilTests {
 			int port = 39002 + i;
 			Configuration sybilConfig = new Configuration() {
 				@Override
-				public InetSocketAddress IPv4Address() {
-					 InetAddress ip = getIPv4Address();
-					 return ip != null ? new InetSocketAddress(ip, port) : null;
+				public Inet4Address address4() {
+					 return (Inet4Address)getIPv4Address();
 				}
 
 				@Override
-				public File storagePath() {
+				public int port() {
+					return port;
+				}
+
+				@Override
+				public Path dataPath() {
 					return sybilDir;
 				}
 			};
@@ -150,23 +138,22 @@ public class SybilTests {
 
 		target.stop();
 
-		deleteDir(sybilDir);
+		FileUtils.deleteFile(sybilDir);
 	}
 
 	@Test
 	public void TestIds() throws Exception {
 		Configuration targetNodeConfig = new Configuration() {
 			@Override
-			public InetSocketAddress IPv4Address() {
-				 InetAddress ip = getIPv4Address();
-				 return ip != null ? new InetSocketAddress(ip, 39001) : null;
+			public Inet4Address address4() {
+				 return (Inet4Address)getIPv4Address();
 			}
 		};
 
 		Node target = new Node(targetNodeConfig);
 		target.start();
 
-		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.IPv4Address());
+		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.address4(), targetNodeConfig.port());
 
 		Node sybil;
 
@@ -175,9 +162,13 @@ public class SybilTests {
 
 			Configuration sybilConfig = new Configuration() {
 				@Override
-				public InetSocketAddress IPv4Address() {
-					 InetAddress ip = getIPv4Address();
-					 return ip != null ? new InetSocketAddress(ip, 39002) : null;
+				public Inet4Address address4() {
+					 return (Inet4Address)getIPv4Address();
+				}
+
+				@Override
+				public int port() {
+					return 39002;
 				}
 			};
 

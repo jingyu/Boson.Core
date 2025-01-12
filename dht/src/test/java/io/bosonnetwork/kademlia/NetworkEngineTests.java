@@ -178,7 +178,7 @@ public class NetworkEngineTests {
 	}
 
 	@BeforeAll
-	public static void beforeAll(){
+	public static void setup(){
 		Level level = Level.TRACE;
 
 		// We use logback as the logging backend

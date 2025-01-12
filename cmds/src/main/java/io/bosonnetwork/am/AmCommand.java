@@ -23,13 +23,12 @@
 
 package io.bosonnetwork.am;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 
 import io.bosonnetwork.Configuration;
 import io.bosonnetwork.DefaultConfiguration;
 import io.bosonnetwork.access.impl.AccessManager;
-
 import picocli.CommandLine.Option;
 
 /**
@@ -47,12 +46,14 @@ public abstract class AmCommand {
 		if (am == null) {
 			DefaultConfiguration.Builder builder = new DefaultConfiguration.Builder();
 
-			configFile = configFile.startsWith("~") ?
-					System.getProperty("user.home") + configFile.substring(1) :
-					configFile;
+			Path file = Path.of(configFile).normalize();
+			if (file.startsWith("~"))
+				file = Path.of(System.getProperty("user.home")).resolve(file.subpath(1, file.getNameCount()));
+			else
+				file = file.toAbsolutePath();
 
 			try {
-				builder.load(configFile);
+				builder.load(file);
 			} catch (Exception e) {
 				System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
 				e.printStackTrace(System.err);
@@ -60,13 +61,13 @@ public abstract class AmCommand {
 			}
 
 			Configuration config = builder.build();
-			File dataDir = config.storagePath();
-			if (dataDir == null) {
-				System.out.println("No datadir in the configuration.");
+			Path dataPath = config.dataPath();
+			if (dataPath == null) {
+				System.out.println("No data path in the configuration.");
 				System.exit(-1);
 			}
 
-			File accessControlRoot = new File(dataDir.getAbsoluteFile(), "accesscontrol");
+			Path accessControlRoot = dataPath.resolve("accesscontrol").toAbsolutePath();
 
 			am = new AccessManager(accessControlRoot);
 		}

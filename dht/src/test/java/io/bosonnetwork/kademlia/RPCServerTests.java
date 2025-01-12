@@ -212,7 +212,7 @@ public class RPCServerTests {
 	}
 
 	@BeforeAll
-	public static void beforeAll(){
+	public static void setup(){
 		Level level = Level.INFO;
 
 		// We use logback as the logging backend

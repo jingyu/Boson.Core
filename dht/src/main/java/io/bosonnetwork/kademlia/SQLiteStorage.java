@@ -23,8 +23,9 @@
 
 package io.bosonnetwork.kademlia;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -144,13 +145,24 @@ public class SQLiteStorage implements DataStorage {
 
 	private static final Logger log = LoggerFactory.getLogger(SQLiteStorage.class);
 
-	public static DataStorage open(File path, ScheduledExecutorService scheduler) throws KadException {
+	public static DataStorage open(Path path, ScheduledExecutorService scheduler) throws KadException {
 		SQLiteStorage storage = new SQLiteStorage();
 		storage.init(path, scheduler);
 		return storage;
 	}
 
-	private void init(File path, ScheduledExecutorService scheduler) throws KadException {
+	private void init(Path path, ScheduledExecutorService scheduler) throws KadException {
+		if (path != null) {
+			Path parent = path.getParent();
+			if (Files.notExists(parent)) {
+				try {
+					Files.createDirectories(parent);
+				} catch (IOException e) {
+					throw new IOError("Failed to create the storage directory.", e);
+				}
+			}
+		}
+
 		// SQLite connection global initialization
 		// According to the SQLite documentation, using single connection in
 		// multiple threads is safe and efficient.

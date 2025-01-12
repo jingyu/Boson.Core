@@ -26,7 +26,7 @@ public class ApplicationLock implements AutoCloseable {
 	 * @throws IllegalStateException if another application instance already took the lock.
 	 */
 	public ApplicationLock(Path lockFile) throws IOException, IllegalStateException {
-		this.lockFile = lockFile;
+		this.lockFile = lockFile.normalize().toAbsolutePath();
 		tryLock();
 	}
 
@@ -39,7 +39,7 @@ public class ApplicationLock implements AutoCloseable {
 	 * @throws IllegalStateException if another application instance already took the lock.
 	 */
 	public ApplicationLock(File lockFile) throws IOException, IllegalStateException {
-		this(lockFile.getAbsoluteFile().toPath());
+		this(lockFile.toPath());
 	}
 
 	/**
@@ -55,9 +55,9 @@ public class ApplicationLock implements AutoCloseable {
 	}
 
 	private void tryLock() throws IOException, IllegalStateException {
-		File parent = lockFile.getParent().toFile();
-		if (!parent.exists())
-			parent.mkdirs();
+		Path parent = lockFile.getParent();
+		if (Files.notExists(parent))
+			Files.createDirectories(parent);
 
 		fc = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		lock = fc.tryLock(0, 0, false);

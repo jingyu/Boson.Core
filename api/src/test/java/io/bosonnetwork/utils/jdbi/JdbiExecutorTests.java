@@ -3,12 +3,8 @@ package io.bosonnetwork.utils.jdbi;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.stream.IntStream;
 
 import org.jdbi.v3.core.Jdbi;
@@ -21,6 +17,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.bosonnetwork.util.jdbi.async.JdbiExecutor;
+import io.bosonnetwork.utils.FileUtils;
 import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
@@ -28,7 +25,7 @@ import io.vertx.junit5.VertxTestContext;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(VertxExtension.class)
 public class JdbiExecutorTests {
-	private static Path dataDir = Path.of(System.getProperty("java.io.tmpdir"), "boson-jdbi");
+	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "JdbiExecutorTests");
 	private static JdbiExecutor je;
 
 	private static long userThreadId;
@@ -65,38 +62,22 @@ public class JdbiExecutorTests {
 		}
 	}
 
-	private static void deleteFile(Path file) throws IOException {
-		Files.walkFileTree(file, new SimpleFileVisitor<Path>() {
-			@Override
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				Files.delete(file);
-				return FileVisitResult.CONTINUE;
-			}
-
-			@Override
-			public  FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-				Files.delete(dir);
-				return FileVisitResult.CONTINUE;
-			}
-		});
-	}
-
 	@BeforeAll
-	static void beforeAll(Vertx vertx, VertxTestContext context) {
+	static void setup(Vertx vertx, VertxTestContext context) {
 		vertx.runOnContext((v) -> {
 			userThreadId = Thread.currentThread().getId();
 			System.out.println(">>>>>>>> Vertx/user thread: " +  userThreadId);
 
 			try {
-				if (Files.exists(dataDir))
-					deleteFile(dataDir);
+				if (Files.exists(testDir))
+					FileUtils.deleteFile(testDir);
 
-				Files.createDirectories(dataDir);
+				Files.createDirectories(testDir);
 			} catch (Exception e) {
 				context.failNow(e);
 			}
 
-			Jdbi jdbi = Jdbi.create("jdbc:sqlite:" + dataDir.resolve("test.db").toString());
+			Jdbi jdbi = Jdbi.create("jdbc:sqlite:" + testDir.resolve("test.db").toString());
 
 			je = JdbiExecutor.create(jdbi, vertx);
 
@@ -105,7 +86,7 @@ public class JdbiExecutorTests {
 	}
 
 	@AfterAll
-	static void afterAll(Vertx vertx, VertxTestContext context) throws Exception {
+	static void teardown(Vertx vertx, VertxTestContext context) throws Exception {
 		vertx.runOnContext((v) -> {
 			var threadId = Thread.currentThread().getId();
 			System.out.println(">>>>>>>> Vertx/user thread: " +  threadId);
@@ -117,8 +98,7 @@ public class JdbiExecutorTests {
 			je = null;
 
 			try {
-				if (Files.exists(dataDir))
-					deleteFile(dataDir);
+				FileUtils.deleteFile(testDir);
 			} catch (Exception e) {
 				context.failNow(e);
 			}

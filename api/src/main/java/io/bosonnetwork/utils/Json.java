@@ -351,7 +351,7 @@ public class Json {
 		}
 	}
 
-	public static void initializeVertxJson() {
+	public static void initializeBosonJsonModule() {
 		String name = "io.bosonnetwork.utils.json.module";
 
 		if (DatabindCodec.mapper().getRegisteredModuleIds().stream().anyMatch(id -> id.equals(name)))
@@ -379,4 +379,5 @@ public class Json {
 	public static CBORFactory cborFactory() {
 		return cborFactory;
 	}
+
 }

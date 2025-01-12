@@ -7,10 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -35,16 +36,17 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox.Nonce;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.FileUtils;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 public class NodeStressTests {
+	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "BosonNodeTests");
+
 	private static final int BOOTSTRAP_NODES = 8;
 	private static final int BOOTSTRAP_NODES_PORT_START = 39001;
 
 	private static final int TEST_NODES = 1024;
 	private static final int TEST_NODES_PORT_START = 39100;
-
-	private static final String workingDir = System.getProperty("java.io.tmpdir") + File.separator + "BosonNodeTests";
 
 	private final static InetAddress localAddr =
 			AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
@@ -59,24 +61,6 @@ public class NodeStressTests {
 	private static DefaultConfiguration.Builder dcb = new DefaultConfiguration.Builder();
 
 	private static ScheduledThreadPoolExecutor testScheduler;
-
-	private static void deleteFile(File file) {
-		if (file.isDirectory()) {
-			var children = file.listFiles();
-			for (var child : children)
-				deleteFile(child);
-		}
-
-		file.delete();
-	}
-
-	private static void prepareWorkingDirectory() {
-		var dir = new File(workingDir);
-		if (dir.exists())
-			deleteFile(dir);
-
-		dir.mkdirs();
-	}
 
 	private static void createTestScheduler() {
 		var index = new AtomicInteger(0);
@@ -103,13 +87,12 @@ public class NodeStressTests {
 		for (int i = 0; i < BOOTSTRAP_NODES; i++) {
 			System.out.format("\n\n\007🟢 Starting the bootstrap node %d ...\n", i);
 
-			String dir = workingDir + File.separator + "bootstraps"  + File.separator + "node-" + i;
-			File d = new File(dir);
-			d.mkdirs();
+			Path dir = testDir.resolve("bootstraps"  + File.separator + "node-" + i);
+			Files.createDirectories(dir);
 
-			dcb.setIPv4Address(localAddr);
-			dcb.setListeningPort(BOOTSTRAP_NODES_PORT_START + i);
-			dcb.setStoragePath(dir);
+			dcb.setAddress4(localAddr);
+			dcb.setPort(BOOTSTRAP_NODES_PORT_START + i);
+			dcb.setDataPath(dir);
 
 			var config = dcb.build();
 			var bootstrap = new Node(config);
@@ -140,12 +123,11 @@ public class NodeStressTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			System.out.format("\007🟢 Starting the test node %d ...\n", i);
 
-			String dir = workingDir + File.separator + "nodes"  + File.separator + "node-" + i;
-			File d = new File(dir);
-			d.mkdirs();
+			Path dir = testDir.resolve("nodes"  + File.separator + "node-" + i);
+			Files.createDirectories(dir);
 
-			dcb.setIPv4Address(localAddr);
-			dcb.setListeningPort(TEST_NODES_PORT_START + i);
+			dcb.setAddress4(localAddr);
+			dcb.setPort(TEST_NODES_PORT_START + i);
 			// dcb.setStoragePath(dir);
 			dcb.addBootstrap(bootstraps);
 
@@ -185,8 +167,8 @@ public class NodeStressTests {
 			var node = bootstrapNodes.get(i);
 			System.out.format("\007🟢 Dumping the routing table of nodes %s ...\n", node.getId());
 			var routingtable = node.toString();
-			var file = workingDir + File.separator + "bootstraps"  + File.separator + "node-" + i + File.separator + "routingtable";
-			try (var out = new FileWriter(file)) {
+			var file = testDir.resolve("bootstraps"  + File.separator + "node-" + i + File.separator + "routingtable");
+			try (var out = Files.newBufferedWriter(file)) {
 				out.write(routingtable);
 			}
 		}
@@ -195,8 +177,8 @@ public class NodeStressTests {
 			var node = testNodes.get(i);
 			System.out.format("\007🟢 Dumping the routing table of nodes %s ...\n", node.getId());
 			var routingtable = node.toString();
-			var file = workingDir + File.separator + "nodes"  + File.separator + "node-" + i + File.separator + "routingtable";
-			try (var out = new FileWriter(file)) {
+			var file = testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "routingtable");
+			try (var out = Files.newBufferedWriter(file)) {
 				out.write(routingtable);
 			}
 		}
@@ -205,21 +187,27 @@ public class NodeStressTests {
 	@BeforeAll
 	@Timeout(value = BOOTSTRAP_NODES + TEST_NODES + 1, unit = TimeUnit.MINUTES)
 	static void setup() throws Exception {
-		prepareWorkingDirectory();
+		if (Files.exists(testDir)) {
+			FileUtils.deleteFile(testDir);
+		}
+
+		Files.createDirectories(testDir);
+
 		createTestScheduler();
 		startBootstraps();
 		startTestNodes();
 
 		System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
-
 	}
 
 	@AfterAll
-	static void tearDown() throws Exception {
+	static void teardown() throws Exception {
 		dumpRoutingTables();
 		stopTestNodes();
 		stopBootstraps();
 		testScheduler.shutdown();
+
+		FileUtils.deleteFile(testDir);
 	}
 
 	@Test

@@ -26,13 +26,12 @@ package io.bosonnetwork.kademlia;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -96,7 +95,7 @@ public class Node implements io.bosonnetwork.Node {
 	private Id id;
 
 	private boolean persistent;
-	private File storagePath;
+	private Path dataPath;
 
 	private static AtomicInteger schedulerThreadIndex;
 	private volatile static ScheduledThreadPoolExecutor defaultScheduler;
@@ -125,7 +124,7 @@ public class Node implements io.bosonnetwork.Node {
 	private static final Logger log = LoggerFactory.getLogger(Node.class);
 
 	public Node(Configuration config) throws KadException {
-		if (config.IPv4Address() == null && config.IPv6Address() == null) {
+		if (config.address4() == null && config.address6() == null) {
 			log.error("No valid IPv4 or IPv6 address specified");
 			throw new IOError("No listening address");
 		}
@@ -133,31 +132,40 @@ public class Node implements io.bosonnetwork.Node {
 		if (Constants.DEVELOPMENT_ENVIRONMENT)
 			log.info("Boson node running in development environment.");
 
-		storagePath = config.storagePath() != null ? config.storagePath().getAbsoluteFile() : null;
-		persistent = checkPersistence(storagePath);
+		dataPath = config.dataPath() != null ? config.dataPath().normalize().toAbsolutePath() : null;
+		persistent = checkPersistence();
 
-		File keyFile = null;
-		if (persistent) {
+		Path keyFile = persistent ? dataPath.resolve("key") : null;
+
+		// Try to load or initialize the key pair
+		// 1. preset private key in the configuration
+		if (config.privateKey() != null) {
+			keyPair = Signature.KeyPair.fromPrivateKey(config.privateKey());
+			writeKeyFile(keyFile);
+		}
+
+		// 2. then try to load the existing key
+		if (persistent && keyPair == null) {
 			// Try to load the existing key
-			keyFile = new File(storagePath, "key");
-			if (keyFile.exists()) {
-				if (keyFile.isDirectory())
+			if (Files.exists(keyFile)) {
+				if (Files.isDirectory(keyFile))
 					log.warn("Key file path {} is an existing directory. DHT node will not be able to persist node key", keyFile);
 				else
 					loadKey(keyFile);
 			}
 		}
 
-		if (keyPair == null) // no existing key
-			initKey(keyFile);
+		// 3. create a random key pair
+		if (keyPair == null) { // no existing key
+			keyPair = Signature.KeyPair.random();
+			writeKeyFile(keyFile);
+		}
 
 		encryptKeyPair = CryptoBox.KeyPair.fromSignatureKeyPair(keyPair);
 
 		id = Id.of(keyPair.publicKey().bytes());
-		if (persistent) {
-			File idFile = new File(storagePath, "id");
-			writeIdFile(idFile);
-		}
+		if (persistent)
+			writeIdFile(dataPath.resolve("id"));
 
 		log.info("Boson Kademlia node: {}", id);
 
@@ -175,26 +183,32 @@ public class Node implements io.bosonnetwork.Node {
 		this.scheduledActions = new ArrayList<>();
 	}
 
-	private boolean checkPersistence(File storagePath) {
-		if (storagePath == null) {
+	private boolean checkPersistence() {
+		if (dataPath == null) {
 			log.info("Storage path disabled, DHT node will not try to persist");
 			return false;
 		}
 
-		if (storagePath.exists()) {
-			if (!storagePath.isDirectory()) {
-				log.warn("Storage path {} is not a directory. DHT node will not be able to persist state", storagePath);
+		if (Files.exists(dataPath)) {
+			if (!Files.isDirectory(dataPath)) {
+				log.warn("Storage path {} is not a directory. DHT node will not be able to persist state", dataPath);
 				return false;
 			} else {
 				return true;
 			}
 		} else {
-			return storagePath.mkdirs();
+			try {
+				Files.createDirectories(dataPath);
+				return true;
+			} catch (IOException e) {
+				log.warn("Storage path {} can not be created. DHT node will not be able to persist state", dataPath);
+				return false;
+			}
 		}
 	}
 
-	private void loadKey(File keyFile) throws KadException {
-		try (FileInputStream is = new FileInputStream(keyFile)) {
+	private void loadKey(Path keyFile) throws KadException {
+		try (InputStream is = Files.newInputStream(keyFile)) {
 			byte[] key = is.readAllBytes();
 			keyPair = Signature.KeyPair.fromPrivateKey(key);
 		} catch (IOException e) {
@@ -202,10 +216,9 @@ public class Node implements io.bosonnetwork.Node {
 		}
 	}
 
-	private void initKey(File keyFile) throws KadException {
-		keyPair = Signature.KeyPair.random();
+	private void writeKeyFile(Path keyFile) throws KadException {
 		if (keyFile != null) {
-			try (FileOutputStream os = new FileOutputStream(keyFile)) {
+			try (OutputStream os = Files.newOutputStream(keyFile)) {
 				os.write(keyPair.privateKey().bytes());
 			} catch (IOException e) {
 				throw new IOError("Can not write the key file.", e);
@@ -213,9 +226,9 @@ public class Node implements io.bosonnetwork.Node {
 		}
 	}
 
-	private void writeIdFile(File idFile) throws KadException {
+	private void writeIdFile(Path idFile) throws KadException {
 		if (idFile != null) {
-			try (FileOutputStream os = new FileOutputStream(idFile)) {
+			try (OutputStream os = Files.newOutputStream(idFile)) {
 				os.write(id.toString().getBytes());
 			} catch (IOException e) {
 				throw new IOError("Can not write the id file.", e);
@@ -420,34 +433,30 @@ public class Node implements io.bosonnetwork.Node {
 			if (this.scheduler == null)
 				this.scheduler = getDefaultScheduler();
 
-			File dbFile = persistent ? new File(storagePath, "node.db") : null;
+			Path dbFile = persistent ? dataPath.resolve("node.db") : null;
 			storage = SQLiteStorage.open(dbFile, getScheduler());
 
-			if (config.IPv4Address() != null) {
-				InetSocketAddress addr4 = config.IPv4Address();
+			if (config.address4() != null) {
+				if (!AddressUtils.isAnyUnicast(config.address4()))
+					throw new IOError("Invalid DHT/IPv4 address: " + config.address4());
 
-				if (!(addr4.getAddress() instanceof Inet4Address) ||
-						!AddressUtils.isAnyUnicast(addr4.getAddress()))
-					throw new IOError("Invalid DHT/IPv4 address: " + config.IPv4Address());
-
+				InetSocketAddress addr4 = new InetSocketAddress(config.address4(), config.port());
 				dht4 = new DHT(Network.IPv4, this, addr4);
 				if (persistent)
-					dht4.enablePersistence(new File(storagePath, "dht4.cache"));
+					dht4.enablePersistence(dataPath.resolve("dht4.cache"));
 
 				dht4.start(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 				numDHTs++;
 			}
 
-			if (config.IPv6Address() != null) {
-				InetSocketAddress addr6 = config.IPv4Address();
+			if (config.address6() != null) {
+				if (!AddressUtils.isAnyUnicast(config.address6()))
+					throw new IOError("Invalid DHT/IPv6 address: " + config.address6());
 
-				if (!(addr6.getAddress() instanceof Inet6Address) ||
-						!AddressUtils.isAnyUnicast(addr6.getAddress()))
-					throw new IOError("Invalid DHT/IPv6 address: " + config.IPv6Address());
-
+				InetSocketAddress addr6 = new InetSocketAddress(config.address6(), config.port());
 				dht6 = new DHT(Network.IPv6, this, addr6);
 				if (persistent)
-					dht6.enablePersistence(new File(storagePath, "dht6.cache"));
+					dht6.enablePersistence(dataPath.resolve("dht6.cache"));
 
 				dht6.start(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 				numDHTs++;

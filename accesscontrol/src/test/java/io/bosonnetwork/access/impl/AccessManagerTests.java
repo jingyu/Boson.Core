@@ -28,8 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -52,12 +53,13 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.access.Permission.Access;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.utils.Json;
 
 public class AccessManagerTests {
-	private static String repoPath = System.getProperty("java.io.tmpdir") + File.separator + "AccessManagerTests";
-	private static File defaultsDir;
-	private static File aclsDir;
+	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "AccessManagerTests");
+	private static final Path defaultsDir = testDir.resolve("defaults");
+	private static final Path aclsDir = testDir.resolve("acls");
 
 	private static EnumMap<Subscription, AccessControlList> defaultACLs;
 	private static EnumMap<Subscription, List<Id>> subscriptions;
@@ -65,28 +67,13 @@ public class AccessManagerTests {
 	private static Node node;
 	private static AccessManager am;
 
-	private static void deleteFile(File file) {
-		if (file.isDirectory()) {
-			File[] children = file.listFiles();
-			for (File child : children)
-				deleteFile(child);
-		}
-
-		file.delete();
-	}
-
 	static void setupDefaults() throws IOException {
-		File repoDir = new File(repoPath);
-		if (repoDir.exists())
-			deleteFile(repoDir);
+		if (Files.exists(testDir))
+			FileUtils.deleteFile(testDir);
 
-		repoDir.mkdirs();
-
-		defaultsDir = new File(repoDir, "defaults");
-		defaultsDir.mkdirs();
-
-		aclsDir = new File(repoDir, "acls");
-		aclsDir.mkdirs();
+		Files.createDirectories(testDir);
+		Files.createDirectories(defaultsDir);
+		Files.createDirectories(aclsDir);
 
 		defaultACLs = new EnumMap<>(Subscription.class);
 
@@ -129,7 +116,7 @@ public class AccessManagerTests {
 		var acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(defaultsDir.resolve(subscription.name()).toFile(), acl);
 
 		// Professional
 		permissions = new HashMap<>();
@@ -170,7 +157,7 @@ public class AccessManagerTests {
 		acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(defaultsDir.resolve(subscription.name()).toFile(), acl);
 
 		// Premium
 		permissions = new HashMap<>();
@@ -211,11 +198,11 @@ public class AccessManagerTests {
 		acl = new AccessControlList(subscription, permissions);
 		acl.seal();
 		defaultACLs.put(subscription, acl);
-		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(defaultsDir.resolve(subscription.name()).toFile(), acl);
 	}
 
 	static void setupTestACLs() throws IOException {
-		AccessManager am = new AccessManager(repoPath);
+		AccessManager am = new AccessManager(testDir);
 
 		subscriptions = new EnumMap<>(Subscription.class);
 		for (var s : EnumSet.allOf(Subscription.class)) {
@@ -235,9 +222,9 @@ public class AccessManagerTests {
 
 	static Configuration getNodeConfiguration() {
 		DefaultConfiguration.Builder dcb = new DefaultConfiguration.Builder();
-		dcb.setAutoIPAddress(true)
-			.setAutoIPv6Address(false)
-			.setListeningPort(10099);
+		dcb.setAutoAddress(true)
+			.setAutoAddress6(false)
+			.setPort(10099);
 
 		return dcb.build();
 	}
@@ -247,7 +234,7 @@ public class AccessManagerTests {
 		setupDefaults();
 		setupTestACLs();
 
-		am = new AccessManager(repoPath);
+		am = new AccessManager(testDir);
 		node = new io.bosonnetwork.kademlia.Node(getNodeConfiguration());
 		am.init(node);
 
@@ -255,8 +242,9 @@ public class AccessManagerTests {
 	}
 
 	@AfterAll
-	static void teardown() {
+	static void teardown() throws Exception {
 		node.stop();
+		FileUtils.deleteFile(testDir);
 	}
 
 	static boolean equals(io.bosonnetwork.access.Permission a, io.bosonnetwork.access.Permission b) {
@@ -375,7 +363,7 @@ public class AccessManagerTests {
 	void testUpdateNodeACL() throws IOException, InterruptedException {
 		Id nid = Id.random();
 
-		AccessManager lam = new AccessManager(repoPath);
+		AccessManager lam = new AccessManager(testDir);
 		Subscription subscription =  Subscription.Professional;
 		lam.allow(nid, subscription);
 
@@ -513,7 +501,7 @@ public class AccessManagerTests {
 		var subscription = Subscription.Free;
 		var acl = new AccessControlList(subscription, permissions);
 		acl.seal();
-		Json.objectMapper().writeValue(new File(defaultsDir, subscription.name()), acl);
+		Json.objectMapper().writeValue(defaultsDir.resolve(subscription.name()).toFile(), acl);
 		return acl;
 	}
 

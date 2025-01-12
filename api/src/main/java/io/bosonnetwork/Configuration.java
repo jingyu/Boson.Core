@@ -23,8 +23,9 @@
 
 package io.bosonnetwork;
 
-import java.io.File;
-import java.net.InetSocketAddress;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -37,18 +38,36 @@ public interface Configuration {
 	/**
 	 * IPv4 address for the DHT node. Null IPv4 address will disable the DHT on IPv4.
 	 *
-	 * @return the InetSocketAddress object of the IPv4 address.
+	 * @return the InetAddress object of the IPv4 address.
 	 */
-	default public InetSocketAddress IPv4Address() {
+	default public Inet4Address address4() {
 		return null;
 	}
 
 	/**
 	 * IPv6 address for the DHT node. Null IPv6 address will disable the DHT on IPv6.
 	 *
-	 * @return the InetSocketAddress object of the IPv6 address.
+	 * @return the InetAddress object of the IPv6 address.
 	 */
-	default public InetSocketAddress IPv6Address() {
+	default public Inet6Address address6() {
+		return null;
+	}
+
+	/**
+	 * The port for the DHT node.
+	 *
+	 * @return the port number.
+	 */
+	default public int port() {
+		return 39001;
+	}
+
+	/**
+	 * The DHT node private key. if no key is provided then the DHT node will generate a random key.
+	 *
+	 * @return the private key or null if not set.
+	 */
+	default public byte[] privateKey() {
 		return null;
 	}
 
@@ -57,9 +76,9 @@ public interface Configuration {
 	 *
 	 * Null path will use default access control: allow all
 	 *
-	 * @return  a File object point to the access control lists path.
+	 * @return  a Path object point to the access control lists path.
 	 */
-	default public File accessControlsPath() {
+	default public Path accessControlsPath() {
 		return null;
 	}
 
@@ -69,9 +88,9 @@ public interface Configuration {
 	 *
 	 * Null path will disable the DHT persist it's data.
 	 *
-	 * @return a File object point to the storage path.
+	 * @return a Path object point to the storage path.
 	 */
-	default public File storagePath() {
+	default public Path dataPath() {
 		return null;
 	}
 

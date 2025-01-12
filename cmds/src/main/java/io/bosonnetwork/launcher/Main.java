@@ -62,7 +62,7 @@ public class Main {
 			// TODO: initialize the user defined access manager
 
 			accessManager = config.accessControlsPath() != null ?
-					new io.bosonnetwork.access.impl.AccessManager(config.accessControlsPath().getAbsoluteFile()) :
+					new io.bosonnetwork.access.impl.AccessManager(config.accessControlsPath()) :
 					new io.bosonnetwork.access.impl.AccessManager();
 
 			accessManager.init(node);
@@ -102,8 +102,8 @@ public class Main {
 			}
 
 			BosonService svc = (BosonService)o;
-			Path dataPath = config.storagePath() == null ? null :
-				config.storagePath().getAbsoluteFile().toPath().resolve(svc.getId());
+			Path dataPath = config.dataPath() == null ? null :
+				config.dataPath().resolve(svc.getId()).toAbsolutePath();
 			ServiceContext ctx = new DefaultServiceContext(node, accessManager, configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), className);
@@ -174,28 +174,28 @@ public class Main {
 					System.exit(-1);
 				}
 
-				builder.setIPv4Address(args[++i]);
+				builder.setAddress4(args[++i]);
 			} else if (args[i].equals("--address6") || args[i].equals("-6")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setIPv6Address(args[++i]);
+				builder.setAddress6(args[++i]);
 			} else if (args[i].equals("--port") || args[i].equals("-p")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setListeningPort(Integer.valueOf(args[++i]));
+				builder.setPort(Integer.valueOf(args[++i]));
 			} else if (args[i].equals("--data-dir") || args[i].equals("-d")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setStoragePath(args[++i]);
+				builder.setDataPath(args[++i]);
 			} else if (args[i].equals("--help") || args[i].equals("-h")) {
 				System.out.println("Usage: launcher [OPTIONS]");
 				System.out.println("Available options:");
@@ -226,8 +226,8 @@ public class Main {
 
 		parseArgs(args);
 
-		Path lockFile = config.storagePath() != null ?
-				config.storagePath().toPath().resolve("lock") :
+		Path lockFile = config.dataPath() != null ?
+				config.dataPath().resolve("lock") :
 				Path.of("./lock");
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
 			initBosonNode();
@@ -242,7 +242,7 @@ public class Main {
 			}
 		} catch (IOException | IllegalStateException e) {
 			System.out.println("Another boson instance alreay running at " +
-					(config.storagePath() != null ? config.storagePath() : "."));
+					(config.dataPath() != null ? config.dataPath() : "."));
 		}
 	}
 }

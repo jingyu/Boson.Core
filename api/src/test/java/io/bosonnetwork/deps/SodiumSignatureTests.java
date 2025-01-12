@@ -38,7 +38,7 @@ import io.bosonnetwork.utils.Hex;
 
 public class SodiumSignatureTests {
 	@BeforeAll
-	static void checkAvailable() {
+	static void setup() {
 		assumeTrue(Sodium.isAvailable(), "Sodium native library is not available");
 	}
 

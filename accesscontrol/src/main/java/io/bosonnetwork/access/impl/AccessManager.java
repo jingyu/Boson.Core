@@ -26,6 +26,7 @@ package io.bosonnetwork.access.impl;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
@@ -79,7 +80,7 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 	}
 
 	public AccessManager(Path repoPath) {
-		repo = repoPath.toAbsolutePath();
+		repo = repoPath.normalize().toAbsolutePath();
 		defaults = repo.resolve("defaults");
 		acls = repo.resolve("acls");
 	}
@@ -163,13 +164,13 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 		}
 	}
 
-	private AccessControlList loadACL(File file) throws IOException {
+	private AccessControlList loadACL(Path file) throws IOException {
 		log.trace("Loading the access control list from: {}", file);
-		return Json.objectMapper().readValue(file, AccessControlList.class);
+		return Json.objectMapper().readValue(file.toFile(), AccessControlList.class);
 	}
 
-	private void saveACL(File file, AccessControlList acl) throws IOException {
-		Json.objectMapper().writeValue(file, acl);
+	private void saveACL(Path file, AccessControlList acl) throws IOException {
+		Json.objectMapper().writeValue(file.toFile(), acl);
 	}
 
 	private void initDefaults() {
@@ -194,8 +195,8 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 		for (Subscription subscription : subscriptions) {
 			AccessControlList acl;
 
-			File aclFile = defaults.resolve(subscription.name()).toFile();
-			if (!aclFile.exists() || aclFile.isDirectory()) {
+			Path aclFile = defaults.resolve(subscription.name());
+			if (Files.notExists(aclFile) || Files.isDirectory(aclFile)) {
 				log.debug("No access control list defined for: {}, using default", subscription);
 				acl = new AccessControlList(subscription);
 			} else {
@@ -218,8 +219,8 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 		if (acls == null)
 			return DEFAULT;
 
-		File aclFile = acls.resolve(id.toString()).toFile();
-		if (!aclFile.exists() || aclFile.isDirectory()) {
+		Path aclFile = acls.resolve(id.toString());
+		if (Files.notExists(aclFile) || Files.isDirectory(aclFile)) {
 			log.debug("No access control list file for: {}, using default", id);
 			return DEFAULT;
 		}
@@ -260,7 +261,7 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 						cache.invalidate(id);
 					} else if (key == keyDefaults) {
 						try {
-							AccessControlList acl = loadACL(defaults.resolve(changed).toFile());
+							AccessControlList acl = loadACL(defaults.resolve(changed));
 							log.debug("Default access control list for {} changed, reload", acl.getSubscription());
 							defaultACLs.put(acl.getSubscription(), acl);
 						} catch (IOException e) {
@@ -295,42 +296,31 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 	}
 
 	public AccessControlList getDefault(Subscription subscription) throws IOException {
-		File aclFile = defaults.resolve(subscription.name()).toFile();
-		if (!aclFile.exists())
-			throw new IOException("ACL for " + subscription + " not exists");
-
-		AccessControlList acl = loadACL(aclFile);
-
-		return acl;
+		Path aclFile = defaults.resolve(subscription.name());
+		return loadACL(aclFile);
 	}
 
 	public AccessControlList allow(Id subjectNode, Subscription subscription) throws IOException {
-		File aclFile = acls.resolve(subjectNode.toString()).toFile();
+		Path aclFile = acls.resolve(subjectNode.toString());
 		AccessControlList acl = new AccessControlList(subscription);
 		saveACL(aclFile, acl);
 		return acl;
 	}
 
 	public AccessControlList deny(Id subjectNode) throws IOException {
-		File aclFile = acls.resolve(subjectNode.toString()).toFile();
+		Path aclFile = acls.resolve(subjectNode.toString());
 		AccessControlList acl = new AccessControlList(Subscription.Blocked);
 		saveACL(aclFile, acl);
 		return acl;
 	}
 
 	public void remove(Id subjectNode) throws IOException {
-		File aclFile = acls.resolve(subjectNode.toString()).toFile();
-		if (aclFile.exists()) {
-			if (!aclFile.delete())
-				throw new IOException("ACL for " + subjectNode + " can not be delete");
-		}
+		Path aclFile = acls.resolve(subjectNode.toString());
+		Files.deleteIfExists(aclFile);
 	}
 
 	public AccessControlList get(Id subjectNode) throws IOException {
-		File aclFile = acls.resolve(subjectNode.toString()).toFile();
-		if (!aclFile.exists())
-			return null;
-
+		Path aclFile = acls.resolve(subjectNode.toString());
 		AccessControlList acl = loadACL(aclFile);
 		acl.seal();
 

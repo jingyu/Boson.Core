@@ -7,10 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -29,15 +30,17 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox.Nonce;
+import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.FileUtils;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
 public class NodeTests {
 	private static final int TEST_NODES = 32;
 	private static final int TEST_NODES_PORT_START = 39001;
 
-	private static final String workingDir = System.getProperty("java.io.tmpdir") + File.separator + "BosonNodeTests";
+	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "NodeTests");
 
 	private final static InetAddress localAddr =
 			AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
@@ -50,30 +53,12 @@ public class NodeTests {
 
 	private static DefaultConfiguration.Builder dcb = new DefaultConfiguration.Builder();
 
-	private static void deleteFile(File file) {
-		if (file.isDirectory()) {
-			var children = file.listFiles();
-			for (var child : children)
-				deleteFile(child);
-		}
-
-		file.delete();
-	}
-
-	private static void prepareWorkingDirectory() {
-		var dir = new File(workingDir);
-		if (dir.exists())
-			deleteFile(dir);
-
-		dir.mkdirs();
-	}
-
 	private static void startBootstrap() throws Exception {
 		System.out.println("\n\n\007🟢 Starting the bootstrap node ...");
 
-		dcb.setIPv4Address(localAddr);
-		dcb.setListeningPort(TEST_NODES_PORT_START - 1);
-		dcb.setStoragePath(workingDir + File.separator + "nodes"  + File.separator + "node-bootstrap");
+		dcb.setAddress4(localAddr);
+		dcb.setPort(TEST_NODES_PORT_START - 1);
+		dcb.setDataPath(testDir.resolve("nodes"  + File.separator + "node-bootstrap"));
 
 		var config = dcb.build();
 		bootstrap = new Node(config);
@@ -84,9 +69,9 @@ public class NodeTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			System.out.format("\n\n\007🟢 Starting the node %d ...\n", i);
 
-			dcb.setIPv4Address(localAddr);
-			dcb.setListeningPort(TEST_NODES_PORT_START + i);
-			dcb.setStoragePath(workingDir + File.separator + "nodes"  + File.separator + "node-" + i);
+			dcb.setAddress4(localAddr);
+			dcb.setPort(TEST_NODES_PORT_START + i);
+			dcb.setDataPath(testDir.resolve("nodes"  + File.separator + "node-" + i));
 			dcb.addBootstrap(bootstrap.getNodeInfo().getV4());
 
 			var config = dcb.build();
@@ -115,8 +100,8 @@ public class NodeTests {
 			var node = testNodes.get(i);
 			System.out.format("\007🟢 Dumping the routing table of nodes %s ...\n", node.getId());
 			var routingtable = node.toString();
-			var file = workingDir + File.separator + "nodes"  + File.separator + "node-" + i + File.separator + "routingtable";
-			try (var out = new FileWriter(file)) {
+			var file = testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "routingtable");
+			try (var out = Files.newBufferedWriter(file)) {
 				out.write(routingtable);
 			}
 		}
@@ -132,7 +117,11 @@ public class NodeTests {
 	@BeforeAll
 	@Timeout(value = TEST_NODES + 1, unit = TimeUnit.MINUTES)
 	static void setup() throws Exception {
-		prepareWorkingDirectory();
+		if (Files.exists(testDir))
+			FileUtils.deleteFile(testDir);
+
+		Files.createDirectories(testDir);
+
 		startBootstrap();
 		startTestNodes();
 
@@ -140,9 +129,30 @@ public class NodeTests {
 	}
 
 	@AfterAll
-	static void tearDown() throws Exception {
+	static void teardown() throws Exception {
 		dumpRoutingTables();
 		stopTestNodes();
+
+		FileUtils.deleteFile(testDir);
+	}
+
+	@Test
+	void testNodeWithPresetKey() throws Exception {
+		var keypair = Signature.KeyPair.random();
+		Id nodeId = Id.of(keypair.publicKey().bytes());
+
+		dcb.setAddress4(localAddr);
+		dcb.setPort(TEST_NODES_PORT_START - 100);
+		dcb.setPrivateKey(keypair.privateKey().bytes());
+		dcb.setDataPath(testDir.resolve("nodes"  + File.separator + "node-" + nodeId));
+
+		var config = dcb.build();
+		var node = new Node(config);
+		node.start();
+
+		assertEquals(nodeId, node.getId());
+
+		node.stop();
 	}
 
 	@Test
@@ -169,6 +179,7 @@ public class NodeTests {
 	@Timeout(value = TEST_NODES, unit = TimeUnit.MINUTES)
 	void testAnnounceAndFindPeer() throws Exception {
 		for (int i = 0; i < TEST_NODES; i++) {
+			Thread.sleep(1000);
 			var announcer = testNodes.get(i);
 			var p = PeerInfo.create(announcer.getId(), 8888);
 

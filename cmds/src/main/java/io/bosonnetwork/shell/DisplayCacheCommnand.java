@@ -1,7 +1,8 @@
 package io.bosonnetwork.shell;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Date;
@@ -43,11 +44,11 @@ public class DisplayCacheCommnand implements Callable<Integer> {
 			description = "The boson cache location, default current directory.")
 	private String cachePath = null;
 
-	private void print(File cache) {
+	private void print(Path cache) {
 		CBORMapper mapper = Json.cborMapper();
 		long now = System.currentTimeMillis();
 		try {
-			JsonNode node = mapper.readTree(cache);
+			JsonNode node = mapper.readTree(cache.toFile());
 			long timestamp = node.get("timestamp").asLong();
 			System.out.format("Timestamp: %s / %s\n",
 					new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ").format(new Date(timestamp)),
@@ -76,21 +77,23 @@ public class DisplayCacheCommnand implements Callable<Integer> {
 
 	@Override
 	public Integer call() throws Exception {
-		File cacheLocation = cachePath.startsWith("~") ?
-				new File(System.getProperty("user.home") + cachePath.substring(1)) :
-				new File(cachePath);
+		Path dir = Path.of(cachePath).normalize();
+		if (dir.startsWith("~"))
+			dir = Path.of(System.getProperty("user.home")).resolve(dir.subpath(1, dir.getNameCount()));
+		else
+			dir = dir.toAbsolutePath();
 
 		if (af == null || !af.ipv6Only) {
-			File cache4 = new File(cacheLocation, "dht4.cache");
-			if (cache4.exists() && !cache4.isDirectory()) {
+			Path cache4 = dir.resolve("dht4.cache");
+			if (Files.exists(cache4) && Files.isRegularFile(cache4)) {
 				System.out.println("IPv4 routing table:");
 				print(cache4);
 			}
 		}
 
 		if (af == null || !af.ipv4Only) {
-			File cache6 = new File(cacheLocation, "dht6.cache");
-			if (cache6.exists() && !cache6.isDirectory()) {
+			Path cache6 = dir.resolve("dht6.cache");
+			if (Files.exists(cache6) && Files.isRegularFile(cache6)) {
 				System.out.println("IPv6 routing table:");
 				print(cache6);
 			}

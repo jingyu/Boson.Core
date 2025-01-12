@@ -31,8 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -60,20 +61,9 @@ import io.bosonnetwork.kademlia.exceptions.CasFail;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
 public class DataStorageTests {
-	private static ScheduledExecutorService scheduler;
+	private static final Path db = Path.of(System.getProperty("java.io.tmpdir"), "boson", "DataStorageTests", "boson.db");
 
-	private File getStorageFile() {
-		File f = new File(System.getProperty("java.io.tmpdir") + "/boson.db");
-
-		return f;
-	}
-
-	private ScheduledExecutorService getScheduler() {
-		if (scheduler == null)
-			scheduler = new ScheduledThreadPoolExecutor(4);
-
-		return scheduler;
-	}
+	private static ScheduledExecutorService scheduler = new ScheduledThreadPoolExecutor(4);
 
 	@SuppressWarnings("unused")
 	private void increment(byte[] value) {
@@ -89,16 +79,13 @@ public class DataStorageTests {
 	}
 
 	@BeforeEach
-	public void setup() {
-		File f = getStorageFile();
-		if (f.exists())
-			f.delete();
+	public void setup() throws Exception {
+		Files.deleteIfExists(db);
 	}
 
 	private DataStorage open(Class<? extends DataStorage> clazz) throws Exception {
-		Method open = clazz.getMethod("open", File.class, ScheduledExecutorService.class);
-
-		Object o= open.invoke(null, getStorageFile(), getScheduler());
+		Method open = clazz.getMethod("open", Path.class, ScheduledExecutorService.class);
+		Object o= open.invoke(null, db, scheduler);
 		return (DataStorage)o;
 	}
 

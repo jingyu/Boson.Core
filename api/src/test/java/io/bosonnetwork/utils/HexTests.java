@@ -36,7 +36,7 @@ public class HexTests {
 	private static String TEXT;
 
 	@BeforeAll
-	public static void beforeAll() {
+	public static void setup() {
 		BIN = new byte[256];
 		StringBuilder sb = new StringBuilder();
 

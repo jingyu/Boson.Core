@@ -23,7 +23,6 @@
 
 package io.bosonnetwork.shell;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -55,7 +54,6 @@ import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.kademlia.Node;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.utils.ApplicationLock;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -156,19 +154,19 @@ public class Main implements Callable<Integer> {
 		}
 
 		if (addr4 != null)
-			builder.setIPv4Address(addr4);
+			builder.setAddress4(addr4);
 
 		if (addr6 != null)
-			builder.setIPv6Address(addr6);
+			builder.setAddress6(addr6);
 
 		if (port != 0)
-			builder.setListeningPort(port);
+			builder.setPort(port);
 
 		if (dataDir != null) {
-			builder.setStoragePath(dataDir);
+			builder.setDataPath(dataDir);
 		} else {
-			if (!builder.hasStoragePath())
-				builder.setStoragePath(DEFAULT_DATA_DIR);
+			if (!builder.hasDataPath())
+				builder.setDataPath(DEFAULT_DATA_DIR);
 		}
 
 		config = builder.build();
@@ -210,11 +208,13 @@ public class Main implements Callable<Integer> {
 
 	private void setLogOutput() {
 		if (dataDir != null && !dataDir.isEmpty()) {
-			File dir = dataDir.startsWith("~") ?
-				new File(System.getProperty("user.home") + dataDir.substring(1)) :
-				new File(dataDir);
+			Path dir = Path.of(dataDir).normalize();
+			if (dir.startsWith("~"))
+				dir = Path.of(System.getProperty("user.home")).resolve(dir.subpath(1, dir.getNameCount()));
+			else
+				dir = dir.toAbsolutePath();
 
-			File logFile = new File(dir, "boson.log").getAbsoluteFile();
+			Path logFile = dir.resolve("boson.log").toAbsolutePath();
 			System.setProperty("BOSON_LOG", logFile.toString());
 		}
 	}
@@ -226,7 +226,7 @@ public class Main implements Callable<Integer> {
 		initCommandLine();
 		initConfig();
 
-		Path lockFile = config.storagePath().toPath().resolve("lock");
+		Path lockFile = config.dataPath().resolve("lock");
 
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
 			initBosonNode();
@@ -251,7 +251,7 @@ public class Main implements Callable<Integer> {
 				}
 			}
 		} catch (IOException | IllegalStateException e) {
-			System.out.println("Another boson instance alreay running at " + config.storagePath());
+			System.out.println("Another boson instance alreay running at " + config.dataPath());
 			return -1;
 		}
 	}

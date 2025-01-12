@@ -23,9 +23,10 @@
 
 package io.bosonnetwork.kademlia;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -100,7 +101,7 @@ public class DHT {
 	private boolean running;
 	private List<ScheduledFuture<?>> scheduledActions;
 
-	private File persistFile;
+	private Path persistFile;
 
 	private Set<NodeInfo> bootstrapNodes;
 	private AtomicBoolean bootstrapping;
@@ -260,7 +261,7 @@ public class DHT {
 		return server;
 	}
 
-	void enablePersistence(File persistFile) {
+	void enablePersistence(Path persistFile) {
 		this.persistFile = persistFile;
 	}
 
@@ -419,7 +420,7 @@ public class DHT {
 		if (running)
 			return;
 
-		if (persistFile != null && persistFile.exists() && persistFile.isFile()) {
+		if (persistFile != null && Files.exists(persistFile) && Files.isRegularFile(persistFile)) {
 			log.info("Loading routing table from {} ...", persistFile);
 			routingTable.load(persistFile);
 		}

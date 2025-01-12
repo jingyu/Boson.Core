@@ -24,17 +24,21 @@
 package io.bosonnetwork;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -49,11 +53,14 @@ import io.bosonnetwork.utils.AddressUtils;
 public class DefaultConfiguration implements Configuration {
 	private static final int DEFAULT_DHT_PORT = 39001;
 
-	InetSocketAddress addr4;
-	InetSocketAddress addr6;
+	Inet4Address addr4;
+	Inet6Address addr6;
+	int port;
 
-	private File accessControlsPath;
-	private File storagePath;
+	byte[] privateKey;
+
+	private Path accessControlsPath;
+	private Path dataPath;
 	private Set<NodeInfo> bootstraps;
 	private Map<String, Map<String, Object>> services;
 
@@ -65,21 +72,36 @@ public class DefaultConfiguration implements Configuration {
 	/**
 	 * IPv4 address for the DHT node. Null IPv4 address will disable the DHT on IPv4.
 	 *
-	 * @return the InetSocketAddress object of the IPv4 address.
+	 * @return the InetAddress object of the IPv4 address.
 	 */
 	@Override
-	public InetSocketAddress IPv4Address() {
+	public Inet4Address address4() {
 		return addr4;
 	}
 
 	/**
 	 * IPv6 address for the DHT node. Null IPv6 address will disable the DHT on IPv6.
 	 *
-	 * @return the InetSocketAddress object of the IPv6 address.
+	 * @return the InetAddress object of the IPv6 address.
 	 */
 	@Override
-	public InetSocketAddress IPv6Address() {
+	public Inet6Address address6() {
 		return addr6;
+	}
+
+	/**
+	 * The port for the DHT node.
+	 *
+	 * @return the port number.
+	 */
+	@Override
+	public int port() {
+		return port;
+	}
+
+	@Override
+	public byte[] privateKey() {
+		return privateKey;
 	}
 
 	/**
@@ -87,10 +109,10 @@ public class DefaultConfiguration implements Configuration {
 	 *
 	 * Null path will use default access control: allow all
 	 *
-	 * @return  a File object point to the access control lists path.
+	 * @return  a Path object point to the access control lists path.
 	 */
 	@Override
-	public File accessControlsPath() {
+	public Path accessControlsPath() {
 		return accessControlsPath;
 	}
 
@@ -100,11 +122,11 @@ public class DefaultConfiguration implements Configuration {
 	 *
 	 * Null path will disable the DHT persist it's data.
 	 *
-	 * @return a File object point to the storage path.
+	 * @return a Path object point to the storage path.
 	 */
 	@Override
-	public File storagePath() {
-		return storagePath;
+	public Path dataPath() {
+		return dataPath;
 	}
 
 	/**
@@ -137,10 +159,6 @@ public class DefaultConfiguration implements Configuration {
 		private boolean autoAddr4 = AUTO_IPV4;
 		private boolean autoAddr6 = AUTO_IPV6;
 
-		private Inet4Address inetAddr4;
-		private Inet6Address inetAddr6;
-		private int port = DEFAULT_DHT_PORT;
-
 		private DefaultConfiguration conf;
 
 		private DefaultConfiguration getConfiguration() {
@@ -157,7 +175,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @param auto true to auto detect the IPv4 address, false to disable.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setAutoIPv4Address(boolean auto) {
+		public Builder setAutoAddress4(boolean auto) {
 			autoAddr4 = auto;
 			return this;
 		}
@@ -169,7 +187,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @param auto true to auto detect the IPv6 address, false to disable.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setAutoIPv6Address(boolean auto) {
+		public Builder setAutoAddress6(boolean auto) {
 			autoAddr6 = auto;
 			return this;
 		}
@@ -181,7 +199,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @param auto true to auto detect the IP addresses, false to disable.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setAutoIPAddress(boolean auto) {
+		public Builder setAutoAddress(boolean auto) {
 			autoAddr4 = auto;
 			autoAddr6 = auto;
 			return this;
@@ -193,10 +211,12 @@ public class DefaultConfiguration implements Configuration {
 		 * @param addr the string IPv4 address.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setIPv4Address(String addr) {
+		public Builder setAddress4(String addr) {
+			Objects.requireNonNull(addr, "addr");
+
 			try {
-				return setIPv4Address(addr != null ? InetAddress.getByName(addr) : null);
-			} catch (IOException | IllegalArgumentException e) {
+				return setAddress4(InetAddress.getByName(addr));
+			} catch (UnknownHostException e) {
 				throw new IllegalArgumentException("Invalid IPv4 address: " + addr, e);
 			}
 		}
@@ -207,11 +227,14 @@ public class DefaultConfiguration implements Configuration {
 		 * @param addr the IPv4 address.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setIPv4Address(InetAddress addr) {
-			if (addr != null && !(addr instanceof Inet4Address))
+		public Builder setAddress4(InetAddress addr) {
+			Objects.requireNonNull(addr, "addr");
+
+			if (addr instanceof Inet4Address addr4)
+				getConfiguration().addr4 = addr4;
+			else
 				throw new IllegalArgumentException("Invalid IPv4 address: " + addr);
 
-			this.inetAddr4 = (Inet4Address)addr;
 			return this;
 		}
 
@@ -221,9 +244,11 @@ public class DefaultConfiguration implements Configuration {
 		 * @param addr the string IPv6 address.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setIPv6Address(String addr) {
+		public Builder setAddress6(String addr) {
+			Objects.requireNonNull(addr, "addr");
+
 			try {
-				return setIPv6Address(addr != null ? InetAddress.getByName(addr) : null);
+				return setAddress6(InetAddress.getByName(addr));
 			} catch (IOException | IllegalArgumentException e) {
 				throw new IllegalArgumentException("Invalid IPv6 address: " + addr, e);
 			}
@@ -235,11 +260,14 @@ public class DefaultConfiguration implements Configuration {
 		 * @param addr the IPv6 address.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setIPv6Address(InetAddress addr) {
-			if (addr != null && !(addr instanceof Inet6Address))
+		public Builder setAddress6(InetAddress addr) {
+			Objects.requireNonNull(addr, "addr");
+
+			if (addr instanceof Inet6Address addr6)
+				getConfiguration().addr6 = addr6;
+			else
 				throw new IllegalArgumentException("Invalid IPv6 address: " + addr);
 
-			this.inetAddr6 = (Inet6Address)addr;
 			return this;
 		}
 
@@ -249,11 +277,19 @@ public class DefaultConfiguration implements Configuration {
 		 * @param port the port to listen.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setListeningPort(int port) {
+		public Builder setPort(int port) {
 			if (port <= 0 || port > 65535)
 				throw new IllegalArgumentException("Invalid port: " + port);
 
-			this.port = port;
+			getConfiguration().port = port;
+			return this;
+		}
+
+		public Builder setPrivateKey(byte[] privateKey) {
+			if (privateKey != null && privateKey.length != 64)
+				throw new IllegalArgumentException("Invalid private key length: " + privateKey.length);
+
+			getConfiguration().privateKey = privateKey;
 			return this;
 		}
 
@@ -273,16 +309,21 @@ public class DefaultConfiguration implements Configuration {
 		 * @return the Builder instance for method chaining.
 		 */
 		public Builder setAccessControlsPath(String path) {
-			return setAccessControlsPath(toFile(path));
+			return setAccessControlsPath(toPath(path));
+		}
+
+		public Builder setAccessControlsPath(File path) {
+			setAccessControlsPath(path != null ? path.toPath() : null);
+			return this;
 		}
 
 		/**
 		 * Set the access control list path for the super node.
 		 *
-		 * @param path the File object to the access control list directory.
+		 * @param path the Path object to the access control list directory.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setAccessControlsPath(File path) {
+		public Builder setAccessControlsPath(Path path) {
 			getConfiguration().accessControlsPath = path;
 			return this;
 		}
@@ -292,8 +333,8 @@ public class DefaultConfiguration implements Configuration {
 		 *
 		 * @return the Builder instance for method chaining.
 		 */
-		public boolean hasStoragePath() {
-			return getConfiguration().storagePath != null;
+		public boolean hasDataPath() {
+			return getConfiguration().dataPath != null;
 		}
 
 		/**
@@ -302,8 +343,8 @@ public class DefaultConfiguration implements Configuration {
 		 * @param path the string path.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setStoragePath(String path) {
-			return setStoragePath(toFile(path));
+		public Builder setDataPath(String path) {
+			return setDataPath(toPath(path));
 		}
 
 		/**
@@ -312,8 +353,13 @@ public class DefaultConfiguration implements Configuration {
 		 * @param path the File object to the storage path.
 		 * @return the Builder instance for method chaining.
 		 */
-		public Builder setStoragePath(File path) {
-			getConfiguration().storagePath = path;
+		public Builder setDataPath(File path) {
+			setDataPath(path != null ? path.toPath() : null);
+			return this;
+		}
+
+		public Builder setDataPath(Path path) {
+			getConfiguration().dataPath = path;
 			return this;
 		}
 
@@ -365,9 +411,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @return the Builder instance for method chaining.
 		 */
 		public Builder addBootstrap(NodeInfo node) {
-			if (node == null)
-				throw new IllegalArgumentException("Invaild node info: null");
-
+			Objects.requireNonNull(node, "node");
 			getConfiguration().bootstraps.add(node);
 			return this;
 		}
@@ -379,9 +423,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @return the Builder instance for method chaining.
 		 */
 		public Builder addBootstrap(Collection<NodeInfo> nodes) {
-			if (nodes == null)
-				throw new IllegalArgumentException("Invaild node info: null");
-
+			Objects.requireNonNull(nodes, "nodes");
 			getConfiguration().bootstraps.addAll(nodes);
 			return this;
 		}
@@ -394,8 +436,7 @@ public class DefaultConfiguration implements Configuration {
 		 * @return the Builder instance for method chaining.
 		 */
 		public Builder addService(String clazz, Map<String, Object> configuration) {
-			if (clazz == null || clazz.isEmpty())
-				throw new IllegalArgumentException("Invaild service class name");
+			Objects.requireNonNull(clazz, "clazz");
 
 			getConfiguration().services.put(clazz, Collections.unmodifiableMap(
 					configuration == null || configuration.isEmpty() ?
@@ -411,47 +452,55 @@ public class DefaultConfiguration implements Configuration {
 		 * @throws IOException if I/O error occurred during the loading.
 		 */
 		public Builder load(String file) throws IOException {
-			File configFile = toFile(file);
+			Objects.requireNonNull(file, "file");
+			Path configFile = toPath(file);
 			return load(configFile);
+		}
+
+		public Builder load(File file) throws IOException {
+			Objects.requireNonNull(file, "file");
+			return load(file.toPath());
 		}
 
 		/**
 		 * Load the configuration data from the JSON file.
 		 *
-		 * @param file the File object to load.
+		 * @param file the Path of file to load.
 		 * @return the Builder instance for method chaining.
 		 * @throws IOException if I/O error occurred during the loading.
 		 */
-		public Builder load(File file) throws IOException {
-			if (file == null || !file.exists() || file.isDirectory())
+		public Builder load(Path file) throws IOException {
+			Objects.requireNonNull(file, "file");
+
+			if (Files.notExists(file) || Files.isDirectory(file))
 				throw new IllegalArgumentException("Invalid config file: " + String.valueOf(file));
 
-			try (FileInputStream in = new FileInputStream(file)) {
+			try (InputStream in = Files.newInputStream(file)) {
 				ObjectMapper mapper = new ObjectMapper();
 				JsonNode root = mapper.readTree(in);
 
 				boolean enabled = root.has("ipv4") ? root.get("ipv4").asBoolean() : AUTO_IPV4;
-				setAutoIPv4Address(enabled);
+				setAutoAddress4(enabled);
 				if (enabled) {
 					if (root.has("address4"))
-						setIPv4Address(root.get("address4").asText());
+						setAddress4(root.get("address4").asText());
 				}
 
-				enabled = root.has("ipv6") ?  root.get("ipv6").asBoolean() : AUTO_IPV6;
-				setAutoIPv6Address(enabled);
+				enabled = root.has("ipv6") ? root.get("ipv6").asBoolean() : AUTO_IPV6;
+				setAutoAddress6(enabled);
 				if (enabled) {
 					if (root.has("address6"))
-						setIPv6Address(root.get("address6").asText());
+						setAddress6(root.get("address6").asText());
 				}
 
 				if (root.has("port"))
-					setListeningPort(root.get("port").asInt());
+					setPort(root.get("port").asInt());
 
 				if (root.has("accessControlsDir"))
 					setAccessControlsPath(root.get("accessControlsDir").asText());
 
 				if (root.has("dataDir"))
-					setStoragePath(root.get("dataDir").asText());
+					setDataPath(root.get("dataDir").asText());
 
 				if (root.has("bootstraps")) {
 					JsonNode bootstraps = root.get("bootstraps");
@@ -515,13 +564,7 @@ public class DefaultConfiguration implements Configuration {
 		public Builder clear() {
 			autoAddr4 = AUTO_IPV4;
 			autoAddr6 = AUTO_IPV6;
-
-			inetAddr4 = null;
-			inetAddr6 = null;
-			port = DEFAULT_DHT_PORT;
-
 			conf = null;
-
 			return this;
 		}
 
@@ -536,39 +579,41 @@ public class DefaultConfiguration implements Configuration {
 			DefaultConfiguration c = getConfiguration();
 			conf = null;
 
-			if (inetAddr4 == null && autoAddr4)
-				inetAddr4 = (Inet4Address)AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
+			if (c.addr4 == null && autoAddr4)
+				c.addr4 = (Inet4Address)AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
 						.filter((a) -> AddressUtils.isAnyUnicast(a))
 						.distinct()
 						.findFirst().orElse(null);
 
-			if (inetAddr6 == null && autoAddr6)
-				inetAddr6 = (Inet6Address)AddressUtils.getAllAddresses().filter(Inet6Address.class::isInstance)
+			if (c.addr6 == null && autoAddr6)
+				c.addr6 = (Inet6Address)AddressUtils.getAllAddresses().filter(Inet6Address.class::isInstance)
 						.filter((a) -> AddressUtils.isAnyUnicast(a))
 						.distinct()
 						.findFirst().orElse(null);
 
-			c.addr4 = inetAddr4 != null ? new InetSocketAddress(inetAddr4, port) : null;
-			c.addr6 = inetAddr6 != null ? new InetSocketAddress(inetAddr6, port) : null;
+			if (c.port <= 0 || c.port > 65535)
+				c.port = DEFAULT_DHT_PORT;
 
 			c.bootstraps = Collections.unmodifiableSet(
-					(c.bootstraps == null || c.bootstraps.isEmpty()) ?
-					Collections.emptySet() : c.bootstraps);
+					c.bootstraps.isEmpty() ? Collections.emptySet() : c.bootstraps);
 
 			c.services = Collections.unmodifiableMap(
-					(c.services == null || c.services.isEmpty()) ?
-					Collections.emptyMap() : c.services);
+					c.services.isEmpty() ? Collections.emptyMap() : c.services);
 
 			return c;
 		}
 
-		private static File toFile(String file) {
+		private static Path toPath(String file) {
 			if (file == null || file.isEmpty())
 				return null;
 
-			return file.startsWith("~" + File.separator) || file.equals("~") ?
-				new File(System.getProperty("user.home") + file.substring(1)) :
-			    new File(file);
+			Path path = Path.of(file).normalize();
+			if (path.startsWith("~"))
+				path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
+			else
+				path = path.toAbsolutePath();
+
+			return path;
 		}
 	}
 }

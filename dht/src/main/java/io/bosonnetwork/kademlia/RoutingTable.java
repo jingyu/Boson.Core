@@ -23,10 +23,9 @@
 
 package io.bosonnetwork.kademlia;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -573,13 +572,13 @@ public final class RoutingTable {
 	 *
 	 * @param file the file that load from
 	 */
-	public void load(File file) {
-		if (!file.exists() || !file.isFile())
+	public void load(Path file) {
+		if (Files.notExists(file) || !Files.isRegularFile(file))
 			return;
 
 		int totalEntries = 0;
 
-		try (FileInputStream in = new FileInputStream(file)) {
+		try (InputStream in = Files.newInputStream(file)) {
 			CBORMapper mapper = new CBORMapper();
 			JsonNode root = mapper.readTree(in);
 			long timestamp = root.get("timestamp").asLong();
@@ -625,8 +624,8 @@ public final class RoutingTable {
 	 * @param file to save to.
 	 * @throws IOException is an I/O error occurred.
 	 */
-	public void save(File file) throws IOException {
-		if (file.isDirectory())
+	public void save(Path file) throws IOException {
+		if (!Files.isRegularFile(file))
 			return;
 
 		if (this.getNumBucketEntries() == 0) {
@@ -634,8 +633,8 @@ public final class RoutingTable {
 			return;
 		}
 
-		Path tempFile = Files.createTempFile(file.getParentFile().toPath(), file.getName(), "-" + String.valueOf(System.currentTimeMillis()));
-		try (FileOutputStream out = new FileOutputStream(tempFile.toFile())) {
+		Path tempFile = Files.createTempFile(file.getParent(), file.getFileName().toString(), "-" + String.valueOf(System.currentTimeMillis()));
+		try (OutputStream out = Files.newOutputStream(tempFile)) {
 			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			gen.writeStartObject();
 
@@ -679,7 +678,7 @@ public final class RoutingTable {
 			gen.writeEndObject();
 			gen.close();
 			out.close();
-			Files.move(tempFile, file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			Files.move(tempFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 		} finally {
 			// Force delete the tempFile if error occurred
 			Files.deleteIfExists(tempFile);
