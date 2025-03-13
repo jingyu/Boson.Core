@@ -579,9 +579,9 @@ public class Id implements Comparable<Id> {
 			Id id = (Id) o;
 			return Arrays.equals(this.bytes, id.bytes);
 		}
+
 		return false;
 	}
-
 
 	/**
 	 *	Returns a hash code for this id.
@@ -619,6 +619,16 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
+	 * Returns the abbreviation string representation of this id, using hex encoding.
+	 *
+	 * @return abbreviation string representation of this id in base58 encoding.
+	 */
+	public String toAbbrHexString() {
+		String s = Hex.encode(bytes);
+		return "0x" + s.substring(0, 6) + "..." + s.substring(s.length() - 4);
+	}
+
+	/**
 	 * Returns the string representation of this id, using base58 encoding.
 	 *
 	 * @return string representation of this id in base58 encoding.
@@ -628,6 +638,16 @@ public class Id implements Comparable<Id> {
 			b58 = Base58.encode(bytes);
 
 		return b58;
+	}
+
+	/**
+	 * Returns the abbreviation string representation of this id, using base58 encoding.
+	 *
+	 * @return abbreviation string representation of this id in base58 encoding.
+	 */
+	public String toAbbrBase58String() {
+		String s = toBase58String();
+		return s.substring(0, 4) + "..." + s.substring(s.length() - 4);
 	}
 
 	/**
@@ -653,5 +673,10 @@ public class Id implements Comparable<Id> {
 	@Override
 	public String toString() {
 		return this.toBase58String();
+	}
+
+	// To abbreviation
+	public String toAbbrString() {
+		return toAbbrBase58String();
 	}
 }

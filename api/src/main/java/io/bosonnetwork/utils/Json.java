@@ -335,6 +335,14 @@ public class Json {
 		}
 	}
 
+	public static <T> T parse(String json, TypeReference<T> type) {
+		try {
+			return objectMapper.readValue(json, type);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("json can not be parsed", e);
+		}
+	}
+
 	public static Map<String, Object> parse(byte[] cbor) {
 		try {
 			return cborMapper.readValue(cbor, MAP_TYPE);
@@ -346,6 +354,14 @@ public class Json {
 	public static <T> T parse(byte[] cbor, Class<T> clazz) {
 		try {
 			return cborMapper.readValue(cbor, clazz);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
+	}
+
+	public static <T> T parse(byte[] cbor, TypeReference<T> type) {
+		try {
+			return cborMapper.readValue(cbor, type);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
 		}
