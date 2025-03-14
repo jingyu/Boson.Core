@@ -89,4 +89,15 @@ public class CryptoIdentity implements Identity {
 	public CryptoBox.KeyPair getEncryptionKeyPair() {
 		return encryptionKeyPair;
 	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
+
+		if (o instanceof CryptoIdentity that)
+			return this.id.equals(that.id);
+
+		return false;
+	}
 }
