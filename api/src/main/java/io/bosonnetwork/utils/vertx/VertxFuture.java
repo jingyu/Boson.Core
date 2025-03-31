@@ -40,6 +40,13 @@ public class VertxFuture<T> extends CompletableFuture<T> implements CompletionSt
 		return new VertxFuture<>(future);
 	}
 
+	public static <T> VertxFuture<T> of(CompletableFuture<T> future) {
+		if (future instanceof VertxFuture<T> vf)
+			return vf;
+		else
+			throw new IllegalArgumentException("Not a VertxFuture");
+	}
+
 	public Future<T> future() {
 		return future;
 	}
@@ -68,22 +75,23 @@ public class VertxFuture<T> extends CompletableFuture<T> implements CompletionSt
 
 	@Override
 	public <U> CompletableFuture<U> newIncompleteFuture() {
+		// TODO: Implement
 		return new VertxFuture<>(context);
 	}
 
-	public static <T> VertxFuture<T> failedFuture(Throwable cause) {
+	public static <U> VertxFuture<U> failedFuture(Throwable cause) {
 		return new VertxFuture<>(Future.failedFuture(cause));
 	}
 
-	public static <T> VertxFuture<T> failedFuture(String cause) {
+	public static <U> VertxFuture<U> failedFuture(String cause) {
 		return new VertxFuture<>(Future.failedFuture(cause));
 	}
 
-	public static <T> VertxFuture<T> succeededFuture() {
+	public static <U> VertxFuture<U> succeededFuture() {
 		return new VertxFuture<>(Future.succeededFuture());
 	}
 
-	public static <T> VertxFuture<T> succeededFuture(T result) {
+	public static <U> VertxFuture<U> succeededFuture(U result) {
 		return new VertxFuture<>(Future.succeededFuture(result));
 	}
 }

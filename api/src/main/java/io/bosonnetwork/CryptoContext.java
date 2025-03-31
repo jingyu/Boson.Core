@@ -15,19 +15,20 @@ public class CryptoContext implements AutoCloseable {
 	private Nonce nextNonce;
 	private Nonce lastPeerNonce;
 
-	public CryptoContext(Id id, PrivateKey privateKey) {
-		this.id = id;
-
-		PublicKey publicKey = id.toEncryptionKey();
-		this.box = CryptoBox.fromKeys(publicKey, privateKey);
-		this.nextNonce = Nonce.random();
-	}
-
 	public CryptoContext(Id id, CryptoBox box) {
 		this.id = id;
 		this.box = box;
 		this.nextNonce = Nonce.random();
 	}
+
+	public CryptoContext(Id id, PublicKey publicKey, PrivateKey privateKey) {
+		this(id, CryptoBox.fromKeys(publicKey, privateKey));
+	}
+
+	public CryptoContext(Id id, PrivateKey privateKey) {
+		this(id, CryptoBox.fromKeys(id.toEncryptionKey(), privateKey));
+	}
+
 
 	public Id getId() {
 		return id;
