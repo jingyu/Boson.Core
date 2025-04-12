@@ -510,13 +510,13 @@ public class Node implements io.bosonnetwork.Node {
 			dht6 = null;
 		}
 
-		scheduler.shutdown();
-
 		try {
 			storage.close();
 		} catch (Exception e) {
 			log.error("Close data storage failed", e);
 		}
+
+		scheduler.shutdown();
 
 		storage = null;
 		networkEngine = null;

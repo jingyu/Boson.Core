@@ -222,10 +222,10 @@ public class SQLiteStorage implements DataStorage {
 
 	@Override
 	public void close() throws IOException {
-		expireFuture.cancel(false);
 		// none of the scheduled tasks should experience exceptions,
 		// log them if they did
 		try {
+			expireFuture.cancel(false);
 			expireFuture.get();
 		} catch (ExecutionException e) {
 			log.error("Scheduled future error", e);
