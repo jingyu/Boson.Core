@@ -1,4 +1,4 @@
-package io.bosonnetwork.util.jdbi;
+package io.bosonnetwork.utils.jdbi;
 
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.spi.JdbiPlugin;

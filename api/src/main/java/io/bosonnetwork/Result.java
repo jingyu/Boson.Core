@@ -23,6 +23,8 @@
 
 package io.bosonnetwork;
 
+import java.util.Objects;
+
 /**
  * A generic class representing a result with values for IPv4 and IPv6 networks.
  *
@@ -68,6 +70,8 @@ public class Result<T> {
 	 * @return the corresponding value for the specified network type.
 	 */
 	public T get(Network preferred) {
+		Objects.requireNonNull(preferred, "preferred");
+
 		T value = getValue(preferred);
 		if (value != null)
 			return value;
@@ -83,15 +87,12 @@ public class Result<T> {
 	 * @return the corresponding value for the specified network type.
 	 */
 	public T getValue(Network network) {
-		switch (network) {
-		case IPv4:
-			return v4;
+		Objects.requireNonNull(network, "network");
 
-		case IPv6:
-			return v6;
-		}
-
-		return null;
+		return switch (network) {
+			case IPv4 -> v4;
+			case IPv6 -> v6;
+		};
 	}
 
 	/**

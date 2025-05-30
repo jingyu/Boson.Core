@@ -216,10 +216,11 @@ public class NodeInfo {
 
 	@Override
 	public boolean equals(Object o) {
-		if (o instanceof NodeInfo) {
-			NodeInfo other = (NodeInfo) o;
-			return this.id.equals(other.id) && this.addr.equals(other.addr);
-		}
+		if (o == this)
+			return true;
+
+		if (o instanceof NodeInfo that)
+			return this.id.equals(that.id) && this.addr.equals(that.addr);
 
 		return false;
 	}

@@ -1,4 +1,4 @@
-package io.bosonnetwork.util.jdbi.async;
+package io.bosonnetwork.utils.jdbi.async;
 
 import org.jdbi.v3.core.HandleCallback;
 import org.jdbi.v3.core.HandleConsumer;

@@ -87,6 +87,10 @@ public class Value {
 		this.data = data;
 	}
 
+	protected Value(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
+		this(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
+	}
+
 	/**
 	 * Private constructor to create a new Value object.
 	 *
@@ -498,15 +502,13 @@ public class Value {
 		if (o == this)
 			return true;
 
-		if (o instanceof Value) {
-			Value v = (Value)o;
-
-			return sequenceNumber == v.sequenceNumber &&
-					Objects.equals(publicKey, v.publicKey) &&
-					Objects.equals(recipient, v.recipient) &&
-					Arrays.equals(nonce, v.nonce) &&
-					Arrays.equals(signature, v.signature) &&
-					Arrays.equals(data, v.data);
+		if (o instanceof Value that) {
+			return this.sequenceNumber == that.sequenceNumber &&
+					Objects.equals(this.publicKey, that.publicKey) &&
+					Objects.equals(this.recipient, that.recipient) &&
+					Arrays.equals(this.nonce, that.nonce) &&
+					Arrays.equals(this.signature, that.signature) &&
+					Arrays.equals(this.data, that.data);
 		}
 
 		return false;

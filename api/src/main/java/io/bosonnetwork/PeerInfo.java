@@ -71,6 +71,10 @@ public class PeerInfo {
 		this.signature = signature;
 	}
 
+	protected PeerInfo(Id peerId, Id nodeId, Id origin, int port, String alternativeURL, byte[] signature) {
+		this(peerId, null, nodeId, origin, port, alternativeURL, signature);
+	}
+
 	private PeerInfo(Signature.KeyPair keypair, Id nodeId, Id origin, int port, String alternativeURL) {
 		if (keypair == null)
 			throw new IllegalArgumentException("Invalid keypair");
@@ -447,14 +451,12 @@ public class PeerInfo {
 		if (o == this)
 			return true;
 
-		if (o instanceof PeerInfo) {
-			PeerInfo v = (PeerInfo)o;
-
-			return Objects.equals(publicKey, v.publicKey) &&
-					Objects.equals(nodeId, v.nodeId) &&
-					Objects.equals(origin, v.origin) &&
-					port == v.port &&
-					Objects.equals(alternativeURL, v.alternativeURL);
+		if (o instanceof PeerInfo that) {
+			return Objects.equals(this.publicKey, that.publicKey) &&
+					Objects.equals(this.nodeId, that.nodeId) &&
+					Objects.equals(this.origin, that.origin) &&
+					this.port == that.port &&
+					Objects.equals(this.alternativeURL, that.alternativeURL);
 		}
 
 		return false;

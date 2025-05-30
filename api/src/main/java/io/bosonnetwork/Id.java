@@ -575,10 +575,8 @@ public class Id implements Comparable<Id> {
 		if (o == this)
 			return true;
 
-		if (o instanceof Id) {
-			Id id = (Id) o;
-			return Arrays.equals(this.bytes, id.bytes);
-		}
+		if (o instanceof Id that)
+			return Arrays.equals(this.bytes, that.bytes);
 
 		return false;
 	}

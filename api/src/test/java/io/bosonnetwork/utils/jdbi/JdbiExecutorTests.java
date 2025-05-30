@@ -7,7 +7,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.IntStream;
 
+import io.vertx.core.Vertx;
 import org.jdbi.v3.core.Jdbi;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -15,12 +17,11 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
-
-import io.bosonnetwork.util.jdbi.async.JdbiExecutor;
-import io.bosonnetwork.utils.FileUtils;
-import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+
+import io.bosonnetwork.utils.FileUtils;
+import io.bosonnetwork.utils.jdbi.async.JdbiExecutor;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @ExtendWith(VertxExtension.class)

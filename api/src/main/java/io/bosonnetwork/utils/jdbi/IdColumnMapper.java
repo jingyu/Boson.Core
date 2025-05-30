@@ -1,4 +1,4 @@
-package io.bosonnetwork.util.jdbi;
+package io.bosonnetwork.utils.jdbi;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;

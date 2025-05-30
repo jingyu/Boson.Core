@@ -1,4 +1,4 @@
-package io.bosonnetwork.util.jdbi;
+package io.bosonnetwork.utils.jdbi;
 
 import java.sql.PreparedStatement;
 import java.sql.Types;
