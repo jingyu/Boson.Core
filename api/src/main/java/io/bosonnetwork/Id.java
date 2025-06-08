@@ -62,6 +62,8 @@ public class Id implements Comparable<Id> {
 	 */
 	public static final Id MAX_ID = Id.ofHex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
 
+	private static final String DID_PREFIX = "did:boson:";
+
 	// the performance for raw bytes is much better then BigInteger
 	private final byte[] bytes;
 
@@ -191,7 +193,8 @@ public class Id implements Comparable<Id> {
 	 * @throws IllegalArgumentException if the id string is invalid id string representation.
 	 */
 	public static Id of(String id) {
-		return id.startsWith("0x") ? ofHex(id) : ofBase58(id);
+		return id.startsWith("0x") ? ofHex(id) :
+				(id.startsWith(DID_PREFIX)) ? ofBase58(id.substring(DID_PREFIX.length())) : ofBase58(id);
 	}
 
 	/**
@@ -646,6 +649,10 @@ public class Id implements Comparable<Id> {
 	public String toAbbrBase58String() {
 		String s = toBase58String();
 		return s.substring(0, 4) + "..." + s.substring(s.length() - 4);
+	}
+
+	public String toDIDString() {
+		return DID_PREFIX + toBase58String();
 	}
 
 	/**

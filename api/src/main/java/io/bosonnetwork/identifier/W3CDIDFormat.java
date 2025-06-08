@@ -20,20 +20,26 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
-public interface Identity {
-	public Id getId();
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.cfg.ContextAttributes;
 
-	public byte[] sign(byte[] data);
+import io.bosonnetwork.utils.Json;
 
-	public boolean verify(byte[] data, byte[] signature);
+abstract class W3CDIDFormat {
+	protected static final ContextAttributes w3cDIDContext = ContextAttributes.getEmpty()
+			.withPerCallAttribute(DIDConstants.BOSON_ID_FORMAT_W3C, true);
 
-	// one-shot encryption
-	public byte[] encrypt(Id recipient, byte[] data);
+	protected ObjectWriter jsonWriter() {
+		return Json.objectMapper().writer(w3cDIDContext);
+	}
 
-	// one-short decryption
-	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
+	protected ObjectWriter prettyJsonWriter() {
+		return Json.objectMapper().writerWithDefaultPrettyPrinter().with(w3cDIDContext);
+	}
 
-	public CryptoContext createCryptoContext(Id id);
+	protected ObjectWriter cborWriter() {
+		return Json.cborMapper().writer(w3cDIDContext);
+	}
 }

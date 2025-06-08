@@ -20,20 +20,29 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
-public interface Identity {
-	public Id getId();
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-	public byte[] sign(byte[] data);
+import java.util.Date;
 
-	public boolean verify(byte[] data, byte[] signature);
+import org.junit.jupiter.api.Test;
 
-	// one-shot encryption
-	public byte[] encrypt(Id recipient, byte[] data);
+import io.bosonnetwork.utils.Json;
 
-	// one-short decryption
-	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
+public class ProofTests {
+	@Test
+	void proofSedeer() {
+		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, new Date(System.currentTimeMillis() / 1000 * 1000),
+				VerificationMethod.of("did:boson:1234567890"),
+				Proof.Purpose.assertionMethod, new byte[64]);
 
-	public CryptoContext createCryptoContext(Id id);
+		var json = Json.toString(proof);
+
+		System.out.println(json);
+		System.out.println(proof);
+
+		var proof2 = Json.parse(json, Proof.class);
+		assertEquals(proof, proof2);
+	}
 }

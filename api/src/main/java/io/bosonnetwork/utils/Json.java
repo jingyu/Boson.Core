@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.utils;
 
 import java.io.IOException;
@@ -44,6 +66,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.identifier.DIDConstants;
 
 /**
  * Common JSON utility methods for JSON process.
@@ -85,10 +108,16 @@ public class Json {
 
 		@Override
 		public void serialize(Id value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			if (isTextFormat(gen))
-				gen.writeString(value.toBase58String());
-			else
-				gen.writeBinary(value.bytes());
+			Object v = provider.getAttribute(DIDConstants.BOSON_ID_FORMAT_W3C);
+			boolean w3cDID = v != null && (Boolean) v;
+			if (!w3cDID) {
+				if (isTextFormat(gen))
+					gen.writeString(value.toBase58String());
+				else
+					gen.writeBinary(value.bytes());
+			} else {
+				gen.writeString(value.toDIDString());
+			}
 		}
 	}
 
@@ -105,12 +134,14 @@ public class Json {
 
 		@Override
 		public Id deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			boolean textFormat = isTextFormat(p);
-			JsonToken expected = textFormat ? JsonToken.VALUE_STRING : JsonToken.VALUE_EMBEDDED_OBJECT;
-			if (p.currentToken() == expected)
-				return textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-			else
+			if (p.currentToken() == JsonToken.VALUE_STRING) {
+				return Id.of(p.getText());
+			} else if (p.currentToken() == JsonToken.VALUE_EMBEDDED_OBJECT) {
+				return Id.of(p.getBinaryValue());
+			} else {
+				JsonToken expected = isTextFormat(p) ? JsonToken.VALUE_STRING : JsonToken.VALUE_EMBEDDED_OBJECT;
 				throw ctx.wrongTokenException(p, Id.class, expected, "Invalid id representation");
+			}
 		}
 	}
 

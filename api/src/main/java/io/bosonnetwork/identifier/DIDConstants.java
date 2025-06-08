@@ -20,20 +20,24 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
-public interface Identity {
-	public Id getId();
+public class DIDConstants {
+	public static final String DID_SCHEME = "did";
+	public static final String DID_METHOD = "boson";
 
-	public byte[] sign(byte[] data);
+	public static final String W3C_DID_CONTEXT = "https://www.w3.org/ns/did/v1.1";
+	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/did/v1";
 
-	public boolean verify(byte[] data, byte[] signature);
+	public static final String W3C_VC_CONTEXT = "https://www.w3.org/ns/credentials/v2";
+	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/did/credentials/v1";
 
-	// one-shot encryption
-	public byte[] encrypt(Id recipient, byte[] data);
+	public static final String W3C_ED25519_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
 
-	// one-short decryption
-	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
+	public static final String DEFAULT_VC_TYPE = "VerifiableCredential";
+	public static final String DEFAULT_VP_TYPE = "VerifiablePresentation";
 
-	public CryptoContext createCryptoContext(Id id);
+	protected static final String DEFAULT_VERIFICATION_METHOD_FRAGMENT = "default";
+
+	public static final String BOSON_ID_FORMAT_W3C = "boson.id.format.w3c-did";
 }
