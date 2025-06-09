@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.identifier;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -34,12 +33,11 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.bosonnetwork.Card;
 import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
-import io.bosonnetwork.utils.Json;
 
 @JsonPropertyOrder({"@context", "id", "verificationMethod", "authentication", "assertion", "verifiableCredential", "service", "proof"})
 public class Document extends W3CDIDFormat {
@@ -249,6 +247,7 @@ public class Document extends W3CDIDFormat {
 	}
 
 	public List<VerifiableCredential> getCredentials(String type) {
+		Objects.requireNonNull(type, "type");
 		return credentials.stream()
 				.filter(vc -> vc.getTypes().contains(type))
 				.collect(Collectors.toList());
@@ -390,45 +389,17 @@ public class Document extends W3CDIDFormat {
 		return false;
 	}
 
-	@Override
-	public String toString() {
-		try {
-			return jsonWriter().writeValueAsString(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: Document is not serializable", e);
-		}
-	}
-
-	public String toPrettyString() {
-		try {
-			return prettyJsonWriter().writeValueAsString(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: Document is not serializable", e);
-		}
-	}
-
-	public byte[] toBytes() {
-		try {
-			return cborWriter().writeValueAsBytes(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: Document is not serializable", e);
-		}
-	}
-
 	public static Document parse(String json) {
-		try {
-			return Json.objectMapper().readValue(json, Document.class);
-		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid Document JSON date", e);
-		}
+		return parse(json, Document.class);
 	}
 
 	public static Document parse(byte[] cbor) {
-		try {
-			return Json.cborMapper().readValue(cbor, Document.class);
-		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid Document CBOR date", e);
-		}
+		return parse(cbor, Document.class);
+	}
+
+	public static DocumentBuilder builder(Identity subject) {
+		Objects.requireNonNull(subject, "subject");
+		return new DocumentBuilder(subject);
 	}
 
 	protected static class BosonCard extends Card {
@@ -444,6 +415,7 @@ public class Document extends W3CDIDFormat {
 			this.doc = doc;
 		}
 
+		// unsigned is not used, just as the method signature for overriding
 		protected BosonCard(Document doc, boolean unsigned) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),

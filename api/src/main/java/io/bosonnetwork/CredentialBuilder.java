@@ -29,8 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class CredentialBuilder extends BosonIdentityObjectBuilder {
-	private final Identity issuer;
+public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	private String id;
 	private final List<String> types;
 	private String name;
@@ -40,8 +39,9 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder {
 	private Id subject;
 	private final Map<String, Object> claims;
 
-	protected CredentialBuilder(Identity issuer) {
-		this.issuer = issuer;
+	protected CredentialBuilder(Identity identity) {
+		super(identity);
+
 		this.types = new ArrayList<>();
 		this.claims = new LinkedHashMap<>();
 	}
@@ -56,6 +56,8 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder {
 	}
 
 	public CredentialBuilder type(List<String> types) {
+		Objects.requireNonNull(types, "types");
+
 		for (String type : types) {
 			if (type == null || type.isEmpty())
 				continue;
@@ -122,13 +124,14 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder {
 		return this;
 	}
 
+	@Override
 	public Credential build() {
 		if (claims.isEmpty())
 			throw new IllegalStateException("Claims cannot be empty");
 
-		Credential unsigned = new Credential(id, types, name, description, issuer.getId(), validFrom, validUntil,
+		Credential unsigned = new Credential(id, types, name, description, identity.getId(), validFrom, validUntil,
 				subject, claims, null, null);
-		byte[] signature = issuer.sign(unsigned.getSignData());
+		byte[] signature = identity.sign(unsigned.getSignData());
 		return new Credential(unsigned, now(), signature);
 	}
 }

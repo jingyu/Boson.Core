@@ -33,19 +33,25 @@ import io.bosonnetwork.BosonIdentityObjectBuilder;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
-public class DocumentBuilder extends BosonIdentityObjectBuilder {
-	private final Identity identity;
-	private final List<String> contexts = new ArrayList<>();
-	private final Map<String, VerificationMethod> verificationMethods = new LinkedHashMap<>();
-	private final Map<String, VerificationMethod> authentications = new LinkedHashMap<>();
-	private final Map<String, VerificationMethod> assertions = new LinkedHashMap<>();
-	private final Map<String, VerifiableCredential> credentials = new LinkedHashMap<>();
-	private final Map<String, Service> services = new LinkedHashMap<>();
+public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
+	private final List<String> contexts;
+	private final Map<String, VerificationMethod> verificationMethods;
+	private final Map<String, VerificationMethod> authentications;
+	private final Map<String, VerificationMethod> assertions;
+	private final Map<String, VerifiableCredential> credentials;
+	private final Map<String, Service> services;
 
 	private final VerificationMethod defaultMethodRef;
 
 	protected DocumentBuilder(Identity identity) {
-		this.identity = identity;
+		super(identity);
+
+		contexts = new ArrayList<>();
+		verificationMethods = new LinkedHashMap<>();
+		authentications = new LinkedHashMap<>();
+		assertions = new LinkedHashMap<>();
+		credentials = new LinkedHashMap<>();
+		services = new LinkedHashMap<>();
 
 		context(DIDConstants.W3C_DID_CONTEXT, DIDConstants.BOSON_DID_CONTEXT, DIDConstants.W3C_ED25519_CONTEXT);
 
@@ -296,6 +302,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder {
 		return addService(id, type, endpoint, properties);
 	}
 
+	@Override
 	public Document build() {
 		Document unsigned = new Document(contexts, identity.getId(), new ArrayList<>(verificationMethods.values()),
 				new ArrayList<>(authentications.values()), new ArrayList<>(assertions.values()),

@@ -48,7 +48,6 @@ public class CardTests {
 				.build();
 
 		assertEquals(identity.getId(), card.getId());
-		assertTrue(card.isGenuine());
 		assertEquals(1, card.getCredentials().size());
 		assertEquals(1, card.getServices().size());
 
@@ -61,6 +60,8 @@ public class CardTests {
 		assertTrue(card.getProfileCredential().isGenuine());
 		assertTrue(card.getProfileCredential().isValid());
 		assertTrue(card.getProfileCredential().selfIssued());
+
+		assertTrue(card.isGenuine());
 
 		System.out.println(card);
 		System.out.println(card.toPrettyString());
@@ -110,7 +111,6 @@ public class CardTests {
 		var card = cb.build();
 
 		assertEquals(identity.getId(), card.getId());
-		assertTrue(card.isGenuine());
 
 		assertNotNull(card.getCredential("profile"));
 		assertNotNull(card.getCredential("passport"));
@@ -119,11 +119,11 @@ public class CardTests {
 		assertNotNull(card.getService("messaging"));
 		assertNotNull(card.getService("bcr"));
 
-		var cards = card.getCredentials();
-		assertEquals(3, cards.size());
-		assertEquals("profile", cards.get(0).getId());
-		assertEquals("passport", cards.get(1).getId());
-		assertEquals("driverLicense", cards.get(2).getId());
+		var creds = card.getCredentials();
+		assertEquals(3, creds.size());
+		assertEquals("profile", creds.get(0).getId());
+		assertEquals("passport", creds.get(1).getId());
+		assertEquals("driverLicense", creds.get(2).getId());
 
 		var services = card.getServices();
 		assertEquals(3, services.size());
@@ -137,6 +137,8 @@ public class CardTests {
 		assertTrue(card.getProfileCredential().selfIssued());
 
 		assertNotNull(card.getHomeNodeService());
+
+		assertTrue(card.isGenuine());
 
 		System.out.println(card);
 		System.out.println(card.toPrettyString());
@@ -167,12 +169,14 @@ public class CardTests {
 		System.out.println(Hex.encode(card.toBytes()));
 
 		var json = card.toString();
-		var profile2 = Card.parse(json);
-		assertEquals(card, profile2);
+		var card2 = Card.parse(json);
+		assertEquals(card, card2);
+		assertEquals(card.toString(), card2.toString());
 
 		var bytes = card.toBytes();
-		var profile3 = Card.parse(bytes);
-		assertEquals(card, profile3);
+		var cards3 = Card.parse(bytes);
+		assertEquals(card, cards3);
+		assertEquals(card.toString(), cards3.toString());
 	}
 
 	@Test

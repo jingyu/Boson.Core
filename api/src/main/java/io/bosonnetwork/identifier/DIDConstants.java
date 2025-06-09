@@ -27,10 +27,10 @@ public class DIDConstants {
 	public static final String DID_METHOD = "boson";
 
 	public static final String W3C_DID_CONTEXT = "https://www.w3.org/ns/did/v1.1";
-	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/did/v1";
+	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/ns/did/v1";
 
 	public static final String W3C_VC_CONTEXT = "https://www.w3.org/ns/credentials/v2";
-	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/did/credentials/v1";
+	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/ns/credentials/v1";
 
 	public static final String W3C_ED25519_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
 

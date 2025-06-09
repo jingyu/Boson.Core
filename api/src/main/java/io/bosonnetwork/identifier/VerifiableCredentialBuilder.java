@@ -33,8 +33,7 @@ import io.bosonnetwork.BosonIdentityObjectBuilder;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
-public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder {
-	private final Identity issuer;
+public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<VerifiableCredential> {
 	private final List<String> contexts;
 	private String id;
 	private final List<String> types;
@@ -45,8 +44,9 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder {
 	private Id subject;
 	private final Map<String, Object> claims;
 
-	protected VerifiableCredentialBuilder(Identity issuer) {
-		this.issuer = issuer;
+	protected VerifiableCredentialBuilder(Identity identity) {
+		super(identity);
+
 		this.contexts = new ArrayList<>();
 		this.types = new ArrayList<>();
 		this.claims = new LinkedHashMap<>();
@@ -142,9 +142,12 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder {
 		return this;
 	}
 
+	@Override
 	public VerifiableCredential build() {
+		Id issuer = identity.getId();
+
 		if (subject == null)
-			subject = issuer.getId();
+			subject = identity.getId();
 
 		DIDURL idUrl;
 		if (id.startsWith(DIDConstants.DID_SCHEME + ":")) {
@@ -163,10 +166,10 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder {
 			throw new IllegalStateException("Claims cannot be empty");
 
 		VerifiableCredential unsigned = new VerifiableCredential(contexts, idUrl.toString(), types,
-				name, description, issuer.getId(), validFrom, validUntil, subject, claims);
-		byte[] signature = issuer.sign(unsigned.getSignData());
+				name, description, issuer, validFrom, validUntil, subject, claims);
+		byte[] signature = identity.sign(unsigned.getSignData());
 		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(),
-				VerificationMethod.defaultReferenceOf(issuer.getId()), Proof.Purpose.assertionMethod, signature);
+				VerificationMethod.defaultReferenceOf(issuer), Proof.Purpose.assertionMethod, signature);
 
 		return new VerifiableCredential(unsigned, proof);
 	}

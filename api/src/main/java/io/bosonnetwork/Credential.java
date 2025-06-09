@@ -212,7 +212,10 @@ public class Credential {
 	}
 
 	protected byte[] getSignData() {
-		return new Credential(this, null,null).toBytes();
+		if (signature != null)	// already signed
+			return new Credential(this, null,null).toBytes();
+		else 					// unsigned
+			return toBytes();
 	}
 
 	@Override
@@ -268,7 +271,7 @@ public class Credential {
 		try {
 			return Json.objectMapper().readValue(json, Credential.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid credential JSON format", e);
+			throw new IllegalArgumentException("Invalid JSON data for Credential", e);
 		}
 	}
 
@@ -276,8 +279,13 @@ public class Credential {
 		try {
 			return Json.cborMapper().readValue(cbor, Credential.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid credential CBOR format", e);
+			throw new IllegalArgumentException("Invalid CBOR data for Credential", e);
 		}
+	}
+
+	public static CredentialBuilder builder(Identity issuer) {
+		Objects.requireNonNull(issuer, "issuer");
+		return new CredentialBuilder(issuer);
 	}
 
 	@JsonPropertyOrder({"id"})

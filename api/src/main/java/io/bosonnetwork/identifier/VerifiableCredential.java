@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.identifier;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -38,14 +37,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.bosonnetwork.BeforeValidPeriodException;
 import io.bosonnetwork.Credential;
 import io.bosonnetwork.ExpiredException;
 import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
-import io.bosonnetwork.utils.Json;
 
 @JsonPropertyOrder({"@context", "id", "type", "name", "description", "issuer", "validFrom", "validUntil",
 		"credentialSubject", "proof"})
@@ -296,45 +294,17 @@ public class VerifiableCredential extends W3CDIDFormat {
 		return false;
 	}
 
-	@Override
-	public String toString() {
-		try {
-			return jsonWriter().writeValueAsString(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: VerifiableCredential is not serializable", e);
-		}
-	}
-
-	public String toPrettyString() {
-		try {
-			return prettyJsonWriter().writeValueAsString(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: VerifiableCredential is not serializable", e);
-		}
-	}
-
-	public byte[] toBytes() {
-		try {
-			return cborWriter().writeValueAsBytes(this);
-		} catch (JsonProcessingException e) {
-			throw new IllegalStateException("INTERNAL ERROR: VerifiableCredential is not serializable", e);
-		}
-	}
-
 	public static VerifiableCredential parse(String json) {
-		try {
-			return Json.objectMapper().readValue(json, VerifiableCredential.class);
-		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid VerifiableCredential JSON date", e);
-		}
+		return parse(json, VerifiableCredential.class);
 	}
 
 	public static VerifiableCredential parse(byte[] cbor) {
-		try {
-			return Json.cborMapper().readValue(cbor, VerifiableCredential.class);
-		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid VerifiableCredential CBOR date", e);
-		}
+		return parse(cbor, VerifiableCredential.class);
+	}
+
+	public static VerifiableCredentialBuilder builder(Identity issuer) {
+		Objects.requireNonNull(issuer, "issuer");
+		return new VerifiableCredentialBuilder(issuer);
 	}
 
 	@JsonPropertyOrder({"id"})

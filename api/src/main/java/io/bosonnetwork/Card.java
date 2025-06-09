@@ -182,11 +182,10 @@ public class Card {
 	}
 
 	protected byte[] getSignData() {
-		try {
-			return Json.cborMapper().writeValueAsBytes(new Card(this, null, null));
-		} catch (JsonProcessingException e) {
-			throw new RuntimeException("INTERNAL ERROR: Card is not serializable", e);
-		}
+		if (signature != null)	// already signed
+			return new Card(this, null, null).toBytes();
+		else 					// unsigned
+			return toBytes();
 	}
 
 	@Override
@@ -238,7 +237,7 @@ public class Card {
 		try {
 			return Json.objectMapper().readValue(json, Card.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid card JSON date", e);
+			throw new IllegalArgumentException("Invalid JSON data for Card", e);
 		}
 	}
 
@@ -246,8 +245,13 @@ public class Card {
 		try {
 			return Json.cborMapper().readValue(cbor, Card.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid card CBOR date", e);
+			throw new IllegalArgumentException("Invalid CBOR data for Card", e);
 		}
+	}
+
+	public static CardBuilder builder(Identity subject) {
+		Objects.requireNonNull(subject, "subject");
+		return new CardBuilder(subject);
 	}
 
 	// helper method for the DID Document

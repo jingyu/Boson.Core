@@ -29,13 +29,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class CardBuilder extends BosonIdentityObjectBuilder {
-	private final Identity identity;
-	private final Map<String, Credential> credentials = new LinkedHashMap<>();
-	private final Map<String, Card.Service> services = new LinkedHashMap<>();
+public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
+	private final Map<String, Credential> credentials;
+	private final Map<String, Card.Service> services;
 
 	protected CardBuilder(Identity identity) {
-		this.identity = identity;
+		super(identity);
+
+		credentials = new LinkedHashMap<>();
+		services = new LinkedHashMap<>();
 	}
 
 	public CardBuilder addCredential(Credential credential) {
@@ -52,11 +54,11 @@ public class CardBuilder extends BosonIdentityObjectBuilder {
 	}
 
 	public CardBuilder addCredential(List<Credential> credentials) {
+		Objects.requireNonNull(credentials, "credentials");
 		for (Credential cred : credentials) {
 			if (cred != null)
 				addCredential(cred);
 		}
-
 		return this;
 	}
 
@@ -201,6 +203,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder {
 		return addService(id, type, endpoint, properties);
 	}
 
+	@Override
 	public Card build() {
 		List<Credential> credentials = this.credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.credentials.values());
 		List<Card.Service> services = this.services.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.services.values());

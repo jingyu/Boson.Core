@@ -22,7 +22,9 @@
 
 package io.bosonnetwork.identifier;
 
-import com.fasterxml.jackson.databind.ObjectWriter;
+import java.io.IOException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.cfg.ContextAttributes;
 
 import io.bosonnetwork.utils.Json;
@@ -31,15 +33,44 @@ abstract class W3CDIDFormat {
 	protected static final ContextAttributes w3cDIDContext = ContextAttributes.getEmpty()
 			.withPerCallAttribute(DIDConstants.BOSON_ID_FORMAT_W3C, true);
 
-	protected ObjectWriter jsonWriter() {
-		return Json.objectMapper().writer(w3cDIDContext);
+	@Override
+	public String toString() {
+		try {
+			return Json.objectMapper().writer(w3cDIDContext).writeValueAsString(this);
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("INTERNAL ERROR: " + this.getClass().getSimpleName() + " is not serializable", e);
+		}
 	}
 
-	protected ObjectWriter prettyJsonWriter() {
-		return Json.objectMapper().writerWithDefaultPrettyPrinter().with(w3cDIDContext);
+	public String toPrettyString() {
+		try {
+			return Json.objectMapper().writerWithDefaultPrettyPrinter().with(w3cDIDContext).writeValueAsString(this);
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("INTERNAL ERROR: " + this.getClass().getSimpleName() + " is not serializable", e);
+		}
 	}
 
-	protected ObjectWriter cborWriter() {
-		return Json.cborMapper().writer(w3cDIDContext);
+	public byte[] toBytes() {
+		try {
+			return Json.cborMapper().writer(w3cDIDContext).writeValueAsBytes(this);
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("INTERNAL ERROR: " + this.getClass().getSimpleName() + " is not serializable", e);
+		}
+	}
+
+	protected static <R> R parse(String json, Class<R> clazz) {
+		try {
+			return Json.objectMapper().readValue(json, clazz);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Invalid JSON data for " + clazz.getSimpleName(), e);
+		}
+	}
+
+	protected static <R> R parse(byte[] cbor, Class<R> clazz) {
+		try {
+			return Json.cborMapper().readValue(cbor, clazz);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Invalid CBOR data for " + clazz.getSimpleName(), e);
+		}
 	}
 }

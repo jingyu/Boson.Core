@@ -33,8 +33,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
-public abstract class BosonIdentityObjectBuilder {
+public abstract class BosonIdentityObjectBuilder<T> {
 	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+	protected final Identity identity;
+
+	protected BosonIdentityObjectBuilder(Identity identity) {
+		this.identity = identity;
+	}
 
 	protected Date trimMillis(Date date) {
 		Calendar cal = Calendar.getInstance(UTC);
@@ -80,4 +85,6 @@ public abstract class BosonIdentityObjectBuilder {
 
 		return value;
 	}
+
+	public abstract T build();
 }
