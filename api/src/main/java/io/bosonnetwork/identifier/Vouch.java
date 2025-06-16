@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -36,6 +36,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
+import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Json;
 

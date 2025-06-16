@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,6 +28,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
 
 public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	private final Map<String, Credential> credentials;

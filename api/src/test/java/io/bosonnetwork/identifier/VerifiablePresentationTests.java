@@ -16,7 +16,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.InvalidSignatureException;
-import io.bosonnetwork.Vouch;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.utils.Hex;
 

@@ -39,7 +39,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.BeforeValidPeriodException;
-import io.bosonnetwork.Credential;
 import io.bosonnetwork.ExpiredException;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;

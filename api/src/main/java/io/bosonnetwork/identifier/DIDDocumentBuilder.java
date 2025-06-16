@@ -29,11 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import io.bosonnetwork.BosonIdentityObjectBuilder;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
-public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
+public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> {
 	private final List<String> contexts;
 	private final Map<String, VerificationMethod> verificationMethods;
 	private final Map<String, VerificationMethod> authentications;
@@ -43,7 +42,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 
 	private final VerificationMethod defaultMethodRef;
 
-	protected DocumentBuilder(Identity identity) {
+	protected DIDDocumentBuilder(Identity identity) {
 		super(identity);
 
 		contexts = new ArrayList<>();
@@ -63,11 +62,11 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		addAssertion(defaultMethodRef);
 	}
 
-	public DocumentBuilder context(String... contexts) {
+	public DIDDocumentBuilder context(String... contexts) {
 		return context(List.of(contexts));
 	}
 
-	public DocumentBuilder context(List<String> contexts) {
+	public DIDDocumentBuilder context(List<String> contexts) {
 		for (String context : contexts) {
 			context = normalize(context);
 
@@ -78,7 +77,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	protected DocumentBuilder addVerificationMethod(VerificationMethod vm) {
+	protected DIDDocumentBuilder addVerificationMethod(VerificationMethod vm) {
 		Objects.requireNonNull(vm, "vm");
 		if (vm.isReference())
 			throw new IllegalArgumentException("VerificationMethod is a reference");
@@ -87,7 +86,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	protected DocumentBuilder addAuthentication(VerificationMethod vm) {
+	protected DIDDocumentBuilder addAuthentication(VerificationMethod vm) {
 		Objects.requireNonNull(vm, "vm");
 		if (vm instanceof VerificationMethod.Reference vmr) {
 			// check that the referenced verification method exists
@@ -105,7 +104,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	protected DocumentBuilder addAssertion(VerificationMethod vm) {
+	protected DIDDocumentBuilder addAssertion(VerificationMethod vm) {
 		Objects.requireNonNull(vm, "vm");
 		if (vm instanceof VerificationMethod.Reference vmr) {
 			// check that the referenced verification method exists
@@ -123,7 +122,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	public DocumentBuilder addCredential(VerifiableCredential vc) {
+	public DIDDocumentBuilder addCredential(VerifiableCredential vc) {
 		Objects.requireNonNull(vc, "vc");
 		if (!vc.getSubject().getId().equals(identity.getId()))
 			throw new IllegalArgumentException("VerifiableCredential subject does not match identity");
@@ -132,11 +131,11 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	public DocumentBuilder addCredential(VerifiableCredential... vcs) {
+	public DIDDocumentBuilder addCredential(VerifiableCredential... vcs) {
 		return addCredential(List.of(vcs));
 	}
 
-	public DocumentBuilder addCredential(List<VerifiableCredential> vcs) {
+	public DIDDocumentBuilder addCredential(List<VerifiableCredential> vcs) {
 		for (VerifiableCredential vc : vcs) {
 			if (vc != null)
 				addCredential(vc);
@@ -145,7 +144,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	public DocumentBuilder addCredential(String id, String type, List<String> contexts, Map<String, Object> claims) {
+	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, Map<String, Object> claims) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claims, "claims");
 
@@ -158,7 +157,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 				.build());
 	}
 
-	public DocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1) {
+	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 
@@ -171,8 +170,8 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 				.build());
 	}
 
-	public DocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
-								   String claim2, Object value2) {
+	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
+											String claim2, Object value2) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 		Objects.requireNonNull(claim2, "claim2");
@@ -187,8 +186,8 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 				.build());
 	}
 
-	public DocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
-								   String claim2, Object value2, String claim3, Object value3) {
+	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
+											String claim2, Object value2, String claim3, Object value3) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 		Objects.requireNonNull(claim2, "claim2");
@@ -224,7 +223,7 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		};
 	}
 
-	public DocumentBuilder addService(String id, String type, String endpoint, Map<String, Object> properties) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint, Map<String, Object> properties) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");
@@ -255,11 +254,11 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return this;
 	}
 
-	public DocumentBuilder addService(String id, String type, String endpoint) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint) {
 		return addService(id, type, endpoint, null);
 	}
 
-	public DocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");
@@ -270,8 +269,8 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return addService(id, type, endpoint, properties);
 	}
 
-	public DocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1,
-									  String prop2, Object value2) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1,
+										 String prop2, Object value2) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");
@@ -285,8 +284,8 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		return addService(id, type, endpoint, properties);
 	}
 
-	public DocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1,
-									  String prop2, Object value2, String prop3, Object value3) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint, String prop1, Object value1,
+										 String prop2, Object value2, String prop3, Object value3) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");
@@ -303,8 +302,8 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 	}
 
 	@Override
-	public Document build() {
-		Document unsigned = new Document(contexts, identity.getId(), new ArrayList<>(verificationMethods.values()),
+	public DIDDocument build() {
+		DIDDocument unsigned = new DIDDocument(contexts, identity.getId(), new ArrayList<>(verificationMethods.values()),
 				new ArrayList<>(authentications.values()), new ArrayList<>(assertions.values()),
 				credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(credentials.values()),
 				services.isEmpty() ? Collections.emptyList() : new ArrayList<>(services.values()));
@@ -313,6 +312,6 @@ public class DocumentBuilder extends BosonIdentityObjectBuilder<Document> {
 		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(), defaultMethodRef,
 				Proof.Purpose.assertionMethod, signature);
 
-		return new Document(unsigned, proof);
+		return new DIDDocument(unsigned, proof);
 	}
 }

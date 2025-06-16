@@ -37,7 +37,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.BeforeValidPeriodException;
-import io.bosonnetwork.Credential;
 import io.bosonnetwork.ExpiredException;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.InvalidSignatureException;

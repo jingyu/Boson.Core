@@ -34,13 +34,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-import io.bosonnetwork.Card;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
 
 @JsonPropertyOrder({"@context", "id", "verificationMethod", "authentication", "assertion", "verifiableCredential", "service", "proof"})
-public class Document extends W3CDIDFormat {
+public class DIDDocument extends W3CDIDFormat {
 	@JsonProperty("@context")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<String> contexts;
@@ -68,14 +67,14 @@ public class Document extends W3CDIDFormat {
 	private transient BosonCard bosonCard;
 
 	@JsonCreator
-	public Document(@JsonProperty(value = "@context") List<String> contexts,
-					@JsonProperty(value = "id", required = true) Id id,
-					@JsonProperty(value = "verificationMethod", required = true) List<VerificationMethod> verificationMethods,
-					@JsonProperty(value = "authentication") List<VerificationMethod> authentications,
-					@JsonProperty(value = "assertion") List<VerificationMethod> assertions,
-					@JsonProperty(value = "verifiableCredential") List<VerifiableCredential> credentials,
-					@JsonProperty(value = "service") List<Service> services,
-					@JsonProperty(value = "proof", required = true) Proof proof) {
+	public DIDDocument(@JsonProperty(value = "@context") List<String> contexts,
+					   @JsonProperty(value = "id", required = true) Id id,
+					   @JsonProperty(value = "verificationMethod", required = true) List<VerificationMethod> verificationMethods,
+					   @JsonProperty(value = "authentication") List<VerificationMethod> authentications,
+					   @JsonProperty(value = "assertion") List<VerificationMethod> assertions,
+					   @JsonProperty(value = "verifiableCredential") List<VerifiableCredential> credentials,
+					   @JsonProperty(value = "service") List<Service> services,
+					   @JsonProperty(value = "proof", required = true) Proof proof) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(verificationMethods, "verificationMethods");
 		Objects.requireNonNull(proof, "proof");
@@ -138,9 +137,9 @@ public class Document extends W3CDIDFormat {
 
 	// internal constructor used by builder.
 	// the caller should transfer ownership of the collections to the new instance
-	protected Document(List<String> contexts, Id id, List<VerificationMethod> verificationMethods,
-					   List<VerificationMethod> authentications, List<VerificationMethod> assertions,
-					   List<VerifiableCredential> credentials, List<Service> services) {
+	protected DIDDocument(List<String> contexts, Id id, List<VerificationMethod> verificationMethods,
+						  List<VerificationMethod> authentications, List<VerificationMethod> assertions,
+						  List<VerifiableCredential> credentials, List<Service> services) {
 		this.contexts = contexts;
 		this.id = id;
 		this.verificationMethods = verificationMethods.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(verificationMethods);
@@ -151,7 +150,7 @@ public class Document extends W3CDIDFormat {
 		this.proof = null;
 	}
 
-	protected Document(Document unsigned, Proof proof) {
+	protected DIDDocument(DIDDocument unsigned, Proof proof) {
 		this.contexts = unsigned.getContexts();
 		this.id = unsigned.getId();
 		this.verificationMethods = unsigned.getVerificationMethods();
@@ -322,8 +321,8 @@ public class Document extends W3CDIDFormat {
 		return bosonCard;
 	}
 
-	public static Document fromCard(Card card, List<String> documentContexts,
-									Map<String, List<String>> vcTypeContexts) {
+	public static DIDDocument fromCard(Card card, List<String> documentContexts,
+									   Map<String, List<String>> vcTypeContexts) {
 		if (card instanceof BosonCard bc)
 			return bc.getDocument();
 
@@ -342,7 +341,7 @@ public class Document extends W3CDIDFormat {
 		VerificationMethod defaultMethod = VerificationMethod.defaultOf(card.getId());
 		VerificationMethod defaultMethodRef = defaultMethod.getReference();
 
-		Document doc = new Document(contexts, card.getId(),
+		DIDDocument doc = new DIDDocument(contexts, card.getId(),
 				List.of(defaultMethod), List.of(defaultMethodRef), List.of(defaultMethodRef),
 				card.getCredentials().stream().map(c -> VerifiableCredential.fromCredential(c, vcTypeContexts))
 						.collect(Collectors.toList()),
@@ -355,11 +354,11 @@ public class Document extends W3CDIDFormat {
 		return doc;
 	}
 
-	public static Document fromCard(Card card, Map<String, List<String>> vcTypeContexts) {
+	public static DIDDocument fromCard(Card card, Map<String, List<String>> vcTypeContexts) {
 		return fromCard(card, List.of(), vcTypeContexts);
 	}
 
-	public static Document fromCard(Card card) {
+	public static DIDDocument fromCard(Card card) {
 		return fromCard(card, List.of(), Map.of());
 	}
 
@@ -378,7 +377,7 @@ public class Document extends W3CDIDFormat {
 		if (this == o)
 			return true;
 
-		if (o instanceof Document that)
+		if (o instanceof DIDDocument that)
 			return Objects.equals(id, that.id) &&
 					Objects.equals(verificationMethods, that.verificationMethods) &&
 					Objects.equals(authentications, that.authentications) &&
@@ -389,26 +388,26 @@ public class Document extends W3CDIDFormat {
 		return false;
 	}
 
-	public static Document parse(String json) {
-		return parse(json, Document.class);
+	public static DIDDocument parse(String json) {
+		return parse(json, DIDDocument.class);
 	}
 
-	public static Document parse(byte[] cbor) {
-		return parse(cbor, Document.class);
+	public static DIDDocument parse(byte[] cbor) {
+		return parse(cbor, DIDDocument.class);
 	}
 
-	public static DocumentBuilder builder(Identity subject) {
+	public static DIDDocumentBuilder builder(Identity subject) {
 		Objects.requireNonNull(subject, "subject");
-		return new DocumentBuilder(subject);
+		return new DIDDocumentBuilder(subject);
 	}
 
 	protected static class BosonCard extends Card {
-		private final Document doc;
+		private final DIDDocument doc;
 
-		protected BosonCard(Document doc) {
+		protected BosonCard(DIDDocument doc) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
-					doc.services.stream().map(s -> Card.createService(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
+					doc.services.stream().map(s -> new Card.Service(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
 							.collect(Collectors.toList()),
 					doc.proof.getCreated(), doc.proof.getProofValue());
 
@@ -416,16 +415,16 @@ public class Document extends W3CDIDFormat {
 		}
 
 		// unsigned is not used, just as the method signature for overriding
-		protected BosonCard(Document doc, boolean unsigned) {
+		protected BosonCard(DIDDocument doc, boolean unsigned) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
-					doc.services.stream().map(s -> Card.createService(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
+					doc.services.stream().map(s -> new Card.Service(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
 							.collect(Collectors.toList()));
 
 			this.doc = doc;
 		}
 
-		protected BosonCard(Card card, Document doc) {
+		protected BosonCard(Card card, DIDDocument doc) {
 			super(card, card.getSignedAt(), card.getSignature());
 			this.doc = doc;
 		}
@@ -435,7 +434,7 @@ public class Document extends W3CDIDFormat {
 			return super.getSignData();
 		}
 
-		public Document getDocument() {
+		public DIDDocument getDocument() {
 			return doc;
 		}
 	}

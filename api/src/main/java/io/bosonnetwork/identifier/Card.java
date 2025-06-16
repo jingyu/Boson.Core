@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -40,6 +40,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
+import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Json;
 
@@ -252,11 +255,6 @@ public class Card {
 	public static CardBuilder builder(Identity subject) {
 		Objects.requireNonNull(subject, "subject");
 		return new CardBuilder(subject);
-	}
-
-	// helper method for the DID Document
-	protected static Service createService(String id, String type, String endpoint, Map<String, Object> properties) {
-		return new Service(id, type, endpoint, properties);
 	}
 
 	@JsonPropertyOrder({ "id", "t", "e" })

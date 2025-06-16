@@ -143,7 +143,6 @@
       <artifactId>sqlite-jdbc</artifactId>
       <scope>test</scope>
     </dependency>
-
   </dependencies>
 
   <build>

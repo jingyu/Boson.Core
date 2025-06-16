@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
 import static java.text.Normalizer.Form.NFC;
 
@@ -32,6 +32,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+
+import io.bosonnetwork.Identity;
 
 public abstract class BosonIdentityObjectBuilder<T> {
 	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");

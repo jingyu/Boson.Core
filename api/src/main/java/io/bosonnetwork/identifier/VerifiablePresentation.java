@@ -15,7 +15,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
-import io.bosonnetwork.Vouch;
 
 @JsonPropertyOrder({ "@context", "id", "type", "holder", "verifiableCredential", "proof" })
 public class VerifiablePresentation extends W3CDIDFormat {

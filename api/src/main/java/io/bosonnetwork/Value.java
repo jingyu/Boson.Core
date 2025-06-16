@@ -419,6 +419,8 @@ public class Value {
 	}
 
 	private byte[] getSignData() {
+		// TODO: optimize with incremental digest, and return sha256 hash as sign input
+		/*
 		byte[] toSign = new byte[(recipient != null ? Id.BYTES : 0) +
 				CryptoBox.Nonce.BYTES + Integer.BYTES + this.data.length];
 		ByteBuffer buf = ByteBuffer.wrap(toSign);
@@ -429,6 +431,16 @@ public class Value {
 		buf.put(data);
 
 		return toSign;
+		*/
+
+		MessageDigest sha = Hash.sha256();
+		if (recipient != null)
+			sha.update(recipient.bytes());
+		sha.update(nonce);
+		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
+		sha.update(data);
+
+		return sha.digest();
 	}
 
 	/**

@@ -37,20 +37,19 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.Card;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.utils.Hex;
 
-public class DocumentTests {
+public class DIDDocumentTests {
 	private static final long DAY = 24 * 60 * 60 * 1000;
 
 	@Test
 	void simpleDocumentTest() {
 		var identity = new CryptoIdentity();
 
-		var doc = new DocumentBuilder(identity)
+		var doc = new DIDDocumentBuilder(identity)
 				.addCredential("profile", "BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"name", "Bob", "avatar", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
 				.addService("homeNode", "BosonHomeNode", Id.random().toString(), "sig", "F5r4bSbLamnvpDEiFgfuspszfMMMmQAhBdlhS1ZiliRdc4i-3aXZZ7mzYdkkpffpm3EsfwyDAcV_mwPiKf8cDA")
@@ -99,12 +98,12 @@ public class DocumentTests {
 		assertDoesNotThrow(doc::validate);
 
 		var json = doc.toString();
-		var doc2 = Document.parse(json);
+		var doc2 = DIDDocument.parse(json);
 		assertEquals(doc, doc2);
 		assertEquals(doc.toString(), doc2.toString());
 
 		var bytes = doc.toBytes();
-		var doc3 = Document.parse(bytes);
+		var doc3 = DIDDocument.parse(bytes);
 		assertEquals(doc, doc3);
 		assertEquals(doc.toString(), doc3.toString());
 
@@ -117,9 +116,9 @@ public class DocumentTests {
 		assertEquals(1, card.getCredentials().size());
 		assertEquals(1, card.getServices().size());
 
-		assertInstanceOf(Document.BosonCard.class, card);
-		assertSame(doc, ((Document.BosonCard) card).getDocument());
-		assertSame(doc, Document.fromCard(card, List.of(),
+		assertInstanceOf(DIDDocument.BosonCard.class, card);
+		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertSame(doc, DIDDocument.fromCard(card, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"))));
 
 		assertTrue(card.isGenuine());
@@ -129,7 +128,7 @@ public class DocumentTests {
 		assertEquals(card, card2); // Object equality
 		assertEquals(card.toString(), card2.toString()); // String equality
 
-		var doc4 = Document.fromCard(card2, List.of(),
+		var doc4 = DIDDocument.fromCard(card2, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1")));
 
 		System.out.println(doc4);
@@ -147,7 +146,7 @@ public class DocumentTests {
 	void complexDocumentTest() {
 		var identity = new CryptoIdentity();
 
-		var db = new DocumentBuilder(identity);
+		var db = new DIDDocumentBuilder(identity);
 		db.addCredential().id("profile")
 				.type("BosonProfile", "https://example.com/credentials/profile/v1")
 				.type("Email", "https://example.com/credentials/email/v1")
@@ -223,12 +222,12 @@ public class DocumentTests {
 		assertDoesNotThrow(doc::validate);
 
 		var json = doc.toString();
-		var doc2 = Document.parse(json);
+		var doc2 = DIDDocument.parse(json);
 		assertEquals(doc, doc2);
 		assertEquals(doc.toString(), doc2.toString());
 
 		var bytes = doc.toBytes();
-		var doc3 = Document.parse(bytes);
+		var doc3 = DIDDocument.parse(bytes);
 		assertEquals(doc, doc3);
 		assertEquals(doc.toString(), doc3.toString());
 
@@ -241,9 +240,9 @@ public class DocumentTests {
 		assertEquals(3, card.getCredentials().size());
 		assertEquals(3, card.getServices().size());
 
-		assertInstanceOf(Document.BosonCard.class, card);
-		assertSame(doc, ((Document.BosonCard) card).getDocument());
-		assertSame(doc, Document.fromCard(card, List.of(),
+		assertInstanceOf(DIDDocument.BosonCard.class, card);
+		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertSame(doc, DIDDocument.fromCard(card, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"Passport", List.of("https://example.com/credentials/passport/v1"),
 						"Email", List.of("https://example.com/credentials/email/v1"),
@@ -256,7 +255,7 @@ public class DocumentTests {
 		assertEquals(card, card2); // Object equality
 		assertEquals(card.toString(), card2.toString()); // String equality
 
-		var doc4 = Document.fromCard(card2, List.of(),
+		var doc4 = DIDDocument.fromCard(card2, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"Passport", List.of("https://example.com/credentials/passport/v1"),
 						"Email", List.of("https://example.com/credentials/email/v1"),
@@ -276,7 +275,7 @@ public class DocumentTests {
 	@Test
 	void emptyDocTest() {
 		var identity = new CryptoIdentity();
-		var doc = new DocumentBuilder(identity).build();
+		var doc = new DIDDocumentBuilder(identity).build();
 
 		System.out.println(doc);
 		System.out.println(doc.toPrettyString());
@@ -290,12 +289,12 @@ public class DocumentTests {
 		assertTrue(doc.isGenuine());
 
 		var json = doc.toString();
-		var doc2 = Document.parse(json);
+		var doc2 = DIDDocument.parse(json);
 		assertEquals(doc, doc2);
 		assertEquals(doc.toString(), doc2.toString());
 
 		var bytes = doc.toBytes();
-		var doc3 = Document.parse(bytes);
+		var doc3 = DIDDocument.parse(bytes);
 		assertEquals(doc, doc3);
 		assertEquals(doc.toString(), doc3.toString());
 
@@ -310,15 +309,15 @@ public class DocumentTests {
 		assertTrue(card.isGenuine());
 		assertDoesNotThrow(card::validate);
 
-		assertInstanceOf(Document.BosonCard.class, card);
-		assertSame(doc, ((Document.BosonCard) card).getDocument());
-		assertSame(doc, Document.fromCard(card, null, null));
+		assertInstanceOf(DIDDocument.BosonCard.class, card);
+		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertSame(doc, DIDDocument.fromCard(card, null, null));
 
 		var card2 = Card.parse(card.toBytes());
 		assertEquals(card, card2); // Object equality
 		assertEquals(card.toString(), card2.toString()); // String equality
 
-		var doc4 = Document.fromCard(card2,null, null);
+		var doc4 = DIDDocument.fromCard(card2,null, null);
 
 		System.out.println(doc4);
 		System.out.println(doc4.toPrettyString());
@@ -338,7 +337,7 @@ public class DocumentTests {
 		for (int i = 0; i < avatar.length; i++)
 			avatar[i] = (byte) i;
 
-		var doc = new DocumentBuilder(identity)
+		var doc = new DIDDocumentBuilder(identity)
 				.addCredential("profile", "BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"name", "Bob", "avatar", avatar)
 				.addService("homeNode", "BosonHomeNode", Id.random().toString(), "sig", "F5r4bSbLamnvpDEiFgfuspszfMMMmQAhBdlhS1ZiliRdc4i-3aXZZ7mzYdkkpffpm3EsfwyDAcV_mwPiKf8cDA")
@@ -362,7 +361,7 @@ public class DocumentTests {
 	void invalidSignatureTest() {
 		var identity = new CryptoIdentity();
 
-		var doc = new DocumentBuilder(identity)
+		var doc = new DIDDocumentBuilder(identity)
 				.addCredential("profile", "BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"name", "Bob", "avatar", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
 				.addService("homeNode", "BosonHomeNode", Id.random().toString(), "sig", "F5r4bSbLamnvpDEiFgfuspszfMMMmQAhBdlhS1ZiliRdc4i-3aXZZ7mzYdkkpffpm3EsfwyDAcV_mwPiKf8cDA")

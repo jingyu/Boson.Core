@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.identifier;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +33,8 @@ import java.util.Date;
 
 import org.junit.jupiter.api.Test;
 
+import io.bosonnetwork.Id;
+import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.utils.Hex;
 
