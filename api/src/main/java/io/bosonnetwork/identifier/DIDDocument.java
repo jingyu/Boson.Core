@@ -24,11 +24,14 @@ package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -436,6 +439,80 @@ public class DIDDocument extends W3CDIDFormat {
 
 		public DIDDocument getDocument() {
 			return doc;
+		}
+	}
+
+	@JsonPropertyOrder({"id", "type", "serviceEndpoint"})
+	public static class Service {
+		@JsonProperty("id")
+		private final String id;
+		@JsonProperty("type")
+		private final String type;
+		@JsonProperty("serviceEndpoint")
+		private final String endpoint;
+		@JsonAnyGetter
+		@JsonAnySetter
+		private final Map<String, Object> properties;
+
+		@JsonCreator
+		protected Service(@JsonProperty(value = "id", required = true) String id,
+						  @JsonProperty(value = "type", required = true) String type,
+						  @JsonProperty(value = "serviceEndpoint", required = true) String endpoint) {
+			Objects.requireNonNull(id, "id");
+			Objects.requireNonNull(type, "type");
+			Objects.requireNonNull(endpoint, "serviceEndpoint");
+
+			this.id = id;
+			this.type = type;
+			this.endpoint = endpoint;
+			this.properties = new LinkedHashMap<>();
+		}
+
+		protected Service(String id, String type, String endpoint, Map<String, Object> properties) {
+			this.id = id;
+			this.type = type;
+			this.endpoint = endpoint;
+			this.properties = properties == null || properties.isEmpty() ? Collections.emptyMap() : properties;
+		}
+
+		public String getId() {
+			return id;
+		}
+
+		public String getType() {
+			return type;
+		}
+
+		public String getEndpoint() {
+			return endpoint;
+		}
+
+		public Map<String, Object> getProperties() {
+			return Collections.unmodifiableMap(properties);
+		}
+
+		@SuppressWarnings("unchecked")
+		public <T> T getProperty(String name) {
+			return (T) properties.get(name);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(id, type, endpoint, properties);
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o)
+				return true;
+
+			if (o instanceof Service that)
+				return Objects.equals(id, that.id) &&
+						Objects.equals(type, that.type) &&
+						Objects.equals(endpoint, that.endpoint) &&
+						Objects.equals(properties, that.properties);
+
+			return false;
 		}
 	}
 }

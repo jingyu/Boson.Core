@@ -38,7 +38,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	private final Map<String, VerificationMethod> authentications;
 	private final Map<String, VerificationMethod> assertions;
 	private final Map<String, VerifiableCredential> credentials;
-	private final Map<String, Service> services;
+	private final Map<String, DIDDocument.Service> services;
 
 	private final VerificationMethod defaultMethodRef;
 
@@ -250,7 +250,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 		}
 
 		String canonicalId = idUrl.toString();
-		services.put(canonicalId, new Service(canonicalId, type, endpoint, properties));
+		services.put(canonicalId, new DIDDocument.Service(canonicalId, type, endpoint, properties));
 		return this;
 	}
 
