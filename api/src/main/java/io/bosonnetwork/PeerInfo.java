@@ -26,9 +26,12 @@ package io.bosonnetwork;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.text.Normalizer;
+import java.util.Arrays;
 import java.util.Objects;
 
+import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Signature;
 
 /**
@@ -36,6 +39,9 @@ import io.bosonnetwork.crypto.Signature;
  * Represents peer information in the Boson network.
  */
 public class PeerInfo {
+	public static final Object ATTRIBUTE_OMIT_PEER_ID = new Object();
+	public static final Object ATTRIBUTE_PEER_ID = new Object();
+
 	private Id publicKey;			// Peer ID
 	private byte[] privateKey;		// Private key to sign the peer info
 	private Id nodeId;				// The node that provide the service peer
@@ -64,7 +70,7 @@ public class PeerInfo {
 		this.publicKey = peerId;
 		this.privateKey = privateKey;
 		this.nodeId = nodeId;
-		this.origin = origin != null ? origin : nodeId;
+		this.origin = origin == null || origin.equals(nodeId) ? null : origin;
 		this.port = port;
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
@@ -88,7 +94,7 @@ public class PeerInfo {
 		this.publicKey = new Id(keypair.publicKey().bytes());;
 		this.privateKey = keypair.privateKey().bytes();
 		this.nodeId = nodeId;
-		this.origin = origin != null ? origin : nodeId;
+		this.origin = origin == null || origin.equals(nodeId) ? null : origin;
 		this.port = port;
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
@@ -105,7 +111,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo of(Id peerId, Id nodeId, int port, byte[] signature) {
-		return new PeerInfo(peerId, null, nodeId, nodeId, port, null, signature);
+		return new PeerInfo(peerId, null, nodeId, null, port, null, signature);
 	}
 
 	/**
@@ -119,7 +125,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, int port, byte[] signature) {
-		return new PeerInfo(peerId, privateKey, nodeId, nodeId, port, null, signature);
+		return new PeerInfo(peerId, privateKey, nodeId, null, port, null, signature);
 	}
 
 	/**
@@ -133,7 +139,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo of(Id peerId, Id nodeId, int port, String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, null, nodeId, nodeId, port, alternativeURL, signature);
+		return new PeerInfo(peerId, null, nodeId, null, port, alternativeURL, signature);
 	}
 
 	/**
@@ -149,7 +155,7 @@ public class PeerInfo {
 	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, int port,
 			String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, privateKey, nodeId, nodeId, port, alternativeURL, signature);
+		return new PeerInfo(peerId, privateKey, nodeId, null, port, alternativeURL, signature);
 	}
 
 	/**
@@ -222,7 +228,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo create(Id nodeId, int port) {
-		return create(null, nodeId, nodeId, port, null);
+		return create(null, nodeId, null, port, null);
 	}
 
 	/**
@@ -234,7 +240,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port) {
-		return create(keypair, nodeId, nodeId, port, null);
+		return create(keypair, nodeId, null, port, null);
 	}
 
 	/**
@@ -273,7 +279,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo create(Id nodeId, int port, String alternativeURL) {
-		return create(null, nodeId, nodeId, port, alternativeURL);
+		return create(null, nodeId, null, port, alternativeURL);
 	}
 
 	/**
@@ -286,7 +292,7 @@ public class PeerInfo {
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port, String alternativeURL) {
-		return create(keypair, nodeId, nodeId, port, alternativeURL);
+		return create(keypair, nodeId, null, port, alternativeURL);
 	}
 
 	/**
@@ -360,7 +366,7 @@ public class PeerInfo {
 	/**
 	 * Gets the node that announces the peer.
 	 *
-	 * @return The origin node ID.
+	 * @return The origin node ID. null if the peer is not delegated.
 	 */
 	public Id getOrigin() {
 		return origin;
@@ -372,7 +378,7 @@ public class PeerInfo {
 	 * @return {@code true} if the peer is delegated, {@code false} otherwise.
 	 */
 	public boolean isDelegated() {
-		return !origin.equals(nodeId);
+		return origin != null;
 	}
 
 	/**
@@ -412,6 +418,8 @@ public class PeerInfo {
 	}
 
 	private byte[] getSignData() {
+		// TODO: optimize with incremental digest, and return sha256 hash as sign input
+		/*
 		byte[] alt = alternativeURL == null || alternativeURL.isEmpty() ?
 				null : alternativeURL.getBytes(UTF_8);
 
@@ -424,6 +432,18 @@ public class PeerInfo {
 			buf.put(alt);
 
 		return toSign;
+		*/
+
+		MessageDigest sha = Hash.sha256();
+		sha.update(publicKey.bytes());
+		sha.update(nodeId.bytes());
+		if (origin != null)
+			sha.update(origin.bytes());
+		sha.update(ByteBuffer.allocate(Short.BYTES).putShort((short)port).array());
+		if (alternativeURL != null)
+			sha.update(alternativeURL.getBytes(UTF_8));
+
+		return sha.digest();
 	}
 
 	/**
@@ -443,7 +463,7 @@ public class PeerInfo {
 
 	@Override
 	public int hashCode() {
-		return publicKey.hashCode() + nodeId.hashCode() + origin.hashCode() + 0x70; // 'p'
+		return 0x6030A + Objects.hash(publicKey, nodeId, origin, port, alternativeURL, Arrays.hashCode(signature));
 	}
 
 	@Override
@@ -456,7 +476,8 @@ public class PeerInfo {
 					Objects.equals(this.nodeId, that.nodeId) &&
 					Objects.equals(this.origin, that.origin) &&
 					this.port == that.port &&
-					Objects.equals(this.alternativeURL, that.alternativeURL);
+					Objects.equals(this.alternativeURL, that.alternativeURL) &&
+					Arrays.equals(this.signature, that.signature);
 		}
 
 		return false;

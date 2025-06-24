@@ -193,8 +193,18 @@ public class Id implements Comparable<Id> {
 	 * @throws IllegalArgumentException if the id string is invalid id string representation.
 	 */
 	public static Id of(String id) {
-		return id.startsWith("0x") ? ofHex(id) :
-				(id.startsWith(DID_PREFIX)) ? ofBase58(id.substring(DID_PREFIX.length())) : ofBase58(id);
+		// return id.startsWith("0x") ? ofHex(id) :
+		//		(id.startsWith(DID_PREFIX)) ? ofBase58(id.substring(DID_PREFIX.length())) : ofBase58(id);
+		try {
+			return ofBase58(id); // base58 is the first class citizen, fail back to hex or w3c format if base58 fails
+		} catch (IllegalArgumentException e) {
+			if (id.charAt(0) == '0' && id.charAt(1) == 'x')
+				return ofHex(id);
+			else if (id.startsWith(DID_PREFIX))
+				return ofBase58(id.substring(DID_PREFIX.length()));
+			else
+				throw new IllegalArgumentException("invalid id string");
+		}
 	}
 
 	/**
@@ -592,9 +602,10 @@ public class Id implements Comparable<Id> {
 	@Override
 	public int hashCode() {
 		if (hashCode == null) {
-			byte[] b = bytes;
+			final byte[] b = bytes;
 
-			hashCode = (((b[0] ^ b[1] ^ b[2] ^ b[3] ^ b[4] ^ b[5] ^ b[6] ^ b[7]) & 0xff) << 24)
+			hashCode = 0x6030A +
+					(((b[0] ^ b[1] ^ b[2] ^ b[3] ^ b[4] ^ b[5] ^ b[6] ^ b[7]) & 0xff) << 24)
 					| (((b[8] ^ b[9] ^ b[10] ^ b[11] ^ b[12] ^ b[13] ^ b[14] ^ b[15]) & 0xff) << 16)
 					| (((b[16] ^ b[17] ^ b[18] ^ b[19] ^ b[20] ^ b[21] ^ b[22] ^ b[23]) & 0xff) << 8)
 					| ((b[24] ^ b[25] ^ b[26] ^ b[27] ^ b[28] ^ b[29] ^ b[30] ^ b[31]) & 0xff);

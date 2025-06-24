@@ -270,7 +270,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash("boson.did.vc", id, types, name, description, issuer, validFrom, validUntil, proof);
+		return Objects.hash(contexts, id, types, name, description, issuer, validFrom, validUntil, subject, proof);
 	}
 
 	@Override
@@ -354,8 +354,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 				return true;
 
 			if (o instanceof CredentialSubject that)
-				return Objects.equals(id, that.id) &&
-						Objects.equals(claims, that.claims);
+				return Objects.equals(id, that.id) && Objects.equals(claims, that.claims);
 
 			return true;
 		}

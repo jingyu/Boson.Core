@@ -24,7 +24,9 @@
 package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
+import java.util.Objects;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
@@ -39,7 +41,7 @@ import io.bosonnetwork.crypto.Signature;
 public class AnnouncePeerRequest extends Message {
 	private int token;
 	private Id peerId;
-	private Id nodeId; // Optional, only for the delegated peers
+	private Id origin; // Optional, only for the delegated peers
 	private int port;
 	private String alternativeURL;
 	private byte[] signature;
@@ -64,7 +66,7 @@ public class AnnouncePeerRequest extends Message {
 
 	public void setPeer(PeerInfo peer) {
 		peerId = peer.getId();
-		nodeId = peer.getNodeId();
+		origin = peer.getOrigin();
 		port = peer.getPort();
 		if (peer.hasAlternativeURL())
 			alternativeURL = peer.getAlternativeURL();
@@ -72,10 +74,7 @@ public class AnnouncePeerRequest extends Message {
 	}
 
 	public PeerInfo getPeer() {
-		if (nodeId == null)
-			nodeId = getId();
-
-		return PeerInfo.of(peerId, nodeId, getId(), port, alternativeURL, signature);
+		return PeerInfo.of(peerId, getId(), origin, port, alternativeURL, signature);
 	}
 
 	public Id getTarget() {
@@ -87,27 +86,23 @@ public class AnnouncePeerRequest extends Message {
 		gen.writeFieldName(getType().toString());
 		gen.writeStartObject();
 
-		gen.writeFieldName("tok");
-		gen.writeNumber(token);
+		gen.writeNumberField("tok", token);
 
 		gen.writeFieldName("t");
-		gen.writeBinary(peerId.bytes());
+		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peerId.bytes(), 0, Id.BYTES);
 
-		if (!nodeId.equals(getId())) {
-			gen.writeFieldName("x");
-			gen.writeBinary(nodeId.bytes());
+		if (origin != null && !Objects.equals(origin, getId())) {
+			gen.writeFieldName("o");
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, origin.bytes(), 0, Id.BYTES);
 		}
 
-		gen.writeFieldName("p");
-		gen.writeNumber(port);
+		gen.writeNumberField("p", port);
 
-		if (alternativeURL != null) {
-			gen.writeFieldName("alt");
-			gen.writeString(alternativeURL);
-		}
+		if (alternativeURL != null)
+			gen.writeStringField("alt", alternativeURL);
 
 		gen.writeFieldName("sig");
-		gen.writeBinary(signature);
+		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, signature, 0, signature.length);
 
 		gen.writeEndObject();
 	}
@@ -122,11 +117,11 @@ public class AnnouncePeerRequest extends Message {
 			parser.nextToken();
 			switch (name) {
 			case "t":
-				peerId = Id.of(parser.getBinaryValue());
+				peerId = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 				break;
 
-			case "x":
-				nodeId = Id.of(parser.getBinaryValue());
+			case "o":
+				origin = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 				break;
 
 			case "p":
@@ -138,7 +133,7 @@ public class AnnouncePeerRequest extends Message {
 				break;
 
 			case "sig":
-				signature = parser.getBinaryValue();
+				signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 				break;
 
 			case "tok":
@@ -155,7 +150,7 @@ public class AnnouncePeerRequest extends Message {
 	@Override
 	public int estimateSize() {
         int size = 4 + 9 + 36 + 5 + 6 + Signature.BYTES;
-        size += nodeId.equals(getId()) ? 0 : 4 + Id.BYTES;
+        size += origin == null ? 0 : 4 + Id.BYTES;
         size += alternativeURL == null ? 0 : 6 + alternativeURL.getBytes().length;
         return super.estimateSize() + size;
 	}
@@ -164,8 +159,8 @@ public class AnnouncePeerRequest extends Message {
 	protected void toString(StringBuilder b) {
 		b.append(",q:{");
 		b.append("t:").append(peerId.toString());
-		if (nodeId != null && !nodeId.equals(getId()))
-			b.append(",x:").append(nodeId.toString());
+		if (origin != null && !origin.equals(getId()))
+			b.append(",o:").append(origin.toString());
 		b.append(",p:").append(port);
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			b.append(",alt:").append(alternativeURL);

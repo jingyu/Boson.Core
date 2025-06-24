@@ -60,10 +60,8 @@ public class ErrorMessage extends Message {
 	protected void serialize(JsonGenerator gen) throws IOException {
 		gen.writeFieldName(getType().toString());
 		gen.writeStartObject();
-		gen.writeFieldName("c");
-		gen.writeNumber(code);
-		gen.writeFieldName("m");
-		gen.writeString(message);
+		gen.writeNumberField("c", code);
+		gen.writeStringField("m", message);
 		gen.writeEndObject();
 	}
 

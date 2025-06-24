@@ -31,7 +31,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.TimeZone;
 
 import com.fasterxml.jackson.core.Base64Variants;
@@ -41,17 +40,16 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.core.io.SegmentedStringWriter;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.core.util.ByteArrayBuilder;
 import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.cfg.ContextAttributes;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
@@ -85,14 +83,14 @@ public class Json {
 	private final static String ISO_8601 = "yyyy-MM-dd'T'HH:mm:ss'Z'";
 	private final static String ISO_8601_WITH_MILLISECONDS = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
-	public static boolean isTextFormat(JsonParser p) {
+	public static boolean isBinaryFormat(JsonParser p) {
 		// Now we only sport JSON, CBOR and TOML formats, CBOR is the only binary format
-		return !(p instanceof CBORParser);
+		return p instanceof CBORParser;
 	}
 
-	public static boolean isTextFormat(JsonGenerator gen) {
+	public static boolean isBinaryFormat(JsonGenerator gen) {
 		// Now we only sport JSON, CBOR and TOML formats, CBOR is the only binary format
-		return !(gen instanceof CBORGenerator);
+		return gen instanceof CBORGenerator;
 	}
 
 	static class IdSerializer extends StdSerializer<Id> {
@@ -108,13 +106,13 @@ public class Json {
 
 		@Override
 		public void serialize(Id value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			Object v = provider.getAttribute(DIDConstants.BOSON_ID_FORMAT_W3C);
-			boolean w3cDID = v != null && (Boolean) v;
+			Boolean attr = (Boolean) provider.getAttribute(DIDConstants.BOSON_ID_FORMAT_W3C);
+			boolean w3cDID = attr != null && attr;
 			if (!w3cDID) {
-				if (isTextFormat(gen))
-					gen.writeString(value.toBase58String());
+				if (isBinaryFormat(gen))
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.bytes(), 0, Id.BYTES);
 				else
-					gen.writeBinary(value.bytes());
+					gen.writeString(value.toBase58String());
 			} else {
 				gen.writeString(value.toDIDString());
 			}
@@ -134,14 +132,7 @@ public class Json {
 
 		@Override
 		public Id deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			if (p.currentToken() == JsonToken.VALUE_STRING) {
-				return Id.of(p.getText());
-			} else if (p.currentToken() == JsonToken.VALUE_EMBEDDED_OBJECT) {
-				return Id.of(p.getBinaryValue());
-			} else {
-				JsonToken expected = isTextFormat(p) ? JsonToken.VALUE_STRING : JsonToken.VALUE_EMBEDDED_OBJECT;
-				throw ctx.wrongTokenException(p, Id.class, expected, "Invalid id representation");
-			}
+			return isBinaryFormat(p) ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 		}
 	}
 
@@ -158,10 +149,12 @@ public class Json {
 
 		@Override
 		public void serialize(InetAddress value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			if (isTextFormat(gen))
-				gen.writeString(value.getHostAddress());
-			else
-				gen.writeBinary(value.getAddress()); // binary ip address
+			if (isBinaryFormat(gen)) {
+				byte[] addr = value.getAddress();
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+			} else {
+				gen.writeString(value.getHostAddress()); // ip address or host name
+			}
 		}
 	}
 
@@ -178,12 +171,8 @@ public class Json {
 
 		@Override
 		public InetAddress deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			boolean textFormat = isTextFormat(p);
-			JsonToken expected = textFormat ? JsonToken.VALUE_STRING : JsonToken.VALUE_EMBEDDED_OBJECT;
-			if (p.currentToken() == expected)
-				return textFormat ? InetAddress.getByName(p.getText()) : InetAddress.getByAddress(p.getBinaryValue());
-			else
-				throw ctx.wrongTokenException(p, InetAddress.class, expected, "Invalid InetAddress representation");
+			return isBinaryFormat(p) ? InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
+					InetAddress.getByName(p.getText());
 		}
 	}
 
@@ -200,10 +189,10 @@ public class Json {
 
 		@Override
 		public void serialize(Date value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			if (isTextFormat(gen))
-				gen.writeString(getDateFormat().format(value));
-			else
+			if (isBinaryFormat(gen))
 				gen.writeNumber(value.getTime());
+			else
+				gen.writeString(getDateFormat().format(value));
 		}
 	}
 
@@ -224,11 +213,15 @@ public class Json {
 		@Override
 		public Date deserialize(JsonParser p, DeserializationContext ctx)
 				throws IOException, JsonProcessingException {
-			if (isTextFormat(p)) {
+			if (p.getCurrentToken() == JsonToken.VALUE_NUMBER_INT) {
+				// Binary format: epoch milliseconds
+				return new Date(p.getValueAsLong());
+			} else {
+				// Text format: RFC3339 / ISO8601 format
 				if (!p.getCurrentToken().equals(JsonToken.VALUE_STRING))
 					throw ctx.wrongTokenException(p, String.class, JsonToken.VALUE_STRING, "Invalid datetime string");
 
-				String dateStr = p.getValueAsString();
+				final String dateStr = p.getValueAsString();
 				try {
 					return getDateFormat().parse(dateStr);
 				} catch (ParseException ignore) {
@@ -241,12 +234,6 @@ public class Json {
 					throw ctx.weirdStringException(p.getText(),
 							Date.class, "Invalid datetime string");
 				}
-			} else {
-				if (!p.getCurrentToken().equals(JsonToken.VALUE_NUMBER_INT))
-					throw ctx.wrongTokenException(p, Date.class, JsonToken.VALUE_NUMBER_INT, "Invalid datetime value");
-
-				// epoch milliseconds
-				return new Date(p.getValueAsLong());
 			}
 		}
 	}
@@ -286,7 +273,26 @@ public class Json {
 
 		@Override
 		public void serialize(NodeInfo value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			Optimized.serializeNodeInfo(gen, value, JsonContext.empty());
+			// Format: triple
+			//   [id, host, port]
+			//
+			// host:
+			//   text format: IP address string or hostname string
+			//   binary format: binary ip address
+			gen.writeStartArray();
+
+			if (isBinaryFormat(gen)) {
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
+				byte[] addr = value.getAddress().getAddress().getAddress();
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+			} else {
+				gen.writeString(value.getId().toBase58String());
+				gen.writeString(value.getAddress().getHostString()); // ip address or host name
+			}
+
+			gen.writeNumber(value.getAddress().getPort());
+
+			gen.writeEndArray();
 		}
 	}
 
@@ -303,7 +309,34 @@ public class Json {
 
 		@Override
 		public NodeInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			return Optimized.deserializeNodeInfo(p, JsonContext.empty());
+			if (p.currentToken() != JsonToken.START_ARRAY)
+				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo, should be an array");
+
+			final boolean binaryFormat = isBinaryFormat(p);
+
+			Id id = null;
+			InetAddress addr = null;
+			int port = 0;
+
+			// id
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				id = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+
+			// address
+			// text format: IP address string or hostname string
+			// binary format: binary ip address or host name string
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				addr = binaryFormat ? InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
+						InetAddress.getByName(p.getText());
+
+			// port
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				port = p.getIntValue();
+
+			if (p.nextToken() != JsonToken.END_ARRAY)
+				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
+
+			return new NodeInfo(id, addr, port);
 		}
 	}
 
@@ -320,7 +353,58 @@ public class Json {
 
 		@Override
 		public void serialize(PeerInfo value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			Optimized.serializePeerInfo(gen, value, provider::getAttribute);
+			final boolean binaryFormat = isBinaryFormat(gen);
+
+			// Format: 6-tuple
+			//   [peerId, nodeId, originNodeId, port, alternativeURL, signature]
+			// If omit the peer id, format:
+			//   [null, nodeId, originNodeId, port, alternativeURL, signature]
+
+			gen.writeStartArray();
+
+			// omit peer id?
+			final Boolean attr = (Boolean) provider.getAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID);
+			final boolean omitPeerId = attr != null && attr;
+
+			if (!omitPeerId) {
+				if (binaryFormat)
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
+				else
+					gen.writeString(value.getId().toBase58String());
+			} else {
+				gen.writeNull();
+			}
+
+			// node id
+			if (binaryFormat)
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getNodeId().bytes(), 0, Id.BYTES);
+			else
+				gen.writeString(value.getNodeId().toBase58String());
+
+			// origin node id
+			if (value.isDelegated()) {
+				if (binaryFormat)
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getOrigin().bytes(), 0, Id.BYTES);
+				else
+					gen.writeString(value.getOrigin().toBase58String());
+			} else {
+				gen.writeNull();
+			}
+
+			// port
+			gen.writeNumber(value.getPort());
+
+			// alternative url
+			if (value.hasAlternativeURL())
+				gen.writeString(value.getAlternativeURL());
+			else
+				gen.writeNull();
+
+			// signature
+			byte[] sig = value.getSignature();
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
+
+			gen.writeEndArray();
 		}
 	}
 
@@ -337,7 +421,52 @@ public class Json {
 
 		@Override
 		public PeerInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			return Optimized.deserializePeerInfo(p, ctx::getAttribute);
+			if (p.currentToken() != JsonToken.START_ARRAY)
+				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo, should be an array");
+
+			final boolean binaryFormat = isBinaryFormat(p);
+
+			Id peerId = null;
+			Id nodeId = null;
+			Id origin = null;
+			int port = 0;
+			String alternativeURL = null;
+			byte[] signature = null;
+
+			// peer id
+			if (p.nextToken() != JsonToken.VALUE_NULL) {
+				peerId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+			} else {
+				// peer id is omitted, should retrieve it from the context
+				peerId = (Id) ctx.getAttribute(PeerInfo.ATTRIBUTE_PEER_ID);
+				if (peerId == null)
+					throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: peer id can not be null");
+			}
+
+			// node id
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				nodeId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+
+			// origin node id
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				origin = binaryFormat ?	Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+
+			// port
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				port = p.getIntValue();
+
+			// alternative url
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				alternativeURL = p.getText();
+
+			// signature
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+
+			if (p.nextToken() != JsonToken.END_ARRAY)
+				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo: too many elements in array");
+
+			return PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature);
 		}
 	}
 
@@ -354,7 +483,54 @@ public class Json {
 
 		@Override
 		public void serialize(Value value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			Optimized.serializeValue(gen, value, JsonContext.empty());
+			final boolean binaryFormat = isBinaryFormat(gen);
+			gen.writeStartObject();
+
+			if (value.getPublicKey() != null) {
+				// public key
+				if (binaryFormat) {
+					gen.writeFieldName("k");
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getPublicKey().bytes(), 0, Id.BYTES);
+				} else {
+					gen.writeStringField("k", value.getPublicKey().toBase58String());
+				}
+
+				// recipient
+				if (value.getRecipient() != null) {
+					if (binaryFormat) {
+						gen.writeFieldName("rec");
+						gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getRecipient().bytes(), 0, Id.BYTES);
+					} else {
+						gen.writeStringField("rec", value.getRecipient().toBase58String());
+					}
+				}
+
+				// nonce
+				byte[] binary = value.getNonce();
+				if (binary != null) {
+					gen.writeFieldName("n");
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
+				}
+
+				// sequence number
+				if (value.getSequenceNumber() > 0)
+					gen.writeNumberField("seq", value.getSequenceNumber());
+
+				// signature
+				binary = value.getSignature();
+				if (binary != null) {
+					gen.writeFieldName("sig");
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
+				}
+			}
+
+			byte[] data = value.getData();
+			if (data != null && data.length > 0) {
+				gen.writeFieldName("v");
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, data, 0, data.length);
+			}
+
+			gen.writeEndObject();
 		}
 	}
 
@@ -371,10 +547,60 @@ public class Json {
 
 		@Override
 		public Value deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
-			return Optimized.deserializeValue(p, JsonContext.empty());
+			if (p.currentToken() != JsonToken.START_OBJECT)
+				throw MismatchedInputException.from(p, Value.class, "Invalid Value: should be an object");
+
+			final boolean binaryFormat = isBinaryFormat(p);
+
+			Id publicKey = null;
+			Id recipient = null;
+			byte[] nonce = null;
+			int sequenceNumber = 0;
+			byte[] signature = null;
+			byte[] data = null;
+
+			while (p.nextToken() != JsonToken.END_OBJECT) {
+				String fieldName = p.currentName();
+				JsonToken token = p.nextToken();
+				switch (fieldName) {
+					case "k":
+						if (token != JsonToken.VALUE_NULL)
+							publicKey = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						break;
+					case "rec":
+						if (token != JsonToken.VALUE_NULL)
+							recipient = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						break;
+					case "n":
+						if (p.currentToken() != JsonToken.VALUE_NULL)
+							nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+						break;
+					case "seq":
+						if (p.currentToken() != JsonToken.VALUE_NULL)
+							sequenceNumber = p.getIntValue();
+						break;
+					case "sig":
+						if (p.currentToken() != JsonToken.VALUE_NULL)
+							signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+						break;
+					case "v":
+						if (p.currentToken() != JsonToken.VALUE_NULL)
+							data = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+						break;
+					default:
+						p.skipChildren();
+				}
+			}
+
+			return Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data);
 		}
 	}
 
+	/**
+	 * Creates the Jackson module.
+	 *
+	 * @return the {@code SimpleModule} object.
+	 */
 	protected static SimpleModule createBosonModule() {
 		String name = "io.bosonnetwork.utils.json.module";
 		SimpleModule module = new SimpleModule(name);
@@ -384,12 +610,14 @@ public class Json {
 		module.addDeserializer(Id.class, new IdDeserializer());
 		module.addSerializer(InetAddress.class, new InetAddressSerializer());
 		module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
+
 		module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
 		module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
 		module.addSerializer(PeerInfo.class, new PeerInfoSerializer());
 		module.addDeserializer(PeerInfo.class, new PeerInfoDeserializer());
 		module.addSerializer(Value.class, new ValueSerializer());
 		module.addDeserializer(Value.class, new ValueDeserializer());
+
 		return module;
 	}
 
@@ -423,16 +651,20 @@ public class Json {
 	 * @return the new {@code ObjectMapper} object.
 	 */
 	protected static ObjectMapper createObjectMapper() {
-		return JsonMapper.builder(createJSONFactory()).disable(
-				MapperFeature.AUTO_DETECT_CREATORS,
-				MapperFeature.AUTO_DETECT_FIELDS,
-				MapperFeature.AUTO_DETECT_GETTERS,
-				MapperFeature.AUTO_DETECT_SETTERS,
-				MapperFeature.AUTO_DETECT_IS_GETTERS)
-			// .defaultDateFormat(getDateFormat())
-			.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-			.addModule(bosonModule)
-			.build();
+		return JsonMapper.builder(createJSONFactory())
+				.disable(MapperFeature.AUTO_DETECT_CREATORS)
+				.disable(MapperFeature.AUTO_DETECT_FIELDS)
+				.disable(MapperFeature.AUTO_DETECT_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_SETTERS)
+				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+				// .defaultDateFormat(getDateFormat())
+				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+				.addModule(bosonModule)
+				.build();
 	}
 
 	/**
@@ -441,60 +673,28 @@ public class Json {
 	 * @return the new {@code CBORMapper} object.
 	 */
 	protected static CBORMapper createCBORMapper() {
-		return CBORMapper.builder(createCBORFactory()).disable(
-				MapperFeature.AUTO_DETECT_CREATORS,
-				MapperFeature.AUTO_DETECT_FIELDS,
-				MapperFeature.AUTO_DETECT_GETTERS,
-				MapperFeature.AUTO_DETECT_SETTERS,
-				MapperFeature.AUTO_DETECT_IS_GETTERS)
-			// .defaultDateFormat(getDateFormat())
-			.addModule(bosonModule)
-			.build();
-	}
-
-	private static class ContextAttributesImpl extends ContextAttributes.Impl {
-		private static final long serialVersionUID = 203154485301320453L;
-
-		private final JsonContext ctx;
-
-		protected ContextAttributesImpl(JsonContext ctx) {
-			super(Collections.emptyMap());
-			this.ctx = ctx;
-		}
-
-		public static ContextAttributes of(JsonContext ctx) {
-			return new ContextAttributesImpl(ctx);
-		}
-
-		@Override
-		public Object getAttribute(Object key) {
-			// non-shared first
-			if (_nonShared != null) {
-				Object ob = _nonShared.get(key);
-				if (ob != null) {
-					if (ob == NULL_SURROGATE)
-						return null;
-
-					return ob;
-				}
-			}
-
-			// then JsonContext
-			Object ob = ctx.getAttribute(key);
-			if (ob != null)
-				return ob;
-
-			// then shared
-			return _shared.get(key);
-		}
+		return CBORMapper.builder(createCBORFactory())
+				.disable(MapperFeature.AUTO_DETECT_CREATORS)
+				.disable(MapperFeature.AUTO_DETECT_FIELDS)
+				.disable(MapperFeature.AUTO_DETECT_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_SETTERS)
+				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+				// .defaultDateFormat(getDateFormat())
+				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+				.addModule(bosonModule)
+				.build();
 	}
 
 	public static String toString(Object object, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return objectMapper.writeValueAsString(object);
 			else
-				return objectMapper.writer(ContextAttributesImpl.of(context)).writeValueAsString(object);
+				return objectMapper.writer(context).writeValueAsString(object);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
@@ -506,9 +706,9 @@ public class Json {
 
 	public static String toPrettyString(Object object, JsonContext context) {
 		try {
-			ObjectWriter writer = JsonContext.isEmpty(context) ?
+			ObjectWriter writer = context == null || context.isEmpty() ?
 					objectMapper.writerWithDefaultPrettyPrinter() :
-					objectMapper.writerWithDefaultPrettyPrinter().with(ContextAttributesImpl.of(context));
+					objectMapper.writerWithDefaultPrettyPrinter().with(context);
 
 			return writer.writeValueAsString(object);
 		} catch (JsonProcessingException e) {
@@ -522,10 +722,10 @@ public class Json {
 
 	public static byte[] toBytes(Object object, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return cborMapper.writeValueAsBytes(object);
 			else
-				return cborMapper.writer(ContextAttributesImpl.of(context)).writeValueAsBytes(object);
+				return cborMapper.writer(context).writeValueAsBytes(object);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
@@ -545,10 +745,10 @@ public class Json {
 
 	public static <T> T parse(String json, Class<T> clazz, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return objectMapper.readValue(json, clazz);
 			else
-				return objectMapper.reader(ContextAttributesImpl.of(context)).forType(clazz).readValue(json);
+				return objectMapper.reader(context).forType(clazz).readValue(json);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("json can not be parsed", e);
 		}
@@ -560,10 +760,10 @@ public class Json {
 
 	public static <T> T parse(String json, TypeReference<T> type, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return objectMapper.readValue(json, type);
 			else
-				return objectMapper.reader(ContextAttributesImpl.of(context)).forType(type).readValue(json);
+				return objectMapper.reader(context).forType(type).readValue(json);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("json can not be parsed", e);
 		}
@@ -583,10 +783,10 @@ public class Json {
 
 	public static <T> T parse(byte[] cbor, Class<T> clazz, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return cborMapper.readValue(cbor, clazz);
 			else
-				return cborMapper.reader(ContextAttributesImpl.of(context)).forType(clazz).readValue(cbor);
+				return cborMapper.reader(context).forType(clazz).readValue(cbor);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
 		}
@@ -598,10 +798,10 @@ public class Json {
 
 	public static <T> T parse(byte[] cbor, TypeReference<T> type, JsonContext context) {
 		try {
-			if (JsonContext.isEmpty(context))
+			if (context == null || context.isEmpty())
 				return cborMapper.readValue(cbor, type);
 			else
-				return cborMapper.reader(ContextAttributesImpl.of(context)).forType(type).readValue(cbor);
+				return cborMapper.reader(context).forType(type).readValue(cbor);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
 		}
@@ -635,445 +835,121 @@ public class Json {
 		return cborFactory;
 	}
 
-	@FunctionalInterface
-	public interface JsonContext {
-		Object getAttribute(Object key);
+	public static class JsonContext extends ContextAttributes.Impl {
+		private static final long serialVersionUID = -385397772721358918L;
 
-		default <T> T getAttribute(Object key, Class<T> clazz) {
-			Object value = getAttribute(key);
-			return value == null ? null : clazz.cast(value);
+		protected JsonContext(Map<?,?> shared) {
+			super(shared, new HashMap<>());
 		}
 
-		JsonContext EMPTY = key -> null;
-
-		static JsonContext empty() {
-			return EMPTY;
+		protected JsonContext(Map<?,?> shared, Map<Object,Object> nonShared) {
+			super(shared, nonShared);
 		}
 
-		static JsonContext withAttribute(Object key, Object value) {
-			return k -> Objects.equals(key, k) ? value : null;
+		public static JsonContext empty() {
+			return new JsonContext(Collections.emptyMap(), Collections.emptyMap());
 		}
 
-		static JsonContext withAttributes(Map<Object, Object> attributes) {
-			return attributes::get;
+		public static JsonContext perCall() {
+			return new JsonContext(Collections.emptyMap(), Collections.emptyMap());
 		}
 
-		static boolean isEmpty(JsonContext context) {
-			return context == null || context == JsonContext.empty();
-		}
-	}
-
-	public static final class Optimized {
-		@SuppressWarnings("unchecked")
-		public static <T> T parse(String json, Class<T> clazz, JsonContext context) throws IOException {
-			if (context == null)
-				context = JsonContext.empty();
-
-			try (JsonParser parser = Json.jsonFactory().createParser(json)) {
-				parser.nextToken();
-				if (clazz == NodeInfo.class)
-					return (T) deserializeNodeInfo(parser, context);
-				else if (clazz == PeerInfo.class)
-					return (T) deserializePeerInfo(parser, context);
-				else if (clazz == Value.class)
-					return (T) deserializeValue(parser, context);
-				else
-					throw new IllegalStateException();
-			}
+		public static JsonContext perCall(Object key, Object value) {
+			Map<Object, Object> m = new HashMap<>();
+			m.put(key, value);
+			return new JsonContext(Collections.emptyMap(), m);
 		}
 
-		public static <T> T parse(String json, Class<T> clazz) throws IOException {
-			return parse(json, clazz, null);
+		static JsonContext perCall(Object key1, Object value1, Object key2, Object value2) {
+			Map<Object, Object> m = new HashMap<>();
+			m.put(key1, value1);
+			m.put(key2, value2);
+			return new JsonContext(Collections.emptyMap(), m);
 		}
 
-		@SuppressWarnings("unchecked")
-		public static <T> T parse(byte[] cbor, Class<T> clazz, JsonContext context) throws IOException {
-			if (context == null)
-				context = JsonContext.empty();
-
-			try (JsonParser parser = Json.cborFactory().createParser(cbor)) {
-				parser.nextToken();
-				if (clazz == NodeInfo.class)
-					return (T) deserializeNodeInfo(parser, context);
-				else if (clazz == PeerInfo.class)
-					return (T) deserializePeerInfo(parser, context);
-				else if (clazz == Value.class)
-					return (T) deserializeValue(parser, context);
-				else
-					throw new IllegalStateException();
-			}
+		static JsonContext perCall(Object key1, Object value1, Object key2, Object value2, Object key3, Object value3) {
+			Map<Object, Object> m = new HashMap<>();
+			m.put(key1, value1);
+			m.put(key2, value2);
+			m.put(key3, value3);
+			return new JsonContext(Collections.emptyMap(), m);
 		}
 
-		public static <T> T parse(byte[] cbor, Class<T> clazz) throws IOException {
-			return parse(cbor, clazz, null);
+		static JsonContext shared(Object key, Object value) {
+			return new JsonContext(Map.of(key, value), Collections.emptyMap());
 		}
 
-		private static void serializeNodeInfo(JsonGenerator gen, NodeInfo value, JsonContext context) throws IOException {
-			var textFormat = isTextFormat(gen);
-
-			// Format: triple
-			//   [id, host, port]
-			gen.writeStartArray();
-
-			if (textFormat)
-				gen.writeString(value.getId().toBase58String());
-			else
-				gen.writeBinary(value.getId().bytes());
-
-			// host ip address or name
-			// text format: IP address string or hostname string
-			// binary format: binary ip address
-			if (textFormat)
-				gen.writeString(value.getAddress().getHostString());
-			else
-				gen.writeBinary(value.getAddress().getAddress().getAddress()); // binary ip address
-
-			// port
-			gen.writeNumber(value.getAddress().getPort());
-
-			gen.writeEndArray();
+		static JsonContext shared(Object key1, Object value1, Object key2, Object value2) {
+			return new JsonContext(Map.of(key1, value1, key2, value2), Collections.emptyMap());
 		}
 
-		private static NodeInfo deserializeNodeInfo(JsonParser p, JsonContext context) throws IOException, JacksonException {
-			if (p.currentToken() != JsonToken.START_ARRAY)
-				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo, should be an array");
+		static JsonContext shared(Object key1, Object value1, Object key2, Object value2, Object key3, Object value3) {
+			return new JsonContext(Map.of(key1, value1, key2, value2, key3, value3), Collections.emptyMap());
+		}
 
-			boolean textFormat = isTextFormat(p);
-			Id id;
-			InetAddress addr;
-			int port;
+		@Override
+		public Object getAttribute(Object key) {
+			if (key == JsonContext.class || key == ContextAttributes.class)
+				return this;
 
-			// id
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL)
-				id = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-			else
-				throw MismatchedInputException.from(p, Id.class, "Invalid NodeInfo: node id can not be null");
+			return super.getAttribute(key);
+		}
 
-			// address
-			// text format: IP address string or hostname string
-			// binary format: binary ip address or host name string
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL) {
-				if (textFormat)
-					addr = InetAddress.getByName(p.getText());
-				else
-					addr = p.currentToken() == JsonToken.VALUE_STRING ?
-							InetAddress.getByName(p.getText()) : InetAddress.getByAddress(p.getBinaryValue());
+		public boolean isEmpty() {
+			return _shared.isEmpty() && _nonShared.isEmpty();
+		}
+
+		@Override
+		public JsonContext withSharedAttribute(Object key, Object value) {
+			if (_shared.isEmpty()) {
+				return new JsonContext(Map.of(key, value));
 			} else {
-				throw MismatchedInputException.from(p, InetAddress.class, "Invalid NodeInfo: node address can not be null");
-			}
-
-			// port
-			p.nextToken();
-			port = p.getIntValue();
-			if (port < 0 || port > 65535)
-				throw InvalidFormatException.from(p, Integer.class, "Invalid NodeInfo: port " + port + " is out of range");
-
-			if (p.nextToken() != JsonToken.END_ARRAY)
-				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
-
-			return new NodeInfo(id, addr, port);
-		}
-
-		public static String toString(NodeInfo value, JsonContext context) throws IOException {
-			try (SegmentedStringWriter sw = new SegmentedStringWriter(Json.jsonFactory()._getBufferRecycler())) {
-				var gen = Json.jsonFactory().createGenerator(sw);
-				serializeNodeInfo(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				return sw.getAndClear();
+				Map<Object, Object> newShared = new HashMap<>(_shared);
+				newShared.put(key, value);
+				return new JsonContext(newShared);
 			}
 		}
 
-		public static String toString(NodeInfo value) throws IOException {
-			return toString(value, JsonContext.empty());
+		@Override
+		public JsonContext withSharedAttributes(Map<?, ?> attributes) {
+			return new JsonContext(attributes == null || attributes.isEmpty() ? Collections.emptyMap() : attributes);
 		}
 
-		public static byte[] toBytes(NodeInfo value, JsonContext context) throws IOException {
-			try (ByteArrayBuilder bb = new ByteArrayBuilder(Json.cborFactory()._getBufferRecycler(), 256)) {
-				var gen = Json.cborFactory().createGenerator(bb);
-				serializeNodeInfo(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				final byte[] result = bb.toByteArray();
-				bb.release();
-				return result;
-			}
+		@Override
+		public JsonContext withoutSharedAttribute(Object key) {
+			if (_shared.isEmpty() || !_shared.containsKey(key))
+				return this;
+
+			if (_shared.size() == 1)
+				return empty();
+
+			Map<Object,Object> newShared = new HashMap<>(_shared);
+			newShared.remove(key);
+			return new JsonContext(newShared);
 		}
 
-		public static byte[] toBytes(NodeInfo value) throws IOException {
-			return toBytes(value, JsonContext.empty());
-		}
-
-		private static void serializePeerInfo(JsonGenerator gen, PeerInfo value, JsonContext context) throws IOException {
-			boolean textFormat = isTextFormat(gen);
-
-			// Format: 6-tuple
-			//   [peerId, nodeId, originNodeId, port, alternativeURL, signature]
-			// If omit the peer id, format:
-			//   [null, nodeId, originNodeId, port, alternativeURL, signature]
-
-			gen.writeStartArray();
-
-			// peer id
-			Boolean attr = (Boolean) context.getAttribute("omitPeerId");
-			boolean omitPeerId = attr != null && attr;
-			if (!omitPeerId) {
-				if (textFormat)
-					gen.writeString(value.getId().toBase58String());
-				else
-					gen.writeBinary(value.getId().bytes());
-			} else {
-				gen.writeNull();
-			}
-
-			// node id
-			if (textFormat)
-				gen.writeString(value.getNodeId().toBase58String());
-			else
-				gen.writeBinary(value.getNodeId().bytes());
-
-			// origin node id
-			if (value.isDelegated()) {
-				if (textFormat)
-					gen.writeString(value.getOrigin().toBase58String());
-				else
-					gen.writeBinary(value.getOrigin().bytes());
-			} else {
-				gen.writeNull();
-			}
-
-			// port
-			gen.writeNumber(value.getPort());
-
-			// alternative url
-			if (value.hasAlternativeURL())
-				gen.writeString(value.getAlternativeURL());
-			else
-				gen.writeNull();
-
-			// signature
-			byte[] sig = value.getSignature();
-			//if (textFormat)
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
-			//else
-			//	gen.writeBinary(sig);
-
-			gen.writeEndArray();
-		}
-
-		private static PeerInfo deserializePeerInfo(JsonParser p, JsonContext context) throws IOException, JacksonException {
-			if (p.currentToken() != JsonToken.START_ARRAY)
-				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo, should be an array");
-
-			boolean textFormat = isTextFormat(p);
-
-			Id peerId;
-			Id nodeId;
-			Id origin = null;
-			int port;
-			String alternativeURL;
-			byte[] signature;
-
-			// peer id
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL) {
-				peerId = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-			} else {
-				// peer id is omitted, should retrieve it from the context
-				peerId = (Id) context.getAttribute("peerId");
-				if (peerId == null)
-					throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: peer id can not be null");
-			}
-
-			// node id
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL)
-				nodeId = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-			else
-				throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: node id can not be null");
-
-			// origin node id
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL)
-				origin = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-
-			// port
-			p.nextToken();
-			port = p.getIntValue();
-			if (port < 0 || port > 65535)
-				throw InvalidFormatException.from(p, Integer.class, "Invalid PeerInfo: port " + port + " is out of range");
-
-			// alternative url
-			p.nextToken();
-			alternativeURL = p.currentToken() == JsonToken.VALUE_NULL ? null : p.getText();
-
-			// signature
-			p.nextToken();
-			if (p.currentToken() != JsonToken.VALUE_NULL)
-				signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-			else
-				throw MismatchedInputException.from(p, byte[].class, "Invalid PeerInfo: signature can not be null");
-
-			if (p.nextToken() != JsonToken.END_ARRAY)
-				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo: too many elements in array");
-
-			return PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature);
-		}
-
-		public static String toString(PeerInfo value, JsonContext context) throws IOException {
-			try (SegmentedStringWriter sw = new SegmentedStringWriter(Json.jsonFactory()._getBufferRecycler())) {
-				var gen = Json.jsonFactory().createGenerator(sw);
-				serializePeerInfo(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				return sw.getAndClear();
-			}
-		}
-
-		public static String toString(PeerInfo value) throws IOException {
-			return toString(value, null);
-		}
-
-		public static byte[] toBytes(PeerInfo value, JsonContext context) throws IOException {
-			try (ByteArrayBuilder bb = new ByteArrayBuilder(Json.cborFactory()._getBufferRecycler())) {
-				var gen = Json.cborFactory().createGenerator(bb);
-				serializePeerInfo(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				final byte[] result = bb.toByteArray();
-				bb.release();
-				return result;
-			}
-		}
-
-		public static byte[] toBytes(PeerInfo value) throws IOException {
-			return toBytes(value, null);
-		}
-
-		private static void serializeValue(JsonGenerator gen, Value value, JsonContext context) throws IOException {
-			boolean textFormat = isTextFormat(gen);
-			gen.writeStartObject();
-
-			if (value.getPublicKey() != null) {
-				// public key
-				if (textFormat)
-					gen.writeStringField("k", value.getPublicKey().toBase58String());
-				else
-					gen.writeBinaryField("k", value.getPublicKey().bytes());
-
-				// recipient
-				if (value.getRecipient() != null) {
-					if (textFormat)
-						gen.writeStringField("rec", value.getRecipient().toBase58String());
-					else
-						gen.writeBinaryField("rec", value.getRecipient().bytes());
-				}
-
-				// nonce
-				byte[] binary = value.getNonce();
-				if (binary != null) {
-					gen.writeFieldName("n");
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
-				}
-
-				// sequence number
-				if (value.getSequenceNumber() >= 0) {
-					gen.writeFieldName("seq");
-					gen.writeNumber(value.getSequenceNumber());
-				}
-
-				// signature
-				binary = value.getSignature();
-				if (value.getSignature() != null) {
-					gen.writeFieldName("sig");
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
+		@Override
+		public JsonContext withPerCallAttribute(Object key, Object value) {
+			// First: null value may need masking
+			if (value == null) {
+				// need to mask nulls to ensure default values won't be showing
+				if (_shared.containsKey(key)) {
+					value = NULL_SURROGATE;
+				} else if ((_nonShared == null) || !_nonShared.containsKey(key)) {
+					// except if non-mutable shared list has no entry, we don't care
+					return this;
+				} else {
+					if (_nonShared.containsKey(key)) // avoid exception on immutable map
+						_nonShared.remove(key);
+					return this;
 				}
 			}
 
-			byte[] data = value.getData();
-			if (data != null && data.length > 0) {
-				gen.writeFieldName("v");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, data, 0, data.length);
-			}
+			if (_nonShared == Collections.emptyMap())
+				_nonShared = new HashMap<>();
 
-			gen.writeEndObject();
-		}
-
-		private static Value deserializeValue(JsonParser p, JsonContext context) throws IOException, JacksonException {
-			if (p.currentToken() != JsonToken.START_OBJECT)
-				throw MismatchedInputException.from(p, Value.class, "Invalid Value: should be an object");
-
-			boolean textFormat = isTextFormat(p);
-
-			Id publicKey = null;
-			Id recipient = null;
-			byte[] nonce = null;
-			int sequenceNumber = -1;
-			byte[] signature = null;
-			byte[] data = null;
-
-			while (p.nextToken() != JsonToken.END_OBJECT) {
-				String fieldName = p.currentName();
-				p.nextToken();
-				switch (fieldName) {
-					case "k":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							publicKey = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-						break;
-					case "rec":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							recipient = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
-						break;
-					case "n":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-						break;
-					case "seq":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							sequenceNumber = p.getIntValue();
-						break;
-					case "sig":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-						break;
-					case "v":
-						if (p.currentToken() != JsonToken.VALUE_NULL)
-							data = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-						else
-							throw MismatchedInputException.from(p, byte[].class, "Invalid Value: data can not be null");
-						break;
-					default:
-						p.skipChildren();
-				}
-			}
-
-			return Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data);
-		}
-
-		public static String toString(Value value, JsonContext context) throws IOException {
-			try (SegmentedStringWriter sw = new SegmentedStringWriter(Json.jsonFactory()._getBufferRecycler())) {
-				var gen = Json.jsonFactory().createGenerator(sw);
-				serializeValue(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				return sw.getAndClear();
-			}
-		}
-
-		public static String toString(Value value) throws IOException {
-			return toString(value, null);
-		}
-
-		public static byte[] toBytes(Value value, JsonContext context) throws IOException {
-			try (ByteArrayBuilder bb = new ByteArrayBuilder(Json.cborFactory()._getBufferRecycler(), value.getData().length + 256)) {
-				var gen = Json.cborFactory().createGenerator(bb);
-				serializeValue(gen, value, context == null ? JsonContext.empty() : context);
-				gen.close();
-				final byte[] result = bb.toByteArray();
-				bb.release();
-				return result;
-			}
-		}
-
-		public static byte[] toBytes(Value value) throws IOException {
-			return toBytes(value, null);
+			_nonShared.put(key, value);
+			return this;
 		}
 	}
 }

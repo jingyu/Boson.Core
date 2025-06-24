@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
@@ -99,9 +100,8 @@ public abstract class LookupRequest extends Message {
 		gen.writeFieldName(getType().toString());
 		gen.writeStartObject();
 		gen.writeFieldName("t");
-		gen.writeBinary(target.bytes());
-		gen.writeFieldName("w");
-		gen.writeNumber(getWant());
+		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, target.bytes(), 0, Id.BYTES);
+		gen.writeNumberField("w", getWant());
 		_serialize(gen);
 		gen.writeEndObject();
 	}
@@ -120,7 +120,7 @@ public abstract class LookupRequest extends Message {
 
 			switch (name) {
 			case "t":
-				target = Id.of(parser.getBinaryValue());
+				target = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 				break;
 
 			case "w":

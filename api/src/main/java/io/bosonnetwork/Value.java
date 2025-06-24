@@ -139,7 +139,7 @@ public class Value {
 	 * @return a new immutable {@code Value} object.
 	 */
 	public static Value of(byte[] data) {
-		return new Value(null, null, null, null, -1, null, data);
+		return new Value(null, null, null, null, 0, null, data);
 	}
 
 	/**
@@ -196,7 +196,7 @@ public class Value {
 	 * @return a new immutable {@code Value} object.
 	 */
 	public static Value createValue(byte[] data) {
-		return new Value(null, null, null, null, -1, null, data);
+		return new Value(null, null, null, null, 0, null, data);
 	}
 
 	/**
@@ -434,10 +434,13 @@ public class Value {
 		*/
 
 		MessageDigest sha = Hash.sha256();
-		if (recipient != null)
-			sha.update(recipient.bytes());
-		sha.update(nonce);
-		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
+		if (publicKey != null) {
+			sha.update(publicKey.bytes());
+			if (recipient != null)
+				sha.update(recipient.bytes());
+			sha.update(nonce);
+			sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
+		}
 		sha.update(data);
 
 		return sha.digest();
@@ -507,6 +510,12 @@ public class Value {
 
 
 		return new Value(kp, recipient, nonce, sequenceNumber + 1, data);
+	}
+
+	@Override
+	public int hashCode() {
+		return 0x6030A + Objects.hash(publicKey, recipient, Arrays.hashCode(nonce),
+				sequenceNumber, Arrays.hashCode(signature), Arrays.hashCode(data));
 	}
 
 	@Override

@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
@@ -40,7 +41,7 @@ public class FindValueResponse extends LookupResponse {
 	private Id recipient;
 	private byte[] nonce;
 	private byte[] signature;
-	private int sequenceNumber = -1;
+	private int sequenceNumber = 0;
 	private byte[] value;
 
 	public FindValueResponse(int txid) {
@@ -75,32 +76,30 @@ public class FindValueResponse extends LookupResponse {
 	protected void _serialize(JsonGenerator gen) throws IOException {
 		if (publicKey != null) {
 			gen.writeFieldName("k");
-			gen.writeBinary(publicKey.bytes());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, publicKey.bytes(), 0, Id.BYTES);
 		}
 
 		if (recipient != null) {
 			gen.writeFieldName("rec");
-			gen.writeBinary(recipient.bytes());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, recipient.bytes(), 0, Id.BYTES);
 		}
 
 		if (nonce != null) {
 			gen.writeFieldName("n");
-			gen.writeBinary(nonce);
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, nonce, 0, nonce.length);
 		}
 
-		if (sequenceNumber >= 0) {
-			gen.writeFieldName("seq");
-			gen.writeNumber(sequenceNumber);
-		}
+		if (sequenceNumber > 0)
+			gen.writeNumberField("seq", sequenceNumber);
 
 		if (signature != null) {
 			gen.writeFieldName("sig");
-			gen.writeBinary(signature);
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, signature, 0, signature.length);
 		}
 
 		if (value != null) {
 			gen.writeFieldName("v");
-			gen.writeBinary(value);
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value, 0, value.length);
 		}
 	}
 
@@ -108,19 +107,19 @@ public class FindValueResponse extends LookupResponse {
 	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
 		switch (fieldName) {
 		case "k":
-			publicKey = Id.of(parser.getBinaryValue());
+			publicKey = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 			break;
 
 		case "rec":
-			recipient = Id.of(parser.getBinaryValue());
+			recipient = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 			break;
 
 		case "n":
-			nonce = parser.getBinaryValue();
+			nonce = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 			break;
 
 		case "sig":
-			signature = parser.getBinaryValue();
+			signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 			break;
 
 		case "seq":
@@ -128,7 +127,7 @@ public class FindValueResponse extends LookupResponse {
 			break;
 
 		case "v":
-			value = parser.getBinaryValue();
+			value = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 			break;
 
 		default:
@@ -153,7 +152,7 @@ public class FindValueResponse extends LookupResponse {
 		if (nonce != null)
 			b.append(",n:").append(Hex.encode(nonce));
 
-		if (sequenceNumber >= 0)
+		if (sequenceNumber > 0)
 			b.append(",seq:").append(sequenceNumber);
 
 		if (signature != null)

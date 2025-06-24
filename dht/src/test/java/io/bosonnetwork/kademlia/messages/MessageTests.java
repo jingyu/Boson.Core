@@ -25,20 +25,34 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
-
+import io.bosonnetwork.kademlia.messages2.Message2;
 import io.bosonnetwork.utils.Hex;
+import io.bosonnetwork.utils.Json;
 
 public abstract class MessageTests {
 	public static int VERSION = 0x68690001;
 	public static String VERSION_STR = "hi/1";
 
+	protected static int TIMING_ITERATIONS = 1_000_000;
+	protected static String DEFAULT_VERSION_STR = "Orca/1";
+
 	protected void printMessage(Message msg, byte[] bin) throws IOException {
 		System.out.println("======== " + msg.getType().name() + ":" + msg.getMethod().name());
 		System.out.println("String: " +  msg.toString());
 		System.out.println("   Hex: " + bin.length + "/" + msg.estimateSize() + " : " + Hex.encode(bin));
-		System.out.println("  JSON: " + new ObjectMapper().writeValueAsString(new CBORMapper().readTree(bin)));
+		System.out.println("  JSON: " + Json.objectMapper().writeValueAsString(Json.cborMapper().readTree(bin)));
+		System.out.println();
+	}
+
+	protected void printMessage(Message2<?> msg) throws IOException {
+		var cbor = msg.toBytes();
+		var json = msg.toJson();
+
+		System.out.println("======== " + msg.getType().name() + ":" + msg.getMethod().name());
+		System.out.println("String: " +  msg);
+		System.out.println("  CBOR: " + cbor.length + " : " + Hex.encode(cbor));
+		System.out.println("*JSON*: " + Json.objectMapper().writeValueAsString(Json.cborMapper().readTree(cbor)));
+		System.out.println("  JSON: " + json);
 		System.out.println();
 	}
 }

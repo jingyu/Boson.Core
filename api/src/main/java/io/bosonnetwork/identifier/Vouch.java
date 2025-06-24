@@ -163,7 +163,7 @@ public class Vouch {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, types, holder, credentials, Arrays.hashCode(signature));
+		return Objects.hash(id, types, holder, credentials, signedAt, Arrays.hashCode(signature));
 	}
 
 	@Override

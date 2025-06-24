@@ -20,24 +20,11 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.identifier;
+package io.bosonnetwork.kademlia.messages2;
 
-public class DIDConstants {
-	public static final String DID_SCHEME = "did";
-	public static final String DID_METHOD = "boson";
-
-	public static final String W3C_DID_CONTEXT = "https://www.w3.org/ns/did/v1.1";
-	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/ns/did/v1";
-
-	public static final String W3C_VC_CONTEXT = "https://www.w3.org/ns/credentials/v2";
-	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/ns/credentials/v1";
-
-	public static final String W3C_ED25519_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
-
-	public static final String DEFAULT_VC_TYPE = "VerifiableCredential";
-	public static final String DEFAULT_VP_TYPE = "VerifiablePresentation";
-
-	protected static final String DEFAULT_VERIFICATION_METHOD_FRAGMENT = "default";
-
-	public static final Object BOSON_ID_FORMAT_W3C = new Object();
+public interface Request extends Message2.Body {
+	@Override
+	default Message2.Type getType() {
+		return Message2.Type.REQUEST;
+	}
 }

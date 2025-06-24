@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
@@ -69,15 +70,21 @@ public class FindPeerResponse extends LookupResponse {
 			return;
 
 		gen.writeFieldName("p");
-		gen.writeStartArray();
-		// p[0] is the peerid
-		gen.writeBinary(peers.get(0).getId().bytes());
-		// p[1...] is the peerinfo without id
+		gen.writeStartArray(peers, peers.size());
+		boolean leadingPeer = true;
+
 		for (PeerInfo pi : peers) {
 			gen.writeStartArray();
-			gen.writeBinary(pi.getNodeId().bytes());
+			if (leadingPeer) {
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, pi.getId().bytes(), 0, Id.BYTES);
+				leadingPeer = false;
+			} else {
+				gen.writeNull();
+			}
+
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, pi.getNodeId().bytes(), 0, Id.BYTES);
 			if (pi.isDelegated())
-				gen.writeBinary(pi.getOrigin().bytes());
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, pi.getOrigin().bytes(), 0, Id.BYTES);
 			else
 				gen.writeNull();
 			gen.writeNumber(pi.getPort());
@@ -85,7 +92,7 @@ public class FindPeerResponse extends LookupResponse {
 				gen.writeString(pi.getAlternativeURL());
 			else
 				gen.writeNull();
-			gen.writeBinary(pi.getSignature());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, pi.getSignature(), 0, pi.getSignature().length);
 			gen.writeEndArray();
 		}
 		gen.writeEndArray();
@@ -109,9 +116,8 @@ public class FindPeerResponse extends LookupResponse {
 		if (parser.currentToken() != JsonToken.START_ARRAY)
 			throw new IOException("Invalid peers, should be array");
 
-		// get peer id from p[0]
-		parser.nextToken();
-		Id peerId = Id.of(parser.getBinaryValue());
+		Id peerId = null;
+		boolean leadingPeer = true;
 
 		List<PeerInfo> ps = new ArrayList<>();
 		while (parser.nextToken() != JsonToken.END_ARRAY) {
@@ -119,15 +125,28 @@ public class FindPeerResponse extends LookupResponse {
 				throw new IOException("Invalid peer info, should be array");
 
 			parser.nextToken();
-			Id nodeId = Id.of(parser.getBinaryValue());
+			if (leadingPeer) {
+				peerId = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
+				leadingPeer = false;
+			} else {
+				if (parser.currentToken() != JsonToken.VALUE_NULL) {
+					Id pid = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
+					if (!pid.equals(peerId))
+						throw new IOException("Peer id mismatch");
+				}
+			}
+
 			parser.nextToken();
-			Id origin = parser.currentToken() != JsonToken.VALUE_NULL ? Id.of(parser.getBinaryValue()) : null;
+			Id nodeId = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
+			parser.nextToken();
+			Id origin = parser.currentToken() != JsonToken.VALUE_NULL ?
+					Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : null;
 			parser.nextToken();
 			int port = parser.getIntValue();
 			parser.nextToken();
 			String alt = parser.currentToken() != JsonToken.VALUE_NULL ? parser.getText() : null;
 			parser.nextToken();
-			byte[] signature = parser.getBinaryValue();
+			byte[] signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 
 			if (parser.nextToken() != JsonToken.END_ARRAY)
 				throw new IOException("Invalid peer info");
@@ -147,6 +166,7 @@ public class FindPeerResponse extends LookupResponse {
 			size += (2 + 2 + 2 + Id.BYTES);
 
 			for (PeerInfo pi : peers) {
+				size ++;
 				size += (2 + 2 + Id.BYTES + 1 + Short.BYTES + 2 + Signature.BYTES);
 				size += pi.isDelegated() ? 2 + Id.BYTES : 1;
 				size += pi.hasAlternativeURL() ? 2 + pi.getAlternativeURL().getBytes().length : 1;

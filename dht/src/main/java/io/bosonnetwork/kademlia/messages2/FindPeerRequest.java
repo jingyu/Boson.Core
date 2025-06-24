@@ -20,24 +20,32 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.identifier;
+package io.bosonnetwork.kademlia.messages2;
 
-public class DIDConstants {
-	public static final String DID_SCHEME = "did";
-	public static final String DID_METHOD = "boson";
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-	public static final String W3C_DID_CONTEXT = "https://www.w3.org/ns/did/v1.1";
-	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/ns/did/v1";
+import io.bosonnetwork.Id;
 
-	public static final String W3C_VC_CONTEXT = "https://www.w3.org/ns/credentials/v2";
-	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/ns/credentials/v1";
+// @JsonDeserialize(using = FindPeerRequest.Deserializer.class)
+public class FindPeerRequest extends LookupRequest {
+	@JsonCreator
+	protected FindPeerRequest(@JsonProperty(value = "t", required = true) Id target,
+							  @JsonProperty(value = "w", required = true) int want) {
+		super(target, want);
+	}
 
-	public static final String W3C_ED25519_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
+	public FindPeerRequest(Id target, boolean want4, boolean want6) {
+		super(target, want4, want6, false);
+	}
 
-	public static final String DEFAULT_VC_TYPE = "VerifiableCredential";
-	public static final String DEFAULT_VP_TYPE = "VerifiablePresentation";
+	@Override
+	public int hashCode() {
+		return 0xF1AD9EE2 + super.hashCode();
+	}
 
-	protected static final String DEFAULT_VERIFICATION_METHOD_FRAGMENT = "default";
-
-	public static final Object BOSON_ID_FORMAT_W3C = new Object();
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindPeerRequest && super.equals(obj);
+	}
 }

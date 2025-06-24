@@ -137,4 +137,20 @@ public class Result<T> {
 	public boolean isComplete() {
 		return v4 != null && v6 != null;
 	}
+
+	@Override
+	public int hashCode() {
+		return 0x6030A + Objects.hash(v4, v6);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+
+		if (obj instanceof Result<?> other)
+			return Objects.equals(v4, other.v4) && Objects.equals(v6, other.v6);
+
+		return false;
+	}
 }

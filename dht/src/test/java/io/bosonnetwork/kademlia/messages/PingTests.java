@@ -23,17 +23,23 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.kademlia.messages2.Message2;
 
 public class PingTests extends MessageTests {
+	@Deprecated
 	@Test
 	public void testPingRequestSize() throws Exception {
 		PingRequest msg = new PingRequest();
@@ -45,6 +51,7 @@ public class PingTests extends MessageTests {
 		assertTrue(bin.length <= msg.estimateSize());
 	}
 
+	@Deprecated
 	@Test
 	public void testPingRequest() throws Exception {
 		Id id = Id.random();
@@ -62,7 +69,7 @@ public class PingTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof PingRequest);
+		assertInstanceOf(PingRequest.class, pm);
 		PingRequest m = (PingRequest)pm;
 
 		assertEquals(Type.REQUEST, m.getType());
@@ -70,8 +77,21 @@ public class PingTests extends MessageTests {
 		assertEquals(id, m.getId());
 		assertEquals(txid, m.getTxid());
 		assertEquals(VERSION_STR, m.getReadableVersion());
+
+		// Compatibility
+		var msg2 = Message2.parse(bin);
+		msg2.setId(msg.getId());
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertNull(msg2.getBody());
+		assertEquals(msg.getVersion(), msg2.getVersion());
+		printMessage(msg2);
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testPingResponseSize() throws Exception {
 		PingResponse msg = new PingResponse();
@@ -83,6 +103,7 @@ public class PingTests extends MessageTests {
 		assertTrue(bin.length <= msg.estimateSize());
 	}
 
+	@Deprecated
 	@Test
 	public void testPingResponse() throws Exception {
 		Id id = Id.random();
@@ -98,7 +119,7 @@ public class PingTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof PingResponse);
+		assertInstanceOf(PingResponse.class, pm);
 		PingResponse m = (PingResponse)pm;
 
 		assertEquals(Type.RESPONSE, m.getType());
@@ -106,5 +127,151 @@ public class PingTests extends MessageTests {
 		assertEquals(id, m.getId());
 		assertEquals(txid, m.getTxid());
 		assertEquals(0, m.getVersion());
+
+		// Compatibility
+		var msg2 = Message2.parse(bin);
+		msg2.setId(msg.getId());
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertNull(msg2.getBody());
+		assertEquals(msg.getVersion(), msg2.getVersion());
+
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	@Test
+	void testRequest() throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x78901234;
+		var msg = Message2.pingRequest(txid);
+		msg.setId(nodeId);
+		byte[] bin = msg.toBytes();
+
+		printMessage(msg);
+
+		assertEquals(20, bin.length);
+
+		assertEquals(Message2.Type.REQUEST, msg.getType());
+		assertEquals(Message2.Method.PING, msg.getMethod());
+		assertEquals(nodeId, msg.getId());
+		assertEquals(txid, msg.getTxid());
+		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
+
+		var msg2 = Message2.parse(bin);
+		msg2.setId(msg.getId());
+		assertEquals(msg, msg2);
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	@Test
+	void testResponse() throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x78901234;
+		var msg = Message2.pingResponse(txid);
+		msg.setId(nodeId);
+		byte[] bin = msg.toBytes();
+
+		printMessage(msg);
+
+		assertEquals(20, bin.length);
+
+		assertEquals(Message2.Type.RESPONSE, msg.getType());
+		assertEquals(Message2.Method.PING, msg.getMethod());
+		assertEquals(nodeId, msg.getId());
+		assertEquals(txid, msg.getTxid());
+		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
+
+		var msg2 = Message2.parse(bin);
+		msg2.setId(nodeId);
+		assertEquals(msg, msg2);
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	@Test
+	void timingRequest() throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x78901234;
+
+		{	// TODO: remove this block
+			var msg = new PingRequest();
+			msg.setId(nodeId);
+			msg.setTxid(txid);
+			msg.setVersion(Constants.VERSION);
+			var bin = msg.serialize();
+			Message.parse(bin);
+
+			var start = System.currentTimeMillis();
+			for (var i = 0; i < TIMING_ITERATIONS; i++) {
+				msg = new PingRequest();
+				msg.setId(nodeId);
+				msg.setTxid(txid);
+				msg.setVersion(Constants.VERSION);
+				bin = msg.serialize();
+				Message.parse(bin);
+			}
+			var end = System.currentTimeMillis();
+			System.out.printf(">>>>>>>> PingRequest: %dms\n", (end - start));
+		}
+
+		// warmup
+		var msg = Message2.pingRequest(txid);
+		msg.setId(nodeId);
+		var bin = msg.toBytes();
+		Message2.parse(bin);
+
+		var start = System.currentTimeMillis();
+		for (var i = 0; i < TIMING_ITERATIONS; i++) {
+			msg = Message2.pingRequest(txid);
+			msg.setId(nodeId);
+			bin = msg.toBytes();
+			Message2.parse(bin);
+		}
+		var end = System.currentTimeMillis();
+		System.out.printf(">>>>>>>> PingRequest: %dms, estimated: streaming ~= 390ms, *mapping ~= 240ms @ MBP-13-m1pro\n", (end - start));
+	}
+
+	@Test
+	void timingResponse() throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x78901234;
+
+		{	// TODO: remove this block
+			var msg = new PingResponse();
+			msg.setId(nodeId);
+			msg.setTxid(txid);
+			msg.setVersion(Constants.VERSION);
+			var bin = msg.serialize();
+			Message.parse(bin);
+
+			var start = System.currentTimeMillis();
+			for (var i = 0; i < TIMING_ITERATIONS; i++) {
+				msg = new PingResponse();
+				msg.setId(nodeId);
+				msg.setTxid(txid);
+				msg.setVersion(Constants.VERSION);
+				bin = msg.serialize();
+				Message.parse(bin);
+			}
+			var end = System.currentTimeMillis();
+			System.out.printf(">>>>>>>> PingResponse: %dms\n", (end - start));
+		}
+
+		// warmup
+		var msg = Message2.pingResponse(txid);
+		msg.setId(nodeId);
+		var bin = msg.toBytes();
+		Message2.parse(bin);
+
+		var start = System.currentTimeMillis();
+		for (var i = 0; i < TIMING_ITERATIONS; i++) {
+			msg = Message2.pingResponse(txid);
+			msg.setId(nodeId);
+			bin = msg.toBytes();
+			Message2.parse(bin);
+		}
+		var end = System.currentTimeMillis();
+		System.out.printf(">>>>>>>> PingResponse: %dms, estimated: streaming ~= 360ms, *mapping ~= 240ms @ MBP-13-m1pro\n", (end - start));
 	}
 }

@@ -20,24 +20,31 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.identifier;
+package io.bosonnetwork.kademlia.messages2;
 
-public class DIDConstants {
-	public static final String DID_SCHEME = "did";
-	public static final String DID_METHOD = "boson";
+import java.util.List;
 
-	public static final String W3C_DID_CONTEXT = "https://www.w3.org/ns/did/v1.1";
-	public static final String BOSON_DID_CONTEXT = "https://bosonnetwork.io/ns/did/v1";
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-	public static final String W3C_VC_CONTEXT = "https://www.w3.org/ns/credentials/v2";
-	public static final String BOSON_VC_CONTEXT = "https://bosonnetwork.io/ns/credentials/v1";
+import io.bosonnetwork.NodeInfo;
 
-	public static final String W3C_ED25519_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
+public class FindNodeResponse extends LookupResponse {
+	@JsonCreator
+	public FindNodeResponse(@JsonProperty("n4") List<NodeInfo> nodes4,
+							@JsonProperty("n6") List<NodeInfo> nodes6,
+							@JsonProperty("tok") int token) {
+		super(nodes4, nodes6, token);
+	}
 
-	public static final String DEFAULT_VC_TYPE = "VerifiableCredential";
-	public static final String DEFAULT_VP_TYPE = "VerifiablePresentation";
 
-	protected static final String DEFAULT_VERIFICATION_METHOD_FRAGMENT = "default";
+	@Override
+	public int hashCode() {
+		return 0xF1ADA00D + super.hashCode();
+	}
 
-	public static final Object BOSON_ID_FORMAT_W3C = new Object();
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindNodeResponse && super.equals(obj);
+	}
 }

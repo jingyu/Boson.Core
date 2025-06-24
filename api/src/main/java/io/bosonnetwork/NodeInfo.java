@@ -26,6 +26,7 @@ package io.bosonnetwork;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.Objects;
 
 /**
  * THis class represent the node information in the Boson network, it contains
@@ -68,7 +69,7 @@ public class NodeInfo {
 			throw new IllegalArgumentException("Invalid socket address: null");
 
 		if (port <= 0 || port > 65535)
-			throw new IllegalArgumentException("Invalud port: " + port);
+			throw new IllegalArgumentException("Invalid port: " + port);
 
 		this.id = id;
 		this.addr = new InetSocketAddress(addr, port);
@@ -89,7 +90,7 @@ public class NodeInfo {
 			throw new IllegalArgumentException("Invalid socket address: null");
 
 		if (port <= 0 || port > 65535)
-			throw new IllegalArgumentException("Invalud port: " + port);
+			throw new IllegalArgumentException("Invalid port: " + port);
 
 		this.id = id;
 		this.addr = new InetSocketAddress(addr, port);
@@ -211,7 +212,7 @@ public class NodeInfo {
 
 	@Override
 	public int hashCode() {
-		return id.hashCode() + 0x6e; // + 'n'
+		return 0x6030A + Objects.hash(id, addr, version);
 	}
 
 	@Override
@@ -220,7 +221,9 @@ public class NodeInfo {
 			return true;
 
 		if (o instanceof NodeInfo that)
-			return this.id.equals(that.id) && this.addr.equals(that.addr);
+			return this.id.equals(that.id) &&
+					this.addr.equals(that.addr) &&
+					this.version == that.version;
 
 		return false;
 	}

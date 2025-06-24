@@ -1,6 +1,6 @@
 package io.bosonnetwork.utils;
 
-import static io.bosonnetwork.utils.Json.isTextFormat;
+import static io.bosonnetwork.utils.Json.isBinaryFormat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
@@ -180,24 +180,24 @@ public class JsonPerfTests {
 
 	// streaming serialization and deserialization
 	static void serializeNodeInfo(JsonGenerator gen, NodeInfo value, JsonContext context) throws IOException {
-		var textFormat = isTextFormat(gen);
+		var binaryFormat = isBinaryFormat(gen);
 
 		// Format: triple
 		//   [id, host, port]
+		//
+		// host:
+		//   text format: IP address string or hostname string
+		//   binary format: binary ip address
 		gen.writeStartArray();
 
-		if (textFormat)
+		if (binaryFormat) {
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
+			byte[] addr = value.getAddress().getAddress().getAddress();
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+		} else {
 			gen.writeString(value.getId().toBase58String());
-		else
-			gen.writeBinary(value.getId().bytes());
-
-		// host ip address or name
-		// text format: IP address string or hostname string
-		// binary format: binary ip address
-		if (textFormat)
 			gen.writeString(value.getAddress().getHostString());
-		else
-			gen.writeBinary(value.getAddress().getAddress().getAddress()); // binary ip address
+		}
 
 		// port
 		gen.writeNumber(value.getAddress().getPort());
@@ -209,7 +209,7 @@ public class JsonPerfTests {
 		if (p.currentToken() != JsonToken.START_ARRAY)
 			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo, should be an array");
 
-		boolean textFormat = isTextFormat(p);
+		boolean binaryFormat = isBinaryFormat(p);
 		Id id;
 		InetAddress addr;
 		int port;
@@ -217,7 +217,7 @@ public class JsonPerfTests {
 		// id
 		p.nextToken();
 		if (p.currentToken() != JsonToken.VALUE_NULL)
-			id = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+			id = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 		else
 			throw MismatchedInputException.from(p, Id.class, "Invalid NodeInfo: node id can not be null");
 
@@ -226,11 +226,11 @@ public class JsonPerfTests {
 		// binary format: binary ip address or host name string
 		p.nextToken();
 		if (p.currentToken() != JsonToken.VALUE_NULL) {
-			if (textFormat)
-				addr = InetAddress.getByName(p.getText());
-			else
+			if (binaryFormat)
 				addr = p.currentToken() == JsonToken.VALUE_STRING ?
 						InetAddress.getByName(p.getText()) : InetAddress.getByAddress(p.getBinaryValue());
+			else
+				addr = InetAddress.getByName(p.getText());
 		} else {
 			throw MismatchedInputException.from(p, InetAddress.class, "Invalid NodeInfo: node address can not be null");
 		}
@@ -454,7 +454,7 @@ public class JsonPerfTests {
 	}
 
 	static void serializePeerInfo(JsonGenerator gen, PeerInfo value, JsonContext context) throws IOException {
-		boolean textFormat = isTextFormat(gen);
+		boolean binaryFormat = isBinaryFormat(gen);
 
 		// Format: 6-tuple
 		//   [peerId, nodeId, originNodeId, port, alternativeURL, signature]
@@ -464,29 +464,29 @@ public class JsonPerfTests {
 		gen.writeStartArray();
 
 		// peer id
-		Boolean attr = (Boolean) context.getAttribute("omitPeerId");
+		Boolean attr = (Boolean) context.getAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID);
 		boolean omitPeerId = attr != null && attr;
 		if (!omitPeerId) {
-			if (textFormat)
-				gen.writeString(value.getId().toBase58String());
+			if (binaryFormat)
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
 			else
-				gen.writeBinary(value.getId().bytes());
+				gen.writeString(value.getId().toBase58String());
 		} else {
 			gen.writeNull();
 		}
 
 		// node id
-		if (textFormat)
-			gen.writeString(value.getNodeId().toBase58String());
+		if (binaryFormat)
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getNodeId().bytes(), 0, Id.BYTES);
 		else
-			gen.writeBinary(value.getNodeId().bytes());
+			gen.writeString(value.getNodeId().toBase58String());
 
 		// origin node id
 		if (value.isDelegated()) {
-			if (textFormat)
-				gen.writeString(value.getOrigin().toBase58String());
+			if (binaryFormat)
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getOrigin().bytes(), 0, Id.BYTES);
 			else
-				gen.writeBinary(value.getOrigin().bytes());
+				gen.writeString(value.getOrigin().toBase58String());
 		} else {
 			gen.writeNull();
 		}
@@ -502,10 +502,7 @@ public class JsonPerfTests {
 
 		// signature
 		byte[] sig = value.getSignature();
-		//if (textFormat)
 		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
-		//else
-		//	gen.writeBinary(sig);
 
 		gen.writeEndArray();
 	}
@@ -514,7 +511,7 @@ public class JsonPerfTests {
 		if (p.currentToken() != JsonToken.START_ARRAY)
 			throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo, should be an array");
 
-		boolean textFormat = isTextFormat(p);
+		boolean binaryFormat = isBinaryFormat(p);
 
 		Id peerId;
 		Id nodeId;
@@ -526,10 +523,10 @@ public class JsonPerfTests {
 		// peer id
 		p.nextToken();
 		if (p.currentToken() != JsonToken.VALUE_NULL) {
-			peerId = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+			peerId = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 		} else {
 			// peer id is omitted, should retrieve it from the context
-			peerId = (Id) context.getAttribute("peerId");
+			peerId = (Id) context.getAttribute(PeerInfo.ATTRIBUTE_PEER_ID);
 			if (peerId == null)
 				throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: peer id can not be null");
 		}
@@ -537,14 +534,14 @@ public class JsonPerfTests {
 		// node id
 		p.nextToken();
 		if (p.currentToken() != JsonToken.VALUE_NULL)
-			nodeId = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+			nodeId = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 		else
 			throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: node id can not be null");
 
 		// origin node id
 		p.nextToken();
 		if (p.currentToken() != JsonToken.VALUE_NULL)
-			origin = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+			origin = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 
 		// port
 		p.nextToken();
@@ -731,7 +728,7 @@ public class JsonPerfTests {
 
 		var start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			s = serdeJsonMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute("omitPeerId", true)).writeValueAsString(pi);
+			s = serdeJsonMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true)).writeValueAsString(pi);
 		var end = System.nanoTime();
 		System.out.println(s);
 		var mappingSerializeTime = end - start;
@@ -739,7 +736,7 @@ public class JsonPerfTests {
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			pi2 = serdeJsonMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute("peerId", peerId)).readValue(s, PeerInfo.class);
+			pi2 = serdeJsonMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId)).readValue(s, PeerInfo.class);
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
 		var mappingDeserializeTime = end - start;
@@ -748,14 +745,14 @@ public class JsonPerfTests {
 		// MixIn
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			s = mixinJsonMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute("omitPeerId", true)).writeValueAsString(pi);
+			s = mixinJsonMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true)).writeValueAsString(pi);
 		end = System.nanoTime();
 		System.out.println(s);
 		System.out.printf(">>>>>>>> Serialize with MixIn: %.2f ms\n", (end - start) / 1000000.0);
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			pi2 = mixinJsonMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute("peerId", peerId)).readValue(s, PeerInfo.class);
+			pi2 = mixinJsonMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId)).readValue(s, PeerInfo.class);
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
 		System.out.printf(">>>>>>>> Deserialize with MixIn: %.2f ms\n", (end - start) / 1000000.0);
@@ -763,7 +760,7 @@ public class JsonPerfTests {
 		// Streaming with generator
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++) {
-			s = toString(pi, JsonContext.withAttribute("omitPeerId", true));
+			s = toString(pi, JsonContext.withAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true));
 		}
 		end = System.nanoTime();
 		System.out.println(s);
@@ -772,7 +769,7 @@ public class JsonPerfTests {
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++) {
-			pi2 = parse(s, PeerInfo.class, JsonContext.withAttribute("peerId", peerId));
+			pi2 = parse(s, PeerInfo.class, JsonContext.withAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId));
 		}
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
@@ -865,7 +862,7 @@ public class JsonPerfTests {
 
 		var start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			s = serdeCborMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute("omitPeerId", true)).writeValueAsBytes(pi);
+			s = serdeCborMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true)).writeValueAsBytes(pi);
 		var end = System.nanoTime();
 		System.out.println(Hex.encode(s));
 		var mappingSerializeTime = end - start;
@@ -873,7 +870,7 @@ public class JsonPerfTests {
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			pi2 = serdeCborMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute("peerId", peerId)).readValue(s, PeerInfo.class);
+			pi2 = serdeCborMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId)).readValue(s, PeerInfo.class);
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
 		var mappingDeserializeTime = end - start;
@@ -882,14 +879,14 @@ public class JsonPerfTests {
 		// MixIn
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			s = mixinCborMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute("omitPeerId", true)).writeValueAsBytes(pi);
+			s = mixinCborMapper.writer(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true)).writeValueAsBytes(pi);
 		end = System.nanoTime();
 		System.out.println(Hex.encode(s));
 		System.out.printf(">>>>>>>> Serialize with MixIn: %.2f ms\n", (end - start) / 1000000.0);
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++)
-			pi2 = mixinCborMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute("peerId", peerId)).readValue(s, PeerInfo.class);
+			pi2 = mixinCborMapper.reader(ContextAttributes.getEmpty().withPerCallAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId)).readValue(s, PeerInfo.class);
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
 		System.out.printf(">>>>>>>> Deserialize with MixIn: %.2f ms\n", (end - start) / 1000000.0);
@@ -897,7 +894,7 @@ public class JsonPerfTests {
 		// Streaming with generator
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++) {
-			s = toBytes(pi, JsonContext.withAttribute("omitPeerId", true));
+			s = toBytes(pi, JsonContext.withAttribute(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true));
 		}
 		end = System.nanoTime();
 		System.out.println(Hex.encode(s));
@@ -906,7 +903,7 @@ public class JsonPerfTests {
 
 		start = System.nanoTime();
 		for (int i = 0; i < 1000000; i++) {
-			pi2 = parse(s, PeerInfo.class, JsonContext.withAttribute("peerId", peerId));
+			pi2 = parse(s, PeerInfo.class, JsonContext.withAttribute(PeerInfo.ATTRIBUTE_PEER_ID, peerId));
 		}
 		end = System.nanoTime();
 		assertEquals(pi, pi2);
@@ -923,22 +920,26 @@ public class JsonPerfTests {
 	}
 
 	static void serializeValue(JsonGenerator gen, Value value, JsonContext context) throws IOException {
-		boolean textFormat = isTextFormat(gen);
+		boolean binaryFormat = isBinaryFormat(gen);
 		gen.writeStartObject();
 
 		if (value.getPublicKey() != null) {
 			// public key
-			if (textFormat)
+			if (binaryFormat) {
+				gen.writeFieldName("k");
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getPublicKey().bytes(), 0, Id.BYTES);
+			} else {
 				gen.writeStringField("k", value.getPublicKey().toBase58String());
-			else
-				gen.writeBinaryField("k", value.getPublicKey().bytes());
+			}
 
 			// recipient
 			if (value.getRecipient() != null) {
-				if (textFormat)
+				if (binaryFormat) {
+					gen.writeFieldName("rec");
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getRecipient().bytes(), 0, Id.BYTES);
+				} else {
 					gen.writeStringField("rec", value.getRecipient().toBase58String());
-				else
-					gen.writeBinaryField("rec", value.getRecipient().bytes());
+				}
 			}
 
 			// nonce
@@ -949,14 +950,12 @@ public class JsonPerfTests {
 			}
 
 			// sequence number
-			if (value.getSequenceNumber() >= 0) {
-				gen.writeFieldName("seq");
-				gen.writeNumber(value.getSequenceNumber());
-			}
+			if (value.getSequenceNumber() > 0)
+				gen.writeNumberField("seq", value.getSequenceNumber());
 
 			// signature
 			binary = value.getSignature();
-			if (value.getSignature() != null) {
+			if (binary != null) {
 				gen.writeFieldName("sig");
 				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
 			}
@@ -975,12 +974,12 @@ public class JsonPerfTests {
 		if (p.currentToken() != JsonToken.START_OBJECT)
 			throw MismatchedInputException.from(p, Value.class, "Invalid Value: should be an object");
 
-		boolean textFormat = isTextFormat(p);
+		boolean binaryFormat = isBinaryFormat(p);
 
 		Id publicKey = null;
 		Id recipient = null;
 		byte[] nonce = null;
-		int sequenceNumber = -1;
+		int sequenceNumber = 0;
 		byte[] signature = null;
 		byte[] data = null;
 
@@ -990,11 +989,11 @@ public class JsonPerfTests {
 			switch (fieldName) {
 				case "k":
 					if (p.currentToken() != JsonToken.VALUE_NULL)
-						publicKey = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+						publicKey = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 					break;
 				case "rec":
 					if (p.currentToken() != JsonToken.VALUE_NULL)
-						recipient = textFormat ? Id.of(p.getText()) : Id.of(p.getBinaryValue());
+						recipient = binaryFormat ? Id.of(p.getBinaryValue()) : Id.of(p.getText());
 					break;
 				case "n":
 					if (p.currentToken() != JsonToken.VALUE_NULL)

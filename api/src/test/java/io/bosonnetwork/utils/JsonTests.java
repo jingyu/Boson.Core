@@ -34,7 +34,7 @@ import io.bosonnetwork.crypto.Signature;
 // Extra:
 //   - performance benchmarks: DataBind/ObjectMapper vs. streaming API
 public class JsonTests {
-	private static final int TIMING_LOOPS = 1_000_000;
+	private static final int TIMING_ITERATIONS = 1_000_000;
 
 	@Test
 	void idTest() {
@@ -291,116 +291,44 @@ public class JsonTests {
 		System.out.println(s);
 		System.out.println(Json.toPrettyString(ni));
 
-		// check the optimized version
-		var s2 = Json.Optimized.toString(ni);
-		assertEquals(s, s2);
-
 		var ni2 = Json.parse(s, NodeInfo.class);
-		assertEquals(ni, ni2);
-
-		// check the optimized version
-		ni2 = Json.Optimized.parse(s, NodeInfo.class);
 		assertEquals(ni, ni2);
 
 		var b = Json.toBytes(ni);
 		System.out.println(Hex.encode(b));
 
-		// check the optimized version
-		var b2 = Json.Optimized.toBytes(ni);
-		assertArrayEquals(b, b2);
-
 		ni2 = Json.parse(b, NodeInfo.class);
 		assertEquals(ni, ni2);
-
-		// check the optimized version
-		ni2 = Json.Optimized.parse(b, NodeInfo.class);
-		assertEquals(ni, ni2);
-	}
-
-	@Test
-	void nodeInfoTiming() throws Exception {
-		warmup();
-
-		var ni = new NodeInfo(Id.random(), "10.0.8.8", 2345);
-		byte[] b = null;
-		NodeInfo ni2 = null;
-
-		var start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.toBytes(ni);
-		var end = System.nanoTime();
-		double serializeTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			ni2 = Json.parse(b, NodeInfo.class);
-		end = System.nanoTime();
-		double deserializeTime = end - start;
-		assertEquals(ni, ni2);
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.Optimized.toBytes(ni);
-		end = System.nanoTime();
-		double serializeOptimizedTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			ni2 = Json.Optimized.parse(b, NodeInfo.class);
-		end = System.nanoTime();
-		double deserializeOptimizedTime = end - start;
-		assertEquals(ni, ni2);
-
-		System.out.println("\n================ NodeInfo");
-		System.out.printf("  Serialize - Mapping : Streaming = %.2f : %.2f, %.4f\n",
-				serializeTime / TIMING_LOOPS, serializeOptimizedTime / TIMING_LOOPS,
-				(double)serializeTime / (double)serializeOptimizedTime);
-		System.out.printf("Deserialize - Mapping : Streaming = %.2f : %.2f, %.4f\n\n",
-				deserializeTime / TIMING_LOOPS, deserializeOptimizedTime / TIMING_LOOPS,
-				(double)deserializeTime / (double)deserializeOptimizedTime);
-
-		assertTrue(serializeTime > serializeOptimizedTime); // 2~3.5x faster
-		assertTrue(deserializeTime > deserializeOptimizedTime); // 1.5~2x faster
 	}
 
 	@ParameterizedTest
-	@ValueSource(strings = {"full", "compact", "omitted"})
+	@ValueSource(strings = {"simple", "simple+omitted", "simple+url", "simple+url+omitted",
+			"delegated", "delegated+omitted", "delegated+url", "delegated+url+omitted"})
 	void peerInfoTest(String mode) throws Exception {
 		var keypair = Signature.KeyPair.random();
 		var peerId = Id.of(keypair.publicKey().bytes());
 		var pi = switch (mode) {
-			case "full" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456, "https://echo.bns.io/");
-			case "compact" -> PeerInfo.create(keypair, Id.random(), 3456);
-			case "omitted" -> PeerInfo.create(keypair, Id.random(), 3456);
+			case "simple", "simple+omitted" -> PeerInfo.create(keypair, Id.random(), 3456);
+			case "simple+url", "simple+url+omitted" -> PeerInfo.create(keypair, Id.random(), 3456, "https://echo.bns.io/");
+			case "delegated", "delegated+omitted" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456);
+			case "delegated+url", "delegated+url+omitted" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456, "https://echo.bns.io/");
 			default -> throw new AssertionError("Unknown mode: " + mode);
 		};
 
-		var serializeContext = mode.equals("omitted") ? Json.JsonContext.withAttribute("omitPeerId", true) : null;
-		var deserializeContext = mode.equals("omitted") ? Json.JsonContext.withAttribute("peerId", peerId) : null;
+		var omitted = mode.endsWith("+omitted");
+		var serializeContext = omitted ? Json.JsonContext.perCall(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true) : null;
+		var deserializeContext = omitted ? Json.JsonContext.perCall(PeerInfo.ATTRIBUTE_PEER_ID, peerId) : null;
 
 		var s = Json.toString(pi, serializeContext);
 		System.out.println(s);
 		System.out.println(Json.toPrettyString(pi, serializeContext));
 
-		// check the optimized version
-		var s2 = Json.Optimized.toString(pi, serializeContext);
-		assertEquals(s, s2);
-
 		var pi2 = Json.parse(s, PeerInfo.class, deserializeContext);
 		assertEquals(pi, pi2);
 
-		// check the optimized version
-		pi2 = Json.Optimized.parse(s, PeerInfo.class, deserializeContext);
-		assertEquals(pi, pi2);
-
-		if (mode.equals("omitted")) {
+		if (omitted) {
 			var e = assertThrows(MismatchedInputException.class, () -> {
 				Json.objectMapper().readValue(s, PeerInfo.class);
-			});
-			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
-
-			e = assertThrows(MismatchedInputException.class, () -> {
-				Json.Optimized.parse(s, PeerInfo.class);
 			});
 			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
 		}
@@ -408,86 +336,15 @@ public class JsonTests {
 		var b = Json.toBytes(pi, serializeContext);
 		System.out.println(Hex.encode(b));
 
-		// check the optimized version
-		var b2 = Json.Optimized.toBytes(pi, serializeContext);
-		assertArrayEquals(b, b2);
-
 		pi2 = Json.parse(b, PeerInfo.class, deserializeContext);
 		assertEquals(pi, pi2);
 
-		// check the optimized version
-		pi2 = Json.Optimized.parse(b, PeerInfo.class, deserializeContext);
-		assertEquals(pi, pi2);
-
-		if (mode.equals("omitted")) {
+		if (omitted) {
 			var e = assertThrows(MismatchedInputException.class, () -> {
 				Json.cborMapper().readValue(b, PeerInfo.class);
 			});
 			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
-
-			e = assertThrows(MismatchedInputException.class, () -> {
-				Json.Optimized.parse(b, PeerInfo.class);
-			});
-			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
 		}
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = {"full", "compact", "omitted"})
-	void peerInfoTiming(String mode) throws Exception {
-		warmup();
-
-		var keypair = Signature.KeyPair.random();
-		var peerId = Id.of(keypair.publicKey().bytes());
-		var pi = switch (mode) {
-			case "full" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456, "https://echo.bns.io/");
-			case "compact" -> PeerInfo.create(keypair, Id.random(), 3456);
-			case "omitted" -> PeerInfo.create(keypair, Id.random(), 3456);
-			default -> throw new AssertionError("Unknown mode: " + mode);
-		};
-
-		var serializeContext = mode.equals("omitted") ? Json.JsonContext.withAttribute("omitPeerId", true) : null;
-		var deserializeContext = mode.equals("omitted") ? Json.JsonContext.withAttribute("peerId", peerId) : null;
-
-		byte[] b = null;
-		PeerInfo pi2 = null;
-
-		var start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.toBytes(pi, serializeContext);
-		var end = System.nanoTime();
-		double serializeTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			pi2 = Json.parse(b, PeerInfo.class, deserializeContext);
-		end = System.nanoTime();
-		double deserializeTime = end - start;
-		assertEquals(pi, pi2);
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.Optimized.toBytes(pi, serializeContext);
-		end = System.nanoTime();
-		double serializeOptimizedTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			pi2 = Json.Optimized.parse(b, PeerInfo.class, deserializeContext);
-		end = System.nanoTime();
-		double deserializeOptimizedTime = end - start;
-		assertEquals(pi, pi2);
-
-		System.out.println("\n================ PeerInfo: " + mode);
-		System.out.printf("  Serialize - Mapping : Streaming = %.2f : %.2f, %.4f\n",
-				serializeTime / TIMING_LOOPS, serializeOptimizedTime / TIMING_LOOPS,
-				(double) serializeTime / (double) serializeOptimizedTime);
-		System.out.printf("Deserialize - Mapping : Streaming = %.2f : %.2f, %.4f\n\n",
-				deserializeTime / TIMING_LOOPS, deserializeOptimizedTime / TIMING_LOOPS,
-				(double) deserializeTime / (double) deserializeOptimizedTime);
-
-		assertTrue(serializeTime > serializeOptimizedTime); // 1.4~2.5x faster
-		assertTrue(deserializeTime > deserializeOptimizedTime); // 1.4~3x faster
 	}
 
 	@ParameterizedTest
@@ -505,103 +362,13 @@ public class JsonTests {
 		System.out.println(s);
 		System.out.println(Json.toPrettyString(v));
 
-		// check the optimized version
-		var s2 = Json.Optimized.toString(v);
-		assertEquals(s, s2);
-
 		var v2 = Json.parse(s, Value.class);
-		assertEquals(v, v2);
-
-		// check the optimized version
-		v2 = Json.Optimized.parse(s, Value.class);
 		assertEquals(v, v2);
 
 		var b = Json.toBytes(v);
 		System.out.println(Hex.encode(b));
 
-		// check the optimized version
-		var b2 = Json.Optimized.toBytes(v);
-		assertArrayEquals(b, b2);
-
 		v2 = Json.parse(b, Value.class);
 		assertEquals(v, v2);
-
-		// check the optimized version
-		v2 = Json.Optimized.parse(b, Value.class);
-		assertEquals(v, v2);
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = {"immutable", "signed", "encrypted"})
-	void valueTiming(String mode) throws Exception {
-		warmup();
-
-		var v = switch (mode) {
-			case "immutable" -> Value.createValue("Hello from bosonnetwork!\n".repeat(10).getBytes());
-			case "signed" -> Value.createSignedValue("Hello from bosonnetwork!\n".repeat(10).getBytes());
-			case "encrypted" -> Value.createEncryptedValue(Id.of(Signature.KeyPair.random().publicKey().bytes()),
-					"Hello from bosonnetwork!\n".repeat(10).getBytes());
-			default -> throw new AssertionError("Unknown mode: " + mode);
-		};
-
-		byte[] b = null;
-		Value v2 = null;
-
-		var start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.toBytes(v);
-		var end = System.nanoTime();
-		double serializeTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			v2 = Json.parse(b, Value.class);
-		end = System.nanoTime();
-		double deserializeTime = end - start;
-		assertEquals(v, v2);
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			b = Json.Optimized.toBytes(v);
-		end = System.nanoTime();
-		double serializeOptimizedTime = end - start;
-
-		start = System.nanoTime();
-		for (int i = 0; i < TIMING_LOOPS; i++)
-			v2 = Json.Optimized.parse(b, Value.class);
-		end = System.nanoTime();
-		double deserializeOptimizedTime = end - start;
-		assertEquals(v, v2);
-
-		System.out.println("\n================ Value: " + mode);
-		System.out.printf("  Serialize - Mapping : Streaming = %.2f : %.2f, %.4f\n",
-				serializeTime / TIMING_LOOPS, serializeOptimizedTime / TIMING_LOOPS,
-				(double) serializeTime / (double) serializeOptimizedTime);
-		System.out.printf("Deserialize - Mapping : Streaming = %.2f : %.2f, %.4f\n\n",
-				deserializeTime / TIMING_LOOPS, deserializeOptimizedTime / TIMING_LOOPS,
-				(double) deserializeTime / (double) deserializeOptimizedTime);
-
-		assertTrue(serializeTime > serializeOptimizedTime); // 1.2~2x faster
-		assertTrue(deserializeTime > deserializeOptimizedTime); // 1.2~1.5x faster
-	}
-
-	private void warmup() {
-		try {
-			Json.parse(Json.toString(Id.random()), Id.class);
-			Json.parse(Json.toString(InetAddress.getByName("192.168.8.8")), InetAddress.class);
-			Json.parse(Json.toString(new Date()), Date.class);
-			Json.parse(Json.toString(new NodeInfo(Id.random(), "192.168.8.8", 2345)), NodeInfo.class);
-			Json.parse(Json.toString(PeerInfo.create(Signature.KeyPair.random(), Id.random(), 3456)), PeerInfo.class);
-			Json.parse(Json.toString(Value.createValue("Foobar".getBytes())), Value.class);
-
-			Json.parse(Json.toBytes(Id.random()), Id.class);
-			Json.parse(Json.toBytes(InetAddress.getByName("192.168.8.8")), InetAddress.class);
-			Json.parse(Json.toBytes(new Date()), Date.class);
-			Json.parse(Json.toBytes(new NodeInfo(Id.random(), "192.168.8.8", 2345)), NodeInfo.class);
-			Json.parse(Json.toBytes(PeerInfo.create(Signature.KeyPair.random(), Id.random(), 3456)), PeerInfo.class);
-			Json.parse(Json.toBytes(Value.createValue("Foobar".getBytes())), Value.class);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
 	}
 }

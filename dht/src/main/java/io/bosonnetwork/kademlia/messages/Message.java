@@ -277,26 +277,22 @@ public abstract class Message {
 	private void serializeInternal(JsonGenerator gen) throws MessageException, IOException {
 		gen.writeStartObject();
 
-		gen.writeFieldName("y");
-		gen.writeNumber(type);
+		gen.writeNumberField("y", type);
 
 		// Id will not included in the encrypted message.
 		/*
 		if (id != null) {
 			gen.writeFieldName("i");
-			gen.writeBinary(id.bytes());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, id.bytes(), 0, Id.BYTES);
 		}
 		*/
 
-		gen.writeFieldName("t");
-		gen.writeNumber(txid);
+		gen.writeNumberField("t", txid);
 
 		serialize(gen);
 
-		if (version != 0) {
-			gen.writeFieldName("v");
-			gen.writeNumber(version);
-		}
+		if (version != 0)
+			gen.writeNumberField("v", version);
 
 		gen.writeEndObject();
 	}

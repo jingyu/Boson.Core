@@ -225,7 +225,8 @@ public class Credential {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, issuer, validFrom, validUntil, subject, Arrays.hashCode(signature));
+		return Objects.hash(id, types, name, description, issuer,
+				validFrom, validUntil, subject, signedAt, Arrays.hashCode(signature));
 	}
 
 	@Override
@@ -242,6 +243,7 @@ public class Credential {
 					Objects.equals(validFrom, that.validFrom) &&
 					Objects.equals(validUntil, that.validUntil) &&
 					Objects.equals(subject, that.subject) &&
+					Objects.equals(signedAt, that.signedAt) &&
 					Arrays.equals(signature, that.signature);
 
 		return false;
@@ -357,8 +359,7 @@ public class Credential {
 				return true;
 
 			if (o instanceof Subject that)
-				return Objects.equals(id, that.id) &&
-						Objects.equals(claims, that.claims);
+				return Objects.equals(id, that.id) && Objects.equals(claims, that.claims);
 
 			return true;
 		}

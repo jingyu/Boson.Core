@@ -193,7 +193,7 @@ public class Card {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, credentials, services, Arrays.hashCode(signature));
+		return Objects.hash(id, credentials, services, signedAt, Arrays.hashCode(signature));
 	}
 
 	@Override

@@ -26,21 +26,29 @@ package io.bosonnetwork.kademlia.messages;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.Message.Method;
 import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.kademlia.messages2.Message2;
 
 public class FindPeerTests extends MessageTests {
+	@Deprecated
 	@Test
 	public void testFindPeerRequestSize() throws Exception {
 		FindPeerRequest msg = new FindPeerRequest(Id.random());
@@ -54,6 +62,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(bin.length <= msg.estimateSize());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerRequest4() throws Exception {
 		Id id = Id.random();
@@ -74,7 +83,7 @@ public class FindPeerTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof FindPeerRequest);
+		assertInstanceOf(FindPeerRequest.class, pm);
 		FindPeerRequest m = (FindPeerRequest)pm;
 
 		assertEquals(Type.REQUEST, m.getType());
@@ -85,8 +94,24 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(target, m.getTarget());
 		assertTrue(m.doesWant4());
 		assertFalse(m.doesWant6());
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getTarget(), body.getTarget());
+		assertEquals(msg.doesWant4(), body.doesWant4());
+		assertEquals(msg.doesWant6(), body.doesWant6());
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerRequest6() throws Exception {
 		Id id = Id.random();
@@ -105,7 +130,7 @@ public class FindPeerTests extends MessageTests {
 		printMessage(msg, bin);
 
 		Message pm = Message.parse(bin);
-		assertTrue(pm instanceof FindPeerRequest);
+		assertInstanceOf(FindPeerRequest.class, pm);
 		pm.setId(id);
 		FindPeerRequest m = (FindPeerRequest)pm;
 
@@ -116,8 +141,25 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(target, m.getTarget());
 		assertFalse(m.doesWant4());
 		assertTrue(m.doesWant6());
+
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getTarget(), body.getTarget());
+		assertEquals(msg.doesWant4(), body.doesWant4());
+		assertEquals(msg.doesWant6(), body.doesWant6());
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerRequest46() throws Exception {
 		Id id = Id.random();
@@ -137,7 +179,7 @@ public class FindPeerTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof FindPeerRequest);
+		assertInstanceOf(FindPeerRequest.class, pm);
 		FindPeerRequest m = (FindPeerRequest)pm;
 
 		assertEquals(Type.REQUEST, m.getType());
@@ -147,8 +189,24 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(target, m.getTarget());
 		assertTrue(m.doesWant4());
 		assertTrue(m.doesWant6());
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getTarget(), body.getTarget());
+		assertEquals(msg.doesWant4(), body.doesWant4());
+		assertEquals(msg.doesWant6(), body.doesWant6());
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerResponseSize() throws Exception {
 		List<NodeInfo> nodes4 = new ArrayList<>();
@@ -192,6 +250,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(bin.length <= msg.estimateSize());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerResponseSize2() throws Exception {
 		List<NodeInfo> nodes4 = new ArrayList<>();
@@ -235,6 +294,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(bin.length <= msg.estimateSize());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerResponse4() throws Exception {
 		Id id = Id.random();
@@ -270,7 +330,7 @@ public class FindPeerTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof FindPeerResponse);
+		assertInstanceOf(FindPeerResponse.class, pm);
 		FindPeerResponse m = (FindPeerResponse)pm;
 
 		assertEquals(Type.RESPONSE, m.getType());
@@ -288,8 +348,25 @@ public class FindPeerTests extends MessageTests {
 
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getNodes4(), body.getNodes4());
+		assertEquals(msg.getNodes6(), body.getNodes6());
+		assertEquals(msg.getToken(), body.getToken());
+		assertEquals(msg.getPeers(), body.getPeers());
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerResponse6() throws Exception {
 		Id id = Id.random();
@@ -325,7 +402,7 @@ public class FindPeerTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof FindPeerResponse);
+		assertInstanceOf(FindPeerResponse.class, pm);
 		FindPeerResponse m = (FindPeerResponse)pm;
 
 		assertEquals(Type.RESPONSE, m.getType());
@@ -343,8 +420,25 @@ public class FindPeerTests extends MessageTests {
 
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getNodes4(), body.getNodes4());
+		assertEquals(msg.getNodes6(), body.getNodes6());
+		assertEquals(msg.getToken(), body.getToken());
+		assertEquals(msg.getPeers(), body.getPeers());
+
+		assertArrayEquals(bin, msg2.toBytes());
 	}
 
+	@Deprecated
 	@Test
 	public void testFindPeerResponse46() throws Exception {
 		Id id = Id.random();
@@ -393,7 +487,7 @@ public class FindPeerTests extends MessageTests {
 
 		Message pm = Message.parse(bin);
 		pm.setId(id);
-		assertTrue(pm instanceof FindPeerResponse);
+		assertInstanceOf(FindPeerResponse.class, pm);
 		FindPeerResponse m = (FindPeerResponse)pm;
 
 		assertEquals(Type.RESPONSE, m.getType());
@@ -414,5 +508,276 @@ public class FindPeerTests extends MessageTests {
 
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
+
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		msg2.setId(id);
+		printMessage(msg2);
+		assertEquals(msg.getType().value(), msg2.getType().value());
+		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
+		assertEquals(msg.getId(), msg2.getId());
+		assertEquals(msg.getTxid(), msg2.getTxid());
+		assertEquals(msg.getReadableVersion(), msg2.getReadableVersion());
+		var body = msg2.getBody();
+		assertEquals(msg.getNodes4(), body.getNodes4());
+		assertEquals(msg.getNodes6(), body.getNodes6());
+		assertEquals(msg.getToken(), body.getToken());
+		assertEquals(msg.getPeers(), body.getPeers());
+
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	/*				old		delta	new
+		v4			381		-1		380
+		v4+p		1091	+2		1093
+		v6			477		-1		476
+		v6+p		1187	+2		1189
+		v4+v6		834		-2		832
+		v4+v6+p		1544	+1		1545
+		p			734		+3		737
+	 */
+	@Deprecated
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("responseParameters")
+	void testFindPeerResponse(String name, List<NodeInfo> nodes4, List<NodeInfo> nodes6, List<PeerInfo> peers, int expectedSize) throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x76543210;
+
+		var msg = new FindPeerResponse(txid);
+		msg.setId(nodeId);
+		msg.setNodes4(nodes4);
+		msg.setNodes6(nodes6);
+		msg.setPeers(peers);
+		msg.setVersion(Constants.VERSION);
+		byte[] bin = msg.serialize();
+
+		printMessage(msg, bin);
+	}
+
+	private static Stream<Arguments> requestParameters() {
+		return Stream.of(
+				Arguments.of("v4", true, false),
+				Arguments.of("v6", false, true),
+				Arguments.of("v4+v6", true, true)
+		);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("requestParameters")
+	void testRequest(String name, boolean want4, boolean want6) throws Exception {
+		var nodeId = Id.random();
+		var target = Id.random();
+		var txid = 0x76543210;
+		var msg = Message2.findPeerRequest(txid, target, want4, want6);
+		msg.setId(nodeId);
+		byte[] bin = msg.toBytes();
+
+		printMessage(msg);
+
+		assertEquals(63, bin.length);
+
+		assertEquals(Message2.Type.REQUEST, msg.getType());
+		assertEquals(Message2.Method.FIND_PEER, msg.getMethod());
+		assertEquals(nodeId, msg.getId());
+		assertEquals(txid, msg.getTxid());
+		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
+		assertEquals(target, msg.getBody().getTarget());
+		assertEquals(want4, msg.getBody().doesWant4());
+		assertEquals(want6, msg.getBody().doesWant6());
+
+		var msg2 = Message2.parse(bin);
+		msg2.setId(nodeId);
+		assertEquals(msg, msg2);
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	private static Stream<Arguments> responseParameters() {
+		var ip4 = "192.168.1.1";
+		var port = 65535;
+
+		var nodes4 = new ArrayList<NodeInfo>();
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+
+		var ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:7386";
+
+		var nodes6 = new ArrayList<NodeInfo>();
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+
+		var peerId = Id.random();
+		var sig = Random.randomBytes(64);
+		var peers = new ArrayList<PeerInfo>();
+		peers.add(PeerInfo.of(peerId, Id.random(), port--, sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, "http://abc.example.com/", sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), port--, "https://foo.example.com/", sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), port, "http://bar.example.com/", sig));
+
+		return Stream.of(
+				Arguments.of("v4", nodes4, null, null, 380),
+				Arguments.of("v4+peers", nodes4, null, peers, 1093),
+				Arguments.of("v6", null, nodes6, null, 476),
+				Arguments.of("v6+peers", null, nodes6, peers, 1189),
+				Arguments.of("v4+v6", nodes4, nodes6, null, 832),
+				Arguments.of("v4+v6+peers", nodes4, nodes6, peers, 1545),
+				Arguments.of("peers", null, null, peers, 737)
+		);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("responseParameters")
+	void testResponse(String name, List<NodeInfo> nodes4, List<NodeInfo> nodes6, List<PeerInfo> peers, int expectedSize) throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x76543210;
+
+		var msg = Message2.findPeerResponse(txid, nodes4, nodes6, peers);
+		msg.setId(nodeId);
+		byte[] bin = msg.toBytes();
+
+		printMessage(msg);
+
+		assertEquals(expectedSize, bin.length);
+
+		assertEquals(Message2.Type.RESPONSE, msg.getType());
+		assertEquals(Message2.Method.FIND_PEER, msg.getMethod());
+		assertEquals(nodeId, msg.getId());
+		assertEquals(txid, msg.getTxid());
+		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
+
+		if (nodes4 != null)
+			assertEquals(nodes4, msg.getBody().getNodes4());
+		else
+			assertTrue(msg.getBody().getNodes4().isEmpty());
+
+		if (nodes6 != null)
+			assertEquals(nodes6, msg.getBody().getNodes6());
+		else
+			assertTrue(msg.getBody().getNodes6().isEmpty());
+
+		if (peers != null)
+			assertEquals(peers, msg.getBody().getPeers());
+		else
+			assertTrue(msg.getBody().getPeers().isEmpty());
+
+		var msg2 = Message2.parse(bin);
+		msg2.setId(nodeId);
+		assertEquals(msg, msg2);
+		assertArrayEquals(bin, msg2.toBytes());
+	}
+
+	@Test
+	void timingRequest() throws Exception {
+		var nodeId = Id.random();
+		var target = Id.random();
+		var txid = 0x76543210;
+
+		{ // TODO: remove
+			// warmup
+			var msg = new FindPeerRequest(target);
+			msg.setId(nodeId);
+			msg.setTxid(txid);
+			msg.setWant4(true);
+			msg.setVersion(Constants.VERSION);
+
+			var bin = msg.serialize();
+			Message.parse(bin);
+
+			var start = System.currentTimeMillis();
+			for (var i = 0; i < TIMING_ITERATIONS; i++) {
+				msg = new FindPeerRequest(target);
+				msg.setId(nodeId);
+				msg.setTxid(txid);
+				msg.setWant4(true);
+				msg.setVersion(Constants.VERSION);
+
+				bin = msg.serialize();
+				Message.parse(bin);
+			}
+			var end = System.currentTimeMillis();
+			System.out.printf(">>>>>>>> FindPeerRequest: %dms\n", (end - start));
+		}
+
+		// warmup
+		var msg = Message2.findPeerRequest(txid, target, true, false);
+		msg.setId(nodeId);
+		var bin = msg.toBytes();
+		Message2.parse(bin);
+
+		var start = System.currentTimeMillis();
+		for (var i = 0; i < TIMING_ITERATIONS; i++) {
+			msg = Message2.findPeerRequest(txid, target, true, false);
+			msg.setId(nodeId);
+			bin = msg.toBytes();
+			Message2.parse(bin);
+		}
+		var end = System.currentTimeMillis();
+		System.out.printf(">>>>>>>> FindPeerRequest: %dms, estimated: streaming ~= 540ms, *mapping ~= 700ms @ MBP-13-m1pro\n", (end - start));
+	}
+
+	@Test
+	void timingResponse() throws Exception {
+		var nodeId = Id.random();
+		var txid = 0x76543210;
+
+		int port = 65535;
+
+		var peerId = Id.random();
+		var sig = Random.randomBytes(64);
+		var peers = new ArrayList<PeerInfo>();
+		peers.add(PeerInfo.of(peerId, Id.random(), port--, sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, "http://abc.example.com/", sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), port--, "https://foo.example.com/", sig));
+		peers.add(PeerInfo.of(peerId, Id.random(), port, "http://bar.example.com/", sig));
+
+		{ // TODO: remove
+			// warmup
+			var msg = new FindPeerResponse(txid);
+			msg.setId(nodeId);
+			msg.setPeers(peers);
+			msg.setVersion(Constants.VERSION);
+			var bin = msg.serialize();
+			Message.parse(bin);
+
+			var start = System.currentTimeMillis();
+			for (var i = 0; i < TIMING_ITERATIONS; i++) {
+				msg = new FindPeerResponse(txid);
+				msg.setId(nodeId);
+				msg.setPeers(peers);
+				msg.setVersion(Constants.VERSION);
+				bin = msg.serialize();
+				Message.parse(bin);
+			}
+			var end = System.currentTimeMillis();
+			System.out.printf(">>>>>>>> FindPeerResponse: %dms\n", (end - start));
+		}
+
+		// warmup
+		var msg = Message2.findPeerResponse(txid, null, null, peers);
+		msg.setId(nodeId);
+		var bin = msg.toBytes();
+		Message2.parse(bin);
+
+		var start = System.currentTimeMillis();
+		for (var i = 0; i < TIMING_ITERATIONS; i++) {
+			msg = Message2.findPeerResponse(txid, null, null, peers);
+			msg.setId(nodeId);
+			bin = msg.toBytes();
+			Message2.parse(bin);
+		}
+		var end = System.currentTimeMillis();
+		System.out.printf(">>>>>>>> FindPeerResponse: %dms, estimated: streaming ~= 1360ms, *mapping ~= 2850ms @ MBP-13-m1pro\n", (end - start));
 	}
 }

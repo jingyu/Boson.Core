@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
@@ -90,14 +91,11 @@ public abstract class LookupResponse extends Message {
 		if (nodes4 != null && !nodes4.isEmpty())
 			serializeNodes(gen, "n4", nodes4);
 
-		if (nodes6 != null && !nodes6.isEmpty()) {
+		if (nodes6 != null && !nodes6.isEmpty())
 			serializeNodes(gen, "n6", nodes6);
-		}
 
-		if (token != 0) {
-			gen.writeFieldName("tok");
-			gen.writeNumber(token);
-		}
+		if (token != 0)
+			gen.writeNumberField("tok", token);
 
 		_serialize(gen);
 		gen.writeEndObject();
@@ -108,11 +106,12 @@ public abstract class LookupResponse extends Message {
 
 	private void serializeNodes(JsonGenerator gen, String fieldName, List<NodeInfo> nodes) throws IOException {
 		gen.writeFieldName(fieldName);
-		gen.writeStartArray();
+		gen.writeStartArray(nodes, nodes.size());
 		for (NodeInfo ni : nodes) {
 			gen.writeStartArray();
-			gen.writeBinary(ni.getId().bytes());
-			gen.writeBinary(ni.getAddress().getAddress().getAddress());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, ni.getId().bytes(), 0, Id.BYTES);
+			byte[] addr = ni.getAddress().getAddress().getAddress();
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length);
 			gen.writeNumber(ni.getAddress().getPort());
 			gen.writeEndArray();
 		}

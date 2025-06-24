@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
+import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
@@ -41,8 +42,8 @@ public class StoreValueRequest extends Message {
 	private Id publicKey;
 	private Id recipient;
 	private byte[] nonce;
-	private int sequenceNumber = -1;
-	private int expectedSequenceNumber = -1;
+	private int sequenceNumber = 0;
+	private int expectedSequenceNumber = 0;
 	private byte[] signature;
 	private byte[] value;
 
@@ -99,41 +100,36 @@ public class StoreValueRequest extends Message {
 		gen.writeFieldName(getType().toString());
 		gen.writeStartObject();
 
-		gen.writeFieldName("tok");
-		gen.writeNumber(token);
+		gen.writeNumberField("tok", token);
 
 		if (publicKey != null) {
+			if (expectedSequenceNumber > 0)
+				gen.writeNumberField("cas", expectedSequenceNumber);
+
 			gen.writeFieldName("k");
-			gen.writeBinary(publicKey.bytes());
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, publicKey.bytes(), 0, Id.BYTES);
 
 			if (recipient != null) {
 				gen.writeFieldName("rec");
-				gen.writeBinary(recipient.bytes());
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, recipient.bytes(), 0, Id.BYTES);
 			}
 
 			if (nonce != null) {
 				gen.writeFieldName("n");
-				gen.writeBinary(nonce);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, nonce, 0, nonce.length);
 			}
+
+			if (sequenceNumber > 0)
+				gen.writeNumberField("seq", sequenceNumber);
 
 			if (signature != null) {
 				gen.writeFieldName("sig");
-				gen.writeBinary(signature);
-			}
-
-			if (sequenceNumber >= 0) {
-				gen.writeFieldName("seq");
-				gen.writeNumber(sequenceNumber);
-			}
-
-			if (expectedSequenceNumber >= 0) {
-				gen.writeFieldName("cas");
-				gen.writeNumber(expectedSequenceNumber);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, signature, 0, signature.length);
 			}
 		}
 
 		gen.writeFieldName("v");
-		gen.writeBinary(value);
+		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value, 0, value.length);
 
 		gen.writeEndObject();
 	}
@@ -147,24 +143,24 @@ public class StoreValueRequest extends Message {
 			String name = parser.getCurrentName();
 			parser.nextToken();
 			switch (name) {
+			case "cas":
+				expectedSequenceNumber = parser.getIntValue();
+				break;
+
 			case "k":
-				publicKey = Id.of(parser.getBinaryValue());
+				publicKey = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 				break;
 
 			case "rec":
-				recipient = Id.of(parser.getBinaryValue());
+				recipient = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
 				break;
 
 			case "n":
-				nonce = parser.getBinaryValue();
+				nonce = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 				break;
 
 			case "sig":
-				signature = parser.getBinaryValue();
-				break;
-
-			case "cas":
-				expectedSequenceNumber = parser.getIntValue();
+				signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 				break;
 
 			case "seq":
@@ -176,7 +172,7 @@ public class StoreValueRequest extends Message {
 				break;
 
 			case "v":
-				value = parser.getBinaryValue();
+				value = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 				break;
 
 			default:
