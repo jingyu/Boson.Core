@@ -90,7 +90,7 @@ public class SQLiteStorage implements DataStorage {
 	private static final String CREATE_PEERS_TABLE = "CREATE TABLE IF NOT EXISTS peers(" +
 			"id BLOB NOT NULL, " +
 			"nodeId BLOB NOT NULL, " +
-			"origin BLOB NOT NULL, " +
+			"origin BLOB, " +
 			"persistent BOOLEAN NOT NULL DEFAULT FALSE, " +
 			"privateKey BLOB, " +
 			"port INTEGER NOT NULL, " +
@@ -98,7 +98,7 @@ public class SQLiteStorage implements DataStorage {
 			"signature BLOB NOT NULL, " +
 			"timestamp INTEGER NOT NULL, " +
 			"announced INTEGER NOT NULL DEFAULT 0, " +
-			"PRIMARY KEY(id, nodeId, origin)" +
+			"PRIMARY KEY(id, nodeId)" +
 		") WITHOUT ROWID";
 
 	private static final String CREATE_PEERS_INDEX =
@@ -123,8 +123,8 @@ public class SQLiteStorage implements DataStorage {
 
 	private static final String UPSERT_PEER = "INSERT INTO peers(" +
 			"id, nodeId, origin, persistent, privateKey, port, alternativeURL, signature, timestamp, announced) " +
-			"VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id, nodeId, origin) DO UPDATE SET " +
-			"persistent=EXCLUDED.persistent, privateKey=EXCLUDED.privateKey, " +
+			"VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id, nodeId) DO UPDATE SET " +
+			"origin=EXCLUDED.origin, persistent=EXCLUDED.persistent, privateKey=EXCLUDED.privateKey, " +
 			"port=EXCLUDED.port, alternativeURL=EXCLUDED.alternativeURL, " +
 			"signature=EXCLUDED.signature, timestamp=EXCLUDED.timestamp, " +
 			"announced=EXCLUDED.announced";
@@ -134,10 +134,10 @@ public class SQLiteStorage implements DataStorage {
 			"ORDER BY RANDOM() LIMIT ?";
 
 	private static final String SELECT_PEER_WITH_SRC = "SELECT * from peers " +
-			"WHERE id = ? and origin = ? and timestamp >= ?";
+			"WHERE id = ? and nodeId = ? and timestamp >= ?";
 
 	private static final String UPDATE_PEER_LAST_ANNOUNCE = "UPDATE peers " +
-			"SET timestamp=?, announced = ? WHERE id = ? and origin = ?";
+			"SET timestamp=?, announced = ? WHERE id = ? and nodeId = ?";
 
 	private Connection connection;
 
@@ -204,14 +204,13 @@ public class SQLiteStorage implements DataStorage {
 			stmt.executeUpdate(CREATE_PEERS_INDEX);
 			stmt.executeUpdate(CREATE_PEERS_ID_INDEX);
 		} catch (SQLException e) {
-			log.error("Failed to open the SQLite storage: " + e.getMessage(), e);
+			log.error("Failed to open the SQLite storage: {}", e.getMessage(), e);
 			throw new IOError("Failed to open the SQLite storage: " + e.getMessage(), e);
 		}
 
-		this.expireFuture = scheduler.scheduleWithFixedDelay(() -> {
-			// Evict the expired entries from the local storage
-			expire();
-		}, 0, Constants.STORAGE_EXPIRE_INTERVAL, TimeUnit.MILLISECONDS);
+		// Evict the expired entries from the local storage
+		this.expireFuture = scheduler.scheduleWithFixedDelay(this::expire,
+				0, Constants.STORAGE_EXPIRE_INTERVAL, TimeUnit.MILLISECONDS);
 
 		log.info("SQLite storage opened: {}", path != null ? path : "MEMORY");
 	}
@@ -227,9 +226,7 @@ public class SQLiteStorage implements DataStorage {
 		try {
 			expireFuture.cancel(false);
 			expireFuture.get();
-		} catch (ExecutionException e) {
-			log.error("Scheduled future error", e);
-		} catch (InterruptedException e) {
+		} catch (ExecutionException | InterruptedException e) {
 			log.error("Scheduled future error", e);
 		} catch (CancellationException ignore) {
 		}
@@ -253,7 +250,7 @@ public class SQLiteStorage implements DataStorage {
 				}
 			}
 		} catch (SQLException e) {
-			log.error("SQLite get user version an error: " + e.getMessage(), e);
+			log.error("SQLite get user version an error: {}", e.getMessage(), e);
 		}
 
 		return userVersion;
@@ -263,7 +260,7 @@ public class SQLiteStorage implements DataStorage {
 	@Override
 	public Stream<Id> getAllValues() throws KadException {
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		ResultSet rs;
 
 		try {
 			stmt = getConnection().prepareStatement("SELECT id from valores WHERE timestamp >= ? ORDER BY id");
@@ -275,42 +272,40 @@ public class SQLiteStorage implements DataStorage {
 			try {
 				if (stmt != null)
 					stmt.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException se) {
+				log.error("SQLite storage encounter an error: {}", se.getMessage(), se);
 			}
 
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
 		final ResultSet idrs = rs;
-		Stream<Id> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<Id>(
+		Stream<Id> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<>(
 				Long.MAX_VALUE, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.ORDERED) {
 			@Override
 			public boolean tryAdvance(Consumer<? super Id> consumer) {
 				try {
-					if(!idrs.next())
+					if (!idrs.next())
 						return false;
 
 					byte[] binId = idrs.getBytes("id");
 					consumer.accept(Id.of(binId));
 					return true;
 				} catch (SQLException e) {
-					log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+					log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 					return false;
 				}
 			}
 		}, false);
 
-		s.onClose(() -> {
+		return s.onClose(() -> {
 			try {
 				idrs.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException e) {
+				log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			}
 		});
-
-		return s;
 	}
 
 	@Override
@@ -340,7 +335,7 @@ public class SQLiteStorage implements DataStorage {
 				return Value.of(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 			}
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -405,7 +400,7 @@ public class SQLiteStorage implements DataStorage {
 
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
@@ -421,7 +416,7 @@ public class SQLiteStorage implements DataStorage {
 			stmt.setBytes(3, valueId.bytes());
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -429,7 +424,7 @@ public class SQLiteStorage implements DataStorage {
 	@Override
 	public Stream<Value> getPersistentValues(long lastAnnounceBefore) throws KadException {
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		ResultSet rs;
 
 		// TODO: improve - the stream should not hold the resultset during the life time.
 		//       we should use the query pagination, fetch the results batch by batch into
@@ -443,9 +438,12 @@ public class SQLiteStorage implements DataStorage {
 			try {
 				if (stmt != null)
 					stmt.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException se) {
+				log.error("SQLite storage encounter an error: {}", se.getMessage(), se);
 			}
+
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
+			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
 		final ResultSet vrs = rs;
@@ -474,21 +472,19 @@ public class SQLiteStorage implements DataStorage {
 					consumer.accept(value);
 					return true;
 				} catch (SQLException e) {
-					log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+					log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 					return false;
 				}
 			}
 		}, false);
 
-		s.onClose(() -> {
+		return s.onClose(() -> {
 			try {
 				vrs.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException e) {
+				log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			}
 		});
-
-		return s;
 	}
 
 	@Override
@@ -500,15 +496,15 @@ public class SQLiteStorage implements DataStorage {
 			int rows = stmt.executeUpdate();
 			return rows > 0;
 		} catch (SQLException e) {
-			log.error("Failed to evict the expired values: " + e.getMessage(), e);
+			log.error("Failed to evict the expired values: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
 
 	@Override
-	public Stream<Id> getAllPeers() {
+	public Stream<Id> getAllPeers() throws KadException {
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		ResultSet rs;
 
 		// TODO: improve - the stream should not hold the resultset during the life time.
 		//       we should use the query pagination, fetch the results batch by batch into
@@ -523,9 +519,12 @@ public class SQLiteStorage implements DataStorage {
 			try {
 				if (stmt != null)
 					stmt.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException se) {
+				log.error("SQLite storage encounter an error: {}", se.getMessage(), se);
 			}
+
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
+			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
 		final ResultSet idrs = rs;
@@ -541,21 +540,19 @@ public class SQLiteStorage implements DataStorage {
 					consumer.accept(Id.of(binId));
 					return true;
 				} catch (SQLException e) {
-					log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+					log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 					return false;
 				}
 			}
 		}, false);
 
-		s.onClose(() -> {
+		return s.onClose(() -> {
 			try {
 				idrs.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException e) {
+				log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			}
 		});
-
-		return s;
 	}
 
 	@Override
@@ -563,7 +560,7 @@ public class SQLiteStorage implements DataStorage {
 		if (maxPeers <=0)
 			maxPeers = Integer.MAX_VALUE;
 
-		List<PeerInfo> peers = new ArrayList<>(maxPeers > 16 ? 16 : maxPeers);
+		List<PeerInfo> peers = new ArrayList<>(Math.min(maxPeers, 16));
 		try (PreparedStatement stmt = getConnection().prepareStatement(SELECT_PEER)) {
 			long when = System.currentTimeMillis() - Constants.MAX_PEER_AGE;
 			stmt.setBytes(1, peerId.bytes());
@@ -574,7 +571,8 @@ public class SQLiteStorage implements DataStorage {
 				while (rs.next()) {
 					byte[] privateKey = rs.getBytes("privateKey");
 					Id nodeId = Id.of(rs.getBytes("nodeId"));
-					Id origin = Id.of(rs.getBytes("origin"));
+					byte[] value = rs.getBytes("origin");
+					Id origin = rs.wasNull() ? null : Id.of(value);
 					int port = rs.getInt("port");
 					String alt = rs.getString("alternativeURL");
 					byte[] signature = rs.getBytes("signature");
@@ -584,7 +582,7 @@ public class SQLiteStorage implements DataStorage {
 				}
 			}
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
@@ -592,11 +590,11 @@ public class SQLiteStorage implements DataStorage {
 	}
 
 	@Override
-	public PeerInfo getPeer(Id peerId, Id origin) throws KadException {
+	public PeerInfo getPeer(Id peerId, Id nodeId) throws KadException {
 		try (PreparedStatement stmt = getConnection().prepareStatement(SELECT_PEER_WITH_SRC)) {
 			long when = System.currentTimeMillis() - Constants.MAX_PEER_AGE;
 			stmt.setBytes(1, peerId.bytes());
-			stmt.setBytes(2, origin.bytes());
+			stmt.setBytes(2, nodeId.bytes());
 			stmt.setLong(3, when);
 
 			try (ResultSet rs = stmt.executeQuery()) {
@@ -604,7 +602,9 @@ public class SQLiteStorage implements DataStorage {
 					return null;
 
 				byte[] privateKey = rs.getBytes("privateKey");
-				Id nodeId = Id.of(rs.getBytes("nodeId"));
+				// Id nodeId = Id.of(rs.getBytes("nodeId"));
+				byte[] value = rs.getBytes("origin");
+				Id origin = rs.wasNull() ? null : Id.of(value);
 				int port = rs.getInt("port");
 				String alt = rs.getString("alternativeURL");
 				byte[] signature = rs.getBytes("signature");
@@ -612,7 +612,7 @@ public class SQLiteStorage implements DataStorage {
 				return PeerInfo.of(peerId, privateKey, nodeId, origin, port, alt, signature);
 			}
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -625,7 +625,7 @@ public class SQLiteStorage implements DataStorage {
 		try {
 			connection.setAutoCommit(false);
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
@@ -633,7 +633,10 @@ public class SQLiteStorage implements DataStorage {
 			for (PeerInfo peer : peers) {
 				stmt.setBytes(1, peer.getId().bytes());
 				stmt.setBytes(2, peer.getNodeId().bytes());
-				stmt.setBytes(3, peer.getOrigin().bytes());
+				if (peer.isDelegated())
+					stmt.setBytes(3, peer.getOrigin().bytes());
+				else
+					stmt.setNull(3, Types.BLOB);
 				stmt.setBoolean(4, false);
 
 				if (peer.hasPrivateKey())
@@ -658,7 +661,7 @@ public class SQLiteStorage implements DataStorage {
 			connection.commit();
 			connection.setAutoCommit(true);
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -668,7 +671,10 @@ public class SQLiteStorage implements DataStorage {
 		try (PreparedStatement stmt = getConnection().prepareStatement(UPSERT_PEER)) {
 			stmt.setBytes(1, peer.getId().bytes());
 			stmt.setBytes(2, peer.getNodeId().bytes());
-			stmt.setBytes(3, peer.getOrigin().bytes());
+			if (peer.isDelegated())
+				stmt.setBytes(3, peer.getOrigin().bytes());
+			else
+				stmt.setNull(3, Types.BLOB);
 			stmt.setBoolean(4, persistent);
 			stmt.setBytes(5, peer.getPrivateKey());
 			stmt.setInt(6, peer.getPort());
@@ -686,22 +692,22 @@ public class SQLiteStorage implements DataStorage {
 
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
 
 	@Override
-	public void updatePeerLastAnnounce(Id peerId, Id origin) throws KadException {
+	public void updatePeerLastAnnounce(Id peerId, Id nodeId) throws KadException {
 		try (PreparedStatement stmt = getConnection().prepareStatement(UPDATE_PEER_LAST_ANNOUNCE)) {
 			long now = System.currentTimeMillis();
 			stmt.setLong(1, now);
 			stmt.setLong(2, now);
 			stmt.setBytes(3, peerId.bytes());
-			stmt.setBytes(4, origin.bytes());
+			stmt.setBytes(4, nodeId.bytes());
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+			log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -709,7 +715,7 @@ public class SQLiteStorage implements DataStorage {
 	@Override
 	public Stream<PeerInfo> getPersistentPeers(long lastAnnounceBefore) throws KadException {
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		ResultSet rs;
 
 		// TODO: improve - the stream should not hold the resultset during the life time.
 		//       we should use the query pagination, fetch the results batch by batch into
@@ -723,24 +729,27 @@ public class SQLiteStorage implements DataStorage {
 			try {
 				if (stmt != null)
 					stmt.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException se) {
+				log.error("SQLite storage encounter an error: {}", se.getMessage(), se);
 			}
+
+			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 
 		final ResultSet prs = rs;
-		Stream<PeerInfo> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<PeerInfo>(
+		Stream<PeerInfo> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<>(
 				Long.MAX_VALUE, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.ORDERED) {
 			@Override
 			public boolean tryAdvance(Consumer<? super PeerInfo> consumer) {
 				try {
-					if(!prs.next())
+					if (!prs.next())
 						return false;
 
 					Id peerId = Id.of(prs.getBytes("id"));
 					byte[] privateKey = prs.getBytes("privateKey");
 					Id nodeId = Id.of(prs.getBytes("nodeId"));
-					Id origin = Id.of(prs.getBytes("origin"));
+					byte[] value = prs.getBytes("origin");
+					Id origin = prs.wasNull() ? null : Id.of(value);
 					int port = prs.getInt("port");
 					String alt = prs.getString("alternativeURL");
 					byte[] signature = prs.getBytes("signature");
@@ -749,34 +758,32 @@ public class SQLiteStorage implements DataStorage {
 					consumer.accept(peer);
 					return true;
 				} catch (SQLException e) {
-					log.error("SQLite storage encounter an error: " + e.getMessage(), e);
+					log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 					return false;
 				}
 			}
 		}, false);
 
-		s.onClose(() -> {
+		return s.onClose(() -> {
 			try {
 				prs.close();
-			} catch (SQLException ignore) {
-				log.error("SQLite storage encounter an error: " + ignore.getMessage(), ignore);
+			} catch (SQLException e) {
+				log.error("SQLite storage encounter an error: {}", e.getMessage(), e);
 			}
 		});
-
-		return s;
 	}
 
 	@Override
-	public boolean removePeer(Id peerId, Id origin) throws KadException {
+	public boolean removePeer(Id peerId, Id nodeId) throws KadException {
 		Connection connection = getConnection();
 
-		try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM peers WHERE id = ? and origin = ?")) {
+		try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM peers WHERE id = ? and nodeId = ?")) {
 			stmt.setBytes(1, peerId.bytes());
-			stmt.setBytes(2, origin.bytes());
+			stmt.setBytes(2, nodeId.bytes());
 			int rows = stmt.executeUpdate();
 			return rows > 0;
 		} catch (SQLException e) {
-			log.error("Failed to evict the expired peers: " + e.getMessage(), e);
+			log.error("Failed to evict the expired peers: {}", e.getMessage(), e);
 			throw new IOError("SQLite storage encounter an error: " + e.getMessage(), e);
 		}
 	}
@@ -790,7 +797,7 @@ public class SQLiteStorage implements DataStorage {
 			stmt.setLong(1, ts);
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("Failed to evict the expired values: " + e.getMessage(), e);
+			log.error("Failed to evict the expired values: {}", e.getMessage(), e);
 		}
 
 		try (PreparedStatement stmt = connection.prepareStatement("DELETE FROM peers WHERE persistent != TRUE and timestamp < ?")) {
@@ -798,7 +805,7 @@ public class SQLiteStorage implements DataStorage {
 			stmt.setLong(1, ts);
 			stmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("Failed to evict the expired peers: " + e.getMessage(), e);
+			log.error("Failed to evict the expired peers: {}", e.getMessage(), e);
 		}
 	}
 }

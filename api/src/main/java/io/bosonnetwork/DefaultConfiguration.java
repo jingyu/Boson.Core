@@ -120,7 +120,7 @@ public class DefaultConfiguration implements Configuration {
 	 * If a Path that points to a writable directory is returned then the node info and
 	 * the routing table will be persisted to that directory periodically and during shutdown.
 	 *
-	 * Null path will disable the DHT persist it's data.
+	 * Null path will disable the DHT persist data.
 	 *
 	 * @return a Path object point to the storage path.
 	 */
@@ -294,7 +294,7 @@ public class DefaultConfiguration implements Configuration {
 		}
 
 		/**
-		 * Checks if there is a access control list path already been set.
+		 * Checks if there is an access control list path already been set.
 		 *
 		 * @return the Builder instance for method chaining.
 		 */
@@ -473,7 +473,7 @@ public class DefaultConfiguration implements Configuration {
 			Objects.requireNonNull(file, "file");
 
 			if (Files.notExists(file) || Files.isDirectory(file))
-				throw new IllegalArgumentException("Invalid config file: " + String.valueOf(file));
+				throw new IllegalArgumentException("Invalid config file: " + file);
 
 			try (InputStream in = Files.newInputStream(file)) {
 				ObjectMapper mapper = new ObjectMapper();
@@ -505,17 +505,17 @@ public class DefaultConfiguration implements Configuration {
 				if (root.has("bootstraps")) {
 					JsonNode bootstraps = root.get("bootstraps");
 					if (!bootstraps.isArray())
-						throw new IOException("Config file error: bootstaps");
+						throw new IOException("Config file error: bootstraps");
 
 					for (JsonNode bootstrap : bootstraps) {
 						if (!bootstrap.has("id"))
-							throw new IOException("Config file error: bootstap node id");
+							throw new IOException("Config file error: bootstrap node id");
 
 						if (!bootstrap.has("address"))
-							throw new IOException("Config file error: bootstap node address");
+							throw new IOException("Config file error: bootstrap node address");
 
 						if (!bootstrap.has("port"))
-							throw new IOException("Config file error: bootstap node port");
+							throw new IOException("Config file error: bootstrap node port");
 
 						try {
 							Id id = Id.of(bootstrap.get("id").asText());
@@ -524,7 +524,7 @@ public class DefaultConfiguration implements Configuration {
 
 							addBootstrap(id, addr, port);
 						} catch (Exception e) {
-							throw new IOException("Config file error: bootstap node - " +
+							throw new IOException("Config file error: bootstrap node - " +
 									bootstrap.get("id").asText(), e);
 						}
 					}
@@ -581,13 +581,13 @@ public class DefaultConfiguration implements Configuration {
 
 			if (c.addr4 == null && autoAddr4)
 				c.addr4 = (Inet4Address)AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
-						.filter((a) -> AddressUtils.isAnyUnicast(a))
+						.filter(AddressUtils::isAnyUnicast)
 						.distinct()
 						.findFirst().orElse(null);
 
 			if (c.addr6 == null && autoAddr6)
 				c.addr6 = (Inet6Address)AddressUtils.getAllAddresses().filter(Inet6Address.class::isInstance)
-						.filter((a) -> AddressUtils.isAnyUnicast(a))
+						.filter(AddressUtils::isAnyUnicast)
 						.distinct()
 						.findFirst().orElse(null);
 

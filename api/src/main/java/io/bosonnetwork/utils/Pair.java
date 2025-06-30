@@ -82,7 +82,7 @@ public class Pair<A, B> {
 		StringBuilder repr = new StringBuilder();
 
 		Function<Object, String> valueOf = (v) ->
-			(v != null && v instanceof String) ? "\"" + v + "\"" : String.valueOf(v);
+			(v instanceof String) ? "\"" + v + "\"" : String.valueOf(v);
 
 		repr.append("<")
 			.append(valueOf.apply(a))

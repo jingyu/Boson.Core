@@ -83,7 +83,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public <U> VertxFuture<U> thenApply(Function<? super T, ? extends U> fn) {
-		Future<U> mapper = future.map(t -> fn.apply(t));
+		Future<U> mapper = future.map(fn::apply);
 		return of(mapper);
 	}
 
@@ -500,9 +500,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public VertxFuture<T> exceptionally(Function<Throwable, ? extends T> fn) {
-		Future<T> otherwise = future.otherwise(e -> {
-			return fn.apply(e);
-		});
+		Future<T> otherwise = future.otherwise(fn::apply);
 
 		return of(otherwise);
 	}
@@ -532,9 +530,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public VertxFuture<T> exceptionallyCompose(Function<Throwable, ? extends CompletionStage<T>> fn) {
-		Future <T> mapper = future.recover(e -> {
-			return Future.fromCompletionStage(fn.apply(e));
-		});
+		Future <T> mapper = future.recover(e -> Future.fromCompletionStage(fn.apply(e)));
 
 		return of(mapper);
 	}
@@ -570,8 +566,8 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public <U> VertxFuture<U> newIncompleteFuture() {
-		Promise<U> primise = Promise.promise();
-		return of(primise.future());
+		Promise<U> promise = Promise.promise();
+		return of(promise.future());
 	}
 
 	@Override
@@ -682,9 +678,10 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean complete(T value) {
-		if (future instanceof Promise promise)
+		if (future instanceof Promise<?>) {
+			Promise<T> promise = (Promise<T>) future;
 			return promise.tryComplete(value);
-		else
+		} else
 			throw new IllegalStateException();
 	}
 
@@ -706,7 +703,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		if (ex == null)
 			throw new NullPointerException();
 
-		if (future instanceof Promise promise)
+		if (future instanceof Promise<?> promise)
 			return promise.tryFail(ex);
 		else
 			throw new IllegalStateException();

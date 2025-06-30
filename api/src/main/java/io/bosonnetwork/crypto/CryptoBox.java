@@ -40,7 +40,7 @@ public class CryptoBox implements AutoCloseable {
 	 */
 	public static final int MAC_BYTES = 16;
 
-	private Box box;
+	private final Box box;
 
 	/**
 	 * The crypto box public key object.
@@ -51,7 +51,7 @@ public class CryptoBox implements AutoCloseable {
 		 */
 		public static final int BYTES = Box.PublicKey.length();
 
-		private Box.PublicKey key;
+		private final Box.PublicKey key;
 		private byte[] bytes;
 
 		private PublicKey(Box.PublicKey key) {
@@ -72,7 +72,7 @@ public class CryptoBox implements AutoCloseable {
 
 		/**
 		 * Transforms the Ed25519 signature public key to a Curve25519 public key. See
-		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 * <a href="https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519">Libsodium documentation</a>
 		 *
 		 * @param key the signature public key.
 		 * @return the public key as a Curve25519 public key.
@@ -102,17 +102,15 @@ public class CryptoBox implements AutoCloseable {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof PublicKey) {
-				PublicKey other = (PublicKey)obj;
-				return key.equals(other.key);
-			}
+			if (obj instanceof PublicKey that)
+				return key.equals(that.key);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + key.hashCode();
 		}
 
 		/**
@@ -154,7 +152,7 @@ public class CryptoBox implements AutoCloseable {
 		 */
 		public static final int BYTES = Box.SecretKey.length();
 
-		private Box.SecretKey key;
+		private final Box.SecretKey key;
 		private byte[] bytes;
 
 		private PrivateKey(Box.SecretKey key) {
@@ -175,7 +173,7 @@ public class CryptoBox implements AutoCloseable {
 
 		/**
 		 * Transforms the Ed25519 private key to a Curve25519 private key. See
-		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 * <a href="https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519">Libsodium documentation</a>
 		 *
 		 * @param key the signature secret key
 		 * @return the secret key as a Curve25519 private key
@@ -205,17 +203,15 @@ public class CryptoBox implements AutoCloseable {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof PrivateKey) {
-				PrivateKey other = (PrivateKey)obj;
-				return key.equals(other.key);
-			}
+			if (obj instanceof PrivateKey that)
+				return key.equals(that.key);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + key.hashCode();
 		}
 
 		/**
@@ -257,7 +253,7 @@ public class CryptoBox implements AutoCloseable {
 		 */
 		public int SEED_BYTES = Seed.length();
 
-		private Box.KeyPair keyPair;
+		private final Box.KeyPair keyPair;
 		private PublicKey pk;
 		private PrivateKey sk;
 
@@ -358,17 +354,15 @@ public class CryptoBox implements AutoCloseable {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof KeyPair) {
-				KeyPair other = (KeyPair)obj;
-				return keyPair.equals(other.keyPair);
-			}
+			if (obj instanceof KeyPair that)
+				return keyPair.equals(that.keyPair);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return keyPair.hashCode() + 0x62; // + 'b' - Boson key pair
+			return 0x6030A + keyPair.hashCode();
 		}
 	}
 
@@ -381,7 +375,7 @@ public class CryptoBox implements AutoCloseable {
 		 */
 		public static final int BYTES = Box.Nonce.length();
 
-		private Box.Nonce nonce;
+		private final Box.Nonce nonce;
 		private byte[] bytes;
 
 		private Nonce(Box.Nonce nonce) {
@@ -452,17 +446,15 @@ public class CryptoBox implements AutoCloseable {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof Nonce) {
-				Nonce other = (Nonce)obj;
-				return nonce.equals(other.nonce);
-			}
+			if (obj instanceof Nonce that)
+				return nonce.equals(that.nonce);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return nonce.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + nonce.hashCode();
 		}
 	}
 

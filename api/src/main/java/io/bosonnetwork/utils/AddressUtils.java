@@ -62,8 +62,8 @@ public class AddressUtils {
 	 * It's defined by a network id and a net mask.
 	 */
 	public static class Subnet {
-		private byte[] network;
-		private int mask;
+		private final byte[] network;
+		private final int mask;
 
 		/**
 		 * Creates a Subnet object from a CIDR network string.
@@ -73,7 +73,7 @@ public class AddressUtils {
 		 */
 		public static Subnet fromString(String cidr) {
 			String[] parts = cidr.split("/");
-			return new Subnet(unchecked(() -> InetAddress.getByName(parts[0])), Integer.valueOf(parts[1]));
+			return new Subnet(unchecked(() -> InetAddress.getByName(parts[0])), Integer.parseInt(parts[1]));
 		}
 
 		/**
@@ -240,9 +240,7 @@ public class AddressUtils {
 	 * @return a sequential Stream with all non-local addresses.
 	 */
 	public static Stream<InetAddress> getNonlocalAddresses() {
-		return getAllAddresses().filter(addr -> {
-			return !addr.isAnyLocalAddress() && !addr.isLoopbackAddress();
-		});
+		return getAllAddresses().filter(addr -> !addr.isAnyLocalAddress() && !addr.isLoopbackAddress());
 	}
 
 	/*
@@ -260,7 +258,7 @@ public class AddressUtils {
 	 * @return true is the address is capable for bind, false otherwise.
 	 */
 	public static boolean isValidBindAddress(InetAddress addr) {
-		// we don't like them them but have to allow them
+		// we don't like them but have to allow them
 		if (addr.isAnyLocalAddress())
 			return true;
 		try {

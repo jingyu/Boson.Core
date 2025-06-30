@@ -37,21 +37,21 @@ public interface BosonService {
 	 *
 	 * @return the unique identifier string.
 	 */
-	public String getId();
+	String getId();
 
 	/**
-	 * The user friendly service name.
+	 * The user-friendly service name.
 	 *
 	 * @return the service name.
 	 */
-	public String getName();
+	String getName();
 
 	/**
 	 * Get the running status
 	 *
 	 * @return true if the service is running, false otherwise.
 	 */
-	public boolean isRunning();
+	boolean isRunning();
 
 	/**
 	 * Initialize the service instance with the {@link ServiceContext} object.
@@ -59,19 +59,19 @@ public interface BosonService {
 	 * @param context the {@link ServiceContext} object to initialize the service.
 	 * @throws BosonServiceException if the error occurred during the initialization.
 	 */
-	public void init(ServiceContext context) throws BosonServiceException;
+	void init(ServiceContext context) throws BosonServiceException;
 
 	/**
 	 * Start the service in asynchronized way.
 	 *
 	 * @return the {@code CompletableFuture} of the starting action.
 	 */
-	public CompletableFuture<Void> start();
+	CompletableFuture<Void> start();
 
 	/**
 	 * Stop the service in asynchronized way.
 	 *
 	 * @return the {@code CompletableFuture} of the stopping action.
 	 */
-	public CompletableFuture<Void> stop();
+	CompletableFuture<Void> stop();
 }

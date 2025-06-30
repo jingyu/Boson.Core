@@ -34,7 +34,7 @@ public interface ConnectionStatusListener {
 	 * @param newStatus the new connection status.
 	 * @param oldStatus the old connection status.
 	 */
-	public default void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
+	default void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
 	}
 
 	/**
@@ -42,7 +42,7 @@ public interface ConnectionStatusListener {
 	 *
 	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	public default void connected(Network network) {
+	default void connected(Network network) {
 	}
 
 	/**
@@ -50,7 +50,7 @@ public interface ConnectionStatusListener {
 	 *
 	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	public default void profound(Network network) {
+	default void profound(Network network) {
 	}
 
 	/**
@@ -58,6 +58,6 @@ public interface ConnectionStatusListener {
 	 *
 	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	public default void disconnected(Network network) {
+	default void disconnected(Network network) {
 	}
 }

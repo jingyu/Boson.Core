@@ -40,7 +40,7 @@ public interface Configuration {
 	 *
 	 * @return the InetAddress object of the IPv4 address.
 	 */
-	default public Inet4Address address4() {
+	default Inet4Address address4() {
 		return null;
 	}
 
@@ -49,7 +49,7 @@ public interface Configuration {
 	 *
 	 * @return the InetAddress object of the IPv6 address.
 	 */
-	default public Inet6Address address6() {
+	default Inet6Address address6() {
 		return null;
 	}
 
@@ -58,7 +58,7 @@ public interface Configuration {
 	 *
 	 * @return the port number.
 	 */
-	default public int port() {
+	default int port() {
 		return 39001;
 	}
 
@@ -67,7 +67,7 @@ public interface Configuration {
 	 *
 	 * @return the private key or null if not set.
 	 */
-	default public byte[] privateKey() {
+	default byte[] privateKey() {
 		return null;
 	}
 
@@ -78,7 +78,7 @@ public interface Configuration {
 	 *
 	 * @return  a Path object point to the access control lists path.
 	 */
-	default public Path accessControlsPath() {
+	default Path accessControlsPath() {
 		return null;
 	}
 
@@ -86,11 +86,11 @@ public interface Configuration {
 	 * If a Path that points to a writable directory is returned then the node info and
 	 * the routing table will be persisted to that directory periodically and during shutdown.
 	 *
-	 * Null path will disable the DHT persist it's data.
+	 * Null path will disable the DHT persist data.
 	 *
 	 * @return a Path object point to the storage path.
 	 */
-	default public Path dataPath() {
+	default Path dataPath() {
 		return null;
 	}
 
@@ -99,7 +99,7 @@ public interface Configuration {
 	 *
 	 * @return a Collection for the bootstrap nodes.
 	 */
-	default public Collection<NodeInfo> bootstrapNodes() {
+	default Collection<NodeInfo> bootstrapNodes() {
 		return Collections.emptyList();
 	}
 
@@ -108,7 +108,7 @@ public interface Configuration {
 	 *
 	 * @return a Map object of service class(FQN) and service configuration.
 	 */
-	default public  Map<String, Map<String, Object>> services() {
+	default Map<String, Map<String, Object>> services() {
 		return Collections.emptyMap();
 	}
 }

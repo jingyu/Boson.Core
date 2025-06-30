@@ -23,17 +23,17 @@
 package io.bosonnetwork;
 
 public interface Identity {
-	public Id getId();
+	Id getId();
 
-	public byte[] sign(byte[] data);
+	byte[] sign(byte[] data);
 
-	public boolean verify(byte[] data, byte[] signature);
+	boolean verify(byte[] data, byte[] signature);
 
 	// one-shot encryption
-	public byte[] encrypt(Id recipient, byte[] data);
+	byte[] encrypt(Id recipient, byte[] data);
 
 	// one-short decryption
-	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
+	byte[] decrypt(Id sender, byte[] data) throws BosonException;
 
-	public CryptoContext createCryptoContext(Id id);
+	CryptoContext createCryptoContext(Id id);
 }

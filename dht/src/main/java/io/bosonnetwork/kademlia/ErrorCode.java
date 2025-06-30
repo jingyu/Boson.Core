@@ -63,31 +63,19 @@ public enum ErrorCode {
 	}
 
 	public static ErrorCode valueOf(int code) {
-		switch (code) {
-		case 0:
-			return Success;
-		case 201:
-			return GenericError;
-		case 202:
-			return ServerError;
-		case 203:
-			return ProtocolError;
-		case 204:
-			return MethodUnknown;
-		case 205:
-			return MessageTooBig;
-		case 206:
-			return InvalidSignature;
-		case 207:
-			return SaltTooBig;
-		case 301:
-			return CasFail;
-		case 302:
-			return SequenceNotMonotonic;
-		case 303:
-			return ImmutableSubstitutionFail;
-		default:
-			return Unknown;
-		}
+		return switch (code) {
+			case 0 -> Success;
+			case 201 -> GenericError;
+			case 202 -> ServerError;
+			case 203 -> ProtocolError;
+			case 204 -> MethodUnknown;
+			case 205 -> MessageTooBig;
+			case 206 -> InvalidSignature;
+			case 207 -> SaltTooBig;
+			case 301 -> CasFail;
+			case 302 -> SequenceNotMonotonic;
+			case 303 -> ImmutableSubstitutionFail;
+			default -> Unknown;
+		};
 	}
 }

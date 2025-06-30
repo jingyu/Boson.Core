@@ -39,12 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.Maps;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
-
-import com.google.common.collect.Maps;
 
 import io.bosonnetwork.BosonException;
 import io.bosonnetwork.Configuration;
@@ -359,7 +359,7 @@ public class AccessManagerTests {
 	}
 
 	@Test
-	@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+	@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 	void testUpdateNodeACL() throws IOException, InterruptedException {
 		Id nid = Id.random();
 
@@ -506,7 +506,7 @@ public class AccessManagerTests {
 	}
 
 	@Test
-	@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+	@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 	void testUpdateDefaultAcl() throws IOException, InterruptedException {
 		Id nid = Id.random();
 

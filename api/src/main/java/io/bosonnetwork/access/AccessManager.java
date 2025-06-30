@@ -35,7 +35,7 @@ public interface AccessManager {
 	 *
 	 * @return the default {@code AccessManager} implementation.
 	 */
-	public static AccessManager getDefault() {
+	static AccessManager getDefault() {
 		return new AccessManager() {
 			@Override
 			public boolean allow(Id subjectNode, String targetServiceId) {
@@ -56,7 +56,7 @@ public interface AccessManager {
 	 * @param targetServiceId the target service id.
 	 * @return true if the subject node allowed to access the service, false otherwise.
 	 */
-	public boolean allow(Id subjectNode, String targetServiceId);
+	boolean allow(Id subjectNode, String targetServiceId);
 
 	/**
 	 * Gets the {@link Permission} of the subject node to the target service.
@@ -65,5 +65,5 @@ public interface AccessManager {
 	 * @param targetServiceId the target service id.
 	 * @return the {@link Permission} object.
 	 */
-	public Permission getPermission(Id subjectNode, String targetServiceId);
+	Permission getPermission(Id subjectNode, String targetServiceId);
 }

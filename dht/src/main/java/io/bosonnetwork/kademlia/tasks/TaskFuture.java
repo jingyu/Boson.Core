@@ -32,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
  * @hidden
  */
 public class TaskFuture<T> extends CompletableFuture<T> {
-	private volatile List<Task> tasks;
+	private final List<Task> tasks;
 
 	public TaskFuture() {
 		super();
@@ -50,11 +50,10 @@ public class TaskFuture<T> extends CompletableFuture<T> {
 
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		for (int i = 0, n = tasks.size(); i < n; i++) {
+		for (Task task : tasks) {
 			try {
-				Task task = tasks.get(i);
 				task.cancel();
-			} catch(IndexOutOfBoundsException e) {
+			} catch (IndexOutOfBoundsException e) {
 				break;
 			}
 		}

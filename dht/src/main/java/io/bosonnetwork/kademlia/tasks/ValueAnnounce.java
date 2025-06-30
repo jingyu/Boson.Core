@@ -37,8 +37,8 @@ import io.bosonnetwork.kademlia.messages.StoreValueRequest;
  * @hidden
  */
 public class ValueAnnounce extends Task {
-	private Deque<CandidateNode> todo;
-	private Value value;
+	private final Deque<CandidateNode> todo;
+	private final Value value;
 
 	private static final Logger log = LoggerFactory.getLogger(ValueAnnounce.class);
 
@@ -54,9 +54,7 @@ public class ValueAnnounce extends Task {
 			CandidateNode cn = todo.peekFirst();
 
 			StoreValueRequest q = new StoreValueRequest(value, cn.getToken());
-			sendCall(cn, q, c -> {
-				todo.remove(cn);
-			});
+			sendCall(cn, q, c -> todo.remove(cn));
 		}
 	}
 

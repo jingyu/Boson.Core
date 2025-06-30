@@ -41,7 +41,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.kademlia.Blacklist.ObservationData;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class BlacklistTests {
 	// Observation: 2 minutes

@@ -38,14 +38,14 @@ public interface Node extends Identity {
 	 * @return the ID of the node.
 	 */
 	@Override
-	public Id getId();
+	Id getId();
 
 	/**
 	 * Gets information about the node.
 	 *
 	 * @return a {@code Result} containing the node information on IPv4 and IPv6.
 	 */
-	public Result<NodeInfo> getNodeInfo();
+	Result<NodeInfo> getNodeInfo();
 
 	/**
 	 * Checks if the given ID corresponds to the local node.
@@ -53,49 +53,49 @@ public interface Node extends Identity {
 	 * @param id the ID to check.
 	 * @return {@code true} if the ID corresponds to the local node, {@code false} otherwise.
 	 */
-	public boolean isLocalId(Id id);
+	boolean isLocalId(Id id);
 
 	/**
 	 * Sets the default lookup option for the node.
 	 *
 	 * @param option the default lookup option.
 	 */
-	public void setDefaultLookupOption(LookupOption option);
+	void setDefaultLookupOption(LookupOption option);
 
 	/**
 	 * Adds a status listener to the node.
 	 *
 	 * @param listener the status listener to add.
 	 */
-	public void addStatusListener(NodeStatusListener listener);
+	void addStatusListener(NodeStatusListener listener);
 
 	/**
 	 * Removes a status listener from the node.
 	 *
 	 * @param listener the status listener to remove.
 	 */
-	public void removeStatusListener(NodeStatusListener listener);
+	void removeStatusListener(NodeStatusListener listener);
 
 	/**
 	 * Adds a connection status listener to the node.
 	 *
 	 * @param listener the connection status listener to add.
 	 */
-	public void addConnectionStatusListener(ConnectionStatusListener listener);
+	void addConnectionStatusListener(ConnectionStatusListener listener);
 
 	/**
 	 * Removes a connection status listener from the node.
 	 *
 	 * @param listener the connection status listener to remove.
 	 */
-	public void removeConnectionStatusListener(ConnectionStatusListener listener);
+	void removeConnectionStatusListener(ConnectionStatusListener listener);
 
 	/**
 	 * Gets the {@code ScheduledExecutorService} used by the node.
 	 *
 	 * @return the scheduled executor service.
 	 */
-	public ScheduledExecutorService getScheduler();
+	ScheduledExecutorService getScheduler();
 
 	/**
 	 * Bootstraps the node from the specified node.
@@ -103,7 +103,7 @@ public interface Node extends Identity {
 	 * @param node the node information to bootstrap with.
 	 * @throws BosonException if an error occurs during bootstrap.
 	 */
-	public void bootstrap(NodeInfo node) throws BosonException;
+	void bootstrap(NodeInfo node) throws BosonException;
 
 	/**
 	 * Bootstraps the node from multiple nodes.
@@ -111,7 +111,7 @@ public interface Node extends Identity {
 	 * @param bootstrapNodes the collection of nodes to bootstrap with.
 	 * @throws BosonException if an error occurs during bootstrap.
 	 */
-	public void bootstrap(Collection<NodeInfo> bootstrapNodes) throws BosonException;
+	void bootstrap(Collection<NodeInfo> bootstrapNodes) throws BosonException;
 
 	// TODO: start, stop change to async method and return a future
 	/**
@@ -119,26 +119,26 @@ public interface Node extends Identity {
 	 *
 	 * @throws BosonException if an error occurs during startup.
 	 */
-	public void start() throws BosonException;
+	void start() throws BosonException;
 
 	/**
 	 * Stops the node.
 	 */
-	public void stop();
+	void stop();
 
 	/**
 	 * Gets the current status of the node.
 	 *
 	 * @return the status of the node.
 	 */
-	public NodeStatus getStatus();
+	NodeStatus getStatus();
 
 	/**
 	 * Checks if the node is running.
 	 *
 	 * @return {@code true} if the node is running, {@code false} otherwise.
 	 */
-	public default boolean isRunning() {
+	default boolean isRunning() {
 		return getStatus() == NodeStatus.Running;
 	}
 
@@ -149,7 +149,7 @@ public interface Node extends Identity {
 	 * @return the signature.
 	 */
 	@Override
-	public byte[] sign(byte[] data);
+	byte[] sign(byte[] data);
 
 	/**
 	 * Verifies the signature of the given data.
@@ -159,7 +159,7 @@ public interface Node extends Identity {
 	 * @return {@code true} if the signature is valid, {@code false} otherwise.
 	 */
 	@Override
-	public boolean verify(byte[] data, byte[] signature);
+	boolean verify(byte[] data, byte[] signature);
 
 	/**
 	 * Encrypts the given data for a specific recipient.
@@ -169,7 +169,7 @@ public interface Node extends Identity {
 	 * @return the encrypted data.
 	 */
 	@Override
-	public byte[] encrypt(Id recipient, byte[] data);
+	byte[] encrypt(Id recipient, byte[] data);
 
 	/**
 	 * Decrypts the given data from a specific sender.
@@ -180,7 +180,7 @@ public interface Node extends Identity {
 	 * @throws BosonException if an error occurs during decryption.
 	 */
 	@Override
-	public byte[] decrypt(Id sender, byte[] data) throws BosonException;
+	byte[] decrypt(Id sender, byte[] data) throws BosonException;
 
 	/**
 	 * Create {@code CryptoContext} object for the target Id.
@@ -189,7 +189,7 @@ public interface Node extends Identity {
 	 * @return the {@code CryptoContext} object for id
 	 */
 	@Override
-	public CryptoContext createCryptoContext(Id id);
+	CryptoContext createCryptoContext(Id id);
 
 	/**
 	 * Lookup the information about a node with the given ID.
@@ -197,7 +197,7 @@ public interface Node extends Identity {
 	 * @param id the ID of the node to find.
 	 * @return a {@code CompletableFuture} object to retrieve the result of the node lookup.
 	 */
-	public default CompletableFuture<Result<NodeInfo>> findNode(Id id) {
+	default CompletableFuture<Result<NodeInfo>> findNode(Id id) {
 		return findNode(id, null);
 	}
 	/**
@@ -207,7 +207,7 @@ public interface Node extends Identity {
 	 * @param option the lookup option to use.
 	 * @return a {@code CompletableFuture} object to retrieve the result of the node lookup.
 	 */
-	public CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option);
+	CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option);
 
 	/**
 	 * Lookup the value with the given ID on the Boson network.
@@ -215,7 +215,7 @@ public interface Node extends Identity {
 	 * @param id the ID of the value to lookup.
 	 * @return a {@code CompletableFuture} object to retrieve the result of the value lookup.
 	 */
-	public default CompletableFuture<Value> findValue(Id id) {
+	default CompletableFuture<Value> findValue(Id id) {
 		return findValue(id, null);
 	}
 
@@ -226,7 +226,7 @@ public interface Node extends Identity {
 	 * @param option the lookup option to use.
 	 * @return a {@code CompletableFuture} object to retrieve the result of the value lookup.
 	 */
-	public CompletableFuture<Value> findValue(Id id, LookupOption option);
+	CompletableFuture<Value> findValue(Id id, LookupOption option);
 
 	/**
 	 * Stores a value in the network.
@@ -235,7 +235,7 @@ public interface Node extends Identity {
 	 * @param persistent {@code true} if the value should be stored persistently, {@code false} otherwise.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<Void> storeValue(Value value, boolean persistent);
+	CompletableFuture<Void> storeValue(Value value, boolean persistent);
 
 	/**
 	 * Stores a value in the network without persistency.
@@ -243,7 +243,7 @@ public interface Node extends Identity {
 	 * @param value the value to store.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public default CompletableFuture<Void> storeValue(Value value) {
+	default CompletableFuture<Void> storeValue(Value value) {
 		return storeValue(value, false);
 	}
 
@@ -252,9 +252,9 @@ public interface Node extends Identity {
 	 *
 	 * @param id the ID to find peers for.
 	 * @param expected the expected number of peers to lookup.
-	 * @return a {@code CompletableFuture} object to retrieve the the list of peers found.
+	 * @return a {@code CompletableFuture} object to retrieve the list of peers found.
 	 */
-	public default CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected) {
+	default CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected) {
 		return findPeer(id, expected, null);
 	}
 
@@ -264,9 +264,9 @@ public interface Node extends Identity {
 	 * @param id the ID to find peers for.
 	 * @param expected the expected number of peers to lookup.
 	 * @param option the lookup option to use.
-	 * @return a {@code CompletableFuture} object to retrieve the the list of peers found.
+	 * @return a {@code CompletableFuture} object to retrieve the list of peers found.
 	 */
-	public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option);
+	CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option);
 
 	/**
 	 * Announces a peer in the network.
@@ -275,7 +275,7 @@ public interface Node extends Identity {
 	 * @param persistent {@code true} if the peer should be announced persistently, {@code false} otherwise.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent);
+	CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent);
 
 	/**
 	 * Announces a peer in the network without persistency.
@@ -283,7 +283,7 @@ public interface Node extends Identity {
 	 * @param peer the peer to announce.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public default CompletableFuture<Void> announcePeer(PeerInfo peer) {
+	default CompletableFuture<Void> announcePeer(PeerInfo peer) {
 		return announcePeer(peer, false);
 	}
 
@@ -293,7 +293,7 @@ public interface Node extends Identity {
 	 * @param valueId the ID of the value to retrieve.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<Value> getValue(Id valueId);
+	CompletableFuture<Value> getValue(Id valueId);
 
 	/**
 	 * Removes the value with the given ID from the node's storage.
@@ -301,7 +301,7 @@ public interface Node extends Identity {
 	 * @param valueId the ID of the value to remove.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<Boolean> removeValue(Id valueId);
+	CompletableFuture<Boolean> removeValue(Id valueId);
 
 	/**
 	 * Gets the peer information with the given ID from the node's storage.
@@ -309,7 +309,7 @@ public interface Node extends Identity {
 	 * @param peerId the ID of the peer to retrieve information for.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<PeerInfo> getPeer(Id peerId);
+	CompletableFuture<PeerInfo> getPeer(Id peerId);
 
 	/**
 	 * Removes the peer entry with the given ID from the node's storage.
@@ -317,12 +317,12 @@ public interface Node extends Identity {
 	 * @param peerId the ID of the peer to remove.
 	 * @return a {@code CompletableFuture} representing the completion of the operation.
 	 */
-	public CompletableFuture<Boolean> removePeer(Id peerId);
+	CompletableFuture<Boolean> removePeer(Id peerId);
 
 	/**
 	 * Get the software version.
 	 *
 	 * @return the version string.
 	 */
-	public String getVersion();
+	String getVersion();
 }

@@ -11,8 +11,8 @@ import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
 class JdbiExecutorImpl implements JdbiExecutor {
-	private Jdbi jdbi;
-	private Vertx vertx;
+	private final Jdbi jdbi;
+	private final Vertx vertx;
 
 	JdbiExecutorImpl(Jdbi jdbi, Vertx vertx) {
 		this.jdbi = jdbi;
@@ -28,9 +28,7 @@ class JdbiExecutorImpl implements JdbiExecutor {
 	 *         value or throws an exception
 	 */
 	protected <T> Future<T> withExecute(final CheckedFunction<Jdbi, T> callback) {
-		return vertx.executeBlocking(() -> {
-				return callback.apply(jdbi);
-		});
+		return vertx.executeBlocking(() -> callback.apply(jdbi));
 	}
 
 	/**

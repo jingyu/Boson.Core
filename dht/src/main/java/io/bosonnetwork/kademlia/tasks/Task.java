@@ -54,7 +54,7 @@ public abstract class Task implements Comparable<Task> {
 	private Task nested;
 
 	private final DHT dht;
-	private Set<RPCCall> inFlight;
+	private final Set<RPCCall> inFlight;
 
 	long startTime;
 	long finishTime;
@@ -64,13 +64,13 @@ public abstract class Task implements Comparable<Task> {
 
 	public static final AtomicInteger nextTaskId = new AtomicInteger(0);
 
-	private static EnumSet<RPCCall.State> callStatesTobeUpdate = EnumSet.of(RPCCall.State.RESPONDED,
+	private static final EnumSet<RPCCall.State> callStatesTobeUpdate = EnumSet.of(RPCCall.State.RESPONDED,
 			RPCCall.State.ERROR, RPCCall.State.STALLED, RPCCall.State.TIMEOUT);
 
 	/**
 	 * @hidden
 	 */
-	public static enum State {
+	public enum State {
 		INITIAL, QUEUED, RUNNING, FINISHED, CANCELED;
 
 		public boolean isTerminal() {
@@ -114,7 +114,7 @@ public abstract class Task implements Comparable<Task> {
 			if (callStatesTobeUpdate.contains(current))
 				serializedUpdate();
 		}
-	};
+	}
 
 	public Task(DHT dht) {
 		this.dht = dht;
@@ -189,7 +189,7 @@ public abstract class Task implements Comparable<Task> {
 
 	public void start() {
 		if (setState(EnumSet.of(State.INITIAL, State.QUEUED), State.RUNNING)) {
-			getLogger().debug("Task starting: {}", toString());
+			getLogger().debug("Task starting: {}", this);
 			startTime = System.currentTimeMillis();
 
 			prepare();
@@ -197,7 +197,7 @@ public abstract class Task implements Comparable<Task> {
 			try {
 				serializedUpdate();
 			} catch (Exception e) {
-				getLogger().error("Task start fialed: " + toString(), e);
+				getLogger().error("Task start failed: {}", this, e);
 			}
 		}
 	}
@@ -209,7 +209,7 @@ public abstract class Task implements Comparable<Task> {
 		if(current > 1)
 			return;
 
-		getLogger().trace("Task update: {}", toString());
+		getLogger().trace("Task update: {}", this);
 
 		try {
 			do {
@@ -235,7 +235,7 @@ public abstract class Task implements Comparable<Task> {
 	public void cancel() {
 		if (setState(EnumSet.complementOf(EnumSet.of(State.FINISHED, State.CANCELED)), State.CANCELED)) {
 			finishTime = System.currentTimeMillis();
-			getLogger().debug("Task canceled: {}", toString());
+			getLogger().debug("Task canceled: {}", this);
 			notifyCompletionListeners();
 		}
 
@@ -246,7 +246,7 @@ public abstract class Task implements Comparable<Task> {
 	private void finish() {
 		if (setState(EnumSet.complementOf(EnumSet.of(State.FINISHED, State.CANCELED)), State.FINISHED)) {
 			finishTime = System.currentTimeMillis();
-			getLogger().debug("Task finished: {}", toString());
+			getLogger().debug("Task finished: {}", this);
 			notifyCompletionListeners();
 		}
 	}
@@ -301,7 +301,7 @@ public abstract class Task implements Comparable<Task> {
 
 		inFlight.add(call);
 
-		getLogger().debug("Task#{} sending call to {}", getTaskId(), node, request.getRemoteAddress());
+		getLogger().debug("Task#{} sending call to {}/{}", getTaskId(), node.getId(), request.getRemoteAddress());
 		// asyncify since we're under a lock here
 		dht.getNode().getScheduler().execute(() -> dht.getServer().sendCall(call));
 
@@ -326,7 +326,7 @@ public abstract class Task implements Comparable<Task> {
 	protected abstract void update();
 
 	protected boolean isDone() {
-		return inFlight.size() == 0;
+		return inFlight.isEmpty();
 	}
 
 	protected abstract Logger getLogger();
@@ -362,4 +362,3 @@ public abstract class Task implements Comparable<Task> {
 		return b.toString();
 	}
 }
-

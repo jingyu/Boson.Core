@@ -402,7 +402,16 @@ public class DataStorageTests {
 				if (r != 0)
 					return r;
 
-				return a.getOrigin().compareTo(b.getOrigin());
+				if (a.getOrigin() != null && b.getOrigin() != null)
+					return a.getOrigin().compareTo(b.getOrigin());
+				else {
+					if (a.getOrigin() == null && b.getOrigin() == null)
+						return 0;
+					else if (a.getOrigin() == null)
+						return -1;
+					else
+						return 1;
+				}
 			};
 
 			peers.sort(c);
@@ -417,17 +426,17 @@ public class DataStorageTests {
 				assertEquals(peers.get(0).getPort(), pi.getPort());
 
 			for (PeerInfo p : peers) {
-				PeerInfo pi = ds.getPeer(p.getId(), p.getOrigin());
+				PeerInfo pi = ds.getPeer(p.getId(), p.getNodeId());
 				assertNotNull(pi);
 				assertEquals(p, pi);
 
-				boolean removed = ds.removePeer(p.getId(), p.getOrigin());
+				boolean removed = ds.removePeer(p.getId(), p.getNodeId());
 				assertTrue(removed);
 
-				pi = ds.getPeer(p.getId(), p.getOrigin());
+				pi = ds.getPeer(p.getId(), p.getNodeId());
 				assertNull(pi);
 
-				removed = ds.removePeer(p.getId(), p.getOrigin());
+				removed = ds.removePeer(p.getId(), p.getNodeId());
 				assertFalse(removed);
 			}
 
@@ -498,7 +507,16 @@ public class DataStorageTests {
 				if (r != 0)
 					return r;
 
-				return a.getOrigin().compareTo(b.getOrigin());
+				if (a.getOrigin() != null && b.getOrigin() != null)
+					return a.getOrigin().compareTo(b.getOrigin());
+				else {
+					if (a.getOrigin() == null && b.getOrigin() == null)
+						return 0;
+					else if (a.getOrigin() == null)
+						return -1;
+					else
+						return 1;
+				}
 			};
 
 			peers.sort(c);
@@ -513,17 +531,17 @@ public class DataStorageTests {
 				assertEquals(peers.get(0).getPort(), pi.getPort());
 
 			for (PeerInfo p : peers) {
-				PeerInfo pi = ds.getPeer(p.getId(), p.getOrigin());
+				PeerInfo pi = ds.getPeer(p.getId(), p.getNodeId());
 				assertNotNull(pi);
 				assertEquals(p, pi);
 
-				boolean removed = ds.removePeer(p.getId(), p.getOrigin());
+				boolean removed = ds.removePeer(p.getId(), p.getNodeId());
 				assertTrue(removed);
 
-				pi = ds.getPeer(p.getId(), p.getOrigin());
+				pi = ds.getPeer(p.getId(), p.getNodeId());
 				assertNull(pi);
 
-				removed = ds.removePeer(p.getId(), p.getOrigin());
+				removed = ds.removePeer(p.getId(), p.getNodeId());
 				assertFalse(removed);
 			}
 

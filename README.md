@@ -46,13 +46,13 @@ If you want to skip the test cases, use the following command instead of the com
 If you want to run build and run all test cases, using the following command:
 
 ```shell
-MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.enviroment=development
+MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.environment=development
 ```
 
 Or you can run specific test with the following command, for example `NodeTests`:
 
 ```shell
-MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.enviroment=development -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=NodeTests
+MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.environment=development -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=NodeTests
 ```
 
 ## Contribution

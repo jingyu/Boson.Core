@@ -38,7 +38,7 @@ import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class NodeStressTests {
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "BosonNodeTests");
 

@@ -24,7 +24,6 @@
 package io.bosonnetwork.kademlia.tasks;
 
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -55,7 +54,7 @@ public class PeerLookup extends LookupTask {
 		super(dht, target);
 	}
 
-	public void setReultHandler(Consumer<Collection<PeerInfo>> resultHandler) {
+	public void setResultHandler(Consumer<Collection<PeerInfo>> resultHandler) {
 		this.resultHandler = resultHandler;
 	}
 
@@ -78,9 +77,7 @@ public class PeerLookup extends LookupTask {
 			q.setWant4(getDHT().getType() == Network.IPv4);
 			q.setWant6(getDHT().getType() == Network.IPv6);
 
-			sendCall(cn, q, (c) -> {
-				cn.setSent();
-			});
+			sendCall(cn, q, (c) -> cn.setSent());
 		}
 	}
 
@@ -97,9 +94,7 @@ public class PeerLookup extends LookupTask {
 		FindPeerResponse r = (FindPeerResponse) response;
 		if (r.hasPeers()) {
 			List<PeerInfo> peers = r.getPeers();
-			final Iterator<PeerInfo> each = peers.iterator();
-			while (each.hasNext()) {
-				PeerInfo peer = each.next();
+			for (PeerInfo peer : peers) {
 				if (!peer.isValid()) {
 					log.error("Response include invalid peer, signature mismatch");
 					return;

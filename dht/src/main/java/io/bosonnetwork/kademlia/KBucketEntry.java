@@ -66,7 +66,7 @@ public class KBucketEntry extends NodeInfo {
 	 * -1 = never queried / learned about it from incoming requests 0 = last query
 	 * was a success > 0 = query failed
 	 */
-	private ExponentialWeightendMovingAverage avgRTT = new ExponentialWeightendMovingAverage(RTT_EMA_WEIGHT);
+	private final ExponentialWeightendMovingAverage avgRTT = new ExponentialWeightendMovingAverage(RTT_EMA_WEIGHT);
 
 	private long created;
 	private long lastSeen;
@@ -309,10 +309,8 @@ public class KBucketEntry extends NodeInfo {
 		if (this == o)
 			return true;
 
-		if (o instanceof KBucketEntry) {
-			KBucketEntry entry = (KBucketEntry) o;
+		if (o instanceof KBucketEntry entry)
 			return super.equals(entry);
-		}
 
 		return false;
 	}
@@ -335,9 +333,9 @@ public class KBucketEntry extends NodeInfo {
 		repr.append(";age:").append(Duration.ofMillis(now - created));
 
 		if (lastSend > 0)
-			repr.append(";sent:" + Duration.ofMillis(now - lastSend));
+			repr.append(";sent:").append(Duration.ofMillis(now - lastSend));
 		if (failedRequests != 0)
-			repr.append(";fail:" + failedRequests);
+			repr.append(";fail:").append(failedRequests);
 		if (reachable)
 			repr.append(";reachable");
 

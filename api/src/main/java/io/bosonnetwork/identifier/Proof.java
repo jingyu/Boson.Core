@@ -96,7 +96,7 @@ public class Proof {
 	}
 
 	protected boolean verify(Id subject, byte[] data) {
-		if (proofValue == null || proofValue.length != Signature.BYTES)
+		if (proofValue.length != Signature.BYTES)
 			return false;
 
 		if (proofPurpose != Purpose.assertionMethod && proofPurpose != Proof.Purpose.authentication)

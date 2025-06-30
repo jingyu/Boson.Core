@@ -58,7 +58,7 @@ public class CryptoContext implements AutoCloseable {
 		// TODO: how to avoid the memory copy?!
 		byte[] n = Arrays.copyOfRange(data, 0, Nonce.BYTES);
 		Nonce nonce = Nonce.fromBytes(n);
-		if (lastPeerNonce != null && nonce.equals(lastPeerNonce))
+		if (nonce.equals(lastPeerNonce))
 			throw new CryptoException("Duplicated nonce");
 
 		lastPeerNonce = nonce;

@@ -222,8 +222,8 @@ public class NodeInfo {
 
 		if (o instanceof NodeInfo that)
 			return this.id.equals(that.id) &&
-					this.addr.equals(that.addr) &&
-					this.version == that.version;
+					this.addr.equals(that.addr); //  &&
+					// this.version == that.version;
 
 		return false;
 	}

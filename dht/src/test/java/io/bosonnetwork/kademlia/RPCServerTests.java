@@ -59,7 +59,7 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.ByteBufferOutputStream;
 
 //@Disabled()
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class RPCServerTests {
 	private final static InetAddress localAddr =
 			AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)

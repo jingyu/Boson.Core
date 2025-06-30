@@ -42,13 +42,13 @@ public class PeerInfo {
 	public static final Object ATTRIBUTE_OMIT_PEER_ID = new Object();
 	public static final Object ATTRIBUTE_PEER_ID = new Object();
 
-	private Id publicKey;			// Peer ID
-	private byte[] privateKey;		// Private key to sign the peer info
-	private Id nodeId;				// The node that provide the service peer
-	private Id origin;				// The node that announce the peer
-	private int port;
-	private String alternativeURL;
-	private byte[] signature;
+	private final Id publicKey;			// Peer ID
+	private final byte[] privateKey;		// Private key to sign the peer info
+	private final Id nodeId;				// The node that provide the service peer
+	private final Id origin;				// The node that announce the peer
+	private final int port;
+	private final String alternativeURL;
+	private final byte[] signature;
 
 	private PeerInfo(Id peerId, byte[] privateKey, Id nodeId, Id origin, int port,
 			String alternativeURL, byte[] signature) {
@@ -74,6 +74,8 @@ public class PeerInfo {
 		this.port = port;
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
+		else
+			this.alternativeURL = null;
 		this.signature = signature;
 	}
 
@@ -91,13 +93,15 @@ public class PeerInfo {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port");
 
-		this.publicKey = new Id(keypair.publicKey().bytes());;
+		this.publicKey = new Id(keypair.publicKey().bytes());
 		this.privateKey = keypair.privateKey().bytes();
 		this.nodeId = nodeId;
 		this.origin = origin == null || origin.equals(nodeId) ? null : origin;
 		this.port = port;
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
+		else
+			this.alternativeURL = null;
 		this.signature = Signature.sign(getSignData(), keypair.privateKey());
 	}
 

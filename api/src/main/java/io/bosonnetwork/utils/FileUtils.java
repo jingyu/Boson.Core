@@ -12,7 +12,7 @@ public class FileUtils {
 		if (Files.notExists(file))
 			return;
 
-		Files.walkFileTree(file, new SimpleFileVisitor<Path>() {
+		Files.walkFileTree(file, new SimpleFileVisitor<>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				Files.delete(file);

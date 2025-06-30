@@ -36,22 +36,22 @@ import io.bosonnetwork.kademlia.messages.Message.Type;
  */
 public class RPCStatistics {
 
-	private AtomicLong receivedBytes = new AtomicLong();
-	private AtomicLong sentBytes = new AtomicLong();
+	private final AtomicLong receivedBytes = new AtomicLong();
+	private final AtomicLong sentBytes = new AtomicLong();
 
-	private AtomicLong lastReceivedBytes = new AtomicLong();
-	private AtomicLong lastSentBytes = new AtomicLong();
+	private final AtomicLong lastReceivedBytes = new AtomicLong();
+	private final AtomicLong lastSentBytes = new AtomicLong();
 	private volatile long lastReceivedTimestamp;
 	private volatile long lastSentTimestamp;
 	private volatile long receivedBytesPerSec;
 	private volatile long sentBytesPerSec;
 
-	private AtomicLong[][] sentMessages;
-	private AtomicLong[][] receivedMessages;
-	private AtomicLong[] timeoutMessages;
+	private final AtomicLong[][] sentMessages;
+	private final AtomicLong[][] receivedMessages;
+	private final AtomicLong[] timeoutMessages;
 
-	private AtomicLong droppedPackets = new AtomicLong();
-	private AtomicLong droppedBytes = new AtomicLong();
+	private final AtomicLong droppedPackets = new AtomicLong();
+	private final AtomicLong droppedBytes = new AtomicLong();
 
 	protected RPCStatistics() {
 		sentMessages = new AtomicLong[Method.values().length][Type.values().length];
@@ -220,32 +220,31 @@ public class RPCStatistics {
 	public String toString() {
 		StringBuilder repr = new StringBuilder();
 
-		@SuppressWarnings("resource")
-		Formatter f = new Formatter(repr);
+		try (Formatter f = new Formatter(repr)) {
+			f.format("### local RPCs%n");
+			f.format("%18s %19s | %19s %19s %19s %n%n", "Method", "REQ", "RSP", "Error", "Timeout");
+			for (Method m : Method.values()) {
+				long sent = sentMessages[m.ordinal()][Type.REQUEST.ordinal()].get();
+				long received = receivedMessages[m.ordinal()][Type.RESPONSE.ordinal()].get();
+				long error = receivedMessages[m.ordinal()][Type.ERROR.ordinal()].get();
+				long timeouts = timeoutMessages[m.ordinal()].get();
+				f.format("%18s %19d | %19d %19d %19d %n", m, sent, received, error, timeouts);
+			}
+			f.format("%n### remote RPCs%n");
+			f.format("%18s %19s | %19s %19s %n%n", "Method", "REQ", "RSP", "Errors");
+			for (Method m : Method.values()) {
+				long received = receivedMessages[m.ordinal()][Type.REQUEST.ordinal()].get();
+				long sent = sentMessages[m.ordinal()][Type.RESPONSE.ordinal()].get();
+				long errors = sentMessages[m.ordinal()][Type.ERROR.ordinal()].get();
+				f.format("%18s %19d | %19d %19d %n", m, received, sent, errors);
+			}
 
-		f.format("### local RPCs%n");
-		f.format("%18s %19s | %19s %19s %19s %n%n", "Method", "REQ", "RSP", "Error", "Timeout");
-		for (Method m : Method.values()) {
-			long sent = sentMessages[m.ordinal()][Type.REQUEST.ordinal()].get();
-			long received = receivedMessages[m.ordinal()][Type.RESPONSE.ordinal()].get();
-			long error = receivedMessages[m.ordinal()][Type.ERROR.ordinal()].get();
-			long timeouts = timeoutMessages[m.ordinal()].get();
-			f.format("%18s %19d | %19d %19d %19d %n", m, sent, received, error, timeouts);
+			f.format("%n### Total[messages/bytes]%n");
+			f.format("    sent  %d/%d, received %d/%d, timeout %d/-, dropped %d/%d%n",
+					getTotalSentMessages(), sentBytes.get(), getTotalReceivedMessages(), receivedBytes.get(),
+					getTotalTimeoutMessages(), droppedPackets.get(), droppedBytes.get());
+
+			return repr.toString();
 		}
-		f.format("%n### remote RPCs%n");
-		f.format("%18s %19s | %19s %19s %n%n", "Method", "REQ", "RSP", "Errors");
-		for (Method m : Method.values()) {
-			long received = receivedMessages[m.ordinal()][Type.REQUEST.ordinal()].get();
-			long sent = sentMessages[m.ordinal()][Type.RESPONSE.ordinal()].get();
-			long errors = sentMessages[m.ordinal()][Type.ERROR.ordinal()].get();
-			f.format("%18s %19d | %19d %19d %n", m, received, sent, errors);
-		}
-
-		f.format("%n### Total[messages/bytes]%n");
-		f.format("    sent  %d/%d, received %d/%d, timeout %d/-, dropped %d/%d%n",
-				getTotalSentMessages(), sentBytes.get(), getTotalReceivedMessages(), receivedBytes.get(),
-				getTotalTimeoutMessages(), droppedPackets.get(), droppedBytes.get());
-
-		return repr.toString();
 	}
 }

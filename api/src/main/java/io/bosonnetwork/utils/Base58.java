@@ -115,7 +115,7 @@ public class Base58 {
 	 * @return the decoded data bytes
 	 */
 	public static byte[] decode(String input) {
-		if (input.length() == 0) {
+		if (input.isEmpty()) {
 			return new byte[0];
 		}
 		// Convert the base58-encoded ASCII chars to a base58 byte sequence (base58 digits).
@@ -124,7 +124,7 @@ public class Base58 {
 			char c = input.charAt(i);
 			int digit = c < 128 ? INDEXES[c] : -1;
 			if (digit < 0) {
-				throw new IllegalArgumentException("Invalid character '" + Character.toString(c) + "' at position " + i);
+				throw new IllegalArgumentException("Invalid character '" + c + "' at position " + i);
 			}
 			input58[i] = (byte) digit;
 		}

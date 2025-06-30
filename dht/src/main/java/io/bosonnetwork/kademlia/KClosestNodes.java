@@ -37,12 +37,12 @@ import io.bosonnetwork.NodeInfo;
  * @hidden
  */
 public class KClosestNodes {
-	private DHT dht;
-	private Id target;
-	private List<KBucketEntry> entries;
-	private int maxEntries;
-	private Comparator<KBucketEntry> cmp;
-	private Predicate<KBucketEntry> filter;
+	private final DHT dht;
+	private final Id target;
+	private final List<KBucketEntry> entries;
+	private final int maxEntries;
+	private final Comparator<KBucketEntry> cmp;
+	private final Predicate<KBucketEntry> filter;
 
 	public KClosestNodes(DHT dht, Id id, int maxEntries) {
 		this(dht, id, maxEntries, KBucketEntry::isEligibleForNodesList);

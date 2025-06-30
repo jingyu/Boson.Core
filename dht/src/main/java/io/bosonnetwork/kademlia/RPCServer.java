@@ -248,10 +248,8 @@ public class RPCServer implements Selectable {
 			}
 		}
 
-		Stream.of(calls.values().stream(), callQueue.stream(), pipeline.stream().map(msg -> msg.getAssociatedCall())
-				.filter(Objects::nonNull)).flatMap(s -> s).forEach(r -> {
-					r.cancel();
-				});
+		Stream.of(calls.values().stream(), callQueue.stream(), pipeline.stream().map(Message::getAssociatedCall)
+				.filter(Objects::nonNull)).flatMap(s -> s).forEach(RPCCall::cancel);
 		pipeline.clear();
 
 		log.info("Stopped RPC Server {}", addr);

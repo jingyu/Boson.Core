@@ -43,18 +43,18 @@ import io.bosonnetwork.kademlia.messages.PingRequest;
 public class PingRefreshTask extends Task {
 	@SuppressWarnings("unused")
 	private KBucket bucket;
-	private Deque<KBucketEntry> todo;
+	private final Deque<KBucketEntry> todo;
 
-	private boolean checkAll;
-	private boolean removeOnTimeout;
-	private boolean probeCache;
+	private final boolean checkAll;
+	private final boolean removeOnTimeout;
+	private final boolean probeCache;
 
 	private static final Logger log = LoggerFactory.getLogger(PingRefreshTask.class);
 
 	/**
 	 * @hidden
 	 */
-	public static enum Options {
+	public enum Options {
 		checkAll, removeOnTimeout, probeCache,
 	}
 
@@ -92,7 +92,7 @@ public class PingRefreshTask extends Task {
 		if (!removeOnTimeout)
 			return;
 
-		// CAUSION:
+		// CAUTION:
 		// Should not use the original bucket object,
 		// because the routing table is dynamic, maybe already changed.
 		Id nodeId = call.getTargetId();
@@ -112,9 +112,7 @@ public class PingRefreshTask extends Task {
 			}
 
 			PingRequest pr = new PingRequest();
-			sendCall(e, pr, c -> {
-				todo.remove(e);
-			});
+			sendCall(e, pr, c -> todo.remove(e));
 		}
 	}
 

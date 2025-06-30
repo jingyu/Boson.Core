@@ -55,7 +55,7 @@ import ch.qos.logback.classic.Logger;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 @TestMethodOrder(OrderAnnotation.class)
 public class NetworkEngineTests {
 	private NetworkEngine networkEngine = new NetworkEngine();

@@ -56,7 +56,7 @@ public class FindValueResponse extends LookupResponse {
 		this.publicKey = value.getPublicKey();
 		this.recipient = value.getRecipient();
 		this.nonce = value.getNonce();
-		this.signature = value.getSignature();;
+		this.signature = value.getSignature();
 		this.sequenceNumber = value.getSequenceNumber();
 		this.value = value.getData();
 	}
@@ -104,7 +104,7 @@ public class FindValueResponse extends LookupResponse {
 	}
 
 	@Override
-	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
 		switch (fieldName) {
 		case "k":
 			publicKey = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
@@ -144,10 +144,10 @@ public class FindValueResponse extends LookupResponse {
 	@Override
 	protected void _toString(StringBuilder b) {
 		if (publicKey != null)
-			b.append(",k:").append(publicKey.toString());
+			b.append(",k:").append(publicKey);
 
 		if (recipient != null)
-			b.append(",rec:").append(recipient.toString());
+			b.append(",rec:").append(recipient);
 
 		if (nonce != null)
 			b.append(",n:").append(Hex.encode(nonce));

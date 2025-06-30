@@ -90,29 +90,29 @@ import io.bosonnetwork.utils.AddressUtils;
  * @hidden
  */
 public class DHT {
-	private Network type;
+	private final Network type;
 
-	private Node node;
-	private InetSocketAddress addr;
+	private final Node node;
+	private final InetSocketAddress addr;
 	private RPCServer server;
 
 	private ConnectionStatus status;
 
 	private boolean running;
-	private List<ScheduledFuture<?>> scheduledActions;
+	private final List<ScheduledFuture<?>> scheduledActions;
 
 	private Path persistFile;
 
-	private Set<NodeInfo> bootstrapNodes;
-	private AtomicBoolean bootstrapping;
-	private BootstrapStage bootstrapStage;
+	private final Set<NodeInfo> bootstrapNodes;
+	private final AtomicBoolean bootstrapping;
+	private final BootstrapStage bootstrapStage;
 	private long lastBootstrap;
 
-	private RoutingTable routingTable;
+	private final RoutingTable routingTable;
 	private long lastSave;
-	private volatile Cache<InetSocketAddress, Id> knownNodes;
+	private final Cache<InetSocketAddress, Id> knownNodes;
 
-	private TaskManager taskMan;
+	private final TaskManager taskMan;
 
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
 
@@ -304,12 +304,10 @@ public class DHT {
 				public void onStateChange(RPCCall c, RPCCall.State previous, RPCCall.State current) {
 					if (current == RPCCall.State.RESPONDED || current == RPCCall.State.ERROR
 							|| current == RPCCall.State.TIMEOUT) {
-						if (c.getResponse() instanceof FindNodeResponse) {
-							FindNodeResponse r = (FindNodeResponse) c.getResponse();
+						if (c.getResponse() instanceof FindNodeResponse r)
 							future.complete(r.getNodes(getType()));
-						} else {
+						else
 							future.complete(Collections.emptyList());
-						}
 					}
 				}
 			});
@@ -327,7 +325,7 @@ public class DHT {
 					l = Collections.emptyList();
 				}
 				return l;
-			}).flatMap(l -> l.stream()).collect(Collectors.toSet());
+			}).flatMap(Collection::stream).collect(Collectors.toSet());
 
 			lastBootstrap = System.currentTimeMillis();
 			fillHomeBucket(nodes);
@@ -438,10 +436,9 @@ public class DHT {
 		running = true;
 		setStatus(ConnectionStatus.Disconnected, ConnectionStatus.Connecting);
 
-		scheduledActions.add(getNode().getScheduler().scheduleWithFixedDelay(() -> {
-			// tasks maintenance that should run all the time, before the first queries
-			taskMan.dequeue();
-		}, 5000, Constants.DHT_UPDATE_INTERVAL, TimeUnit.MILLISECONDS));
+		// tasks maintenance that should run all the time, before the first queries
+		scheduledActions.add(getNode().getScheduler().scheduleWithFixedDelay(taskMan::dequeue, 5000,
+				Constants.DHT_UPDATE_INTERVAL, TimeUnit.MILLISECONDS));
 
 		// Ping check if the routing table loaded from cache
 		if (routingTable.getNumBucketEntries() > 0)
@@ -514,9 +511,7 @@ public class DHT {
 			// log them if they did
 			try {
 				future.get();
-			} catch (ExecutionException e) {
-				log.error("Scheduled future error", e);
-			} catch (InterruptedException e) {
+			} catch (ExecutionException | InterruptedException e) {
 				log.error("Scheduled future error", e);
 			} catch (CancellationException ignore) {
 			}
@@ -529,7 +524,7 @@ public class DHT {
 				log.info("Persisting routing table on shutdown...");
 				routingTable.save(persistFile);
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error("Persisting routing table failed", e);
 			}
 		}
 
@@ -952,7 +947,7 @@ public class DHT {
 	public Task findPeer(Id id, int expected, LookupOption option, Consumer<Collection<PeerInfo>> completeHandler) {
 		Set<PeerInfo> peers = ConcurrentHashMap.newKeySet();
 		PeerLookup task = new PeerLookup(this, id);
-		task.setReultHandler((ps) -> {
+		task.setResultHandler((ps) -> {
 			peers.addAll(ps);
 
 			if (option != LookupOption.CONSERVATIVE && peers.size() >= expected) {

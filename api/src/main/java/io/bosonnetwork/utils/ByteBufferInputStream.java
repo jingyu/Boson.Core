@@ -94,7 +94,7 @@ public class ByteBufferInputStream {
 	 *         there is no more data because the end of the stream has been reached.
 	 * @throws IOException if an I/O error occurs.
 	 */
-	public int read(byte dest[], int offset, int len) throws IOException {
+	public int read(byte[] dest, int offset, int len) throws IOException {
 		if (dest == null || offset < 0 || len < 0 || offset + len > dest.length) {
 			if (dest == null) {
 				throw new IllegalArgumentException("null byte array");
@@ -151,7 +151,7 @@ public class ByteBufferInputStream {
 	/**
 	 * Returns the number of bytes that can be read (or skipped over) from this
 	 * input stream without blocking by the next caller of a method for this input
-	 * stream. The next caller might be the same thread or or another thread.
+	 * stream. The next caller might be the same thread or another thread.
 	 *
 	 * @return the number of bytes that can be read from this input stream without
 	 *         blocking.
@@ -179,7 +179,7 @@ public class ByteBufferInputStream {
 	public void mark(int readlimit) {
 		try {
 			getByteBuffer().mark();
-		} catch (NullPointerException e) {
+		} catch (NullPointerException ignore) {
 		}
 	}
 

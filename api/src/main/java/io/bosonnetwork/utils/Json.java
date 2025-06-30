@@ -108,14 +108,10 @@ public class Json {
 		public void serialize(Id value, JsonGenerator gen, SerializerProvider provider) throws IOException {
 			Boolean attr = (Boolean) provider.getAttribute(DIDConstants.BOSON_ID_FORMAT_W3C);
 			boolean w3cDID = attr != null && attr;
-			if (!w3cDID) {
-				if (isBinaryFormat(gen))
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.bytes(), 0, Id.BYTES);
-				else
-					gen.writeString(value.toBase58String());
-			} else {
-				gen.writeString(value.toDIDString());
-			}
+			if (isBinaryFormat(gen))
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.bytes(), 0, Id.BYTES);
+			else
+				gen.writeString(w3cDID ? value.toDIDString() : value.toBase58String());
 		}
 	}
 
@@ -426,7 +422,7 @@ public class Json {
 
 			final boolean binaryFormat = isBinaryFormat(p);
 
-			Id peerId = null;
+			Id peerId;
 			Id nodeId = null;
 			Id origin = null;
 			int port = 0;

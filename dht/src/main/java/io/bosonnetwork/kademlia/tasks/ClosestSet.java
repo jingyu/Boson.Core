@@ -126,8 +126,6 @@ public class ClosestSet {
 
 	@Override
 	public String toString() {
-		String str = "ClosestNodes: " + closest.size() + " head:" + head().approxDistance(target) + " tail:" + tail().approxDistance(target);
-
-		return str;
+		return "ClosestNodes: " + closest.size() + " head:" + head().approxDistance(target) + " tail:" + tail().approxDistance(target);
 	}
 }

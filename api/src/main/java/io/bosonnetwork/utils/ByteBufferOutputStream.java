@@ -74,9 +74,9 @@ public class ByteBufferOutputStream extends OutputStream {
 			else
 				throw e;
 		} catch (BufferOverflowException e) {
-			throw new IOException("Stream capacity exceeded: " + String.valueOf(e.getMessage()), e);
+			throw new IOException("Stream capacity exceeded: " + e.getMessage(), e);
 		} catch (ReadOnlyBufferException e) {
-			throw new IOException("Stream is read-only: " + String.valueOf(e.getMessage()), e);
+			throw new IOException("Stream is read-only: " + e.getMessage(), e);
 		}
 	}
 
@@ -111,19 +111,17 @@ public class ByteBufferOutputStream extends OutputStream {
 			else
 				throw e;
 		} catch (BufferOverflowException e) {
-			throw new IOException("Stream capacity exceeded: " + String.valueOf(e.getMessage()), e);
+			throw new IOException("Stream capacity exceeded: " + e.getMessage(), e);
 		} catch (ReadOnlyBufferException e) {
-			throw new IOException("Stream is read-only: " + String.valueOf(e.getMessage()), e);
+			throw new IOException("Stream is read-only: " + e.getMessage(), e);
 		}
 	}
 
 	/**
 	 * Flush any accumulated bytes.
-	 *
-	 * @exception IOException if an I/O error occurs
 	 */
 	@Override
-	public void flush() throws IOException {
+	public void flush() {
 		ByteBuffer buf = getByteBuffer();
 		if (buf instanceof MappedByteBuffer) {
 			try {

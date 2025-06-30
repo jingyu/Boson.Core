@@ -45,7 +45,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	private Sha256Hash(byte[] rawHashBytes) {
 		if (rawHashBytes.length == LENGTH)
-			throw new IllegalArgumentException("Invalid rawHashBytes " + rawHashBytes);
+			throw new IllegalArgumentException("Invalid rawHashBytes length");
 
 		this.bytes = rawHashBytes;
 	}
@@ -253,7 +253,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	/**
 	 * Returns the internal byte array, without defensively copying.
-	 * Therefore do NOT modify the returned array.
+	 * Therefore, do NOT modify the returned array.
 	 *
 	 * @return the raw hash bytes
 	 */
@@ -276,7 +276,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	 * @return the reversed bytes of the given bytes. ddd
 	 */
 	private static byte[] reverseBytes(byte[] bytes) {
-		// We could use the XOR trick here but it's easier to understand if we don't. If we find this is really a
+		// We could use the XOR trick here, but it's easier to understand if we don't. If we find this is really a
 		// performance issue the matter can be revisited.
 		byte[] buf = new byte[bytes.length];
 		for (int i = 0; i < bytes.length; i++)

@@ -45,7 +45,7 @@ import io.bosonnetwork.kademlia.messages.Message;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class SybilTests {
 	private InetAddress getIPv4Address() {
 		return AddressUtils.getAllAddresses()

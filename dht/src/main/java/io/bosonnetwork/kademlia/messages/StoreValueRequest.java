@@ -69,7 +69,7 @@ public class StoreValueRequest extends Message {
 		this.publicKey = value.getPublicKey();
 		this.recipient = value.getRecipient();
 		this.nonce = value.getNonce();
-		this.signature = value.getSignature();;
+		this.signature = value.getSignature();
 		this.sequenceNumber = value.getSequenceNumber();
 		this.value = value.getData();
 	}
@@ -192,10 +192,10 @@ public class StoreValueRequest extends Message {
 		b.append(",q:{");
 
 		if (publicKey != null) {
-			b.append("k:").append(publicKey.toString());
+			b.append("k:").append(publicKey);
 
 			if (recipient != null)
-				b.append(",rec:").append(recipient.toString());
+				b.append(",rec:").append(recipient);
 
 			if (nonce != null)
 				b.append(",n:").append(Hex.encode(nonce));

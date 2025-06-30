@@ -39,9 +39,9 @@ import io.bosonnetwork.kademlia.DHT;
  * @hidden
  */
 public class TaskManager {
-	private DHT dht;
-	private Deque<Task> queued;
-	private Set<Task> running;
+	private final DHT dht;
+	private final Deque<Task> queued;
+	private final Set<Task> running;
 	private boolean canceling;
 
 	public TaskManager(DHT dht) {

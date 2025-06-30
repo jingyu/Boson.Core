@@ -49,9 +49,9 @@ public enum Network {
 	private final int protocolHeaderSize;
 	private final int maxPacketSize;
 
-	private Network(ProtocolFamily family, Class<? extends InetAddress> addresstype, int headerSize, int maxPacketSize) {
+	Network(ProtocolFamily family, Class<? extends InetAddress> addressType, int headerSize, int maxPacketSize) {
 		this.protocolFamily = family;
-		this.preferredAddressType = addresstype;
+		this.preferredAddressType = addressType;
 		this.protocolHeaderSize = headerSize;
 		this.maxPacketSize = maxPacketSize;
 	}
@@ -97,9 +97,9 @@ public enum Network {
 	}
 
 	/**
-	 * Get the ProtocolFamliy of this network type.
+	 * Get the ProtocolFamily of this network type.
 	 *
-	 * @return the ProtocolFamliy of this network type.
+	 * @return the ProtocolFamily of this network type.
 	 */
 	ProtocolFamily protocolFamily() {
 		return protocolFamily;

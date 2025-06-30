@@ -35,7 +35,7 @@ import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.enviroment", matches = "development")
+@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class NodeTests {
 	private static final int TEST_NODES = 32;
 	private static final int TEST_NODES_PORT_START = 39001;
@@ -44,14 +44,14 @@ public class NodeTests {
 
 	private final static InetAddress localAddr =
 			AddressUtils.getAllAddresses().filter(Inet4Address.class::isInstance)
-				.filter((a) -> AddressUtils.isAnyUnicast(a))
+				.filter(AddressUtils::isAnyUnicast)
 				.distinct().findFirst().get();
 
 	private static Node bootstrap;
-	private static List<Node> testNodes = new ArrayList<>(TEST_NODES);
+	private static final List<Node> testNodes = new ArrayList<>(TEST_NODES);
 	//private static List<NodeInfo> bootstraps = new ArrayList<>(TEST_NODES);
 
-	private static DefaultConfiguration.Builder dcb = new DefaultConfiguration.Builder();
+	private static final DefaultConfiguration.Builder dcb = new DefaultConfiguration.Builder();
 
 	private static void startBootstrap() throws Exception {
 		System.out.println("\n\n\007🟢 Starting the bootstrap node ...");

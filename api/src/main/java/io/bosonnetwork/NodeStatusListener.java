@@ -35,30 +35,30 @@ public interface NodeStatusListener {
 	 * @param newStatus The new status of the node.
 	 * @param oldStatus The previous status of the node.
 	 */
-	public default void statusChanged(NodeStatus newStatus, NodeStatus oldStatus) {
+	default void statusChanged(NodeStatus newStatus, NodeStatus oldStatus) {
 	}
 
 	/**
 	 * Called when the node is in the process of starting.
 	 */
-	public default void starting() {
+	default void starting() {
 	}
 
 	/**
 	 * Called when the node has started.
 	 */
-	public default void started() {
+	default void started() {
 	}
 
 	/**
 	 * Called when the node is in the process of stopping.
 	 */
-	public default void stopping() {
+	default void stopping() {
 	}
 
 	/**
 	 * Called when the node has stopped.
 	 */
-	public default void stopped() {
+	default void stopped() {
 	}
 }

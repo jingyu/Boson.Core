@@ -32,7 +32,7 @@ public interface Permission {
 	/**
 	 * The access permissions: allow and deny.
 	 */
-	public enum Access {
+	enum Access {
 		/**
 		 * Allow access.
 		 */
@@ -51,16 +51,11 @@ public interface Permission {
 		 * @return the enum constant of the specified enum type with the specified name.
 		 */
 		public static Access of(String name) {
-			switch (name.toLowerCase()) {
-			case "allow":
-				return Allow;
-
-			case "deny":
-				return Deny;
-
-			default:
-				throw new IllegalArgumentException("Unknown: " + name);
-			}
+			return switch (name.toLowerCase()) {
+				case "allow" -> Allow;
+				case "deny" -> Deny;
+				default -> throw new IllegalArgumentException("Unknown: " + name);
+			};
 		}
 	}
 
@@ -69,21 +64,21 @@ public interface Permission {
 	 *
 	 * @return the service id string.
 	 */
-	public String getTargetServiceId();
+	String getTargetServiceId();
 
 	/**
 	 * Gets the access type.
 	 *
 	 * @return the access type.
 	 */
-	public Access getAccess();
+	Access getAccess();
 
 	/**
 	 * Checks if the access is allowed to the target service.
 	 *
 	 * @return true if allowed, false otherwise.
 	 */
-	default public boolean isAllow() {
+	default boolean isAllow() {
 		return getAccess() == Access.Allow;
 	}
 
@@ -92,7 +87,7 @@ public interface Permission {
 	 *
 	 * @return true if denied, false otherwise.
 	 */
-	default public boolean isDeny() {
+	default boolean isDeny() {
 		return getAccess() == Access.Deny;
 	}
 
@@ -101,5 +96,5 @@ public interface Permission {
 	 *
 	 * @return the properties in {@code Map} object.
 	 */
-	public Map<String, Object> getProperties();
+	Map<String, Object> getProperties();
 }

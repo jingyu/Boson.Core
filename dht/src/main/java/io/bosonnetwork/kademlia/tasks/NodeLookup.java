@@ -105,9 +105,7 @@ public class NodeLookup extends LookupTask {
 			r.setWant4(getDHT().getType() == Network.IPv4);
 			r.setWant6(getDHT().getType() == Network.IPv6);
 
-			sendCall(cn, r, (c) -> {
-				cn.setSent();
-			});
+			sendCall(cn, r, (c) -> cn.setSent());
 		}
 	}
 
@@ -142,4 +140,3 @@ public class NodeLookup extends LookupTask {
 		return log;
 	}
 }
-

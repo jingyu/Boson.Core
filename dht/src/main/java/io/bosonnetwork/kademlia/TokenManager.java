@@ -37,9 +37,9 @@ import io.bosonnetwork.crypto.Random;
  * @hidden
  */
 public class TokenManager {
-	private AtomicLong timestamp = new AtomicLong();
+	private final AtomicLong timestamp = new AtomicLong();
 	private volatile long previousTimestamp;
-	private byte[] sessionSecret = new byte[32];
+	private final byte[] sessionSecret = new byte[32];
 
 	TokenManager() {
 		Random.secureRandom().nextBytes(sessionSecret);
@@ -71,12 +71,10 @@ public class TokenManager {
 
 		byte[] digest = Hash.sha256().digest(tokData);
 		int pos = (digest[0] & 0xff) & 0x1f; // mod 32
-		int token = ((digest[pos] & 0xff) << 24) |
+		return ((digest[pos] & 0xff) << 24) |
 				((digest[(pos + 1) & 0x1f] & 0xff) << 16) |
 				((digest[(pos + 2) & 0x1f] & 0xff) << 8) |
 				(digest[(pos + 3) & 0x1f] & 0xff);
-
-		return token;
 	}
 
 	public int generateToken(Id nodeId, InetSocketAddress addr, Id targetId) {

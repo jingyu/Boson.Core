@@ -99,7 +99,7 @@ public class ClosestCandidates {
 				List<Id> toRemove = closest.values().stream()
 						.filter(cn -> !cn.isInFlight())
 						.sorted(this::candidateOrder).skip(capacity)
-						.map(cn -> cn.getId()).collect(Collectors.toList());
+						.map(CandidateNode::getId).collect(Collectors.toList());
 				for (Id id : toRemove)
 					closest.remove(id);
 			}
@@ -111,9 +111,7 @@ public class ClosestCandidates {
 			return;
 
 		synchronized (closest) {
-			closest.entrySet().removeIf((e) -> {
-				return filter.test(e.getValue());
-			});
+			closest.entrySet().removeIf((e) -> filter.test(e.getValue()));
 		}
 	}
 
@@ -159,8 +157,6 @@ public class ClosestCandidates {
 
 	@Override
 	public String toString() {
-		String str = "ClosestCandidates: " + closest.size() + " head:" + head().approxDistance(target) + " tail:" + tail().approxDistance(target);
-
-		return str;
+		return "ClosestCandidates: " + closest.size() + " head:" + head().approxDistance(target) + " tail:" + tail().approxDistance(target);
 	}
 }

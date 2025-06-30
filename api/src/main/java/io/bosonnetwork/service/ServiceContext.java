@@ -40,21 +40,21 @@ public interface ServiceContext {
 	 *
 	 * @return the host Boson node.
 	 */
-	public Node getNode();
+	Node getNode();
 
 	/**
-	 * Shotcut API to get the host Boson node id.
+	 * Shortcut API to get the host Boson node id.
 	 *
 	 * @return the host Boson node id.
 	 */
-	public Id getNodeId();
+	Id getNodeId();
 
 	/**
 	 * Gets the persistence path for the current service.
 	 *
 	 * @return the {@code Path} object.
 	 */
-	public Path getDataPath();
+	Path getDataPath();
 
 	/**
 	 * Gets the {@link io.bosonnetwork.access.AccessManager} instance that provided by
@@ -62,14 +62,14 @@ public interface ServiceContext {
 	 *
 	 * @return the AccessManager interface.
 	 */
-	public AccessManager getAccessManager();
+	AccessManager getAccessManager();
 
 	/**
 	 * Gets the service configuration data.
 	 *
 	 * @return the configuration data in {@code Map} object.
 	 */
-	public Map<String, Object> getConfiguration();
+	Map<String, Object> getConfiguration();
 
 	/**
 	 * Set the service runtime property
@@ -78,7 +78,7 @@ public interface ServiceContext {
 	 * @param value the new value to be associated with the property name.
 	 * @return the previous value associated with {@code name}.
 	 */
-	public Object setProperty(String name, Object value);
+	Object setProperty(String name, Object value);
 
 	/**
 	 * Returns the value to which the specified name, or {@code null} if the service
@@ -88,5 +88,5 @@ public interface ServiceContext {
 	 * @return the value of the specified property, or
      *         {@code null} if the service contains no mapping for the property.
 	 */
-	public Object getProperty(String name);
+	Object getProperty(String name);
 }

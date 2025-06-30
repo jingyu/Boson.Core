@@ -146,7 +146,7 @@ public abstract class LookupResponse extends Message {
 		}
 	}
 
-	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
 	}
 
 	private List<NodeInfo> parseNodes(String fieldName, CBORParser parser) throws IOException {

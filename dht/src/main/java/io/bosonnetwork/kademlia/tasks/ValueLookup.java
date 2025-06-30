@@ -83,9 +83,7 @@ public class ValueLookup extends LookupTask {
 			if (expectedSequence != -1)
 				r.setSequenceNumber(expectedSequence);
 
-			sendCall(cn, r, (c) -> {
-				cn.setSent();
-			});
+			sendCall(cn, r, (c) -> cn.setSent());
 		}
 	}
 

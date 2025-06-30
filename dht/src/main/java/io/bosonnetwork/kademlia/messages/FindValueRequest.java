@@ -61,16 +61,11 @@ public class FindValueRequest extends LookupRequest {
 	}
 
 	@Override
-	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		switch (fieldName) {
-		case "seq":
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
+		if (fieldName.equals("seq"))
 			sequenceNumber = parser.getIntValue();
-			break;
-
-		default:
+		else
 			System.out.println("Unknown field: " + fieldName);
-			break;
-		}
 	}
 
 	@Override

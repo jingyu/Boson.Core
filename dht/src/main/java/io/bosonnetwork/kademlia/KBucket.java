@@ -71,8 +71,6 @@ public class KBucket implements Comparable<KBucket> {
 	final boolean homeBucket;
 
 	/**
-	 * use {@link #insertOrRefresh}, {@link #sortedInsert} or {@link #removeEntry}
-	 * to handle this<br>
 	 * using copy-on-write semantics for this list, referencing it is safe if you
 	 * make local copy
 	 */
@@ -131,15 +129,15 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	public KBucketEntry get(Id id, boolean includeCache) {
-		for (KBucketEntry e : getEntries()) {
-			if (e.getId().equals(id))
-				return e;
+		for (KBucketEntry entry : getEntries()) {
+			if (entry.getId().equals(id))
+				return entry;
 		}
 
 		if (includeCache) {
-			for (KBucketEntry e : getCache()) {
-				if (e.getId().equals(id))
-					return e;
+			for (KBucketEntry entry : getCache()) {
+				if (entry.getId().equals(id))
+					return entry;
 			}
 		}
 
@@ -185,12 +183,10 @@ public class KBucket implements Comparable<KBucket> {
 		// Stream is heavy and slow, use for loop(more fast) instead
 		// return getEntries().stream().filter(predicate).findAny().orElse(null);
 
-		KBucketEntry e;
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			e = entriesRef.get(i);
-			if (predicate.test(e))
-				return e;
+		for (KBucketEntry entry : entriesRef) {
+			if (predicate.test(entry))
+				return entry;
 		}
 		return null;
 	}
@@ -199,12 +195,10 @@ public class KBucket implements Comparable<KBucket> {
 		// Stream is heavy and slow, use for loop(more fast) instead
 		// return getCache().stream().filter(predicate).findAny().orElse(null);
 
-		KBucketEntry e;
 		List<KBucketEntry> entriesRef = getCache();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			e = entriesRef.get(i);
-			if (predicate.test(e))
-				return e;
+		for (KBucketEntry entry : entriesRef) {
+			if (predicate.test(entry))
+				return entry;
 		}
 		return null;
 	}
@@ -264,7 +258,7 @@ public class KBucket implements Comparable<KBucket> {
 	 * Notify bucket of new incoming packet from a node, perform update or insert
 	 * existing nodes where appropriate
 	 *
-	 * @param entry The entry to insert
+	 * @param newEntry The entry to insert
 	 */
 	void _put(final KBucketEntry newEntry) {
 		if (newEntry == null)
@@ -328,16 +322,15 @@ public class KBucket implements Comparable<KBucket> {
 	/**
 	 * Tries to instert entry by replacing a bad entry.
 	 *
-	 * @param entry Entry to insert
+	 * @param newEntry Entry to insert
 	 * @return true if replace was successful
 	 */
 	private boolean _replaceBadEntry(KBucketEntry newEntry) {
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry e = entriesRef.get(i);
-			if (e.needsReplacement()) {
+		for (KBucketEntry entry : entriesRef) {
+			if (entry.needsReplacement()) {
 				// bad one get rid of it
-				_update(e, newEntry);
+				_update(entry, newEntry);
 				return true;
 			}
 		}
@@ -380,8 +373,7 @@ public class KBucket implements Comparable<KBucket> {
 	// TODO: CHECKME!!!
 	void _update(KBucketEntry toRefresh) {
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry entry = entriesRef.get(i);
+		for (KBucketEntry entry : entriesRef) {
 			if (entry.equals(toRefresh)) {
 				entry.merge(toRefresh);
 				return;
@@ -389,8 +381,7 @@ public class KBucket implements Comparable<KBucket> {
 		}
 
 		entriesRef = getCache();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry entry = entriesRef.get(i);
+		for (KBucketEntry entry : entriesRef) {
 			if (entry.equals(toRefresh)) {
 				entry.merge(toRefresh);
 				return;
@@ -430,7 +421,7 @@ public class KBucket implements Comparable<KBucket> {
 			}
 
 			if (unorderedInsert)
-				Collections.sort(newEntries, KBucketEntry.AGE_ORDER);
+				newEntries.sort(KBucketEntry.AGE_ORDER);
 
 			if (wasFull && added)
 				while (newEntries.size() > Constants.MAX_ENTRIES_PER_BUCKET)
@@ -455,13 +446,7 @@ public class KBucket implements Comparable<KBucket> {
 		if (e1.lastSeen() < e2.lastSeen())
 			return 1;
 
-		if (e1.creationTime() < e2.creationTime())
-			return -1;
-
-		if (e1.creationTime() > e2.creationTime())
-			return 1;
-
-		return 0;
+		return Long.compare(e1.creationTime(), e2.creationTime());
 	}
 
 	void _insertIntoCache(KBucketEntry toInsert) {
@@ -489,7 +474,7 @@ public class KBucket implements Comparable<KBucket> {
 		List<KBucketEntry> newCache = new ArrayList<>(cacheRef);
 		newCache.add(toInsert);
 		if (newCache.size() > Constants.MAX_ENTRIES_PER_BUCKET) {
-			Collections.sort(newCache, KBucket::cacheOrder);
+			newCache.sort(KBucket::cacheOrder);
 			KBucketEntry removed = newCache.remove(newCache.size() - 1);
 			if (removed.equals(toInsert))
 				return;
@@ -505,7 +490,7 @@ public class KBucket implements Comparable<KBucket> {
 			return null;
 
 		List<KBucketEntry> newCache = new ArrayList<>(cacheRef);
-		Collections.sort(newCache, KBucket::cacheOrder);
+		newCache.sort(KBucket::cacheOrder);
 		KBucketEntry entry = newCache.remove(0);
 		setCache(newCache);
 
@@ -535,9 +520,7 @@ public class KBucket implements Comparable<KBucket> {
 			return;
 
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry entry = entriesRef.get(i);
-
+		for (KBucketEntry entry : entriesRef) {
 			// update last responded. insert will be invoked soon, thus we don't have to do
 			// the move-to-end stuff
 			if (entry.getId().equals(msg.getId())) {
@@ -547,9 +530,7 @@ public class KBucket implements Comparable<KBucket> {
 		}
 
 		entriesRef = getCache();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry entry = entriesRef.get(i);
-
+		for (KBucketEntry entry : entriesRef) {
 			// update last responded. insert will be invoked soon, thus we don't have to do
 			// the move-to-end stuff
 			if (entry.getId().equals(msg.getId())) {
@@ -560,16 +541,15 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	/**
-	 * A peer failed to respond
+	 * A node failed to respond
 	 *
-	 * @param addr Address of the peer
+	 * @param id id of the node
 	 */
 	void _onTimeout(Id id) {
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry e = entriesRef.get(i);
-			if (e.getId().equals(id)) {
-				e.signalRequestTimeout();
+		for (KBucketEntry entry : entriesRef) {
+			if (entry.getId().equals(id)) {
+				entry.signalRequestTimeout();
 
 				// NOTICE: Test only - merge buckets
 				//   remove when the entry needs replacement
@@ -578,17 +558,16 @@ public class KBucket implements Comparable<KBucket> {
 
 				// NOTICE: Product
 				//   only removes the entry if it is bad
-				_removeIfBad(e, false);
+				_removeIfBad(entry, false);
 
 				return;
 			}
 		}
 
 		entriesRef = getCache();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry e = entriesRef.get(i);
-			if (e.getId().equals(id)) {
-				e.signalRequestTimeout();
+		for (KBucketEntry entry : entriesRef) {
+			if (entry.getId().equals(id)) {
+				entry.signalRequestTimeout();
 				return;
 			}
 		}
@@ -596,19 +575,17 @@ public class KBucket implements Comparable<KBucket> {
 
 	void _onSend(Id id) {
 		List<KBucketEntry> entriesRef = getEntries();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry e = entriesRef.get(i);
-			if (e.getId().equals(id)) {
-				e.signalRequest();
+		for (KBucketEntry entry : entriesRef) {
+			if (entry.getId().equals(id)) {
+				entry.signalRequest();
 				return;
 			}
 		}
 
 		entriesRef = getCache();
-		for (int i = 0, n = entriesRef.size(); i < n; i++) {
-			KBucketEntry e = entriesRef.get(i);
-			if (e.getId().equals(id)) {
-				e.signalRequest();
+		for (KBucketEntry entry : entriesRef) {
+			if (entry.getId().equals(id)) {
+				entry.signalRequest();
 				return;
 			}
 		}
@@ -622,10 +599,8 @@ public class KBucket implements Comparable<KBucket> {
 		if (this == o)
 			return true;
 
-		if (o instanceof KBucket) {
-			KBucket bucket = (KBucket) o;
-			return prefix.equals(bucket.prefix);
-		}
+		if (o instanceof KBucket that)
+			return prefix.equals(that.prefix);
 
 		return false;
 	}

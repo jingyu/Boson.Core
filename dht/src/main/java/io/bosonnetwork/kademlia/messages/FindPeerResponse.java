@@ -100,16 +100,11 @@ public class FindPeerResponse extends LookupResponse {
 	}
 
 	@Override
-	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		switch (fieldName) {
-		case "p":
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
+		if (fieldName.equals("p"))
 			peers = parsePeers(parser);
-			break;
-
-		default:
+		else
 			System.out.println("Unknown field: " + fieldName);
-			break;
-		}
 	}
 
 	private List<PeerInfo> parsePeers(CBORParser parser) throws IOException {
@@ -180,7 +175,7 @@ public class FindPeerResponse extends LookupResponse {
 	protected void _toString(StringBuilder b) {
 		if (peers != null && !peers.isEmpty()) {
 			b.append(",p:");
-			b.append(peers.stream().map(p -> p.toString()).collect(Collectors.joining(",", "[", "]")));
+			b.append(peers.stream().map(PeerInfo::toString).collect(Collectors.joining(",", "[", "]")));
 		}
 	}
 }

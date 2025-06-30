@@ -30,7 +30,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -48,13 +47,12 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
@@ -81,16 +79,16 @@ import io.bosonnetwork.utils.Json;
  * @hidden
  */
 public final class RoutingTable {
-	private DHT dht;
+	private final DHT dht;
 
 	private volatile List<KBucket> buckets;
 
-	private AtomicInteger writeLock;
-	private Queue<Operation> pipeline;
+	private final AtomicInteger writeLock;
+	private final Queue<Operation> pipeline;
 
 	private long timeOfLastPingCheck;
 
-	private Map<KBucket, Task> maintenanceTasks = new IdentityHashMap<>();
+	private final Map<KBucket, Task> maintenanceTasks = new IdentityHashMap<>();
 
 	private static final Logger log = LoggerFactory.getLogger(RoutingTable.class);
 
@@ -410,7 +408,7 @@ public final class RoutingTable {
 				b._put(e);
 		}
 
-		_modify(Arrays.asList(bucket), Arrays.asList(a, b));
+		_modify(List.of(bucket), List.of(a, b));
 	}
 
 	private void _mergeBuckets() {
@@ -447,7 +445,7 @@ public final class RoutingTable {
 					b1.cacheStream().forEach(newBucket::_put);
 					b2.cacheStream().forEach(newBucket::_put);
 
-					_modify(Arrays.asList(b1, b2), Arrays.asList(newBucket));
+					_modify(List.of(b1, b2), List.of(newBucket));
 
 					i -= 2;
 				}
@@ -544,9 +542,7 @@ public final class RoutingTable {
 			return CompletableFuture.completedFuture(null);
 
 		List<CompletableFuture<Void>> futures = new ArrayList<>(bucketsRef.size());
-		for (int i = 0, n = bucketsRef.size(); i < n; i++) {
-			KBucket bucket = bucketsRef.get(i);
-
+		for (KBucket bucket : bucketsRef) {
 			int num = bucket.size();
 
 			// just try to fill partially populated buckets

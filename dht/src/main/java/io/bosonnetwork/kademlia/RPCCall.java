@@ -39,10 +39,10 @@ import io.bosonnetwork.kademlia.tasks.CandidateNode;
  * @hidden
  */
 public class RPCCall {
-	private Message request;
+	private final Message request;
 	private Message response;
 
-	private NodeInfo target;
+	private final NodeInfo target;
 	private boolean sourceWasKnownReachable;
 
 	private long sentTime = -1;
@@ -52,7 +52,7 @@ public class RPCCall {
 	private State state = State.UNSENT;
 	ScheduledExecutorService scheduler;
 	private ScheduledFuture<?> timeoutTimer;
-	private List<RPCCallListener> listeners;
+	private final List<RPCCallListener> listeners;
 
 	/**
 	 * @hidden
@@ -73,16 +73,13 @@ public class RPCCall {
 
 		this.target = target;
 		this.request = request;
-		this.listeners = new ArrayList<>(8);
+		this.listeners = new ArrayList<>(4);
 
 		request.setRemote(target.getId(), target.getAddress());
-		if (target instanceof KBucketEntry) {
-			KBucketEntry e = (KBucketEntry)target;
-			sourceWasKnownReachable = e.isReachable();
-		} else if (target instanceof CandidateNode) {
-			CandidateNode n = (CandidateNode)target;
-			sourceWasKnownReachable = n.isReachable();
-		}
+		if (target instanceof KBucketEntry entry)
+			sourceWasKnownReachable = entry.isReachable();
+		else if (target instanceof CandidateNode node)
+			sourceWasKnownReachable = node.isReachable();
 	}
 
 	public boolean knownReachableAtCreationTime() {

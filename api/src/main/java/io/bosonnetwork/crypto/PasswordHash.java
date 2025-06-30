@@ -6,10 +6,10 @@ public class PasswordHash {
 	public static final int MAX_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.maxHashLength();
 	public static final int MIN_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.minHashLength();
 
-	public static enum Algorithm {
+	public enum Algorithm {
 		ARGON2I13(1), ARGON2ID13(2);
 
-		private int id;
+		private final int id;
 
 		public static final Algorithm DEFAULT =
 				org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm.argon2id13().isSupported() ?
@@ -45,7 +45,7 @@ public class PasswordHash {
 	public static class Salt {
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.Salt.length();
 
-		private org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt;
+		private final org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt;
 		private byte[] bytes;
 
 		private Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt) {
@@ -83,17 +83,15 @@ public class PasswordHash {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof Salt) {
-				Salt other = (Salt)obj;
-				return salt.equals(other.salt);
-			}
+			if (obj instanceof Salt that)
+				return salt.equals(that.salt);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return salt.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + salt.hashCode();
 		}
 	}
 
@@ -205,8 +203,8 @@ public class PasswordHash {
 	 * @param password The password to hash.
 	 * @param length The key length to generate.
 	 * @param salt A salt.
-	 * @param opsLimit The operations limit, which must be in the range {@link #minOpsLimit()} to {@link #maxOpsLimit()}.
-	 * @param memLimit The memory limit, which must be in the range {@link #minMemLimit()} to {@link #maxMemLimit()}.
+	 * @param opsLimit The operations limit, which must be in the range minOpsLimit maxOpsLimit.
+	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 * @throws IllegalArgumentException If the opsLimit is too low for the specified algorithm.

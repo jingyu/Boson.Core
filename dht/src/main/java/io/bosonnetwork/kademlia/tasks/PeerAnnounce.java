@@ -37,10 +37,10 @@ import io.bosonnetwork.kademlia.messages.AnnouncePeerRequest;
  * @hidden
  */
 public class PeerAnnounce extends Task {
-	private Deque<CandidateNode> todo;
-	private PeerInfo peer;
+	private final Deque<CandidateNode> todo;
+	private final PeerInfo peer;
 
-	private static final Logger log = LoggerFactory.getLogger(ValueAnnounce.class);
+	private static final Logger log = LoggerFactory.getLogger(PeerAnnounce.class);
 
 	public PeerAnnounce(DHT dht, ClosestSet closest, PeerInfo peer) {
 		super(dht);
@@ -54,9 +54,7 @@ public class PeerAnnounce extends Task {
 			CandidateNode cn = todo.peekFirst();
 
 			AnnouncePeerRequest q = new AnnouncePeerRequest(peer, cn.getToken());
-			sendCall(cn, q, c -> {
-				todo.remove(cn);
-			});
+			sendCall(cn, q, c -> todo.remove(cn));
 		}
 	}
 

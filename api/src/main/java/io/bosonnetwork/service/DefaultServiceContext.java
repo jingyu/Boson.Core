@@ -12,11 +12,11 @@ import io.bosonnetwork.access.AccessManager;
  * Default {@link ServiceContext} implementation.
  */
 public class DefaultServiceContext implements ServiceContext {
-	private Node node;
-	private AccessManager accessManager;
-	private Map<String, Object> configuration;
-	private Map<String, Object> properties;
-	private Path dataPath;
+	private final Node node;
+	private final AccessManager accessManager;
+	private final Map<String, Object> configuration;
+	private final Map<String, Object> properties;
+	private final Path dataPath;
 
 	/**
 	 * Creates a new {@link ServiceContext} instance.

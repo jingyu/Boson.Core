@@ -41,9 +41,9 @@ import io.bosonnetwork.utils.AddressUtils;
  * @hidden
  */
 public abstract class LookupTask extends Task {
-	private Id target;
-	private ClosestSet closest;
-	private ClosestCandidates candidates;
+	private final Id target;
+	private final ClosestSet closest;
+	private final ClosestCandidates candidates;
 
 	public LookupTask(DHT dht, Id target) {
 		super(dht);
@@ -133,7 +133,7 @@ public abstract class LookupTask extends Task {
 	protected String getStatus() {
 		StringBuilder status = new StringBuilder();
 
-		status.append(toString()).append('\n');
+		status.append(this).append('\n');
 		status.append("Closest: \n");
 		if (closest.size() > 0)
 			status.append(closest.entriesStream().map(NodeInfo::toString).collect(Collectors.joining("\n    ", "    ", "\n")));

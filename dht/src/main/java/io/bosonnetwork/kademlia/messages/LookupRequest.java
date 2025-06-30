@@ -134,7 +134,7 @@ public abstract class LookupRequest extends Message {
 		}
 	}
 
-	protected void _parse(String fieldName, CBORParser parser) throws MessageException, IOException {
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
 	}
 
 	@Override

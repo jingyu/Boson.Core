@@ -111,8 +111,7 @@ class FileSystemResolverCache implements ResolverCache {
 			}
 
 			log.debug("Resolver persistent cache hit: {}", id);
-			return Json.cborMapper().readValue(file.toFile(), new TypeReference<Resolver.ResolutionResult<Card>>() {
-			});
+			return Json.cborMapper().readValue(file.toFile(), new TypeReference<Resolver.ResolutionResult<Card>>() { });
 		} catch (IOException e) {
 			log.error("Resolver persistent cache entry read failed: {}", id, e);
 			throw e;
@@ -121,7 +120,7 @@ class FileSystemResolverCache implements ResolverCache {
 
 	@Override
 	public void cleanup() throws IOException {
-		Files.walkFileTree(cacheDir, new SimpleFileVisitor<Path>() {
+		Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				if (attrs.lastModifiedTime().toMillis() < System.currentTimeMillis() - expiration * 1000) {
@@ -136,7 +135,7 @@ class FileSystemResolverCache implements ResolverCache {
 
 	@Override
 	public void clear() throws Exception {
-		Files.walkFileTree(cacheDir, new SimpleFileVisitor<Path>() {
+		Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				Files.delete(file);

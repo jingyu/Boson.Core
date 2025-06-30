@@ -4,4 +4,4 @@ PRGDIR=`dirname $0`
 
 [ -f "$BOSON_HOME"/bin/boson-launcher ] || BOSON_HOME=`cd "$PRGDIR/.." ; pwd`
 
-java -cp "$BOSON_HOME/lib/*" -Dio.bosonnetwork.enviroment=development $JAVA_OPTS io.bosonnetwork.launcher.Main $*
+java -cp "$BOSON_HOME/lib/*" -Dio.bosonnetwork.environment=development $JAVA_OPTS io.bosonnetwork.launcher.Main $*

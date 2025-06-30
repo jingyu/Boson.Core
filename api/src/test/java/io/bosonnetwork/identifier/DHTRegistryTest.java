@@ -235,6 +235,7 @@ public class DHTRegistryTest {
 		int version = 1;
 		var nonce = CryptoBox.Nonce.random();
 		var sha = Hash.sha256();
+		sha.update(card.getId().bytes());
 		sha.update(nonce.bytes());
 		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(version).array());
 		sha.update(card.toBytes());
@@ -274,6 +275,7 @@ public class DHTRegistryTest {
 		int version = 2;
 		var nonce = CryptoBox.Nonce.random();
 		var sha = Hash.sha256();
+		sha.update(card.getId().bytes());
 		sha.update(nonce.bytes());
 		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(version).array());
 		sha.update(card.toBytes());

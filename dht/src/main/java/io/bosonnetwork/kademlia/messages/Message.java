@@ -70,7 +70,7 @@ public abstract class Message {
 	/**
 	 * @hidden
 	 */
-	public static enum Method {
+	public enum Method {
 		UNKNOWN(0x00),
 		PING(0x01),
 		FIND_NODE(0x02),
@@ -79,9 +79,9 @@ public abstract class Message {
 		STORE_VALUE(0x05),
 		FIND_VALUE(0x06);
 
-		private int value;
+		private final int value;
 
-		private Method(int value) {
+		Method(int value) {
 			this.value = value;
 		}
 
@@ -95,45 +95,30 @@ public abstract class Message {
 		}
 
 		public static Method valueOf(int value) {
-			switch (value & METHOD_MASK) {
-			case 0x01:
-				return PING;
-
-			case 0x02:
-				return FIND_NODE;
-
-			case 0x03:
-				return ANNOUNCE_PEER;
-
-			case 0x04:
-				return FIND_PEER;
-
-			case 0x05:
-				return STORE_VALUE;
-
-			case 0x06:
-				return FIND_VALUE;
-
-			case 0x00:
-				return UNKNOWN;
-
-			default:
-				throw new IllegalArgumentException("Invalid method: " + value);
-			}
+			return switch (value & METHOD_MASK) {
+				case 0x01 -> PING;
+				case 0x02 -> FIND_NODE;
+				case 0x03 -> ANNOUNCE_PEER;
+				case 0x04 -> FIND_PEER;
+				case 0x05 -> STORE_VALUE;
+				case 0x06 -> FIND_VALUE;
+				case 0x00 -> UNKNOWN;
+				default -> throw new IllegalArgumentException("Invalid method: " + value);
+			};
 		}
 	}
 
 	/**
 	 * @hidden
 	 */
-	public static enum Type {
+	public enum Type {
 		REQUEST(0x20),
 		RESPONSE(0x40),
 		ERROR(0x00);
 
-		private int value;
+		private final int value;
 
-		private Type(int value) {
+		Type(int value) {
 			this.value = value;
 		}
 
@@ -150,19 +135,12 @@ public abstract class Message {
 		}
 
 		public static Type valueOf(int value) {
-			switch (value & TYPE_MASK) {
-			case 0x20:
-				return REQUEST;
-
-			case 0x40:
-				return RESPONSE;
-
-			case 0x00:
-				return ERROR;
-
-			default:
-				throw new IllegalArgumentException("Invalid Type: " + value);
-			}
+			return switch (value & TYPE_MASK) {
+				case 0x20 -> REQUEST;
+				case 0x40 -> RESPONSE;
+				case 0x00 -> ERROR;
+				default -> throw new IllegalArgumentException("Invalid Type: " + value);
+			};
 		}
 	}
 
@@ -266,7 +244,7 @@ public abstract class Message {
 			serializeInternal(gen);
 			gen.close();
 		} catch (IOException e) {
-			throw new MessageException("Serialize mssage failed.", e);
+			throw new MessageException("Serialize message failed.", e);
 		}
 	}
 
@@ -279,7 +257,7 @@ public abstract class Message {
 
 		gen.writeNumberField("y", type);
 
-		// Id will not included in the encrypted message.
+		// Id will not include in the encrypted message.
 		/*
 		if (id != null) {
 			gen.writeFieldName("i");
@@ -378,7 +356,7 @@ public abstract class Message {
 					case "y":
 						break;
 
-					// Id will not included in the encrypted message.
+					// Id will not include in the encrypted message.
 					/*
 					case "i":
 						try {
@@ -433,49 +411,27 @@ public abstract class Message {
 	}
 
 	private static Message createMessage(Type type, Method method) throws MessageException {
-		switch (type) {
-		case REQUEST:
-			switch (method) {
-			case PING:
-				return new PingRequest();
-			case FIND_NODE:
-				return new FindNodeRequest();
-			case ANNOUNCE_PEER:
-				return new AnnouncePeerRequest();
-			case FIND_PEER:
-				return new FindPeerRequest();
-			case STORE_VALUE:
-				return new StoreValueRequest();
-			case FIND_VALUE:
-				return new FindValueRequest();
-			default:
-				throw new MessageException("Invalid request method.");
-			}
-
-		case RESPONSE:
-			switch (method) {
-			case PING:
-				return new PingResponse();
-			case FIND_NODE:
-				return new FindNodeResponse();
-			case ANNOUNCE_PEER:
-				return new AnnouncePeerResponse();
-			case FIND_PEER:
-				return new FindPeerResponse();
-			case STORE_VALUE:
-				return new StoreValueResponse();
-			case FIND_VALUE:
-				return new FindValueResponse();
-			default:
-				throw new MessageException("Invalid response method.");
-			}
-
-		case ERROR:
-			return new ErrorMessage(method);
-
-		default:
-			throw new RuntimeException("INTERNAL ERROR: should never happen.");
-		}
+		return switch (type) {
+			case REQUEST -> switch (method) {
+				case PING -> new PingRequest();
+				case FIND_NODE -> new FindNodeRequest();
+				case ANNOUNCE_PEER -> new AnnouncePeerRequest();
+				case FIND_PEER -> new FindPeerRequest();
+				case STORE_VALUE -> new StoreValueRequest();
+				case FIND_VALUE -> new FindValueRequest();
+				default -> throw new MessageException("Invalid request method.");
+			};
+			case RESPONSE -> switch (method) {
+				case PING -> new PingResponse();
+				case FIND_NODE -> new FindNodeResponse();
+				case ANNOUNCE_PEER -> new AnnouncePeerResponse();
+				case FIND_PEER -> new FindPeerResponse();
+				case STORE_VALUE -> new StoreValueResponse();
+				case FIND_VALUE -> new FindValueResponse();
+				default -> throw new MessageException("Invalid response method.");
+			};
+			case ERROR -> new ErrorMessage(method);
+		};
 	}
 
 	public int estimateSize() {

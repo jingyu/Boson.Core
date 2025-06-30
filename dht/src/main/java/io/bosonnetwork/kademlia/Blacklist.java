@@ -43,13 +43,13 @@ public class Blacklist {
 	private static final int OBSERVATION_HITS = 30;
 	private static final long BAN_DURATION = 60; // minutes
 
-	private Cache<Object, ObservationData> observations;
-	private Cache<Object, Object> banned;
+	private final Cache<Object, ObservationData> observations;
+	private final Cache<Object, Object> banned;
 
-	private long observationPeriod;
-	private long observationHits;
+	private final long observationPeriod;
+	private final long observationHits;
 	@SuppressWarnings("unused")
-	private long banDiration;
+	private final long banDuration;
 
 	private static final Object OBJ = new Object();
 	private static final Logger log = LoggerFactory.getLogger(Blacklist.class);
@@ -81,17 +81,17 @@ public class Blacklist {
 		this(OBSERVATION_PERIOD, OBSERVATION_HITS, BAN_DURATION);
 	}
 
-	public Blacklist(long observationPeriod, long observationHits, long banDiration) {
+	public Blacklist(long observationPeriod, long observationHits, long banDuration) {
 		this.observationPeriod = observationPeriod;
 		this.observationHits = observationHits;
-		this.banDiration = banDiration;
+		this.banDuration = banDuration;
 
 		observations = Caffeine.newBuilder()
-			.expireAfterAccess(observationPeriod, TimeUnit.MINUTES)
+			.expireAfterAccess(this.observationPeriod, TimeUnit.MINUTES)
 			.build();
 
 		banned = Caffeine.newBuilder()
-			.expireAfterAccess(banDiration, TimeUnit.MINUTES)
+			.expireAfterAccess(this.banDuration, TimeUnit.MINUTES)
 			.build();
 	}
 

@@ -23,7 +23,6 @@
 
 package io.bosonnetwork;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -33,18 +32,17 @@ import java.util.Map;
 public final class Version {
 	private static final String VERSION_NOT_AVAILABLE = "N/A";
 
-	@SuppressWarnings("serial")
-	private static final Map<String, String> names = new HashMap<String, String>() {{
-	    put("OR", "Orca");		// Java super node
-	    put("MK", "Meerkat");	// Native regular node
-	}};
+	private static final Map<String, String> names = Map.of(
+	    "OR", "Orca",			// Java super node
+	    "MK", "Meerkat"			// Native regular node
+	);
 
 	/**
 	 * Build a version from the software name and version number.
 	 *
 	 * @param name the Boson node software name
 	 * @param version the Boson node software version
-	 * @return a int that represent the version information
+	 * @return an integer that represent the version information
 	 */
 	public static int build(String name, int version) {
 		byte[] nameBytes = name.getBytes();
@@ -58,7 +56,7 @@ public final class Version {
 	/**
 	 * Convert the integer version information to readable string.
 	 *
-	 * @param version the integer version infomation.
+	 * @param version the integer version information.
 	 * @return a readable string version.
 	 */
 	public static String toString(int version) {

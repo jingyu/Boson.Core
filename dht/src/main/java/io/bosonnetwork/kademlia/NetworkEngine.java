@@ -42,12 +42,12 @@ import org.slf4j.LoggerFactory;
  * @hidden
  */
 public class NetworkEngine {
-	private Queue<Selectable> registrations;
-	private Queue<Selectable> interestUpdates;
-	private List<Selectable> selectables;
-	private AtomicReference<Thread> worker;
+	private final Queue<Selectable> registrations;
+	private final Queue<Selectable> interestUpdates;
+	private final List<Selectable> selectables;
+	private final AtomicReference<Thread> worker;
 
-	private Selector selector;
+	private final Selector selector;
 
 	private static final Logger log = LoggerFactory.getLogger(NetworkEngine.class);
 
@@ -179,7 +179,7 @@ public class NetworkEngine {
 			idleIterations = (rolls != 0) ? 0 : idleIterations + 1;
 
 			// check the idle loops
-			if(selectables.size() == 0 && registrations.peek() == null && idleIterations > 100) {
+			if(selectables.isEmpty() && registrations.peek() == null && idleIterations > 100) {
 				// stop the idle loop, restart on demand
 				worker.set(null);
 				log.info("Stopped select loop, restart on demand.");

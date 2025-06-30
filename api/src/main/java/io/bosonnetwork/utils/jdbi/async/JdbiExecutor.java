@@ -22,12 +22,12 @@ public interface JdbiExecutor {
 	 * in the connection pool. The worker queue in the executor should probably be
 	 * bounded, unless the caller(s) already has a bound for the number of
 	 * outstanding requests. Making the queue bounded will mean you are blocking the
-	 * calling thread when the queue fills up. Whether or not that is acceptable
+	 * calling thread when the queue fills up. Whether that is acceptable
 	 * depends on if and how your service limits incoming requests
 	 * </p>
 	 *
 	 * @param jdbi     the initialized Jdbi class
-	 * @param executor an executor to use for all database calls
+	 * @param vertx    the Vertx instance to use
 	 */
 	static JdbiExecutor create(Jdbi jdbi, Vertx vertx) {
 		return new JdbiExecutorImpl(jdbi, vertx);
@@ -183,7 +183,7 @@ public interface JdbiExecutor {
 
 	/**
 	 * A convenience method which opens an extension of the given type, and yields
-	 * it to a callback. A handle is opened if needed by the extention, and closed
+	 * it to a callback. A handle is opened if needed by the extension, and closed
 	 * before returning to the caller.
 	 *
 	 * <p>

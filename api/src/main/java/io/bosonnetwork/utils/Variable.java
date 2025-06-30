@@ -29,7 +29,7 @@ public class Variable<T> {
 		if (o == this)
 			return true;
 
-		if (o instanceof Variable that)
+		if (o instanceof Variable<?> that)
 			return Objects.equals(this.value, that.value);
 
 		return false;

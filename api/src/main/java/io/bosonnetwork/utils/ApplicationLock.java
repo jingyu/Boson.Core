@@ -13,7 +13,7 @@ import java.nio.file.StandardOpenOption;
  * in single instance mode.
  */
 public class ApplicationLock implements AutoCloseable {
-	private Path lockFile;
+	private final Path lockFile;
 	private FileChannel fc;
 	private FileLock lock;
 

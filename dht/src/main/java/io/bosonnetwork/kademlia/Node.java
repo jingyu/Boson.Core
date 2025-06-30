@@ -33,7 +33,6 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -42,7 +41,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -53,14 +51,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.github.benmanes.caffeine.cache.RemovalListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Configuration;
 import io.bosonnetwork.ConnectionStatusListener;
@@ -391,7 +388,7 @@ public class Node implements io.bosonnetwork.Node {
 					log.error("Scheduler rejected the task execution because unknown reason: {}", r.toString());
 
 				// TODO: check me!!!
-				throw new RejectedExecutionException("Task " + r.toString() + " rejected from " + e.toString());
+				// throw new RejectedExecutionException("Task " + r.toString() + " rejected from " + e.toString());
 			});
 
 			s.setKeepAliveTime(20, TimeUnit.SECONDS);
@@ -406,7 +403,7 @@ public class Node implements io.bosonnetwork.Node {
 	public void bootstrap(NodeInfo node) throws KadException {
 		checkArgument(node != null, "Invalid bootstrap node");
 
-		bootstrap(Arrays.asList(node));
+		bootstrap(List.of(node));
 	}
 
 	@Override
@@ -469,9 +466,8 @@ public class Node implements io.bosonnetwork.Node {
 			throw e;
 		}
 
-		scheduledActions.add(getScheduler().scheduleWithFixedDelay(() -> {
-			persistentAnnounce();
-		}, 60000, Constants.RE_ANNOUNCE_INTERVAL, TimeUnit.MILLISECONDS));
+		scheduledActions.add(getScheduler().scheduleWithFixedDelay(this::persistentAnnounce,
+				60000, Constants.RE_ANNOUNCE_INTERVAL, TimeUnit.MILLISECONDS));
 	}
 
 	@Override
@@ -490,9 +486,7 @@ public class Node implements io.bosonnetwork.Node {
 			// log them if they did
 			try {
 				future.get();
-			} catch (ExecutionException e) {
-				log.error("Scheduled future error", e);
-			} catch (InterruptedException e) {
+			} catch (ExecutionException | InterruptedException e) {
 				log.error("Scheduled future error", e);
 			} catch (CancellationException ignore) {
 			}
@@ -571,7 +565,7 @@ public class Node implements io.bosonnetwork.Node {
 				log.debug("Re-announce the peer: {}", p.getId());
 
 				try {
-					storage.updatePeerLastAnnounce(p.getId(), p.getOrigin());
+					storage.updatePeerLastAnnounce(p.getId(), p.getNodeId());
 				} catch (Exception e) {
 					log.error("Can not update last announce timestamp for peer", e);
 				}
@@ -722,8 +716,8 @@ public class Node implements io.bosonnetwork.Node {
 				if (value != null) {
 					try {
 						getStorage().putValue(value);
-					} catch (KadException ignore) {
-						log.error("Save value " + id + " failed", ignore);
+					} catch (KadException e) {
+						log.error("Save value " + id + " failed", e);
 					}
 				}
 
@@ -794,7 +788,7 @@ public class Node implements io.bosonnetwork.Node {
 		List<PeerInfo> local;
 		try {
 			local = getStorage().getPeer(id, expected);
-			if (((expected <= 0 && local.size() > 0) || (expected > 0 && local.size() >= expected)) &&
+			if (((expected <= 0 && !local.isEmpty()) || (expected > 0 && local.size() >= expected)) &&
 					lookupOption == LookupOption.ARBITRARY)
 				return CompletableFuture.completedFuture(local);
 		} catch (KadException e) {
@@ -815,8 +809,8 @@ public class Node implements io.bosonnetwork.Node {
 			try {
 				// TODO: CHECKME! overwrite the local existing directly?!
 				getStorage().putPeer(ps);
-			} catch (KadException ignore) {
-				log.error("Save peer " + id + " failed", ignore);
+			} catch (KadException e) {
+				log.error("Save peer " + id + " failed", e);
 			}
 
 			if (c >= numDHTs) {
@@ -844,7 +838,7 @@ public class Node implements io.bosonnetwork.Node {
 	public CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent) {
 		checkState(isRunning(), "Node not running");
 		checkArgument(peer != null, "Invalid peer: null");
-		checkArgument(peer.getOrigin().equals(getId()), "Invaid peer: not belongs to current node");
+		checkArgument(peer.getNodeId().equals(getId()), "Invalid peer: not belongs to current node");
 		checkArgument(peer.isValid(), "Invalid peer");
 
 		try {

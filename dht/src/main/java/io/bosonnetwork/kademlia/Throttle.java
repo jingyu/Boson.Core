@@ -33,8 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * @hidden
  */
 public class Throttle {
-	private Map<InetAddress, Integer> counter = new ConcurrentHashMap<>();
-	private AtomicLong lastDecayTime = new AtomicLong(System.currentTimeMillis());
+	private final Map<InetAddress, Integer> counter = new ConcurrentHashMap<>();
+	private final AtomicLong lastDecayTime = new AtomicLong(System.currentTimeMillis());
 
 	private static final int LIMITS = 128;
 	private static final int PERMITS_PER_SECOND = 32;

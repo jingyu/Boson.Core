@@ -57,16 +57,16 @@ public abstract class BosonIdentityObjectBuilder<T> {
 	}
 
 	@SuppressWarnings("unchecked")
-	protected <T> T normalize(T value) {
+	protected <R> R normalize(R value) {
 		if (value instanceof String s)
-			return (T) Normalizer.normalize(s, NFC);
+			return (R) Normalizer.normalize(s, NFC);
 
 		if (value instanceof Map) {
 			Map<Object, Object> map = new LinkedHashMap<>();
 			for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) value).entrySet())
 				map.put(normalize(entry.getKey()), normalize(entry.getValue()));
 
-			return (T) map;
+			return (R) map;
 		}
 
 		if (value instanceof List) {
@@ -74,7 +74,7 @@ public abstract class BosonIdentityObjectBuilder<T> {
 			for (Object o : (List<Object>) value)
 				list.add(normalize(o));
 
-			return (T) list;
+			return (R) list;
 		}
 
 		if (value instanceof Object[]) {
@@ -82,7 +82,7 @@ public abstract class BosonIdentityObjectBuilder<T> {
 			for (int i = 0; i < array.length; i++)
 				array[i] = normalize(((Object[]) value)[i]);
 
-			return (T) array;
+			return (R) array;
 		}
 
 		return value;

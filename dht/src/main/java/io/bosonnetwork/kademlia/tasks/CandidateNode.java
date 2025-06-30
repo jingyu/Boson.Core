@@ -60,10 +60,8 @@ public class CandidateNode extends NodeInfo {
 	public CandidateNode(NodeInfo ni) {
 		super(ni);
 
-		if (ni instanceof KBucketEntry) {
-			KBucketEntry e = (KBucketEntry)ni;
-			reachable = e.isReachable();
-		}
+		if (ni instanceof KBucketEntry entry)
+			reachable = entry.isReachable();
 	}
 
 	public void setSent() {

@@ -6,14 +6,12 @@ import java.util.concurrent.ThreadLocalRandom;
 public class Random {
 	private static final boolean SECURE_RANDOM_THREAD_SAFE = isSecureRandomThreadSafe();
 
-	// The JDK buit-in SecureRandom should be thead-safe in organic mode.
+	// The JDK built-in SecureRandom should be thread-safe in organic mode.
 	private static final SecureRandom secureRandom = isSecureRandomThreadSafe() ? new SecureRandom() : null;
 
 	// Fail-back for non-thread-safe JCE environment
 	private static final ThreadLocal<SecureRandom> localSecureRandom = isSecureRandomThreadSafe() ? null :
-		ThreadLocal.withInitial(() -> {
-			return new SecureRandom();
-		});
+		ThreadLocal.withInitial(SecureRandom::new);
 
 	private static boolean isSecureRandomThreadSafe() {
 		SecureRandom r = new SecureRandom();

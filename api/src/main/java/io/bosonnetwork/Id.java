@@ -68,8 +68,8 @@ public class Id implements Comparable<Id> {
 	private final byte[] bytes;
 
 	// Cache fields for expensive computations
-	private String b58;			// Cache for base58 string representation
-	private Integer hashCode;	// Cache for hash code
+	private volatile String b58;	// Cache for base58 string representation
+	private volatile int hashCode;	// Cache for hash code
 
 	/**
 	 * 3-way comparison function, compare the ids by distance.
@@ -184,7 +184,7 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Creates an id from the an id string representation. The string representation chould be:
+	 * Creates an id from the id string representation. The string representation could be:
 	 *   - hex representation with or the hex prefix '0x'
 	 *   - or base58 representation
 	 *
@@ -208,7 +208,7 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Creates an id from the a hex string representation.
+	 * Creates an id from the hex string representation.
 	 *
 	 * @param hexId the id string in hex representation.
 	 * @return the new created id.
@@ -223,7 +223,7 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Creates an id from the a base58 string representation.
+	 * Creates an id from the base58 string representation.
 	 *
 	 * @param base58Id the id string in base58 representation.
 	 * @return the new created id.
@@ -359,8 +359,8 @@ public class Id implements Comparable<Id> {
 	/**
 	 * Checks the distance between two ids using the XOR metric.
 	 *
-	 * @param id1 id to be calculate the distance.
-	 * @param id2 id to be calculate the distance.
+	 * @param id1 id to be calculated the distance.
+	 * @param id2 id to be calculated the distance.
 	 * @return The distance between id1 and id2.
 	 */
 	public static Id distance(Id id1, Id id2) {
@@ -413,12 +413,12 @@ public class Id implements Comparable<Id> {
 	/**
 	 * Gets the approx distance between two ids.
 	 *
-	 * @param id1 id to be calculate the distance.
-	 * @param id2 id to be calculate the distance.
+	 * @param id1 id to be calculated the distance.
+	 * @param id2 id to be calculated the distance.
 	 * @return the approx distance between the two ids.
 	 */
 	public static int approxDistance(Id id1, Id id2) {
-		/**
+		/*
 		 * Compute the xor of this and to Get the index i of the first set bit of the
 		 * xor returned NodeId The distance between them is ID_LENGTH - i
 		 */
@@ -428,8 +428,8 @@ public class Id implements Comparable<Id> {
 	/**
 	 * Compares the distance of two ids relative to this one using the XOR metric.
 	 *
-	 * @param id1 id to be calculate the distance.
-	 * @param id2 id to be calculate the distance.
+	 * @param id1 id to be calculated the distance.
+	 * @param id2 id to be calculated the distance.
 	 * @return -1 if id1 is closer to this key, 0 if id1 and id2 are equal distant, 1 if
 	 *         id2 is closer
 	 */
@@ -499,8 +499,8 @@ public class Id implements Comparable<Id> {
 	/**
 	 * Checks if the leading bits up to the n-th bit of both id are equal.
 	 *
-	 * @param id1 id to be check.
-	 * @param id2 id to be check.
+	 * @param id1 id to be checked.
+	 * @param id2 id to be checked.
 	 * @param n the n bits to check. if n &lt; 0 then no bits have to match;
 	 *        otherwise n bytes have to match.
 	 * @return true if the first bits up to the n-th bit of both keys are equal, otherwise false.
@@ -538,9 +538,9 @@ public class Id implements Comparable<Id> {
 		int mask = 0xFF80 >>> (depth & 0x07);
 
 		// mask out the part we have to copy over from the last prefix byte
-		dest.bytes[idx] &= ~mask;
+		dest.bytes[idx] &= (byte) ~mask;
 		// copy the bits from the last byte
-		dest.bytes[idx] |= src.bytes[idx] & mask;
+		dest.bytes[idx] |= (byte) (src.bytes[idx] & mask);
 	}
 
 	/**
@@ -601,7 +601,7 @@ public class Id implements Comparable<Id> {
 	 */
 	@Override
 	public int hashCode() {
-		if (hashCode == null) {
+		if (hashCode == 0) {
 			final byte[] b = bytes;
 
 			hashCode = 0x6030A +

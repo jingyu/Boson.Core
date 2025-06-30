@@ -29,34 +29,19 @@ public class TimeUtils {
 	public static Duration parseDuration(CharSequence duration) throws DateTimeParseException {
 		int idx = duration.length() - 1;
         final char specifier = duration.charAt(idx);
-        final TemporalUnit unit;
-        switch (specifier) {
-            case 's':
-            	unit = ChronoUnit.SECONDS;
-                break;
-            case 'm':
-            	unit = ChronoUnit.MINUTES;
-                break;
-            case 'h':
-            	unit = ChronoUnit.HOURS;
-                break;
-            case 'd':
-            	unit = ChronoUnit.DAYS;
-                break;
-            case 'w':
-            	unit = ChronoUnit.WEEKS;
-                break;
-            case 'M':
-            	unit = ChronoUnit.MONTHS;
-                break;
-            case 'y':
-            	unit = ChronoUnit.YEARS;
-                break;
-            default:
-                throw new DateTimeParseException("Can' parse duration, admitted only s, m, h, d, w, M, y", duration, idx);
-        }
+        final TemporalUnit unit = switch (specifier) {
+			case 's' -> ChronoUnit.SECONDS;
+			case 'm' -> ChronoUnit.MINUTES;
+			case 'h' -> ChronoUnit.HOURS;
+			case 'd' -> ChronoUnit.DAYS;
+			case 'w' -> ChronoUnit.WEEKS;
+			case 'M' -> ChronoUnit.MONTHS;
+			case 'y' -> ChronoUnit.YEARS;
+			default ->
+					throw new DateTimeParseException("Can' parse duration, admitted only s, m, h, d, w, M, y", duration, idx);
+		};
 
-        try {
+		try {
         	long number = Long.parseLong(duration, 0, idx, 10);
         	return Duration.ofSeconds(number * unit.getDuration().toSeconds());
         } catch (Exception e) {

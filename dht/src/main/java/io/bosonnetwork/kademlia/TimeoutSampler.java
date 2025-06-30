@@ -204,9 +204,7 @@ public class TimeoutSampler {
 	private long timeoutBaseline;
 	private volatile long updateCount;
 
-	Snapshot snapshot = new Snapshot(tap(bins.clone(), ary -> {
-		ary[ary.length - 1] = BASE_QUANTILE;
-	}));
+	Snapshot snapshot = new Snapshot(tap(bins.clone(), ary -> ary[ary.length - 1] = BASE_QUANTILE));
 
 	private final RPCCallListener listener = new RPCCallListener() {
 		@Override
@@ -234,8 +232,8 @@ public class TimeoutSampler {
 		void normalize() {
 			long cumulativePopulation = 0;
 
-			for (int i = 0; i < values.length; i++) {
-				cumulativePopulation += values[i];
+			for (long value : values) {
+				cumulativePopulation += value;
 			}
 
 			if (cumulativePopulation > 0) {
@@ -251,7 +249,7 @@ public class TimeoutSampler {
 			for (int bin = 0; bin < values.length; bin++) {
 				mean += ((values[bin] * BIN_SIZE * bin) + ((values[bin] * BIN_SIZE) >>> 1)) >>> 20;
 				if (values[bin] > modePop) {
-					mode = (bin * BIN_SIZE) + (BIN_SIZE >>> 1);
+					mode = ((long) bin * BIN_SIZE) + (BIN_SIZE >>> 1);
 					modePop = values[bin];
 				}
 			}
@@ -261,7 +259,7 @@ public class TimeoutSampler {
 			for (int i = 0; i < values.length; i++) {
 				quant -= values[i];
 				if (quant <= 0)
-					return (i * BIN_SIZE) + (BIN_SIZE >>> 1);
+					return ((long) i * BIN_SIZE) + (BIN_SIZE >>> 1);
 			}
 
 			return MAX_BIN;
@@ -345,8 +343,7 @@ public class TimeoutSampler {
 		// is HIGHER (to prevent descent to zero and missing more than 10% of the
 		// packets in the worst case).
 		// but At most RPC_CALL_TIMEOUT_MAX
-		long timeout = Math.min(Math.max(timeoutBaseline + Constants.RPC_CALL_TIMEOUT_BASELINE_MIN, timeoutCeiling),
+		return Math.min(Math.max(timeoutBaseline + Constants.RPC_CALL_TIMEOUT_BASELINE_MIN, timeoutCeiling),
 				Constants.RPC_CALL_TIMEOUT_MAX);
-		return timeout;
 	}
 }

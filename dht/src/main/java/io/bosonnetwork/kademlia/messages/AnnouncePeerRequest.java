@@ -34,6 +34,7 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.utils.Hex;
 
 /**
  * @hidden
@@ -164,7 +165,7 @@ public class AnnouncePeerRequest extends Message {
 		b.append(",p:").append(port);
 		if (alternativeURL != null && !alternativeURL.isEmpty())
 			b.append(",alt:").append(alternativeURL);
-		b.append(",sig:").append(signature.toString());
+		b.append(",sig:").append(Hex.encode(signature));
 		b.append(",tok:").append(token);
 		b.append("}");
 	}

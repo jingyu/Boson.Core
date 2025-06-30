@@ -10,18 +10,13 @@ public class HighlightingCompositeConverter extends ForegroundCompositeConverter
 	@Override
 	protected String getForegroundColorCode(ILoggingEvent event) {
 		Level level = event.getLevel();
-		switch (level.toInt()) {
-		case Level.ERROR_INT:
-			return "38;5;196";
-		case Level.WARN_INT:
-			return "38;5;221";
-		case Level.INFO_INT:
-			return "38;5;40";
-		case Level.TRACE_INT:
-			return "38;5;245";
-		default:
-			return ANSIConstants.DEFAULT_FG;
-		}
+		return switch (level.toInt()) {
+			case Level.ERROR_INT -> "38;5;196";
+			case Level.WARN_INT -> "38;5;221";
+			case Level.INFO_INT -> "38;5;40";
+			case Level.TRACE_INT -> "38;5;245";
+			default -> ANSIConstants.DEFAULT_FG;
+		};
 	}
 
 }

@@ -48,7 +48,7 @@ public class Functional {
 	 * @param <T> the parameter type
 	 * @param <E> the exception type to throw
 	 */
-	public static interface ThrowingConsumer<T, E extends Throwable> {
+	public interface ThrowingConsumer<T, E extends Throwable> {
 		/**
 		 * Performs this operation on the given argument.
 		 *
@@ -65,7 +65,7 @@ public class Functional {
 	 * @param <E> the exception type to throw
 	 */
 	@FunctionalInterface
-	public static interface ThrowingSupplier<R, E extends Throwable> {
+	public interface ThrowingSupplier<R, E extends Throwable> {
 		/**
 		 * Gets a result.
 		 *
@@ -83,7 +83,7 @@ public class Functional {
 	 * @param <E> the exception type to throw
 	 */
 	@FunctionalInterface
-	public static interface ThrowingFunction<R, T, E extends Throwable> {
+	public interface ThrowingFunction<R, T, E extends Throwable> {
 		/**
 		 * Applies this function to the given argument.
 		 *

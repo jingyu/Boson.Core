@@ -133,7 +133,7 @@ public class Value {
 	}
 
 	/**
-	 * Rebuilds a immutable {@code Value} object from the data.
+	 * Rebuilds an immutable {@code Value} object from the data.
 	 *
 	 * @param data the data of the value.
 	 * @return a new immutable {@code Value} object.
@@ -157,7 +157,7 @@ public class Value {
 	}
 
 	/**
-	 * Rebuilds a encrypted {@code Value} object from the data.
+	 * Rebuilds an encrypted {@code Value} object from the data.
 	 *
 	 * @param publicKey the public key associated with the value.
 	 * @param recipient the recipient's ID if the value is encrypted.
@@ -173,7 +173,7 @@ public class Value {
 	}
 
 	/**
-	 * Rebuilds a encrypted {@code Value} object from the data.
+	 * Rebuilds an encrypted {@code Value} object from the data.
 	 *
 	 * @param publicKey the public key associated with the value.
 	 * @param privateKey the private key associated with the value.
@@ -190,7 +190,7 @@ public class Value {
 	}
 
 	/**
-	 * Creates a immutable {@code Value} object from the data.
+	 * Creates an immutable {@code Value} object from the data.
 	 *
 	 * @param data the data of the value.
 	 * @return a new immutable {@code Value} object.
@@ -247,7 +247,7 @@ public class Value {
 	}
 
 	/**
-	 * Creates a encrypted {@code Value} object from the data. The new value will be encrypted
+	 * Creates an encrypted {@code Value} object from the data. The new value will be encrypted
 	 * and signed by a new generated random key pair.
 	 *
 	 * @param recipient the recipient's ID if the value is encrypted.
@@ -260,7 +260,7 @@ public class Value {
 	}
 
 	/**
-	 * Creates a encrypted {@code Value} object from the data with the given key pair and nonce.
+	 * Creates an encrypted {@code Value} object from the data with the given key pair and nonce.
 	 *
 	 * @param keypair the key pair to sign the {@code Value}
 	 * @param recipient the recipient's ID if the value is encrypted.
@@ -275,7 +275,7 @@ public class Value {
 	}
 
 	/**
-	 * Creates a encrypted {@code Value} object from the data with the given key pair and nonce.
+	 * Creates an encrypted {@code Value} object from the data with the given key pair and nonce.
 	 *
 	 * @param keypair the key pair to sign the {@code Value}
 	 * @param recipient the recipient's ID if the value is encrypted.

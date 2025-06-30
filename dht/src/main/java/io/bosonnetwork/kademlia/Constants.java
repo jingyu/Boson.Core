@@ -100,7 +100,7 @@ public final class Constants {
 	///////////////////////////////////////////////////////////////////////////
 	// Development environment
 	///////////////////////////////////////////////////////////////////////////
-	public static final String	ENVIRONMENT_PROPERTY					= "io.bosonnetwork.enviroment";
+	public static final String	ENVIRONMENT_PROPERTY					= "io.bosonnetwork.environment";
 	public static final boolean	DEVELOPMENT_ENVIRONMENT					= System.getProperty(ENVIRONMENT_PROPERTY, "")
 																				.equals("development");
 }

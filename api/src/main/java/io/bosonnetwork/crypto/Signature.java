@@ -43,7 +43,7 @@ public class Signature {
 		 */
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.PublicKey.length();
 
-		private org.apache.tuweni.crypto.sodium.Signature.PublicKey key;
+		private final org.apache.tuweni.crypto.sodium.Signature.PublicKey key;
 		private byte[] bytes;
 
 		private PublicKey(org.apache.tuweni.crypto.sodium.Signature.PublicKey key) {
@@ -94,17 +94,15 @@ public class Signature {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof PublicKey) {
-				PublicKey other = (PublicKey)obj;
-				return key.equals(other.key);
-			}
+			if (obj instanceof PublicKey that)
+				return key.equals(that.key);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + key.hashCode();
 		}
 
 		/**
@@ -144,7 +142,7 @@ public class Signature {
 		 */
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.SecretKey.length();
 
-		private org.apache.tuweni.crypto.sodium.Signature.SecretKey key;
+		private final org.apache.tuweni.crypto.sodium.Signature.SecretKey key;
 		private byte[] bytes;
 
 		private PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey key) {
@@ -152,7 +150,7 @@ public class Signature {
 		}
 
 		/**
-		 * Create a PivateKey from an array of bytes. The byte array
+		 * Create a PrivateKey from an array of bytes. The byte array
 		 * must be of length {@link #BYTES}.
 		 *
 		 * @param key the bytes for the secret key.
@@ -198,17 +196,15 @@ public class Signature {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof PrivateKey) {
-				PrivateKey other = (PrivateKey)obj;
-				return key.equals(other.key);
-			}
+			if (obj instanceof PrivateKey that)
+				return key.equals(that.key);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return key.hashCode() + 0x62; // + 'b' - Boson
+			return 0x6030A + key.hashCode();
 		}
 
 		/**
@@ -249,7 +245,7 @@ public class Signature {
 		 */
 		public int SEED_BYTES = Seed.length();
 
-		private org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
+		private final org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
 		private PublicKey pk;
 		private PrivateKey sk;
 
@@ -309,7 +305,7 @@ public class Signature {
 		}
 
 		/**
-		 * Gets the public key the this key pair.
+		 * Gets the public key of this key pair.
 		 *
 		 * @return the public key of the key pair.
 		 */
@@ -321,7 +317,7 @@ public class Signature {
 		}
 
 		/**
-		 * Gets the private key the this key pair.
+		 * Gets the private key of this key pair.
 		 *
 		 * @return the private key of the key pair.
 		 */
@@ -337,17 +333,15 @@ public class Signature {
 			if (obj == this)
 				return true;
 
-			if (obj instanceof KeyPair) {
-				KeyPair other = (KeyPair)obj;
-				return keyPair.equals(other.keyPair);
-			}
+			if (obj instanceof KeyPair that)
+				return keyPair.equals(that.keyPair);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return keyPair.hashCode() + 0x62; // + 'b' - Boson key pair
+			return 0x6030A + keyPair.hashCode();
 		}
 	}
 

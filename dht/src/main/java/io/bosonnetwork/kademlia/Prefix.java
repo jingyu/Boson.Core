@@ -89,7 +89,7 @@ public class Prefix extends Id {
 		int oldDepth = parent.depth--;
 		// set last bit to zero
 		byte[] b = parent.bytes();
-		b[oldDepth >>> 3] &= ~(0x80 >> (oldDepth & 0x07));
+		b[oldDepth >>> 3] &= (byte) ~(0x80 >> (oldDepth & 0x07));
 		return parent;
 	}
 
@@ -98,9 +98,9 @@ public class Prefix extends Id {
 		Prefix branch = new Prefix(this);
 		int branchDepth = ++branch.depth;
 		if (highBranch)
-			branch.bytes()[branchDepth / 8] |= 0x80 >> (branchDepth % 8);
+			branch.bytes()[branchDepth / 8] |= (byte) (0x80 >> (branchDepth % 8));
 		else
-			branch.bytes()[branchDepth / 8] &= ~(0x80 >> (branchDepth % 8));
+			branch.bytes()[branchDepth / 8] &= (byte) ~(0x80 >> (branchDepth % 8));
 
 		return branch;
 	}
@@ -163,13 +163,14 @@ public class Prefix extends Id {
 
 	@Override
 	public boolean equals(Object o) {
-		if (o instanceof Prefix) {
-			Prefix p = (Prefix) o;
+		if (o == this)
+			return true;
 
-			if (this.depth != p.depth)
+		if (o instanceof Prefix that) {
+			if (this.depth != that.depth)
 				return false;
 
-			return Arrays.equals(this.bytes(), p.bytes());
+			return Arrays.equals(this.bytes(), that.bytes());
 		}
 		return false;
 	}

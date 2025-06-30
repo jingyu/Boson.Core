@@ -64,9 +64,9 @@ public interface DataStorage extends Closeable {
 
 	public List<PeerInfo> getPeer(Id peerId, int maxPeers) throws KadException;
 
-	public PeerInfo getPeer(Id peerId, Id origin) throws KadException ;
+	public PeerInfo getPeer(Id peerId, Id nodeId) throws KadException ;
 
-	public boolean removePeer(Id peerId, Id origin) throws KadException;
+	public boolean removePeer(Id peerId, Id nodeId) throws KadException;
 
 	public void putPeer(Collection<PeerInfo> peers) throws KadException;
 
@@ -80,7 +80,7 @@ public interface DataStorage extends Closeable {
 		putPeer(peer, persistent, true);
 	}
 
-	public void updatePeerLastAnnounce(Id peerId, Id origin) throws KadException;
+	public void updatePeerLastAnnounce(Id peerId, Id nodeId) throws KadException;
 
 	public Stream<PeerInfo> getPersistentPeers(long lastAnnounceBefore) throws KadException;
 
