@@ -122,22 +122,9 @@ public class VouchTests {
 	@Test
 	void emptyVouchTest() {
 		var identity = new CryptoIdentity();
-		var vouch = new VouchBuilder(identity).build();
 
-		assertEquals(0, vouch.getCredentials().size());
-		assertTrue(vouch.isGenuine());
-
-		System.out.println(vouch);
-		System.out.println(vouch.toPrettyString());
-		System.out.println(Hex.encode(vouch.toBytes()));
-
-		var json = vouch.toString();
-		var vouch2 = Vouch.parse(json);
-		assertEquals(vouch, vouch2);
-
-		var bytes = vouch.toBytes();
-		var vouch3 = Vouch.parse(bytes);
-		assertEquals(vouch, vouch3);
+		var ex = assertThrows(IllegalStateException.class, () -> new VouchBuilder(identity).build());
+		assertEquals("Credentials cannot be empty", ex.getMessage());
 	}
 
 	@Test

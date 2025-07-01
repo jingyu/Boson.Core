@@ -44,16 +44,17 @@ public class VerifiablePresentation extends W3CDIDFormat {
 					@JsonProperty(value = "id") String id,
 					@JsonProperty(value = "type") List<String> types,
 					@JsonProperty(value = "holder", required = true) Id holder,
-					@JsonProperty("verifiableCredential") List<VerifiableCredential> credentials,
+					@JsonProperty(value = "verifiableCredential", required = true) List<VerifiableCredential> credentials,
 					@JsonProperty(value = "proof", required = true) Proof proof) {
 		Objects.requireNonNull(holder, "holder");
+		Objects.requireNonNull(credentials, "credentials");
 		Objects.requireNonNull(proof, "proof");
 
 		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
 		this.holder = holder;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
+		this.credentials = Collections.unmodifiableList(credentials);
 		this.proof = proof;
 	}
 
@@ -64,7 +65,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
 		this.holder = holder;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
+		this.credentials = Collections.unmodifiableList(credentials);
 		this.proof = null;
 	}
 

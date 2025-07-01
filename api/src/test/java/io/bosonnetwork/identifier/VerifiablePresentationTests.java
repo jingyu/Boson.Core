@@ -216,54 +216,9 @@ public class VerifiablePresentationTests {
 	@Test
 	void emptyVPTest() {
 		var identity = new CryptoIdentity();
-		var vp = new VerifiablePresentationBuilder(identity).build();
 
-		System.out.println(vp);
-		System.out.println(vp.toPrettyString());
-		System.out.println(Hex.encode(vp.toBytes()));
-
-		assertEquals(0, vp.getCredentials().size());
-		assertTrue(vp.isGenuine());
-
-		var json = vp.toString();
-		var vp2 = VerifiablePresentation.parse(json);
-		assertEquals(vp, vp2);
-		assertEquals(vp.toString(), vp2.toString());
-
-		var bytes = vp.toBytes();
-		var vp3 = VerifiablePresentation.parse(bytes);
-		assertEquals(vp, vp3);
-		assertEquals(vp.toString(), vp3.toString());
-
-		var vouch = vp.toVouch();
-
-		System.out.println(vouch);
-		System.out.println(vouch.toPrettyString());
-		System.out.println(Hex.encode(vouch.toBytes()));
-
-		assertEquals(0, vouch.getCredentials().size());
-		assertTrue(vouch.isGenuine());
-		assertDoesNotThrow(vouch::validate);
-
-		assertInstanceOf(VerifiablePresentation.BosonVouch.class, vouch);
-		assertSame(vp, ((VerifiablePresentation.BosonVouch) vouch).getVerifiablePresentation());
-		assertSame(vp, VerifiablePresentation.fromVouch(vouch, null));
-
-		var vouch2 = Vouch.parse(vouch.toBytes());
-		assertEquals(vouch, vouch2); // Object equality
-		assertEquals(vouch.toString(), vouch2.toString()); // String equality
-
-		var vp4 = VerifiablePresentation.fromVouch(vouch2,null);
-
-		System.out.println(vp4);
-		System.out.println(vp4.toPrettyString());
-		System.out.println(Hex.encode(vp4.toBytes()));
-
-		assertEquals(vp, vp4);
-		assertEquals(vp.toPrettyString(), vp4.toPrettyString());
-
-		assertEquals(vouch, vp4.toVouch());
-		assertEquals(vouch.toString(), vp4.toVouch().toString());
+		var ex = assertThrows(IllegalStateException.class, () -> new VerifiablePresentationBuilder(identity).build());
+		assertEquals("Credentials cannot be empty", ex.getMessage());
 	}
 
 	@Test

@@ -1,7 +1,6 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,7 +145,10 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 
 	@Override
 	public Vouch build() {
-		List<Credential> credentials = this.credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.credentials.values());
+		if (credentials.isEmpty())
+			throw new IllegalStateException("Credentials cannot be empty");
+
+		List<Credential> credentials = new ArrayList<>(this.credentials.values());
 		Vouch unsigned = new Vouch(id, types, identity.getId(), new ArrayList<>(credentials));
 		byte[] signature = identity.sign(unsigned.getSignData());
 		return new Vouch(unsigned, now(), signature);

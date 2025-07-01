@@ -1,7 +1,6 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,7 +169,10 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 
 	@Override
 	public VerifiablePresentation build() {
-		List<VerifiableCredential> credentials = this.credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.credentials.values());
+		if (credentials.isEmpty())
+			throw new IllegalStateException("Credentials cannot be empty");
+
+		List<VerifiableCredential> credentials = new ArrayList<>(this.credentials.values());
 		VerifiablePresentation unsigned = new VerifiablePresentation(contexts, id, types, identity.getId(), credentials);
 		byte[] signature = identity.sign(unsigned.getSignData());
 		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(),

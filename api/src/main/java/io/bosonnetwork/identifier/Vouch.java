@@ -67,17 +67,18 @@ public class Vouch {
 	protected Vouch(@JsonProperty(value = "id") String id,
 					@JsonProperty(value = "t") List<String> types,
 					@JsonProperty(value = "h", required = true) Id holder,
-					@JsonProperty("c") List<Credential> credentials,
+					@JsonProperty(value = "c", required = true) List<Credential> credentials,
 					@JsonProperty(value = "sat", required = true) Date signedAt,
 					@JsonProperty(value = "sig", required = true) byte[] signature) {
 		Objects.requireNonNull(holder, "holder");
+		Objects.requireNonNull(credentials, "credentials");
 		Objects.requireNonNull(signedAt, "signedAt");
 		Objects.requireNonNull(signature, "signature");
 
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
 		this.holder = holder;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
+		this.credentials = Collections.unmodifiableList(credentials);
 		this.signedAt = signedAt;
 		this.signature = signature;
 	}
@@ -88,7 +89,7 @@ public class Vouch {
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
 		this.holder = holder;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
+		this.credentials = Collections.unmodifiableList(credentials);
 		this.signedAt = null;
 		this.signature = null;
 	}
