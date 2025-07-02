@@ -30,41 +30,126 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * @hidden
+ * A Throttle(rate limiter) that restricts requests per IP address based on a token bucket algorithm.
+ * Allows a specified number of requests per second with a burst capacity.
  */
 public class Throttle {
+	private static final int DEFAULT_LIMIT_PER_SECOND = 32;
+	private static final int DEFAULT_BURST_CAPACITY = 128;
+
+	private final int limitPerSecond;
+	private final int burstCapacity;
+
 	private final Map<InetAddress, Integer> counter = new ConcurrentHashMap<>();
 	private final AtomicLong lastDecayTime = new AtomicLong(System.currentTimeMillis());
 
-	private static final int LIMITS = 128;
-	private static final int PERMITS_PER_SECOND = 32;
+	/**
+	 * Constructs a Throttle with custom limits.
+	 *
+	 * @param limitPerSecond Maximum requests allowed per second.
+	 * @param burstCapacity Maximum burst requests allowed.
+	 * @throws IllegalArgumentException if parameters are non-positive or burstCapacity is less than limitPerSecond.
+	 */
+	protected Throttle(int limitPerSecond, int burstCapacity) {
+		if (limitPerSecond <= 0 || burstCapacity <= 0 || burstCapacity < limitPerSecond)
+			throw new IllegalArgumentException("limitPerSecond and burstCapacity must be > 0 and burstCapacity must be >= limitPerSecond");
 
+		this.limitPerSecond = limitPerSecond;
+		this.burstCapacity = burstCapacity;
+	}
+
+	/**
+	 * Constructs a Throttle with default limits (32 requests/sec, 128 burst).
+	 */
 	protected Throttle() {
+		this(DEFAULT_LIMIT_PER_SECOND, DEFAULT_BURST_CAPACITY);
 	}
 
-	public boolean saturatingInc(InetAddress addr) {
-		int count = counter.compute(addr, (key, old) -> old == null ? 1 : Math.min(old + 1, LIMITS));
-		return count >= LIMITS;
+	/**
+	 * Creates a new Throttle with default limits (32 requests/sec, 128 burst).
+	 * @return A new Throttle.
+	 */
+	public static Throttle enabled() {
+		return new Throttle();
 	}
 
-	public void saturatingDec(InetAddress addr) {
-		counter.compute(addr, (key, old) -> old == null || old == 1 ? null : old - 1);
+	/**
+	 * Creates a new Throttle with custom limits.
+	 * @param limitPerSecond Maximum requests allowed per second.
+	 * @param burstCapacity Maximum burst requests allowed.
+	 * @return A new Throttle.
+	 * @throws IllegalArgumentException if parameters are non-positive or burstCapacity is less than limitPerSecond.
+	 */
+	public static Throttle enabled(int limitPerSecond, int burstCapacity) {
+		return new Throttle(limitPerSecond, burstCapacity);
 	}
 
+	/**
+	 * Creates a new Throttle that is disabled.
+	 * @return A new Throttle.
+	 */
+	public static Throttle disabled() {
+		return new Disabled();
+	}
+
+	/**
+	 * Increments the request count for an address and checks if the burst limit is reached.
+	 *
+	 * @param addr The IP address to track.
+	 * @return true if the burst limit is reached or exceeded, false otherwise.
+	 */
+	public boolean incrementAndCheck(InetAddress addr) {
+		int count = counter.compute(addr, (a, c) -> c == null ? 1 : Math.min(c + 1, burstCapacity));
+		return count >= burstCapacity;
+	}
+
+	/**
+	 * Decrements the request count for an address, removing it if it reaches zero.
+	 *
+	 * @param addr The IP address to decrement.
+	 */
+	public void decrement(InetAddress addr) {
+		counter.compute(addr, (a, c) -> c == null || c == 1 ? null : c - 1);
+	}
+
+	/**
+	 * Clears the request count for an address.
+	 *
+	 * @param addr The IP address to clear.
+	 */
 	public void clear(InetAddress addr) {
 		counter.remove(addr);
 	}
 
-	public boolean test(InetAddress addr) {
-		return counter.getOrDefault(addr, 0) >= LIMITS;
+	/**
+	 * Checks if the address has reached or exceeded the burst limit.
+	 *
+	 * @param addr The IP address to check.
+	 * @return true if the burst limit is reached or exceeded, false otherwise.
+	 */
+	public boolean isLimitReached(InetAddress addr) {
+		return counter.getOrDefault(addr, 0) >= burstCapacity;
 	}
 
-	public int estimateDeplayAndInc(InetAddress addr) {
-		int count = counter.compute(addr, (key, old) -> old == null ? 1 : old + 1);
-		int diff = count - LIMITS + 1; // TODO: CHECKME! +1 fixed that throttled by peer
-		return Math.max(diff, 0) * 1000 / PERMITS_PER_SECOND;
+	/**
+	 * Increments the request count and estimates the delay (in milliseconds)
+	 * needed before the next request is allowed.
+	 *
+	 * @param addr The IP address to check and increment.
+	 * @return The estimated delay in milliseconds, or 0 if within limits.
+	 */
+	public int incrementAndEstimateDelay(InetAddress addr) {
+		int count = counter.compute(addr, (a, c) -> c == null ? 1 : c + 1);
+		if (count < burstCapacity)
+			return 0;
+		// IMPORTANT: +1 to fix that throttled by peer
+		return (count - burstCapacity + 1) * 1000 / limitPerSecond;
 	}
 
+	/**
+	 * Decays request counts based on elapsed time, reducing counts proportionally
+	 * to the rate limit and removing entries with zero or negative counts.
+	 */
 	public void decay() {
 		long now = System.currentTimeMillis();
 		long last = lastDecayTime.get();
@@ -75,29 +160,27 @@ public class Throttle {
 		if (!lastDecayTime.compareAndSet(last, last + interval * 1000))
 			return;
 
-		int delta = (int)(interval * PERMITS_PER_SECOND);
-		// minor optimization: delete first, then replace only what's left
+		int delta = (int) (interval * limitPerSecond);
 		counter.entrySet().removeIf(entry -> entry.getValue() <= delta);
 		counter.replaceAll((k, v) -> v - delta);
 	}
 
 	/**
-	 * @hidden
+	 * Disabled Throttle.
+	 * @see Throttle
 	 */
-	public static class Eanbled extends Throttle {
-	}
+	private static class Disabled extends Throttle {
+		protected Disabled() {
+			super(0, 0);
+		}
 
-	/**
-	 * @hidden
-	 */
-	public static class Disabled extends Throttle {
 		@Override
-		public boolean saturatingInc(InetAddress addr) {
+		public boolean incrementAndCheck(InetAddress addr) {
 			return false;
 		}
 
 		@Override
-		public void saturatingDec(InetAddress addr) {
+		public void decrement(InetAddress addr) {
 		}
 
 		@Override
@@ -105,12 +188,12 @@ public class Throttle {
 		}
 
 		@Override
-		public boolean test(InetAddress addr) {
+		public boolean isLimitReached(InetAddress addr) {
 			return false;
 		}
 
 		@Override
-		public int estimateDeplayAndInc(InetAddress addr) {
+		public int incrementAndEstimateDelay(InetAddress addr) {
 			return 0;
 		}
 

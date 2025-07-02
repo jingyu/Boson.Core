@@ -130,8 +130,8 @@ public class RPCServer implements Selectable {
 		this.callQueue = new ConcurrentLinkedQueue<>();
 		this.pipeline = new ConcurrentLinkedQueue<>();
 
-		this.outboundThrottle = enableThrottle ? new Throttle.Eanbled() : new Throttle.Disabled();
-		this.inboundThrottle = enableThrottle ? new Throttle.Eanbled() : new Throttle.Disabled();
+		this.outboundThrottle = enableThrottle ? Throttle.enabled() : Throttle.disabled();
+		this.inboundThrottle = enableThrottle ? Throttle.enabled() : Throttle.disabled();
 		this.timeoutSampler = new TimeoutSampler();
 		this.stats = new RPCStatistics();
 
@@ -282,7 +282,7 @@ public class RPCServer implements Selectable {
 				break;
 			}
 
-			int delay = outboundThrottle.estimateDeplayAndInc(call.getRequest().getRemoteAddress().getAddress());
+			int delay = outboundThrottle.incrementAndEstimateDelay(call.getRequest().getRemoteAddress().getAddress());
 			if(delay > 0) {
 				delay += Random.random().nextInt(10, 50);
 				log.info("Throttled(delay {}ms) the RPCCall to remote peer {}@{}, {}", delay,
@@ -290,7 +290,7 @@ public class RPCServer implements Selectable {
 				getScheduler().schedule(() -> {
 					callQueue.add(call);
 					processCallQueue();
-					outboundThrottle.saturatingDec(call.getRequest().getRemoteAddress().getAddress());
+					outboundThrottle.decrement(call.getRequest().getRemoteAddress().getAddress());
 				}, delay, TimeUnit.MILLISECONDS);
 				continue;
 			}
@@ -501,7 +501,7 @@ public class RPCServer implements Selectable {
 				continue;
 			}
 
-			if(inboundThrottle.saturatingInc(sa.getAddress())) {
+			if(inboundThrottle.incrementAndCheck(sa.getAddress())) {
 				log.warn("Throttled an packet from {}", AddressUtils.toString(sa));
 				stats.droppedPacket(readBuffer.limit() + dht.getType().protocolHeaderSize());
 				continue;
