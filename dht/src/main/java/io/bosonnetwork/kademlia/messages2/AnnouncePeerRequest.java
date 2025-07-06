@@ -154,7 +154,7 @@ public class AnnouncePeerRequest implements Request {
 				ctxt.reportInputMismatch(AnnouncePeerRequest.class, "Missing nodeId attribute in the deserialization context");
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
-				final String fieldName = p.getCurrentName();
+				final String fieldName = p.currentName();
 				final JsonToken token = p.nextToken();
 				switch (fieldName) {
 				case "tok":

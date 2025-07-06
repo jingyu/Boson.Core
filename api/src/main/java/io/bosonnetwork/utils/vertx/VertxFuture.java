@@ -15,11 +15,10 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.ContextInternal;
-import io.vertx.core.impl.future.FutureInternal;
 
 public class VertxFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
 	Future<T> future;
@@ -56,21 +55,9 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		return new VertxFuture<>(Future.succeededFuture(result));
 	}
 
-	protected ContextInternal getContext() {
-		return ((FutureInternal<T>)future).context();
-	}
-
-	protected ContextInternal currentContext() {
-		return (ContextInternal)Vertx.currentContext();
-	}
-
-	protected ContextInternal defaultContext() {
-		return currentContext() != null ? currentContext() : getContext();
-	}
-
 	@Override
 	public Executor defaultExecutor() {
-		ContextInternal context = defaultContext();
+		Context context = Vertx.currentContext();
 		if (context != null) {
 			return (r) -> context.executeBlocking(() -> {
 				r.run();
@@ -602,17 +589,13 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
-		CountDownLatch latch;
-		io.vertx.core.impl.WorkerExecutor executor = io.vertx.core.impl.WorkerExecutor.unwrapWorkerExecutor();
-		if (executor != null) {
-			latch = executor.suspend(cont -> future.onComplete(ar -> cont.resume()));
-		} else {
-			latch = new CountDownLatch(1);
-			future.onComplete(ar -> latch.countDown());
-		}
+		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
+			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
-		if (latch != null)
-			latch.await();
+		final CountDownLatch latch = new CountDownLatch(1);
+		future.onComplete(ar -> latch.countDown());
+
+		latch.await();
 
 		if (future.succeeded())
 			return future.result();
@@ -624,19 +607,14 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 
 	@Override
 	public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-		CountDownLatch latch;
-		io.vertx.core.impl.WorkerExecutor executor = io.vertx.core.impl.WorkerExecutor.unwrapWorkerExecutor();
-		if (executor != null) {
-			latch = executor.suspend(cont -> future.onComplete(ar -> cont.resume()));
-		} else {
-			latch = new CountDownLatch(1);
-			future.onComplete(ar -> latch.countDown());
-		}
+		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
+			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
-		if (latch != null) {
-			if (!latch.await(timeout, unit))
-				throw new TimeoutException();
-		}
+		final CountDownLatch latch = new CountDownLatch(1);
+		future.onComplete(ar -> latch.countDown());
+
+		if (!latch.await(timeout, unit))
+			throw new TimeoutException();
 
 		if (future.succeeded())
 			return future.result();
@@ -722,8 +700,14 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		if (unit == null)
 			throw new NullPointerException();
 
-		defaultContext().setTimer(unit.toMillis(timeout), (tid) -> complete(value));
-		return this;
+		Future<T> f = future.timeout(timeout, unit).recover(e -> {
+			if (e instanceof TimeoutException)
+				return Future.succeededFuture(value);
+			else
+				return Future.failedFuture(e);
+		});
+
+		return of(f);
 	}
 
 	@Override

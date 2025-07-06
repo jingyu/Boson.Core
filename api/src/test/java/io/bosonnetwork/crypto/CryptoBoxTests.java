@@ -50,11 +50,11 @@ public class CryptoBoxTests {
 
 	@Test
 	public void keyPairFromZeroedPrivateKey() {
-		byte[] zeroSk = new byte[CryptoBox.PrivateKey.BYTES];
+		var zeroSk = new byte[CryptoBox.PrivateKey.BYTES];
 		Arrays.fill(zeroSk, (byte)0);
 
-		CryptoBox.KeyPair kp = CryptoBox.KeyPair.fromPrivateKey(zeroSk);
-		assert(kp != null);
+		var kp = CryptoBox.KeyPair.fromPrivateKey(zeroSk);
+		assertNotNull(kp);
 
 		assertArrayEquals(zeroSk, kp.privateKey().bytes());
 		assertFalse(Arrays.equals(zeroSk, kp.publicKey().bytes()));
@@ -62,11 +62,11 @@ public class CryptoBoxTests {
 
 	@Test
 	public void keyPairFromSeed() {
-		byte[] seed = new byte[32];
+		var seed = new byte[CryptoBox.KeyPair.SEED_BYTES];
 		Random.random().nextBytes(seed);
 
-		CryptoBox.KeyPair kp = CryptoBox.KeyPair.fromSeed(seed);
-		CryptoBox.KeyPair kp2 = CryptoBox.KeyPair.fromSeed(seed);
+		var kp = CryptoBox.KeyPair.fromSeed(seed);
+		var kp2 = CryptoBox.KeyPair.fromSeed(seed);
 
 		assertEquals(kp.privateKey(), kp2.privateKey());
 		assertEquals(kp.publicKey(), kp2.publicKey());
@@ -77,9 +77,9 @@ public class CryptoBoxTests {
 
 	@Test
 	public void testEqualityAndRecovery() {
-		CryptoBox.KeyPair kp = CryptoBox.KeyPair.random();
-		CryptoBox.KeyPair otherKp1 = CryptoBox.KeyPair.fromPrivateKey(kp.privateKey());
-		CryptoBox.KeyPair otherKp2 = CryptoBox.KeyPair.fromPrivateKey(kp.privateKey().bytes());
+		var kp = CryptoBox.KeyPair.random();
+		var otherKp1 = CryptoBox.KeyPair.fromPrivateKey(kp.privateKey());
+		var otherKp2 = CryptoBox.KeyPair.fromPrivateKey(kp.privateKey().bytes());
 
 		assertEquals(kp, otherKp1);
 		assertEquals(kp, otherKp2);
@@ -90,9 +90,9 @@ public class CryptoBoxTests {
 
 	@Test
 	public void testKeyBytes() {
-		CryptoBox.KeyPair kp = CryptoBox.KeyPair.random();
-		CryptoBox.PrivateKey sk = CryptoBox.PrivateKey.fromBytes(kp.privateKey().bytes());
-		CryptoBox.PublicKey pk = CryptoBox.PublicKey.fromBytes(kp.publicKey().bytes());
+		var kp = CryptoBox.KeyPair.random();
+		var sk = CryptoBox.PrivateKey.fromBytes(kp.privateKey().bytes());
+		var pk = CryptoBox.PublicKey.fromBytes(kp.publicKey().bytes());
 
 		assertEquals(kp.privateKey(), sk);
 		assertEquals(kp.publicKey(), pk);
@@ -103,12 +103,12 @@ public class CryptoBoxTests {
 
 	@Test
 	public void encryptDecryptSealed() throws CryptoException {
-		CryptoBox.KeyPair receiver = CryptoBox.KeyPair.random();
+		var receiver = CryptoBox.KeyPair.random();
 
-		byte[] encrypted = CryptoBox.encryptSealed(Hex.decode("deadbeef"), receiver.publicKey());
+		var encrypted = CryptoBox.encryptSealed(Hex.decode("deadbeef"), receiver.publicKey());
 		assertNotNull(encrypted);
 
-		byte[] decrypted = CryptoBox.decryptSealed(encrypted, receiver.publicKey(), receiver.privateKey());
+		var decrypted = CryptoBox.decryptSealed(encrypted, receiver.publicKey(), receiver.privateKey());
 		assertNotNull(decrypted);
 		assertArrayEquals(Hex.decode("deadbeef"), decrypted);
 
@@ -121,8 +121,8 @@ public class CryptoBoxTests {
 
 	@Test
 	public void checkEncryptAndDecrypt() throws CryptoException {
-		CryptoBox.KeyPair alice = CryptoBox.KeyPair.random();
-		CryptoBox.KeyPair bob = CryptoBox.KeyPair.random();
+		var alice = CryptoBox.KeyPair.random();
+		var bob = CryptoBox.KeyPair.random();
 
 		byte[] message = "This is a test message".getBytes();
 
@@ -137,7 +137,7 @@ public class CryptoBoxTests {
 			CryptoBox.decrypt(encrypted, bob.publicKey(), alice.privateKey(), nonce.increment());
 		});
 
-		CryptoBox.KeyPair other = CryptoBox.KeyPair.random();
+		var other = CryptoBox.KeyPair.random();
 		assertThrows(CryptoException.class, () -> {
 			CryptoBox.decrypt(encrypted, bob.publicKey(), other.privateKey(), nonce);
 		});
@@ -150,10 +150,10 @@ public class CryptoBoxTests {
 
 	@Test
 	public void checkPrecomputedEncryptAndDecrypt() throws CryptoException {
-		CryptoBox.KeyPair alice = CryptoBox.KeyPair.random();
-		CryptoBox.KeyPair bob = CryptoBox.KeyPair.random();
+		var alice = CryptoBox.KeyPair.random();
+		var bob = CryptoBox.KeyPair.random();
 
-		byte[] message = "This is a test message".getBytes();
+		var message = "This is a test message".getBytes();
 		byte[] encrypted;
 
 		try (CryptoBox precomputed = CryptoBox.fromKeys(alice.publicKey(), bob.privateKey())) {
@@ -162,7 +162,7 @@ public class CryptoBoxTests {
 		}
 
 		try (CryptoBox precomputed = CryptoBox.fromKeys(bob.publicKey(), alice.privateKey())) {
-			byte[] decrypted = precomputed.decrypt(encrypted, nonce);
+			var decrypted = precomputed.decrypt(encrypted, nonce);
 			assertNotNull(decrypted);
 			assertArrayEquals(message, decrypted);
 		}
@@ -175,7 +175,7 @@ public class CryptoBoxTests {
 		}
 
 		try (CryptoBox precomputed = CryptoBox.fromKeys(bob.publicKey(), alice.privateKey())) {
-			byte[] decrypted = precomputed.decrypt(encrypted, nonce);
+			var decrypted = precomputed.decrypt(encrypted, nonce);
 
 			assertNotNull(decrypted);
 			assertArrayEquals(message, decrypted);
@@ -193,19 +193,19 @@ public class CryptoBoxTests {
 
 	@Test
 	public void checkBoxKeyPairFromSignatureKeyPair() {
-		Signature.KeyPair signKeyPair = Signature.KeyPair.random();
-		CryptoBox.KeyPair boxKeyPair = CryptoBox.KeyPair.fromSignatureKeyPair(signKeyPair);
+		var signKeyPair = Signature.KeyPair.random();
+		var boxKeyPair = CryptoBox.KeyPair.fromSignatureKeyPair(signKeyPair);
 		assertNotNull(boxKeyPair);
 	}
 
 	@Test
 	public void checkBoxKeysFromSignatureKeys() throws CryptoException {
-		Signature.KeyPair keyPair = Signature.KeyPair.random();
-		CryptoBox.PublicKey boxPk = CryptoBox.PublicKey.fromSignatureKey(keyPair.publicKey());
-		CryptoBox.PrivateKey boxSk = CryptoBox.PrivateKey.fromSignatureKey(keyPair.privateKey());
+		var keyPair = Signature.KeyPair.random();
+		var boxPk = CryptoBox.PublicKey.fromSignatureKey(keyPair.publicKey());
+		var boxSk = CryptoBox.PrivateKey.fromSignatureKey(keyPair.privateKey());
 		assertEquals(boxPk, CryptoBox.KeyPair.fromPrivateKey(boxSk).publicKey());
 
-		CryptoBox.KeyPair boxKeyPair = CryptoBox.KeyPair.fromSignatureKeyPair(keyPair);
+		var boxKeyPair = CryptoBox.KeyPair.fromSignatureKeyPair(keyPair);
 		assertEquals(boxKeyPair, CryptoBox.KeyPair.fromPrivateKey(boxSk));
 		assertEquals(boxSk, boxKeyPair.privateKey());
 		assertEquals(boxPk, boxKeyPair.publicKey());
@@ -213,7 +213,7 @@ public class CryptoBoxTests {
 
 	@Test
 	public void testDestroy() {
-		CryptoBox.KeyPair keyPair = CryptoBox.KeyPair.random();
+		var keyPair = CryptoBox.KeyPair.random();
 		keyPair.privateKey().destroy();
 		assertTrue(keyPair.privateKey().isDestroyed());
 		assertFalse(keyPair.publicKey().isDestroyed());

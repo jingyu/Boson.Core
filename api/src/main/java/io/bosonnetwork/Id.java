@@ -33,69 +33,68 @@ import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
 
 /**
- * The Boson Identifiers. On the Boson network, all objects are identified through Id,
- * including nodes, values, peers...
- *
- * <p>This class is immutable and thread-safe. All instances of this class are
- * guaranteed to have a valid byte array of length {@link #BYTES}. The internal state
- * cannot be modified after construction.</p>
+ * Represents a 256-bit identifier used in the Boson network to uniquely identify
+ * nodes, values, peers, and other objects. This class is immutable and thread-safe.
+ * All instances are guaranteed to have a valid byte array of length {@link #BYTES}.
+ * The internal state cannot be modified after construction.
  */
 public class Id implements Comparable<Id> {
 	/**
-	 * The number of bits used to represent an Id value in two's complement binary form.
+	 * The number of bits used to represent an {@code Id} in two's complement binary form.
 	 */
 	public static final int SIZE = 256;
 	/**
-	 * The number of bytes used to represent an Id value in two's complement binary form.
+	 * The number of bytes used to represent an {@code Id} in two's complement binary form.
 	 */
 	public static final int BYTES = SIZE / Byte.SIZE;
 	/**
-	 * A constant holding the zero Id.
+	 * A constant representing the zero identifier (all bits set to 0).
 	 */
 	public static final Id ZERO_ID = new Id();
 	/**
-	 * A constant holding the minimum Id.
+	 * A constant representing the minimum identifier (equivalent to {@link #ZERO_ID}).
 	 */
 	public static final Id MIN_ID = ZERO_ID;
 	/**
-	 * A constant holding the maximum Id.
+	 * A constant representing the maximum identifier (all bits set to 1).
 	 */
-	public static final Id MAX_ID = Id.ofHex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+	public static final Id MAX_ID = createMaxId();
 
 	private static final String DID_PREFIX = "did:boson:";
+	private static final SecureRandom RANDOM = new SecureRandom();
 
-	// the performance for raw bytes is much better then BigInteger
 	private final byte[] bytes;
-
-	// Cache fields for expensive computations
-	private volatile String b58;	// Cache for base58 string representation
-	private volatile int hashCode;	// Cache for hash code
+	private volatile String b58;	// Cached base58 string representation
+	private volatile int hashCode;	// Cache hash code
 
 	/**
-	 * 3-way comparison function, compare the ids by distance.
+	 * 3-way comparator. For sorting {@code Id} instances based on their
+	 * distance to a target identifier using the XOR metric.
 	 */
-	public static final class Comparator implements java.util.Comparator<Id> {
+	public static final class ThreeWayComparator implements java.util.Comparator<Id> {
 		private final Id target;
 
 		/**
-		 * Creates a 3-way comparator object with target id.
+		 * Creates a comparator that sorts identifiers based on their XOR distance to the specified target.
 		 *
-		 * @param target the target id that compare to.
+		 * @param target the target identifier to measure distances against.
+		 * @throws NullPointerException if the target is null.
 		 */
-		public Comparator(Id target) {
+		public ThreeWayComparator(Id target) {
+			if (target == null)
+				throw new NullPointerException("Target identifier cannot be null");
+
 			this.target = target;
 		}
 
 		/**
-		 * Compares the two ids by the distance to the target id.
+		 * Compares two identifiers based on their XOR distance to the target identifier.
 		 *
-		 * @param o1 the first id to be compared.
-		 * @param o2 the second id to be compared.
-		 * @return a negative integer, zero, or a positive integer as the
-		 *         distance to the first id is less than, equal to, or greater than
-		 *         the distance to the second.
-		 * @throws NullPointerException if an argument is null and this
-		 *         comparator does not permit null arguments.
+		 * @param o1 the first identifier to compare.
+		 * @param o2 the second identifier to compare.
+		 * @return a negative integer if {@code o1} is closer to the target, zero if equally distant,
+		 *		 or a positive integer if {@code o2} is closer.
+		 * @throws NullPointerException if either {@code o1} or {@code o2} is null.
 		 */
 		@Override
 		public int compare(Id o1, Id o2) {
@@ -104,145 +103,162 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Construct a random id.
+	 * Constructs a zero identifier (all bits set to 0).
 	 */
 	protected Id() {
 		bytes = new byte[BYTES];
 	}
 
 	/**
-	 * Construct an id from the existing id.
-	 *
-	 * @param id the existing id.
-	 */
-	protected Id(Id id) {
-		this(id.bytes);
-	}
-
-	/**
 	 * Construct an id from a byte array. it should at least {@link #BYTES} bytes available.
 	 *
-	 * @param buf the byte array that contains a binary id.
+	 * @param buf the byte array containing the identifier data.
+	 * @throws IllegalArgumentException if the array length is not exactly {@link #BYTES}.
 	 */
 	protected Id(byte[] buf) {
-		this(buf, 0);
+		if (buf == null)
+			throw new NullPointerException("Byte array cannot be null");
+
+		if (buf.length != BYTES)
+			throw new IllegalArgumentException("Byte array should be exactly " + BYTES + " bytes");
+
+		this.bytes = buf;
 	}
 
 	/**
-	 * Construct an id from a byte array, it should at least {@link #BYTES} bytes
-	 * available after the offset.
+	 * Constructs an identifier by copying the bytes of an existing identifier.
 	 *
-	 * @param buf the byte array that contains a binary id.
-	 * @param offset The offset of the subarray to be used.
+	 * @param id the identifier to copy.
+	 * @throws NullPointerException if {@code id} is null.
 	 */
-	protected Id(byte[] buf, int offset) {
-		this.bytes = Arrays.copyOfRange(buf, offset, offset + BYTES);
+	@SuppressWarnings("CopyConstructorMissesField")
+	protected Id(Id id) {
+		if (id == null)
+			throw new NullPointerException("Input identifier cannot be null");
+
+		this.bytes = Arrays.copyOf(id.bytes, BYTES);
 	}
 
 	/**
-	 * Creates an id from a byte array. it should at least {@link #BYTES} bytes available.
+	 * Creates an identifier from a byte array.
 	 *
-	 * @param buf the byte array that contains a binary id.
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the buf length less than {@link #BYTES} bytes.
+	 * @param buf the byte array containing exactly {@link #BYTES} bytes.
+	 * @return a new {@code Id} instance.
+	 * @throws NullPointerException if buf is null.
+	 * @throws IllegalArgumentException if the array length is not exactly {@link #BYTES}.
 	 */
 	public static Id of(byte[] buf) {
-		if (buf.length != BYTES)
-			throw new IllegalArgumentException("Binary id should be " + BYTES + " bytes long.");
-
-		return new Id(buf);
+		return new Id(Arrays.copyOf(buf, buf.length));
 	}
 
 	/**
-	 * Creates an id from a byte array, it should at least {@link #BYTES} bytes
-	 * available after the offset.
+	 * Creates an identifier from a byte array starting at the specified offset.
 	 *
-	 * @param buf the byte array that contains a binary id.
-	 * @param offset The offset of the subarray to be used.
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the offset is invalid or less then {@link #BYTES}
-	 * 	       bytes available in the buf after the offset.
+	 * @param buf the byte array containing the identifier data.
+	 * @param offset the starting offset in the array.
+	 * @return a new {@code Id} instance.
+	 * @throws NullPointerException if buf is null.
+	 * @throws IllegalArgumentException if the offset is negative or there are fewer than
+	 *		 {@link #BYTES} bytes available from the offset.
 	 */
 	public static Id of(byte[] buf, int offset) {
+		if (buf == null)
+			throw new NullPointerException("Byte array cannot be null");
+
 		if (offset < 0)
-			throw new IllegalArgumentException("Invalid offset, must be non-negative");
+			throw new IllegalArgumentException("Offset must be non-negative");
 
 		if (buf.length - offset < BYTES)
-			throw new IllegalArgumentException("Binary id should be " + BYTES + " bytes long.");
+			throw new IllegalArgumentException("Byte array must have at least " + BYTES + " bytes available");
 
-		return new Id(buf, offset);
+		return new Id(Arrays.copyOfRange(buf, offset, offset + BYTES));
 	}
 
 	/**
-	 * Clone an existing id.
+	 * Creates a new identifier by copying an existing identifier.
 	 *
-	 * @param id the existing id to clone.
-	 * @return the new created id.
+	 * @param id the identifier to copy.
+	 * @return a new {@code Id} instance with the same value.
+	 * @throws NullPointerException if {@code id} is null.
 	 */
 	public static Id of(Id id) {
 		return new Id(id);
 	}
 
 	/**
-	 * Creates an id from the id string representation. The string representation could be:
-	 *   - hex representation with or the hex prefix '0x'
-	 *   - or base58 representation
+	 * Creates an identifier from an id string representation in one of the following formats:
+	 *   - Base58
+	 *   - Hexadecimal (with or without "0x" prefix)
+	 *   - W3C DID format ("did:boson:...")
+	 * Base58 is attempted first, with fallback to hexadecimal or DID.
 	 *
-	 * @param id the id string .
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the id string is invalid id string representation.
+	 * @param id the string representation of the identifier.
+	 * @return a new {@code Id} instance.
+	 * @throws IllegalArgumentException if the string is not a valid Base58, hexadecimal, or DID representation.
+	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id of(String id) {
-		// return id.startsWith("0x") ? ofHex(id) :
-		//		(id.startsWith(DID_PREFIX)) ? ofBase58(id.substring(DID_PREFIX.length())) : ofBase58(id);
+		if (id == null)
+			throw new NullPointerException("Identifier string cannot be null");
+
 		try {
-			return ofBase58(id); // base58 is the first class citizen, fail back to hex or w3c format if base58 fails
+			return ofBase58(id);
 		} catch (IllegalArgumentException e) {
-			if (id.charAt(0) == '0' && id.charAt(1) == 'x')
+			if (id.startsWith("0x") || id.startsWith("0X"))
 				return ofHex(id);
 			else if (id.startsWith(DID_PREFIX))
 				return ofBase58(id.substring(DID_PREFIX.length()));
 			else
-				throw new IllegalArgumentException("invalid id string");
+				throw new IllegalArgumentException("Invalid identifier string: must be Base58, hexadecimal, or Boson DID format");
 		}
 	}
 
 	/**
-	 * Creates an id from the hex string representation.
+	 * Creates an identifier from a hexadecimal string, with or without the "0x" prefix.
 	 *
-	 * @param hexId the id string in hex representation.
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the id string is invalid hex representation.
+	 * @param hexId the hexadecimal string representation.
+	 * @return a new {@code Id} instance.
+	 * @throws IllegalArgumentException if the string is not a valid hexadecimal representation
+	 *		 or does not represent exactly {@link #BYTES} bytes.
+	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id ofHex(String hexId) {
-		int offset = hexId.startsWith("0x") ? 2 : 0;
+		if (hexId == null)
+			throw new NullPointerException("Hexadecimal string cannot be null");
+
+		final int offset = hexId.startsWith("0x") || hexId.startsWith("0X") ? 2 : 0;
 		if (hexId.length() != BYTES * 2 + offset)
-			throw new IllegalArgumentException("Hex ID string should be " + BYTES * 2 + " characters long.");
+			throw new IllegalArgumentException("Hexadecimal string must represent exactly " + BYTES + " bytes");
 
 		return of(Hex.decode(hexId, offset, BYTES * 2));
 	}
 
 	/**
-	 * Creates an id from the base58 string representation.
+	 * Creates an identifier from a Base58-encoded string.
 	 *
-	 * @param base58Id the id string in base58 representation.
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the id string is invalid base58 representation.
+	 * @param base58Id the Base58-encoded string.
+	 * @return a new {@code Id} instance.
+	 * @throws IllegalArgumentException if the string is not a valid Base58 encoding
+	 *		 or does not decode to exactly {@link #BYTES} bytes.
+	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id ofBase58(String base58Id) {
+		if (base58Id == null)
+			throw new NullPointerException("Base58 string cannot be null");
+
 		return of(Base58.decode(base58Id));
 	}
 
 	/**
-	 * Creates an id with the specified bit set to 1.
+	 * Creates an identifier with a single bit set to 1 at the specified index (from MSB to LSB).
 	 *
-	 * @param idx the bit index, from high bit to low bit
-	 * @return the new created id.
-	 * @throws IllegalArgumentException if the idx out of range.
+	 * @param idx the bit index (0 is the most significant bit, 255 is the least significant bit).
+	 * @return a new {@code Id} instance with the specified bit set.
+	 * @throws IllegalArgumentException if the index is not in the range [0, {@link #SIZE}).
 	 */
 	public static Id ofBit(int idx) {
 		if (idx < 0 || idx >= SIZE)
-			throw new IllegalArgumentException("the index out of range");
+			throw new IllegalArgumentException("Bit index must be in range [0, " + SIZE + ")");
 
 		Id id = new Id();
 		id.bytes[idx / 8] = (byte)(0x80 >>> (idx % 8));
@@ -250,96 +266,126 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Creates a new id and set all bits with zero.
+	 * Returns the zero identifier (all bits set to 0).
 	 *
-	 * @return the new created id.
+	 * @return the {@link #ZERO_ID} constant.
 	 */
 	public static Id zero() {
 		return ZERO_ID;
 	}
 
 	/**
-	 * Creates a random id.
+	 * Returns the minimum identifier (all bits set to 0).
 	 *
-	 * @return the new created id.
+	 * @return the {@link #MIN_ID} constant.
+	 */
+	public static Id min() {
+		return MIN_ID;
+	}
+
+	/**
+	 * Returns the maximum identifier (all bits set to 1).
+	 *
+	 * @return the {@link #MAX_ID} constant.
+	 */
+	public static Id max() {
+		return MAX_ID;
+	}
+
+	/**
+	 * Generates a random identifier.
+	 *
+	 * @return a new random {@code Id} instance.
 	 */
 	public static Id random() {
 		Id id = new Id();
-		new SecureRandom().nextBytes(id.bytes);
+		RANDOM.nextBytes(id.bytes);
+		return id;
+	}
+
+	private static Id createMaxId() {
+		Id id = new Id();
+		Arrays.fill(id.bytes, (byte) 0xFF);
 		return id;
 	}
 
 	/**
 	 * Returns an array of bytes representing the id object.
 	 *
-	 * @return a copy of the internal bytes
+	 * @return a new byte array containing the identifier's value.
 	 */
 	public byte[] getBytes() {
 		return bytes.clone();
 	}
 
 	/**
-	 * @hidden
+	 * Returns the internal byte array of the identifier.
+	 * <p><strong>Warning:</strong> This method is for internal use only and may be removed in future versions.
+	 * Modifying the returned array will cause undefined behavior. Use {@link #getBytes()} for safe access.</p>
 	 *
-	 * Returns the internal byte array of the id object.
-	 * IMPORTANT: The returned array MUST NOT be modified.
-	 *
-	 * @return an array of bytes
-	 *
-	 * REMARK: This method exposes internal state and will be removed in a future version.
-	 *         Use {@link #getBytes()} instead.
+	 * @return the internal byte array (must not be modified).
 	 */
 	public final byte[] bytes() {
 		// Performance critical method: returns internal array directly
-		// IMPORTANT: Callers must not modify the returned array
 		return bytes;
 	}
 
 	/**
-	 * Get the integer value from the offset of the id's binary form.
+	 * Reads four bytes from the specified offset and returns them as an unsigned integer
+	 * in big-endian order.
 	 *
-	 * Reads the next four bytes from the offset, composing them into an int value according to
-	 * the big-endian byte order.
-	 *
-	 * @param offset the offset from which the byte to read.
-	 * @return the int value at the offset.
-	 * @throws ArrayIndexOutOfBoundsException if the offset exceed the limit.
+	 * @param offset the starting offset in the identifier's byte array.
+	 * @return the unsigned integer value.
+	 * @throws ArrayIndexOutOfBoundsException if the offset is not in the range [0, {@link #BYTES} - 4].
 	 */
 	public int getInt(int offset) {
+		if (offset < 0 || offset > BYTES - 4)
+			throw new ArrayIndexOutOfBoundsException("Offset must be in range [0, " + (BYTES - 4) + "]");
+
 		return Byte.toUnsignedInt(bytes[offset]) << 24 |
-				Byte.toUnsignedInt(bytes[offset+1]) << 16 |
-				Byte.toUnsignedInt(bytes[offset+2]) << 8 |
-				Byte.toUnsignedInt(bytes[offset+3]);
+				Byte.toUnsignedInt(bytes[offset + 1]) << 16 |
+				Byte.toUnsignedInt(bytes[offset + 2]) << 8 |
+				Byte.toUnsignedInt(bytes[offset + 3]);
 	}
 
 	/**
-	 * Returns a new id whose value is (this + id).
+	 * Returns a new identifier representing the sum of this identifier and another.
+	 * Addition is performed using two's complement arithmetic, treating the identifiers
+	 * as 256-bit unsigned integers.
 	 *
-	 * @param id id to be added to this id.
-	 * @return the new id whose value is (this + id).
+	 * @param id the identifier to add to this one.
+	 * @return a new {@code Id} instance representing the sum.
+	 * @throws NullPointerException if the input identifier is null.
 	 */
 	public Id add(Id id) {
 		return add(this, id);
 	}
 
 	/**
-	 * Returns a new id whose value is (id1 + id2).
+	 * Returns a new identifier representing the sum of two identifiers.
+	 * Addition is performed using two's complement arithmetic, treating the identifiers
+	 * as 256-bit unsigned integers.
 	 *
-	 * @param id1 id to be added.
-	 * @param id2 id to be added.
-	 * @return the new id whose value is (id1 + id2).
+	 * @param id1 the first identifier.
+	 * @param id2 the second identifier.
+	 * @return a new {@code Id} instance representing the sum.
+	 * @throws NullPointerException if either identifier is null.
 	 */
+	@SuppressWarnings("UnnecessaryLocalVariable")
 	public static Id add(Id id1, Id id2) {
-		Id result = new Id();
+		if (id1 == null || id2 == null)
+			throw new NullPointerException("Identifier cannot be null");
 
-		byte[] a = id1.bytes;
-		byte[] b = id2.bytes;
-		byte[] r = result.bytes;
+		final Id result = new Id();
+
+		final byte[] a = id1.bytes;
+		final byte[] b = id2.bytes;
+		final byte[] r = result.bytes;
 
 		int carry = 0;
-		for(int i = BYTES - 1; i >= 0; i--) {
+		for (int i = BYTES - 1; i >= 0; i--) {
 			carry = (a[i] & 0xff) + (b[i] & 0xff) + carry;
-			r[i] = (byte)(carry & 0xff);
+			r[i] = (byte) (carry & 0xff);
 			carry >>>= 8;
 		}
 
@@ -347,28 +393,34 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Checks the distance between this and another id using the XOR metric.
+	 * Calculates the distance between this identifier and another using the XOR metric.
 	 *
-	 * @param to another id.
-	 * @return The distance of the given id to this id.
+	 * @param to the other identifier.
+	 * @return a new {@code Id} instance representing the XOR distance.
+	 * @throws NullPointerException if the input identifier is null.
 	 */
 	public Id distance(Id to) {
 		return distance(this, to);
 	}
 
 	/**
-	 * Checks the distance between two ids using the XOR metric.
+	 * Calculates the distance between two identifiers using the XOR metric.
 	 *
-	 * @param id1 id to be calculated the distance.
-	 * @param id2 id to be calculated the distance.
-	 * @return The distance between id1 and id2.
+	 * @param id1 the first identifier.
+	 * @param id2 the second identifier.
+	 * @return a new {@code Id} instance representing the XOR distance.
+	 * @throws NullPointerException if either identifier is null.
 	 */
+	@SuppressWarnings("UnnecessaryLocalVariable")
 	public static Id distance(Id id1, Id id2) {
-		Id result = new Id();
+		if (id1 == null || id2 == null)
+			throw new NullPointerException("Identifier cannot be null");
 
-		byte[] r = result.bytes;
-		byte[] a = id1.bytes;
-		byte[] b = id2.bytes;
+		final Id result = new Id();
+
+		final byte[] r = result.bytes;
+		final byte[] a = id1.bytes;
+		final byte[] b = id2.bytes;
 
 		for (int i = 0; i < BYTES; i++)
 			r[i] = (byte) (a[i] ^ b[i]);
@@ -377,64 +429,71 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Get an Id that is some distance away from this id.
+	 * Generates an identifier that is a specified number of bits away from this identifier
+	 * using the XOR metric.
 	 *
-	 * @param distance in number of bits
-	 * @return the new generated Id
+	 * @param distance the number of bits of difference (0 to {@link #SIZE}).
+	 * @return a new {@code Id} instance at the specified distance.
+	 * @throws IllegalArgumentException if the distance is not in the range [0, {@link #SIZE}].
 	 */
 	public Id getIdByDistance(int distance) {
-		byte[] result = new byte[BYTES];
+		if (distance < 0 || distance > SIZE)
+			throw new IllegalArgumentException("Distance must be in range [0, " + SIZE + "]");
 
-		int zeroBytes = (SIZE - distance) / 8;
-		int zeroBits = (SIZE - distance) % 8;
+		final byte[] result = new byte[BYTES];
 
-		// new byte array is initialized with all zeroes
-		// Arrays.fill(result, 0, zeroBytes, (byte)0);
+		final int zeroBytes = (SIZE - distance) / 8;
+		final int zeroBits = (SIZE - distance) % 8;
 
 		if (zeroBytes < BYTES) {
 			result[zeroBytes] = (byte)(0xFF >>> zeroBits);
-
 			Arrays.fill(result, zeroBytes + 1, BYTES, (byte) 0xFF);
 		}
 
-		return this.distance(Id.of(result));
+		return this.distance(new Id(result));
 	}
 
 	/**
-	 * Gets the approx distance from this id to another id.
+	 * Calculates the approximate distance between this identifier and another using
+	 * the number of leading zeros in their XOR.
 	 *
-	 * @param to another id.
-	 * @return the approx distance to another id.
+	 * @param to the other identifier.
+	 * @return the approximate distance (0 to {@link #SIZE}).
+	 * @throws NullPointerException if the input identifier is null.
 	 */
 	public int approxDistance(Id to) {
 		return approxDistance(this, to);
 	}
 
 	/**
-	 * Gets the approx distance between two ids.
+	 * Calculates the approximate distance between two identifiers using the number
+	 * of leading zeros in their XOR.
 	 *
-	 * @param id1 id to be calculated the distance.
-	 * @param id2 id to be calculated the distance.
-	 * @return the approx distance between the two ids.
+	 * @param id1 the first identifier.
+	 * @param id2 the second identifier.
+	 * @return the approximate distance (0 to {@link #SIZE}).
+	 * @throws NullPointerException if either identifier is null.
 	 */
 	public static int approxDistance(Id id1, Id id2) {
-		/*
-		 * Compute the xor of this and to Get the index i of the first set bit of the
-		 * xor returned NodeId The distance between them is ID_LENGTH - i
-		 */
+		if (id1 == null || id2 == null)
+			throw new NullPointerException("Identifier cannot be null");
+
 		return SIZE - id1.distance(id2).getLeadingZeros();
 	}
 
 	/**
-	 * Compares the distance of two ids relative to this one using the XOR metric.
+	 * Compares two identifiers based on their XOR distance to this identifier.
 	 *
-	 * @param id1 id to be calculated the distance.
-	 * @param id2 id to be calculated the distance.
-	 * @return -1 if id1 is closer to this key, 0 if id1 and id2 are equal distant, 1 if
-	 *         id2 is closer
+	 * @param id1 the first identifier to compare.
+	 * @param id2 the second identifier to compare.
+	 * @return -1 if {@code id1} is closer, 0 if equally distant, or 1 if {@code id2} is closer.
+	 * @throws NullPointerException if either identifier is null.
 	 */
 	public int threeWayCompare(Id id1, Id id2) {
-		int mmi = Arrays.mismatch(id1.bytes, id2.bytes);
+		if (id1 == null || id2 == null)
+			throw new NullPointerException("Identifier cannot be null");
+
+		final int mmi = Arrays.mismatch(id1.bytes, id2.bytes);
 		if (mmi == -1)
 			return 0;
 
@@ -446,15 +505,15 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Counts the number of leading 0's in this id
+	 * Counts the number of leading zeros in this identifier's binary representation.
 	 *
-	 * @return the number of leading 0's
+	 * @return the number of leading zeros (0 to {@link #SIZE}).
 	 */
 	public int getLeadingZeros() {
 		int msb = 0;
 
-		int i;
-		for (i = 0; i < BYTES && bytes[i] == 0; i++);
+		int i = 0;
+		while (i < BYTES && bytes[i] == 0) i++;
 		msb += i << 3;
 
 		if (i < BYTES) {
@@ -471,15 +530,15 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Counts the number of trailing 0's in this id.
+	 * Counts the number of trailing zeros in this identifier's binary representation.
 	 *
-	 * @return the number of trailing 0's
+	 * @return the number of trailing zeros (0 to {@link #SIZE}).
 	 */
 	public int getTrailingZeros() {
 		int lsb = 0;
 
-		int i;
-		for (i = BYTES - 1; i >= 0 && bytes[i] == 0; i--);
+		int i =  BYTES - 1;
+		while (i >= 0 && bytes[i] == 0) i--;
 		lsb += (BYTES - 1 - i) << 3;
 
 		if (i >= 0) {
@@ -497,41 +556,49 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Checks if the leading bits up to the n-th bit of both id are equal.
+	 * Checks if the first {@code n} bits of two identifiers are equal.
 	 *
-	 * @param id1 id to be checked.
-	 * @param id2 id to be checked.
-	 * @param n the n bits to check. if n &lt; 0 then no bits have to match;
-	 *        otherwise n bytes have to match.
-	 * @return true if the first bits up to the n-th bit of both keys are equal, otherwise false.
+	 * @param id1 the first identifier.
+	 * @param id2 the second identifier.
+	 * @param depth the depth of bits to compare (0 to {@link #SIZE} - 1).
+	 * @return {@code true} if the first {@code n} bits are equal, {@code false} otherwise.
+	 * @throws NullPointerException if either identifier is null.
+	 * @throws IllegalArgumentException if {@code n} is out of range.
 	 */
-	public static boolean bitsEqual(Id id1, Id id2, int n) {
-		if (n < 0)
-			return true;
+	public static boolean bitsEqual(Id id1, Id id2, int depth) {
+		if (id1 == null || id2 == null)
+			throw new NullPointerException("Identifiers cannot be null");
 
-		int mmi = Arrays.mismatch(id1.bytes, id2.bytes);
+		if (depth < 0 || depth >= SIZE)
+			throw new IllegalArgumentException("Depth of bits must be in range [0, " + SIZE + ")");
 
-		int indexToCheck = n >>> 3;
+		int indexToCheck = depth >>> 3;
+
 		int diff = (id1.bytes[indexToCheck] ^ id2.bytes[indexToCheck]) & 0xff;
+		boolean bitsDiff = (diff & (0xff80 >>> (depth & 0x07))) == 0;
 
-		boolean bitsDiff = (diff & (0xff80 >>> (n & 0x07))) == 0;
-
-		return mmi == indexToCheck ? bitsDiff : Integer.compareUnsigned(mmi, indexToCheck) > 0;
+		return Arrays.mismatch(id1.bytes, 0, indexToCheck,
+				id2.bytes, 0, indexToCheck) == -1 && bitsDiff;
 	}
 
 	/**
-	 * Copy the leading depth bits from the source id to the dest id.
+	 * Copies the first {@code depth} bits from the source identifier to the destination identifier.
 	 *
-	 * @param src source id object.
-	 * @param dest dest id object.
-	 * @param depth bits depth to copy.
+	 * @param src the source identifier.
+	 * @param dest the destination identifier.
+	 * @param depth the depth of bits to copy (0 to {@link #SIZE} - 1).
+	 * @throws NullPointerException if either identifier is null.
+	 * @throws IllegalArgumentException if {@code depth} out of range.
 	 */
 	protected static void bitsCopy(Id src, Id dest, int depth) {
-		if (depth < 0)
-			return;
+		if (src == null || dest == null)
+			throw new NullPointerException("Identifier cannot be null");
+
+		if (depth < 0 || depth >= SIZE)
+			throw new IllegalArgumentException("Depth of bits must be in range [0, " + SIZE + ")");
 
 		// copy over all complete bytes
-		int idx = depth >>> 3;
+		final int idx = depth >>> 3;
 		if (idx > 0)
 			System.arraycopy(src.bytes, 0, dest.bytes, 0, idx);
 
@@ -544,32 +611,44 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Gets the Ed25519 signature public key from this id.
+	 * Gets the Ed25519 signature public key from this identifier.
 	 *
-	 * @return the Ed25519 public key object.
+	 * @return the Ed25519 public key derived from this identifier's bytes.
+	 * @throws IllegalArgumentException if the identifier's bytes are not a valid Ed25519 public key.
 	 */
 	public Signature.PublicKey toSignatureKey() {
 		return Signature.PublicKey.fromBytes(bytes);
 	}
 
 	/**
-	 * Gets the X25519 encryption public key from this id.
+	 * Gets the X25519 encryption public key from this identifier.
 	 *
-	 * @return the X25519 public key object.
+	 * @return the X25519 public key derived from this identifier's Ed25519 public key.
+	 * @throws IllegalArgumentException if the identifier's bytes are not a valid Ed25519 public key
+	 *		 or cannot be converted to an X25519 public key.
 	 */
 	public CryptoBox.PublicKey toEncryptionKey() {
 		return CryptoBox.PublicKey.fromSignatureKey(toSignatureKey());
 	}
 
+	/**
+	 * Compares two identifiers lexicographically, treating their bytes as unsigned values.
+	 *
+	 * @param id1 the first identifier.
+	 * @param id2 the second identifier.
+	 * @return a negative integer, zero, or a positive integer if {@code id1} is less than,
+	 *		 equal to, or greater than {@code id2}.
+	 */
 	public static int compare(Id id1, Id id2) {
 		return Arrays.compareUnsigned(id1.bytes, id2.bytes);
 	}
+
 	/**
-	 * Compares this id with the specified id for ordering.
+	 * Compares this identifier with another for ordering, treating bytes as unsigned values.
 	 *
-	 * @param o the id object to be compared.
-	 * @return a negative integer, zero, or a positive integer as this id is less than,
-	 *         equal to, or greater than the specified id.
+	 * @param o the identifier to compare with.
+	 * @return a negative integer, zero, or a positive integer if this identifier is less than,
+	 *		 equal to, or greater than the specified identifier.
 	 */
 	@Override
 	public int compareTo(Id o) {
@@ -577,11 +656,11 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Compares this id with the specified id for equality.
+	 * Checks if this identifier is equal to another object.
 	 *
-	 * @param o Object to which this id is to be compared.
-	 * @return true if and only if the specified Object is an Id
-	 *         whose value is equal to this id.
+	 * @param o the object to compare with.
+	 * @return {@code true} if the object is an {@code Id} with the same value,
+	 *		 {@code false} otherwise.
 	 */
 	@Override
 	public boolean equals(Object o) {
@@ -595,9 +674,9 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 *	Returns a hash code for this id.
+	 *	Returns a hash code for this identifier.
 	 *
-	 *	@return a hash code value for this id.
+	 *	@return the hash code value.
 	 */
 	@Override
 	public int hashCode() {
@@ -615,25 +694,29 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * @return The BigInteger representation of the key
+	 * Returns the identifier as a {@code BigInteger}, treating the bytes as an unsigned
+	 * 256-bit integer in big-endian order.
+	 *
+	 * @return the {@code BigInteger} representation.
 	 */
 	public BigInteger toInteger() {
 		return new BigInteger(1, bytes);
 	}
 
 	/**
-	 * Returns the string representation of this id, using hex encoding.
+	 * Returns the hexadecimal representation of this identifier, prefixed with "0x".
 	 *
-	 * @return string representation of this id in hex encoding.
+	 * @return the hexadecimal string.
 	 */
 	public String toHexString() {
 		return "0x" + Hex.encode(bytes);
 	}
 
 	/**
-	 * Returns the abbreviation string representation of this id, using hex encoding.
+	 * Returns an abbreviated hexadecimal representation of this identifier,
+	 * showing the first 6 and last 4 characters with "..." in between, prefixed with "0x".
 	 *
-	 * @return abbreviation string representation of this id in base58 encoding.
+	 * @return the abbreviated hexadecimal string.
 	 */
 	public String toAbbrHexString() {
 		String s = Hex.encode(bytes);
@@ -641,9 +724,9 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Returns the string representation of this id, using base58 encoding.
+	 * Returns the Base58-encoded representation of this identifier.
 	 *
-	 * @return string representation of this id in base58 encoding.
+	 * @return the Base58 string.
 	 */
 	public String toBase58String() {
 		if (b58 == null)
@@ -653,45 +736,77 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
-	 * Returns the abbreviation string representation of this id, using base58 encoding.
+	 * Returns an abbreviated Base58 representation of this identifier,
+	 * showing the first 4 and last 4 characters with "..." in between.
 	 *
-	 * @return abbreviation string representation of this id in base58 encoding.
+	 * @return the abbreviated Base58 string.
 	 */
 	public String toAbbrBase58String() {
 		String s = toBase58String();
 		return s.substring(0, 4) + "..." + s.substring(s.length() - 4);
 	}
 
+	/**
+	 * Returns the W3C Decentralized Identifier (DID) representation of this identifier,
+	 * prefixed with "did:boson:" followed by the Base58 encoding.
+	 *
+	 * @return the DID string.
+	 */
 	public String toDIDString() {
 		return DID_PREFIX + toBase58String();
 	}
 
 	/**
-	 * Returns the string representation of this id, using binary form.
+	 * Returns the binary representation of this identifier as a string of '0' and '1'
+	 * characters.(For debug purposes)
 	 *
-	 * @return string representation of this id in binary string.
+	 * @param withSpaces if true, includes a space every 8 bits; if false, returns a compact string.
+	 * @return the binary string.
 	 */
-	public String toBinaryString() {
-		StringBuilder repr = new StringBuilder(SIZE + (SIZE >>> 2));
+	public String toBinaryString(boolean withSpaces) {
+		StringBuilder repr = new StringBuilder(withSpaces ? SIZE + BYTES : SIZE);
+		final char[] bits = new char[8];
 
-		for(int i = 0; i < SIZE; i++) {
-			repr.append((bytes[i >>> 3] & (0x80 >> (i & 0x07))) != 0 ? '1' : '0');
-			if ((i & 0x03) == 0x03) repr.append(' ');
+		for (int i = 0; i < BYTES; i++) {
+			int b = bytes[i] & 0xFF;
+			for (int j = 7; j >= 0; j--) {
+				bits[j] = (b & 1) == 1 ? '1' : '0';
+				b >>>= 1;
+			}
+
+			repr.append(bits);
+			if (withSpaces && i < BYTES - 1)
+				repr.append(' ');
 		}
+
 		return repr.toString();
 	}
 
 	/**
-	 * Returns the string representation of this id, using base58 encoding.
+	 * Returns the binary representation of this identifier as a string of '0' and '1'
+	 * characters, with spaces every 8 bits for readability.(For debug purposes)
 	 *
-	 * @return string representation of this id.
+	 * @return the binary string.
+	 */
+	public String toBinaryString() {
+		return toBinaryString(true);
+	}
+
+	/**
+	 * Returns the default string representation of this identifier, using Base58 encoding.
+	 *
+	 * @return the Base58 string.
 	 */
 	@Override
 	public String toString() {
-		return this.toBase58String();
+		return toBase58String();
 	}
 
-	// To abbreviation
+	/**
+	 * Returns an abbreviated string representation of this identifier, using Base58 encoding.
+	 *
+	 * @return the abbreviated Base58 string.
+	 */
 	public String toAbbrString() {
 		return toAbbrBase58String();
 	}

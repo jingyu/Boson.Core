@@ -4,25 +4,8 @@ import java.security.SecureRandom;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class Random {
-	private static final boolean SECURE_RANDOM_THREAD_SAFE = isSecureRandomThreadSafe();
-
-	// The JDK built-in SecureRandom should be thread-safe in organic mode.
-	private static final SecureRandom secureRandom = isSecureRandomThreadSafe() ? new SecureRandom() : null;
-
-	// Fail-back for non-thread-safe JCE environment
-	private static final ThreadLocal<SecureRandom> localSecureRandom = isSecureRandomThreadSafe() ? null :
-		ThreadLocal.withInitial(SecureRandom::new);
-
-	private static boolean isSecureRandomThreadSafe() {
-		SecureRandom r = new SecureRandom();
-
-		if (r.getProvider() == null || r.getAlgorithm() == null) {
-			return false;
-		} else {
-			return Boolean.parseBoolean(
-					r.getProvider().getProperty("SecureRandom." + r.getAlgorithm() + " ThreadSafe", "false"));
-		}
-	}
+	// SecureRandom has been explicitly documented as thread-safe since Java 17
+	private static final SecureRandom secureRandom = new SecureRandom();
 
 	/**
 	 * Returns the current thread's {@code ThreadLocalRandom} object.
@@ -36,26 +19,12 @@ public class Random {
 	}
 
 	/**
-	 * Returns a thread-safe {@code SecureRandom} instance.
-	 *
-	 * This method provides an optimized approach for creating a thread-safe
-	 * {@code SecureRandom}:
-	 *   - If {@code SecureRandom} is inherently thread-safe, a shared instance
-	 *     is returned for all calling threads.
-	 *   - Otherwise, a thread-localed instance is used to ensure thread safety.
-	 *
-	 * Since {@code SecureRandom} uses synchronized blocks internally to protect key
-	 * methods, the returned instance is safe for use across multiple threads.
-	 * However, if {@code SecureRandom} is not inherently thread-safe, using a
-	 * shared instance may cause contention in high-concurrency scenarios.
+	 * Returns a {@code SecureRandom} instance.
 	 *
 	 * @return a thread-safe {@code SecureRandom} instance.
 	 */
 	public static SecureRandom secureRandom() {
-		if (SECURE_RANDOM_THREAD_SAFE)
 			return secureRandom;
-		else
-			return localSecureRandom.get();
 	}
 
 	public static byte[] randomBytes(int length) {

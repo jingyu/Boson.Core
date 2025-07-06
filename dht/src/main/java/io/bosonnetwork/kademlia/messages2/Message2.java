@@ -431,7 +431,7 @@ public class Message2<T> {
 			Class<?> bodyClass = null;
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
-				String fieldName = p.getCurrentName();
+				String fieldName = p.currentName();
 				p.nextToken();
 				switch (fieldName) {
 				case "y": {

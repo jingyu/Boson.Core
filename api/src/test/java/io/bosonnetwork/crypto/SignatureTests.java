@@ -36,11 +36,11 @@ import io.bosonnetwork.utils.Hex;
 public class SignatureTests {
 	@Test
 	public void keyPairFromSeed() {
-		byte[] seed = new byte[32];
+		var seed = new byte[Signature.KeyPair.SEED_BYTES];
 		Random.random().nextBytes(seed);
 
-		Signature.KeyPair kp = Signature.KeyPair.fromSeed(seed);
-		Signature.KeyPair kp2 = Signature.KeyPair.fromSeed(seed);
+		var kp = Signature.KeyPair.fromSeed(seed);
+		var kp2 = Signature.KeyPair.fromSeed(seed);
 
 		assertEquals(kp.privateKey(), kp2.privateKey());
 		assertEquals(kp.publicKey(), kp2.publicKey());
@@ -51,9 +51,9 @@ public class SignatureTests {
 
 	@Test
 	public void testEqualityAndRecovery() {
-		Signature.KeyPair kp = Signature.KeyPair.random();
-		Signature.KeyPair otherKp1 = Signature.KeyPair.fromPrivateKey(kp.privateKey());
-		Signature.KeyPair otherKp2 = Signature.KeyPair.fromPrivateKey(kp.privateKey().bytes());
+		var kp = Signature.KeyPair.random();
+		var otherKp1 = Signature.KeyPair.fromPrivateKey(kp.privateKey());
+		var otherKp2 = Signature.KeyPair.fromPrivateKey(kp.privateKey().bytes());
 
 		assertEquals(kp, otherKp1);
 		assertEquals(kp, otherKp2);
@@ -64,9 +64,9 @@ public class SignatureTests {
 
 	@Test
 	public void testKeyBytes() {
-		Signature.KeyPair kp = Signature.KeyPair.random();
-		Signature.PrivateKey sk = Signature.PrivateKey.fromBytes(kp.privateKey().bytes());
-		Signature.PublicKey pk = Signature.PublicKey.fromBytes(kp.publicKey().bytes());
+		var kp = Signature.KeyPair.random();
+		var sk = Signature.PrivateKey.fromBytes(kp.privateKey().bytes());
+		var pk = Signature.PublicKey.fromBytes(kp.publicKey().bytes());
 
 		assertEquals(kp.privateKey(), sk);
 		assertEquals(kp.publicKey(), pk);
@@ -77,27 +77,27 @@ public class SignatureTests {
 
 	@Test
 	public void checkSignAndVerify() {
-		Signature.KeyPair kp = Signature.KeyPair.random();
-		byte[] sig = Signature.sign(Hex.decode("deadbeef"), kp.privateKey());
+		var kp = Signature.KeyPair.random();
+		var sig = Signature.sign(Hex.decode("deadbeef"), kp.privateKey());
 		assertEquals(Signature.BYTES, sig.length);
 
-		boolean result = Signature.verify(Hex.decode("deadbeef"), sig, kp.publicKey());
+		var result = Signature.verify(Hex.decode("deadbeef"), sig, kp.publicKey());
 		assertTrue(result);
 	}
 
 	@Test
 	public void checkSignAndVerifyWithKey() {
-		Signature.KeyPair kp = Signature.KeyPair.random();
-		byte[] sig = kp.privateKey().sign(Hex.decode("deadbeef"));
+		var kp = Signature.KeyPair.random();
+		var sig = kp.privateKey().sign(Hex.decode("deadbeef"));
 		assertEquals(Signature.BYTES, sig.length);
 
-		boolean result = kp.publicKey().verify(Hex.decode("deadbeef"), sig);
+		var result = kp.publicKey().verify(Hex.decode("deadbeef"), sig);
 		assertTrue(result);
 	}
 
 	@Test
 	public void testDestroy() {
-		Signature.KeyPair keyPair = Signature.KeyPair.random();
+		var keyPair = Signature.KeyPair.random();
 		keyPair.privateKey().destroy();
 		assertTrue(keyPair.privateKey().isDestroyed());
 		assertFalse(keyPair.publicKey().isDestroyed());
@@ -106,14 +106,10 @@ public class SignatureTests {
 		assertTrue(keyPair.privateKey().isDestroyed());
 		assertTrue(keyPair.publicKey().isDestroyed());
 
-		IllegalStateException ex = assertThrows(IllegalStateException.class, () -> {
-			keyPair.privateKey().bytes();
-		});
+		var ex = assertThrows(IllegalStateException.class, () -> keyPair.privateKey().bytes());
 		assertEquals("allocated value has been destroyed", ex.getMessage());
 
-		ex = assertThrows(IllegalStateException.class, () -> {
-			keyPair.publicKey().bytes();
-		});
+		ex = assertThrows(IllegalStateException.class, () -> keyPair.publicKey().bytes());
 		assertEquals("allocated value has been destroyed", ex.getMessage());
 	}
 }

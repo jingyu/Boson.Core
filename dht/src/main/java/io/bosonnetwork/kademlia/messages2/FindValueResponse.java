@@ -153,7 +153,7 @@ public class FindValueResponse extends LookupResponse {
 			Value value = null;
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
-				final String fieldName = p.getCurrentName();
+				final String fieldName = p.currentName();
 				final JsonToken token = p.nextToken();
 				switch (fieldName) {
 				case "n4":

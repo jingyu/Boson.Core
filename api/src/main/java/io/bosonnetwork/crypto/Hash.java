@@ -21,8 +21,6 @@ public class Hash {
 	 * Performs a final update on the digest using the specified array
 	 * of bytes, then completes the digest computation.
 	 *
-	 * The digest is reset after this call is made.
-	 *
 	 * @param input  the array of bytes.
 	 * @param offset the offset to start from in the array of bytes.
 	 * @param len    the number of bytes to use, starting at {@code offset}.
@@ -37,8 +35,6 @@ public class Hash {
 	/**
 	 * Performs a final update on the digest using the specified array of bytes,
 	 * then completes the digest computation.
-	 *
-	 * The digest is reset after this call is made.
 	 *
 	 * @param input the input to be updated before the digest is completed.
 	 *
@@ -97,8 +93,6 @@ public class Hash {
 	/**
 	 * Performs a final update on the digest using the specified array of bytes,
 	 * then completes the digest computation.
-	 *
-	 * The digest is reset after this call is made.
 	 *
 	 * @param input the input to be updated before the digest is completed.
 	 *

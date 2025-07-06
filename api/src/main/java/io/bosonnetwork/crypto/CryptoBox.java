@@ -34,7 +34,7 @@ import org.apache.tuweni.crypto.sodium.Sodium;
 /**
  * Public-key(Curve 25519) authenticated encryption.
  */
-public class CryptoBox implements AutoCloseable {
+public class CryptoBox implements AutoCloseable, Destroyable {
 	/**
 	 * The Message Authentication Code size of the encrypted data in bytes.
 	 */
@@ -115,7 +115,6 @@ public class CryptoBox implements AutoCloseable {
 
 		/**
 		 * Destroy this {@code PublicKey}.
-		 *
 		 * Sensitive information associated with this {@code PublicKey}
 		 * is destroyed or cleared.
 		 */
@@ -216,7 +215,6 @@ public class CryptoBox implements AutoCloseable {
 
 		/**
 		 * Destroy this {@code PrivateKey}.
-		 *
 		 * Sensitive information associated with this {@code PrivateKey}
 		 * is destroyed or cleared.
 		 */
@@ -251,7 +249,7 @@ public class CryptoBox implements AutoCloseable {
 		/**
 		 * The seed length in bytes.
 		 */
-		public int SEED_BYTES = Seed.length();
+		public static final int SEED_BYTES = Seed.length();
 
 		private final Box.KeyPair keyPair;
 		private PublicKey pk;
@@ -301,7 +299,7 @@ public class CryptoBox implements AutoCloseable {
 		 * Converts signature key pair (Ed25519) to a box key pair (Curve25519)
 		 * so that the same key pair can be used both for authenticated encryption
 		 * and for signatures. See
-		 * https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519
+		 * <a href="https://libsodium.gitbook.io/doc/advanced/ed25519-curve25519">Libsodium documentation</a>
 		 *
 		 * @param keyPair A {@link Signature.KeyPair}.
 		 * @return the new generated box key pair.
@@ -503,12 +501,12 @@ public class CryptoBox implements AutoCloseable {
 
 	/**
 	 * Encrypt a sealed message for a given key.
-	 *
+	 * <p/>
 	 * Sealed boxes are designed to anonymously send messages to a recipient given its public key.
 	 * Only the recipient can decrypt these messages, using its private key. While
 	 * the recipient can verify the integrity of the message, it cannot verify
 	 * the identity of the sender.
-	 *
+	 * <p/>
 	 * A message is encrypted using an ephemeral key pair, whose secret part is destroyed
 	 * right after the encryption process. Without knowing the secret key used for a given
 	 * message, the sender cannot decrypt its own message later. And without additional data,
@@ -575,12 +573,18 @@ public class CryptoBox implements AutoCloseable {
 
 	@Override
 	public void close() {
+		destroy();
+	}
+
+	@Override
+	public void destroy() {
 		box.close();
 	}
 
 	@Override
-	protected void finalize() {
-		close();
+	public boolean isDestroyed() {
+		// always return false as the inner box not exposed the isDestroyed() method
+		return false;
 	}
 
 	static {

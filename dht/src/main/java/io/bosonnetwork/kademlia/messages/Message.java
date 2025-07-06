@@ -311,7 +311,7 @@ public abstract class Message {
 						break;
 				}
 
-				String name = parser.getCurrentName();
+				String name = parser.currentName();
 				if (name != null && name.equals("y")) {
 					parser.nextToken();
 					typeCode = parser.getIntValue();
@@ -350,7 +350,7 @@ public abstract class Message {
 					if (--depth == 0)
 						break;
 				} else if (tok == JsonToken.FIELD_NAME) {
-					String name = parser.getCurrentName();
+					String name = parser.currentName();
 					parser.nextToken();
 					switch (name) {
 					case "y":

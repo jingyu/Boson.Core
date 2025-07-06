@@ -135,7 +135,7 @@ public final class RoutingTable {
 		this.buckets = new ArrayList<>();
 		this.writeLock = new AtomicInteger(0);
 		this.pipeline = new ConcurrentLinkedQueue<>();
-		buckets.add(new KBucket(new Prefix(), x -> true));
+		buckets.add(new KBucket(Prefix.all(), x -> true));
 	}
 
 	private List<KBucket> getBuckets() {

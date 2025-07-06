@@ -34,6 +34,7 @@ public interface ConnectionStatusListener {
 	 * @param newStatus the new connection status.
 	 * @param oldStatus the old connection status.
 	 */
+	@SuppressWarnings("unused")
 	default void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
 	}
 
@@ -58,6 +59,7 @@ public interface ConnectionStatusListener {
 	 *
 	 * @param network the DHT network, IPv4 or IPv6.
 	 */
+	@SuppressWarnings("unused")
 	default void disconnected(Network network) {
 	}
 }

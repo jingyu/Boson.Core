@@ -185,8 +185,8 @@ public class PasswordHash {
 	 * @param password The password to hash.
 	 * @param length The key length to generate.
 	 * @param salt A salt.
-	 * @param opsLimit The operations limit, which must be in the range {@link #minOpsLimit()} to {@link #maxOpsLimit()}.
-	 * @param memLimit The memory limit, which must be in the range {@link #minMemLimit()} to {@link #maxMemLimit()}.
+	 * @param opsLimit The operations limit, which must be in the range minMemLimit to maxMemLimit.
+	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 * @throws IllegalArgumentException If the opsLimit is too low for the specified algorithm.
@@ -203,7 +203,7 @@ public class PasswordHash {
 	 * @param password The password to hash.
 	 * @param length The key length to generate.
 	 * @param salt A salt.
-	 * @param opsLimit The operations limit, which must be in the range minOpsLimit maxOpsLimit.
+	 * @param opsLimit The operations limit, which must be in the range minMemLimit to maxMemLimit.
 	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
@@ -252,8 +252,8 @@ public class PasswordHash {
 	 * Compute a hash from a password.
 	 *
 	 * @param password The password to hash.
-	 * @param opsLimit The operations limit, which must be in the range {@link #minOpsLimit()} to {@link #maxOpsLimit()}.
-	 * @param memLimit The memory limit, which must be in the range {@link #minMemLimit()} to {@link #maxMemLimit()}.
+	 * @param opsLimit The operations limit, which must be in the range minMemLimit to maxMemLimit.
+	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
 	 * @return The hash string.
 	 */
 	public static String hash(String password, long opsLimit, long memLimit) {

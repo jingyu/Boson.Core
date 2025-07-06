@@ -33,7 +33,7 @@ import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.vertx.VertxBackedCaffeine;
+import io.bosonnetwork.utils.vertx.VertxCaffeine;
 import io.bosonnetwork.utils.vertx.VertxFuture;
 
 public abstract class AbstractResolver implements Resolver {
@@ -42,7 +42,7 @@ public abstract class AbstractResolver implements Resolver {
 
 	public AbstractResolver(Vertx vertx, ResolverCache persistentCache) {
 		Caffeine<Object, Object> caffeine = vertx == null ?
-				Caffeine.newBuilder() : VertxBackedCaffeine.newBuilder(vertx);
+				Caffeine.newBuilder() : VertxCaffeine.newBuilder(vertx);
 
 		this.persistentCache = persistentCache;
 

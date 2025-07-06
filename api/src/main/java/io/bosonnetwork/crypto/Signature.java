@@ -107,7 +107,6 @@ public class Signature {
 
 		/**
 		 * Destroy this PublicKey object.
-		 *
 		 * Sensitive information associated with this object is destroyed or cleared.
 		 */
 		@Override
@@ -209,7 +208,6 @@ public class Signature {
 
 		/**
 		 * Destroy this private key.
-		 *
 		 * Sensitive information associated with this private key
 		 * is destroyed or cleared.
 		 */
@@ -243,7 +241,7 @@ public class Signature {
 		/**
 		 * The seed length in bytes.
 		 */
-		public int SEED_BYTES = Seed.length();
+		public static final int SEED_BYTES = Seed.length();
 
 		private final org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
 		private PublicKey pk;

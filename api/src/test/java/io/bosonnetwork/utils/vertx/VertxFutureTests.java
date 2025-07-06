@@ -8,48 +8,53 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-
-import io.bosonnetwork.utils.Variable;
+import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.ContextInternal;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+
+import io.bosonnetwork.utils.Variable;
 
 @ExtendWith(VertxExtension.class)
 public class VertxFutureTests {
 	private static void printThreadContext(String prefix) {
-		System.out.printf("%s: %s:%d\n", String.valueOf(prefix),
-				Thread.currentThread().getName(), Thread.currentThread().getId());
+		System.out.printf("%s: %s:%d\n", prefix, Thread.currentThread().getName(), Thread.currentThread().getId());
 	}
 
 	@Test
 	void testFuture(Vertx vertx, VertxTestContext context) {
-		ContextInternal ctx = (ContextInternal)vertx.getOrCreateContext();
+		Context ctx = vertx.getOrCreateContext();
 
-		Promise<String> promise = ctx.promise();
+		Promise<String> promise = Promise.promise();
+		Variable<Long> tid = new Variable<>();
 
 		ctx.runOnContext(v -> {
+			tid.set(Thread.currentThread().getId());
 			try {
 				TimeUnit.SECONDS.sleep(1);
 			} catch (InterruptedException e) {
 				promise.fail(e);
 			}
 
-			printThreadContext("Vertx.runOnContext");
+			printThreadContext("Context.runOnContext");
 			promise.complete("Hello future");
 		});
 
 		promise.future().andThen(ar -> {
 			printThreadContext("Future.andThen");
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 		}).map(s -> {
 			printThreadContext("Future.map");
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 			return s + " ==>> mapped";
 		}).compose(s -> {
 			printThreadContext("Future.compose");
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 			return Future.succeededFuture(s + " ==>> composed");
 		}).onComplete(context.succeedingThenComplete());
 	}
@@ -57,66 +62,77 @@ public class VertxFutureTests {
 	@Test
 	void testCompletableFuture() {
 		CompletableFuture<String> future = CompletableFuture.completedFuture("Foo bar");
+		long threadId = Thread.currentThread().getId();
 
 		future.thenApply(s -> {
 			printThreadContext("Future.thenApply");
+			assertEquals(threadId, Thread.currentThread().getId());
 			return s + " ==>> applied";
 		}).thenCompose(s -> {
 			printThreadContext("Future.thenCompose");
+			assertEquals(threadId, Thread.currentThread().getId());
 			return CompletableFuture.completedFuture(s + " ==>> composed");
 		}).thenAccept(s -> {
 			printThreadContext("Future.thenAccept");
+			assertEquals(threadId, Thread.currentThread().getId());
 		}).thenRun(() -> {
 			printThreadContext("Future.thenRun");
+			assertEquals(threadId, Thread.currentThread().getId());
 		}).thenApplyAsync(s -> {
 			printThreadContext("Future.thenApplyAsync");
+			assertNotEquals(threadId, Thread.currentThread().getId());
 			return s + " ==>> appliedAsync";
+		}).thenCompose(s -> {
+			printThreadContext("Future.thenCompose");
+			assertNotEquals(threadId, Thread.currentThread().getId());
+			return CompletableFuture.completedFuture(s + " ==>> composed");
 		}).thenComposeAsync(s -> {
 			printThreadContext("Future.thenComposeAsync");
+			assertNotEquals(threadId, Thread.currentThread().getId());
 			return CompletableFuture.completedFuture(s + " ==>> composedAsync");
+		}).thenCompose(s -> {
+			printThreadContext("Future.thenCompose");
+			assertNotEquals(threadId, Thread.currentThread().getId());
+			return CompletableFuture.completedFuture(s + " ==>> composed");
 		}).thenRunAsync(() -> {
 			printThreadContext("Future.thenRunAsync");
+			assertNotEquals(threadId, Thread.currentThread().getId());
 		}).join();
 	}
 
 	@Test
 	void testVertxCompletableFuture(Vertx vertx, VertxTestContext context) {
-		ContextInternal ctx = (ContextInternal)vertx.getOrCreateContext();
-		Promise<String> promise = ctx.promise();
+		var ctx = vertx.getOrCreateContext();
+		Promise<String> promise = Promise.promise();
 
 		Variable<Long> tid = new Variable<>();
 
-		vertx.runOnContext(v -> {
+		ctx.runOnContext(v -> {
+			tid.set(Thread.currentThread().getId());
+
 			try {
 				TimeUnit.SECONDS.sleep(1);
 			} catch (InterruptedException e) {
 				promise.fail(e);
 			}
 
-			printThreadContext("Vertx.runOnContext");
-			tid.set(Thread.currentThread().getId());
+			printThreadContext("Context.runOnContext");
 			promise.complete("Hello future");
 		});
 
 		Future<String> future = promise.future().andThen(ar -> {
 			printThreadContext("Future.andThen");
-			context.verify(() -> {
-				assertEquals(tid.get(), Thread.currentThread().getId());
-			});
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 		}).map(s -> {
 			printThreadContext("Future.map");
-			context.verify(() -> {
-				assertEquals(tid.get(), Thread.currentThread().getId());
-			});
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 			return s + " ==>> mapped";
 		}).compose(s -> {
 			printThreadContext("Future.compose");
-			context.verify(() -> {
-				assertEquals(tid.get(), Thread.currentThread().getId());
-			});
-			Promise<String> p = ctx.promise();
-			vertx.runOnContext(v -> {
-				printThreadContext("Future.compose::vertx.runOnContext");
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
+			Promise<String> p = Promise.promise();
+			ctx.runOnContext(v -> {
+				printThreadContext("Future.compose::Context.runOnContext");
 				p.complete(s + " ==>> composed");
 			});
 			return p.future();
@@ -126,15 +142,11 @@ public class VertxFutureTests {
 
 		cf.thenApply(s -> {
 			printThreadContext("CompletableFuture.thenApply");
-			context.verify(() -> {
-				assertEquals(tid.get(), Thread.currentThread().getId());
-			});
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 			return s + " ==>> thenApply";
 		}).thenCompose(v -> {
 			printThreadContext("CompletableFuture.thenCompose");
-			context.verify(() -> {
-				assertEquals(tid.get(), Thread.currentThread().getId());
-			});
+			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
 			return VertxFuture.succeededFuture(v);
 		}).thenAcceptAsync(s -> {
 			printThreadContext("CompletableFuture.thenAcceptAsync");
@@ -176,10 +188,12 @@ public class VertxFutureTests {
 
 	@Test
 	void testVertxCompletableFutureGet(Vertx vertx, VertxTestContext context) throws Exception {
+		var ctx = vertx.getOrCreateContext();
+
 		Promise<String> promise = Promise.promise();
-		vertx.runOnContext(v -> {
+		ctx.runOnContext(v -> {
 			try {
-				TimeUnit.SECONDS.sleep(3);
+				TimeUnit.MILLISECONDS.sleep(1900);
 				promise.complete("Foo bar");
 			} catch (InterruptedException e) {
 				promise.fail(e);
@@ -192,11 +206,13 @@ public class VertxFutureTests {
 	}
 
 	@Test
-	void testVertxCompletableFutureGetInVertxContext(Vertx vertx, VertxTestContext context) throws Exception {
+	void testVertxCompletableFutureGetInVertxContext(Vertx vertx, VertxTestContext context) {
+		var ctx = vertx.getOrCreateContext();
+
 		Promise<String> promise = Promise.promise();
-		vertx.runOnContext(v -> {
+		ctx.runOnContext(v -> {
 			try {
-				TimeUnit.SECONDS.sleep(3);
+				TimeUnit.MILLISECONDS.sleep(1900);
 				promise.complete("Foo bar");
 			} catch (InterruptedException e) {
 				promise.fail(e);
@@ -204,13 +220,11 @@ public class VertxFutureTests {
 		});
 
 		VertxFuture<String> future = VertxFuture.of(promise.future());
-		vertx.runOnContext(v -> {
+		ctx.runOnContext(v -> {
 			printThreadContext("context.verify");
 
-			IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-				future.get();
-	        });
-	        assertEquals("Cannot be called on a Vert.x event-loop thread", exception.getMessage());
+			IllegalStateException exception = assertThrows(IllegalStateException.class, future::get);
+	        assertEquals("Cannot not be called on vertx thread or event loop thread", exception.getMessage());
 			context.completeNow();
 		});
 	}

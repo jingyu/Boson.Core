@@ -8,7 +8,7 @@ import com.github.benmanes.caffeine.cache.Scheduler;
 
 import io.vertx.core.Vertx;
 
-public class VertxBackedCaffeine {
+public class VertxCaffeine {
 	public static Caffeine<Object, Object> newBuilder(Vertx vertx) {
 		// Executor vertxExecutor = (r) -> vertx.runOnContext(() -> {
 		Executor vertxExecutor = (r) -> vertx.executeBlocking(() -> {

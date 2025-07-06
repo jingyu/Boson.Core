@@ -160,7 +160,7 @@ public class StoreValueRequest implements Request {
 			byte[] data = null;
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
-				String fieldName = p.getCurrentName();
+				String fieldName = p.currentName();
 				JsonToken token = p.nextToken();
 				switch (fieldName) {
 				case "tok":

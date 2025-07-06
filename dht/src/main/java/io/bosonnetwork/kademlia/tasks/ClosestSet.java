@@ -45,7 +45,8 @@ public class ClosestSet {
 		this.target = target;
 		this.capacity = capacity;
 
-		closest = new ConcurrentSkipListMap<>(new Id.Comparator(target));
+		// closest = new ConcurrentSkipListMap<>(new Id.Comparator(target));
+		closest = new ConcurrentSkipListMap<>(target::threeWayCompare);
 	}
 
 	boolean reachedCapacity() {

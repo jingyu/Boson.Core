@@ -140,7 +140,7 @@ public class StoreValueRequest extends Message {
 			throw new MessageException("Invalid " + getMethod() + " request message");
 
 		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.getCurrentName();
+			String name = parser.currentName();
 			parser.nextToken();
 			switch (name) {
 			case "cas":

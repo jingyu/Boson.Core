@@ -124,7 +124,7 @@ public abstract class LookupResponse extends Message {
 			throw new MessageException("Invalid " + getMethod() + " response message");
 
 		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.getCurrentName();
+			String name = parser.currentName();
 			parser.nextToken();
 			switch (name) {
 			case "n4":

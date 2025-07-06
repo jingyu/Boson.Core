@@ -150,6 +150,7 @@ public class JsonPerfTests {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	static <T> T parse(String json, Class<T> clazz, JsonContext context) throws IOException {
 		try (JsonParser parser = Json.jsonFactory().createParser(json)) {
 			parser.nextToken();
@@ -164,6 +165,7 @@ public class JsonPerfTests {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	static <T> T parse(byte[] cbor, Class<T> clazz, JsonContext context) throws IOException {
 		try (JsonParser parser = Json.cborFactory().createParser(cbor)) {
 			parser.nextToken();

@@ -73,7 +73,6 @@ public interface Configuration {
 
 	/**
 	 * The access control lists directory.
-	 *
 	 * Null path will use default access control: allow all
 	 *
 	 * @return  a Path object point to the access control lists path.
@@ -85,7 +84,6 @@ public interface Configuration {
 	/**
 	 * If a Path that points to a writable directory is returned then the node info and
 	 * the routing table will be persisted to that directory periodically and during shutdown.
-	 *
 	 * Null path will disable the DHT persist data.
 	 *
 	 * @return a Path object point to the storage path.
