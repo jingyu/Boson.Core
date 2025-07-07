@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,15 +22,29 @@
 
 package io.bosonnetwork.kademlia.messages;
 
-/**
- * @hidden
- */
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import io.bosonnetwork.NodeInfo;
+
 public class FindNodeResponse extends LookupResponse {
-	public FindNodeResponse(int txid) {
-		super(Method.FIND_NODE, txid);
+	@JsonCreator
+	public FindNodeResponse(@JsonProperty("n4") List<NodeInfo> nodes4,
+							@JsonProperty("n6") List<NodeInfo> nodes6,
+							@JsonProperty("tok") int token) {
+		super(nodes4, nodes6, token);
 	}
 
-	public FindNodeResponse() {
-		this(0);
+
+	@Override
+	public int hashCode() {
+		return 0xF1ADA00D + super.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindNodeResponse && super.equals(obj);
 	}
 }

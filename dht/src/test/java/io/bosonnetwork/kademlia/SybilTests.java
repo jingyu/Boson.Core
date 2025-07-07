@@ -40,8 +40,8 @@ import io.bosonnetwork.Configuration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.messages.FindNodeRequest;
-import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.FindNodeRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 

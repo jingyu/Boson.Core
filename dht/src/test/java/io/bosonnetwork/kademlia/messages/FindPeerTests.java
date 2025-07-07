@@ -43,9 +43,11 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.FindPeerRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.FindPeerResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
 
 public class FindPeerTests extends MessageTests {
 	@Deprecated
@@ -95,7 +97,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(m.doesWant4());
 		assertFalse(m.doesWant6());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());
@@ -143,7 +145,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(m.doesWant6());
 
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());
@@ -190,7 +192,7 @@ public class FindPeerTests extends MessageTests {
 		assertTrue(m.doesWant4());
 		assertTrue(m.doesWant6());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());
@@ -349,7 +351,7 @@ public class FindPeerTests extends MessageTests {
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());
@@ -421,7 +423,7 @@ public class FindPeerTests extends MessageTests {
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());
@@ -509,7 +511,7 @@ public class FindPeerTests extends MessageTests {
 		List<PeerInfo> rPeers = m.getPeers();
 		assertArrayEquals(peers.toArray(), rPeers.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindPeerResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindPeerResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		printMessage(msg2);
 		assertEquals(msg.getType().value(), msg2.getType().value());

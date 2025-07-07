@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,196 +23,182 @@
 package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
+import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.dataformat.cbor.CBORParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.utils.Hex;
+import io.bosonnetwork.utils.Json;
 
-/**
- * @hidden
- */
-public class StoreValueRequest extends Message {
-	private int token;
-	private Id publicKey;
-	private Id recipient;
-	private byte[] nonce;
-	private int sequenceNumber = 0;
-	private int expectedSequenceNumber = 0;
-	private byte[] signature;
-	private byte[] value;
+@JsonPropertyOrder({"tok", "cas", "k", "rec", "n", "seq", "sig", "v"})
+@JsonDeserialize(using = StoreValueRequest.Deserializer.class)
+public class StoreValueRequest implements Request {
+	private final int token;
+	private final int expectedSequenceNumber;
+	private final Value value;
 
-	public StoreValueRequest() {
-		super(Type.REQUEST, Method.STORE_VALUE);
+	protected StoreValueRequest(Value value, int token, int expectedSequenceNumber) {
+		this.token = token;
+		this.expectedSequenceNumber = expectedSequenceNumber;
+		this.value = value;
 	}
 
-	public StoreValueRequest(Value value, int token) {
-		this();
-		setToken(token);
-		setValue(value);
+	public StoreValueRequest(int token, int expectedSequenceNumber, Value value) {
+		this.token = token;
+		this.expectedSequenceNumber = expectedSequenceNumber;
+		this.value = value;
 	}
 
+	@JsonProperty("tok")
 	public int getToken() {
 		return token;
-	}
-
-	public void setToken(int token) {
-		this.token = token;
-	}
-
-	public void setValue(Value value) {
-		this.publicKey = value.getPublicKey();
-		this.recipient = value.getRecipient();
-		this.nonce = value.getNonce();
-		this.signature = value.getSignature();
-		this.sequenceNumber = value.getSequenceNumber();
-		this.value = value.getData();
-	}
-
-	public Value getValue() {
-		return Value.of(publicKey, recipient, nonce, sequenceNumber, signature, value);
 	}
 
 	public int getExpectedSequenceNumber() {
 		return expectedSequenceNumber;
 	}
 
-	public void setExpectedSequenceNumber(int expectedSequenceNumber) {
-		this.expectedSequenceNumber = expectedSequenceNumber;
+	public Value getValue() {
+		return value;
 	}
 
-
-	public boolean isMutable() {
-		return publicKey != null;
+	@JsonProperty("k")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Id getPublicKey() {
+		return value == null ? null : value.getPublicKey();
 	}
 
-	public Id getValueId() {
-		return Value.calculateId(publicKey, value);
+	@JsonProperty("rec")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Id getRecipient() {
+		return value == null ? null : value.getRecipient();
+	}
+
+	@JsonProperty("n")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected byte[] getNonce() {
+		return value == null ? null : value.getNonce();
+	}
+
+	@JsonProperty("seq")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+	protected int getSequenceNumber() {
+		return value == null ? 0 : value.getSequenceNumber();
+	}
+
+	@JsonProperty("sig")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected byte[] getSignature() {
+		return value == null ? null : value.getSignature();
+	}
+
+	@JsonProperty("v")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected byte[] getData() {
+		return value == null ? null : value.getData();
+	}
+
+	@JsonProperty("cas")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+	protected int getCas() {
+		return expectedSequenceNumber;
 	}
 
 	@Override
-	protected void serialize(JsonGenerator gen) throws IOException {
-		gen.writeFieldName(getType().toString());
-		gen.writeStartObject();
+	public int hashCode() {
+		return Objects.hash(token, expectedSequenceNumber, value);
+	}
 
-		gen.writeNumberField("tok", token);
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
 
-		if (publicKey != null) {
-			if (expectedSequenceNumber > 0)
-				gen.writeNumberField("cas", expectedSequenceNumber);
+		if (obj instanceof StoreValueRequest that)
+			return Objects.equals(token, that.token) &&
+					Objects.equals(expectedSequenceNumber, that.expectedSequenceNumber) &&
+					Objects.equals(value, that.value);
 
-			gen.writeFieldName("k");
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, publicKey.bytes(), 0, Id.BYTES);
+		return false;
+	}
 
-			if (recipient != null) {
-				gen.writeFieldName("rec");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, recipient.bytes(), 0, Id.BYTES);
-			}
+	static class Deserializer extends StdDeserializer<StoreValueRequest> {
+		private static final long serialVersionUID = -5378630545373241813L;
 
-			if (nonce != null) {
-				gen.writeFieldName("n");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, nonce, 0, nonce.length);
-			}
-
-			if (sequenceNumber > 0)
-				gen.writeNumberField("seq", sequenceNumber);
-
-			if (signature != null) {
-				gen.writeFieldName("sig");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, signature, 0, signature.length);
-			}
+		public Deserializer() {
+			super(StoreValueRequest.class);
 		}
 
-		gen.writeFieldName("v");
-		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value, 0, value.length);
+		public Deserializer(Class<?> vc) {
+			super(vc);
+		}
 
-		gen.writeEndObject();
-	}
+		@Override
+		public StoreValueRequest deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+			if (p.getCurrentToken() != JsonToken.START_OBJECT)
+				throw ctxt.wrongTokenException(p, StoreValueRequest.class, JsonToken.START_OBJECT,
+						"Invalid StoreValueRequest: should be an object");
 
-	@Override
-	protected void parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		if (!fieldName.equals(Type.REQUEST.toString()) || parser.getCurrentToken() != JsonToken.START_OBJECT)
-			throw new MessageException("Invalid " + getMethod() + " request message");
+			final boolean binaryFormat = Json.isBinaryFormat(p);
 
-		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.currentName();
-			parser.nextToken();
-			switch (name) {
-			case "cas":
-				expectedSequenceNumber = parser.getIntValue();
-				break;
+			int tok = 0;
+			int cas = 0;
+			Id publicKey = null;
+			Id recipient = null;
+			byte[] nonce = null;
+			int sequenceNumber = 0;
+			byte[] signature = null;
+			byte[] data = null;
 
-			case "k":
-				publicKey = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-				break;
-
-			case "rec":
-				recipient = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-				break;
-
-			case "n":
-				nonce = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-				break;
-
-			case "sig":
-				signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-				break;
-
-			case "seq":
-				sequenceNumber = parser.getIntValue();
-				break;
-
-			case "tok":
-				token = parser.getIntValue();
-				break;
-
-			case "v":
-				value = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-				break;
-
-			default:
-				System.out.println("Unknown field: " + fieldName);
-				break;
+			while (p.nextToken() != JsonToken.END_OBJECT) {
+				String fieldName = p.currentName();
+				JsonToken token = p.nextToken();
+				switch (fieldName) {
+				case "tok":
+					tok = p.getIntValue();
+					break;
+				case "cas":
+					cas = p.getIntValue();
+					break;
+				case "k":
+					if (token != JsonToken.VALUE_NULL)
+						publicKey = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+					break;
+				case "rec":
+					if (token != JsonToken.VALUE_NULL)
+						recipient = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+					break;
+				case "n":
+					if (token != JsonToken.VALUE_NULL)
+						nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				case "seq":
+					if (token != JsonToken.VALUE_NULL)
+						sequenceNumber = p.getIntValue();
+					break;
+				case "sig":
+					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				case "v":
+					if (token != JsonToken.VALUE_NULL)
+						data = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				default:
+					p.skipChildren();
+				}
 			}
+
+			return new StoreValueRequest(Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data),
+					tok, cas);
 		}
-	}
-
-	@Override
-	public int estimateSize() {
-		return super.estimateSize() + 208 + value.length;
-	}
-
-	@Override
-	protected void toString(StringBuilder b) {
-		b.append(",q:{");
-
-		if (publicKey != null) {
-			b.append("k:").append(publicKey);
-
-			if (recipient != null)
-				b.append(",rec:").append(recipient);
-
-			if (nonce != null)
-				b.append(",n:").append(Hex.encode(nonce));
-
-			if (sequenceNumber >= 0)
-				b.append(",seq:").append(sequenceNumber);
-
-			if (signature != null)
-				b.append(",sig:").append(Hex.encode(signature));
-
-			if (expectedSequenceNumber >= 0)
-				b.append(",cas:").append(expectedSequenceNumber);
-
-			b.append(",");
-		}
-
-		b.append("tok:").append(token);
-		b.append(",v:").append(Hex.encode(value));
-		b.append("}");
 	}
 }

@@ -59,9 +59,9 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
-import io.bosonnetwork.kademlia.messages.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.Message;
-import io.bosonnetwork.kademlia.messages.MessageException;
+import io.bosonnetwork.kademlia.messages.deprecated.ErrorMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.MessageException;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**

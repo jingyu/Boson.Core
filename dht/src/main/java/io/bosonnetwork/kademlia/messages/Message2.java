@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages2;
+package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

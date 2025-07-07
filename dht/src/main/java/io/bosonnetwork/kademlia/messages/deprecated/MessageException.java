@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
 import io.bosonnetwork.kademlia.ErrorCode;
 import io.bosonnetwork.kademlia.exceptions.KadException;

@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,57 +22,55 @@
 
 package io.bosonnetwork.kademlia.messages;
 
-import java.io.IOException;
+import java.util.Objects;
 
-import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.dataformat.cbor.CBORParser;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.Id;
 
-/**
- * @hidden
- */
-public abstract class LookupRequest extends Message {
-	private Id target;
-	private boolean want4;
-	private boolean want6;
-	private boolean wantToken;
+@JsonPropertyOrder({"t", "w"})
+public abstract class LookupRequest implements Request {
+	@JsonProperty("t")
+	protected final Id target;
+	protected final boolean want4;
+	protected final boolean want6;
+	protected final boolean wantToken;
 
-	public LookupRequest(Method method, Id target) {
-		super(Type.REQUEST, method);
+	protected LookupRequest(Id target, int want) {
+		if (want < 0 || want > 7)
+			throw new IllegalArgumentException("want");
+
 		this.target = target;
+		want4 = (want & 0x01) == 0x01;
+		want6 = (want & 0x02) == 0x02;
+		wantToken = (want & 0x04) == 0x04;
+	}
+
+	protected LookupRequest(Id target, boolean want4, boolean want6, boolean wantToken) {
+		this.target = target;
+		this.want4 = want4;
+		this.want6 = want6;
+		this.wantToken = wantToken;
 	}
 
 	public Id getTarget() {
 		return target;
 	}
 
-	public void setWant4(boolean want4) {
-		this.want4 = want4;
-	}
-
 	public boolean doesWant4() {
 		return want4;
-	}
-
-	public void setWant6(boolean want6) {
-		this.want6 = want6;
 	}
 
 	public boolean doesWant6() {
 		return want6;
 	}
 
-    protected void setWantToken(boolean wantToken) {
-		this.wantToken = wantToken;
-	}
-
-    protected boolean doesWantToken() {
+	protected boolean doesWantToken() {
 		return wantToken;
 	}
 
+	@JsonProperty("w")
 	protected int getWant() {
 		int want = 0;
 
@@ -89,66 +86,26 @@ public abstract class LookupRequest extends Message {
 		return want;
 	}
 
-	protected void setWant(int want) {
-		want4 = (want & 0x01) == 0x01;
-		want6 = (want & 0x02) == 0x02;
-		wantToken = (want & 0x04) == 0x04;
+	protected static boolean isValidWant(int want) {
+		return want > 0 && want <= 7;
 	}
 
 	@Override
-	protected void serialize(JsonGenerator gen) throws IOException {
-		gen.writeFieldName(getType().toString());
-		gen.writeStartObject();
-		gen.writeFieldName("t");
-		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, target.bytes(), 0, Id.BYTES);
-		gen.writeNumberField("w", getWant());
-		_serialize(gen);
-		gen.writeEndObject();
-	}
-
-	protected void _serialize(JsonGenerator gen) throws IOException {
+	public int hashCode() {
+		return Objects.hash(target, want4, want6, wantToken);
 	}
 
 	@Override
-	protected void parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		if (!fieldName.equals(Type.REQUEST.toString()) || parser.getCurrentToken() != JsonToken.START_OBJECT)
-			throw new MessageException("Invalid " + getMethod() + " request message");
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
 
-		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.currentName();
-			parser.nextToken();
+		if (obj instanceof LookupRequest that)
+			return Objects.equals(target, that.target) &&
+					want4 == that.want4 &&
+					want6 == that.want6 &&
+					wantToken == that.wantToken;
 
-			switch (name) {
-			case "t":
-				target = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-				break;
-
-			case "w":
-				setWant(parser.getIntValue());
-				break;
-
-			default:
-				_parse(name, parser);
-				break;
-			}
-		}
-	}
-
-	protected void _parse(String fieldName, CBORParser parser) throws IOException {
-	}
-
-	@Override
-	public int estimateSize() {
-		return super.estimateSize() + 43;
-	}
-
-	@Override
-	protected void toString(StringBuilder b) {
-		b.append(",q:{t:").append(target).append(",w:").append(getWant());
-		_toString(b);
-		b.append("}");
-	}
-
-	protected void _toString(StringBuilder b) {
+		return false;
 	}
 }

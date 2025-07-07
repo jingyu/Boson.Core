@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
 import static com.google.common.base.Preconditions.checkArgument;
 

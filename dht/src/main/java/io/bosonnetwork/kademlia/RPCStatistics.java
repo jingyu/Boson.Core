@@ -27,9 +27,9 @@ import java.util.Arrays;
 import java.util.Formatter;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.bosonnetwork.kademlia.messages.Message;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
 
 /**
  * @hidden

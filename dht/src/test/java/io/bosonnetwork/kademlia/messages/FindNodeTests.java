@@ -43,9 +43,11 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.FindNodeRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.FindNodeResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
 
 public class FindNodeTests extends MessageTests {
 	@Deprecated
@@ -98,7 +100,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -152,7 +154,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -203,7 +205,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -255,7 +257,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -306,7 +308,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -358,7 +360,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -452,7 +454,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -510,7 +512,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -567,7 +569,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -625,7 +627,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -692,7 +694,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -760,7 +762,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());

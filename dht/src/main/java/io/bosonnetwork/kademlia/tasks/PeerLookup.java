@@ -38,9 +38,9 @@ import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KClosestNodes;
 import io.bosonnetwork.kademlia.RPCCall;
-import io.bosonnetwork.kademlia.messages.FindPeerRequest;
-import io.bosonnetwork.kademlia.messages.FindPeerResponse;
-import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.FindPeerRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.FindPeerResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 
 /**
  * @hidden

@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,196 +22,75 @@
 
 package io.bosonnetwork.kademlia.messages;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Objects;
 
-import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.dataformat.cbor.CBORParser;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 
-/**
- * @hidden
- */
-public abstract class LookupResponse extends Message {
-	private List<NodeInfo> nodes4;
-	private List<NodeInfo> nodes6;
+@JsonPropertyOrder({"n4", "n6", "tok"})
+public abstract class LookupResponse implements Response {
+	@JsonProperty("n4")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected final List<NodeInfo> nodes4;
+	@JsonProperty("n6")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected final List<NodeInfo> nodes6;
+	@JsonProperty("tok")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+	protected final int token;
 
-	private int token;
-
-	public LookupResponse(Method method, int txid) {
-		super(Type.RESPONSE, method, txid);
-	}
-
-	public void setNodes4(List<NodeInfo> nodes4) {
-		this.nodes4 = nodes4;
+	protected LookupResponse(List<NodeInfo> nodes4, List<NodeInfo> nodes6, int token) {
+		this.nodes4 = nodes4 == null || nodes4.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes4);
+		this.nodes6 = nodes6 == null || nodes6.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes6);
+		this.token = token;
 	}
 
 	public List<NodeInfo> getNodes4() {
-		return nodes4 != null ? Collections.unmodifiableList(nodes4) : Collections.emptyList();
-	}
-
-	public void setNodes6(List<NodeInfo> nodes6) {
-		this.nodes6 = nodes6;
+		return nodes4;
 	}
 
 	public List<NodeInfo> getNodes6() {
-		return nodes6 != null ? Collections.unmodifiableList(nodes6) : Collections.emptyList();
+		return nodes6;
 	}
 
 	public List<NodeInfo> getNodes(Network type) {
-		if (type == Network.IPv4)
-			return getNodes4();
-		else
-			return getNodes6();
+		// Objects.requireNonNull(type, "type");
+		return switch (type) {
+			case IPv4 -> getNodes4();
+			case IPv6 -> getNodes6();
+		};
+	}
+
+	public List<NodeInfo> getNodes() {
+		// nodes4 is preferred
+		return !nodes4.isEmpty() ? nodes4 : nodes6;
 	}
 
 	public int getToken() {
 		return token;
 	}
 
-	public void setToken(int token) {
-		this.token = token;
+	@Override
+	public int hashCode() {
+		return Objects.hash(nodes4, nodes6, token);
 	}
 
 	@Override
-	protected void serialize(JsonGenerator gen) throws IOException {
-		gen.writeFieldName(getType().toString());
-		gen.writeStartObject();
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
 
-		if (nodes4 != null && !nodes4.isEmpty())
-			serializeNodes(gen, "n4", nodes4);
+		if (obj instanceof LookupResponse that)
+			return Objects.equals(nodes4, that.nodes4) &&
+					Objects.equals(nodes6, that.nodes6) &&
+					token == that.token;
 
-		if (nodes6 != null && !nodes6.isEmpty())
-			serializeNodes(gen, "n6", nodes6);
-
-		if (token != 0)
-			gen.writeNumberField("tok", token);
-
-		_serialize(gen);
-		gen.writeEndObject();
-	}
-
-	protected void _serialize(JsonGenerator gen) throws IOException {
-	}
-
-	private void serializeNodes(JsonGenerator gen, String fieldName, List<NodeInfo> nodes) throws IOException {
-		gen.writeFieldName(fieldName);
-		gen.writeStartArray(nodes, nodes.size());
-		for (NodeInfo ni : nodes) {
-			gen.writeStartArray();
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, ni.getId().bytes(), 0, Id.BYTES);
-			byte[] addr = ni.getAddress().getAddress().getAddress();
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length);
-			gen.writeNumber(ni.getAddress().getPort());
-			gen.writeEndArray();
-		}
-		gen.writeEndArray();
-	}
-
-	@Override
-	protected void parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		if (!fieldName.equals(Type.RESPONSE.toString()) || parser.getCurrentToken() != JsonToken.START_OBJECT)
-			throw new MessageException("Invalid " + getMethod() + " response message");
-
-		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.currentName();
-			parser.nextToken();
-			switch (name) {
-			case "n4":
-				nodes4 = parseNodes(fieldName, parser);
-				break;
-
-			case "n6":
-				nodes6 = parseNodes(fieldName, parser);
-				break;
-
-			case "tok":
-				token = parser.getIntValue();
-				break;
-
-			default:
-				_parse(name, parser);
-				break;
-			}
-		}
-	}
-
-	protected void _parse(String fieldName, CBORParser parser) throws IOException {
-	}
-
-	private List<NodeInfo> parseNodes(String fieldName, CBORParser parser) throws IOException {
-		if (parser.currentToken() != JsonToken.START_ARRAY)
-			throw new IOException("Invalid " + fieldName + " data, should be array");
-
-		List<NodeInfo> nodes = new ArrayList<>();
-		while (parser.nextToken() != JsonToken.END_ARRAY) {
-			if (parser.currentToken() != JsonToken.START_ARRAY)
-				throw new IOException("Invalid " + fieldName + " info data, should be array");
-
-			parser.nextToken();
-			Id id = Id.of(parser.getBinaryValue());
-			parser.nextToken();
-			InetAddress addr = InetAddress.getByAddress(parser.getBinaryValue());
-			parser.nextToken();
-			int port = parser.getIntValue();
-
-			if (parser.nextToken() != JsonToken.END_ARRAY)
-				throw new IOException("Invalid " + fieldName + " info data");
-
-			nodes.add(new NodeInfo(id, addr, port));
-		}
-
-		return nodes.isEmpty() ? null : nodes;
-	}
-
-	@Override
-	public int estimateSize() {
-		int size = super.estimateSize() + 4;
-
-		if (nodes4 != null && !nodes4.isEmpty())
-			size += (5 + 44 * nodes4.size());
-
-		if (nodes6 != null && !nodes6.isEmpty())
-			size += (5 + 56 * nodes6.size());
-
-		size += (token == 0) ? 0 : 9;
-
-		return size;
-	}
-
-	@Override
-	protected void toString(StringBuilder b) {
-		b.append(",r:{");
-
-		if (nodes4 != null && !nodes4.isEmpty()) {
-			b.append("n4:");
-			b.append(nodes4.stream().map(n -> n.toString()).collect(Collectors.joining(",", "[", "]")));
-		}
-
-		if (nodes6 != null && !nodes6.isEmpty()) {
-			if (nodes4 != null && !nodes4.isEmpty())
-				b.append(",");
-
-			b.append("n6:");
-			b.append(nodes6.stream().map(n -> n.toString()).collect(Collectors.joining(",", "[", "]")));
-		}
-
-		if (token != 0)
-			b.append(",tok:").append(token);
-
-		_toString(b);
-		b.append("}");
-	}
-
-	protected void _toString(StringBuilder b) {
+		return false;
 	}
 }

@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,32 +22,35 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.bosonnetwork.Id;
 
-/**
- * @hidden
- */
+// @JsonDeserialize(using = FindNodeRequest.Deserializer.class)
 public class FindNodeRequest extends LookupRequest {
-	public FindNodeRequest(Id targetId, boolean wantToken) {
-		super(Method.FIND_NODE, targetId);
-		setWantToken(wantToken);
+	@JsonCreator
+	protected FindNodeRequest(@JsonProperty(value = "t", required = true) Id target,
+							  @JsonProperty(value = "w", required = true) int want) {
+		super(target, want);
 	}
 
-	public FindNodeRequest(Id targetId) {
-		this(targetId, false);
+	public FindNodeRequest(Id target, boolean want4, boolean want6, boolean wantToken) {
+		super(target, want4, want6, wantToken);
 	}
 
-	protected FindNodeRequest() {
-		this(null, false);
-	}
-
-    @Override
-	public void setWantToken(boolean wantToken) {
-		super.setWantToken(wantToken);
-	}
-
-    @Override
+	@Override
 	public boolean doesWantToken() {
 		return super.doesWantToken();
+	}
+
+	@Override
+	public int hashCode() {
+		return 0xF1ADA00D + super.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindNodeRequest && super.equals(obj);
 	}
 }

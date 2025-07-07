@@ -25,7 +25,7 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.Json;
 

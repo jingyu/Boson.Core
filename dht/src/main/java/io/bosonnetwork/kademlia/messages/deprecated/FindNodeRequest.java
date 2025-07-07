@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,11 +21,34 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages2;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
-public interface Response extends Message2.Body {
-	@Override
-	default Message2.Type getType() {
-		return Message2.Type.RESPONSE;
+import io.bosonnetwork.Id;
+
+/**
+ * @hidden
+ */
+public class FindNodeRequest extends LookupRequest {
+	public FindNodeRequest(Id targetId, boolean wantToken) {
+		super(Method.FIND_NODE, targetId);
+		setWantToken(wantToken);
+	}
+
+	public FindNodeRequest(Id targetId) {
+		this(targetId, false);
+	}
+
+	protected FindNodeRequest() {
+		this(null, false);
+	}
+
+    @Override
+	public void setWantToken(boolean wantToken) {
+		super.setWantToken(wantToken);
+	}
+
+    @Override
+	public boolean doesWantToken() {
+		return super.doesWantToken();
 	}
 }

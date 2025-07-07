@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,18 +22,30 @@
 
 package io.bosonnetwork.kademlia.messages;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import io.bosonnetwork.Id;
 
-/**
- * @hidden
- */
+// @JsonDeserialize(using = FindPeerRequest.Deserializer.class)
 public class FindPeerRequest extends LookupRequest {
-	public FindPeerRequest(Id target) {
-		super(Method.FIND_PEER, target);
-		setWantToken(true);
+	@JsonCreator
+	protected FindPeerRequest(@JsonProperty(value = "t", required = true) Id target,
+							  @JsonProperty(value = "w", required = true) int want) {
+		super(target, want);
 	}
 
-	protected FindPeerRequest() {
-		this(null);
+	public FindPeerRequest(Id target, boolean want4, boolean want6) {
+		super(target, want4, want6, false);
+	}
+
+	@Override
+	public int hashCode() {
+		return 0xF1AD9EE2 + super.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindPeerRequest && super.equals(obj);
 	}
 }

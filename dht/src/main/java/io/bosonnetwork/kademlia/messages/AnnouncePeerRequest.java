@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,145 +27,162 @@ import java.util.Objects;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.dataformat.cbor.CBORParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.Hex;
+import io.bosonnetwork.utils.Json;
 
-/**
- * @hidden
- */
-public class AnnouncePeerRequest extends Message {
-	private int token;
-	private Id peerId;
-	private Id origin; // Optional, only for the delegated peers
-	private int port;
-	private String alternativeURL;
-	private byte[] signature;
-
-	public AnnouncePeerRequest() {
-		super(Type.REQUEST, Method.ANNOUNCE_PEER);
-	}
+@JsonSerialize(using = AnnouncePeerRequest.Serializer.class)
+@JsonDeserialize(using = AnnouncePeerRequest.Deserializer.class)
+public class AnnouncePeerRequest implements Request {
+	private final int token;
+	private final PeerInfo peer;
 
 	public AnnouncePeerRequest(PeerInfo peer, int token) {
-		this();
-		setPeer(peer);
-		setToken(token);
+		this.token = token;
+		this.peer = peer;
 	}
 
 	public int getToken() {
 		return token;
 	}
 
-	public void setToken(int token) {
-		this.token = token;
-	}
-
-	public void setPeer(PeerInfo peer) {
-		peerId = peer.getId();
-		origin = peer.getOrigin();
-		port = peer.getPort();
-		if (peer.hasAlternativeURL())
-			alternativeURL = peer.getAlternativeURL();
-		signature = peer.getSignature();
-	}
-
 	public PeerInfo getPeer() {
-		return PeerInfo.of(peerId, getId(), origin, port, alternativeURL, signature);
-	}
-
-	public Id getTarget() {
-		return peerId;
+		return peer;
 	}
 
 	@Override
-	protected void serialize(JsonGenerator gen) throws IOException {
-		gen.writeFieldName(getType().toString());
-		gen.writeStartObject();
+	public int hashCode() {
+		return Objects.hash(token, peer);
+	}
 
-		gen.writeNumberField("tok", token);
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
 
-		gen.writeFieldName("t");
-		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peerId.bytes(), 0, Id.BYTES);
+		if (o instanceof AnnouncePeerRequest that)
+			return this.token == that.token && this.peer.equals(that.peer);
 
-		if (origin != null && !Objects.equals(origin, getId())) {
-			gen.writeFieldName("o");
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, origin.bytes(), 0, Id.BYTES);
+		return false;
+	}
+
+	static class Serializer extends StdSerializer<AnnouncePeerRequest> {
+		private static final long serialVersionUID = -3471421981677027622L;
+
+		public Serializer() {
+			this(AnnouncePeerRequest.class);
 		}
 
-		gen.writeNumberField("p", port);
+		public Serializer(Class<AnnouncePeerRequest> t) {
+			super(t);
+		}
 
-		if (alternativeURL != null)
-			gen.writeStringField("alt", alternativeURL);
+		@Override
+		public void serialize(AnnouncePeerRequest value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+			boolean binaryFormat = Json.isBinaryFormat(gen);
 
-		gen.writeFieldName("sig");
-		gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, signature, 0, signature.length);
+			gen.writeStartObject();
+			gen.writeNumberField("tok", value.token);
 
-		gen.writeEndObject();
-	}
-
-	@Override
-	protected void parse(String fieldName, CBORParser parser) throws MessageException, IOException {
-		if (!fieldName.equals(Type.REQUEST.toString()) || parser.getCurrentToken() != JsonToken.START_OBJECT)
-			throw new MessageException("Invalid " + getMethod() + " request message");
-
-		while (parser.nextToken() != JsonToken.END_OBJECT) {
-			String name = parser.currentName();
-			parser.nextToken();
-			switch (name) {
-			case "t":
-				peerId = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-				break;
-
-			case "o":
-				origin = Id.of(parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-				break;
-
-			case "p":
-				port = parser.getIntValue();
-				break;
-
-			case "alt":
-				alternativeURL = parser.getValueAsString();
-				break;
-
-			case "sig":
-				signature = parser.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-				break;
-
-			case "tok":
-				token = parser.getIntValue();
-				break;
-
-			default:
-				System.out.println("Unknown field: " + fieldName);
-				break;
+			if (binaryFormat) {
+				gen.writeFieldName("t");
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.peer.getId().bytes(), 0, Id.BYTES);
+			} else {
+				gen.writeStringField("t", value.peer.getId().toBase58String());
 			}
+
+			if (value.peer.isDelegated()) {
+				if (binaryFormat) {
+					gen.writeFieldName("o");
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.peer.getOrigin().bytes(), 0, Id.BYTES);
+				} else {
+					gen.writeStringField("o", value.peer.getOrigin().toBase58String());
+				}
+			}
+
+			gen.writeNumberField("p", value.peer.getPort());
+
+			if (value.peer.getAlternativeURL() != null)
+				gen.writeStringField("alt", value.peer.getAlternativeURL());
+
+			byte[] sig = value.peer.getSignature();
+			gen.writeFieldName("sig");
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
+
+			gen.writeEndObject();
 		}
 	}
 
-	@Override
-	public int estimateSize() {
-        int size = 4 + 9 + 36 + 5 + 6 + Signature.BYTES;
-        size += origin == null ? 0 : 4 + Id.BYTES;
-        size += alternativeURL == null ? 0 : 6 + alternativeURL.getBytes().length;
-        return super.estimateSize() + size;
-	}
+	static class Deserializer extends StdDeserializer<AnnouncePeerRequest> {
+		private static final long serialVersionUID = -1837715448567615081L;
 
-	@Override
-	protected void toString(StringBuilder b) {
-		b.append(",q:{");
-		b.append("t:").append(peerId.toString());
-		if (origin != null && !origin.equals(getId()))
-			b.append(",o:").append(origin.toString());
-		b.append(",p:").append(port);
-		if (alternativeURL != null && !alternativeURL.isEmpty())
-			b.append(",alt:").append(alternativeURL);
-		b.append(",sig:").append(Hex.encode(signature));
-		b.append(",tok:").append(token);
-		b.append("}");
+		public Deserializer() {
+			this(AnnouncePeerRequest.class);
+		}
+
+		public Deserializer(Class<AnnouncePeerRequest> t) {
+			super(t);
+		}
+
+		@Override
+		public AnnouncePeerRequest deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
+			if (p.getCurrentToken() != JsonToken.START_OBJECT)
+				throw ctxt.wrongTokenException(p, AnnouncePeerRequest.class, JsonToken.START_OBJECT,
+						"Invalid AnnouncePeerRequest: should be an object");
+
+			final boolean binaryFormat = Json.isBinaryFormat(p);
+
+			int tok = 0;
+			Id peerId = null;
+			Id origin = null;
+			int port = 0;
+			String alternativeURL = null;
+			byte[] signature = null;
+
+			Id nodeId = (Id) ctxt.getAttribute(Message2.ATTR_NODE_ID);
+			if (nodeId == null)
+				ctxt.reportInputMismatch(AnnouncePeerRequest.class, "Missing nodeId attribute in the deserialization context");
+
+			while (p.nextToken() != JsonToken.END_OBJECT) {
+				final String fieldName = p.currentName();
+				final JsonToken token = p.nextToken();
+				switch (fieldName) {
+				case "tok":
+					tok = p.getIntValue();
+					break;
+				case "t":
+					peerId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+					break;
+				case "o":
+					if (token != JsonToken.VALUE_NULL)
+						origin = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+					break;
+				case "p":
+					port = p.getIntValue();
+					break;
+				case "alt":
+					if (token != JsonToken.VALUE_NULL)
+						alternativeURL = p.getText();
+					break;
+				case "sig":
+					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				default:
+					p.skipChildren();
+				}
+			}
+
+			return new AnnouncePeerRequest(PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature), tok);
+		}
 	}
 }

@@ -42,9 +42,11 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.AnnouncePeerRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.AnnouncePeerResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
 
 public class AnnouncePeerTests extends MessageTests {
 	@Deprecated
@@ -130,7 +132,7 @@ public class AnnouncePeerTests extends MessageTests {
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
-		var body = msg2.getBody(io.bosonnetwork.kademlia.messages2.AnnouncePeerRequest.class);
+		var body = msg2.getBody(io.bosonnetwork.kademlia.messages.AnnouncePeerRequest.class);
 		assertEquals(msg.getToken(), body.getToken());
 		assertEquals(peer, body.getPeer());
 		assertEquals(msg.getVersion(), msg2.getVersion());
@@ -183,7 +185,7 @@ public class AnnouncePeerTests extends MessageTests {
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
-		var body = msg2.getBody(io.bosonnetwork.kademlia.messages2.AnnouncePeerRequest.class);
+		var body = msg2.getBody(io.bosonnetwork.kademlia.messages.AnnouncePeerRequest.class);
 		assertEquals(msg.getToken(), body.getToken());
 		assertEquals(peer, body.getPeer());
 		assertEquals(msg.getVersion(), msg2.getVersion());

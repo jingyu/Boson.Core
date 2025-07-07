@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,11 +21,42 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages2;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
-public interface Request extends Message2.Body {
+import java.io.OutputStream;
+
+/**
+ * @hidden
+ */
+public class PartialMessage extends Message {
+	public static final PartialMessage BLANK = new PartialMessage();
+
+	private PartialMessage(Message msg) {
+		super(msg.getType(), msg.getMethod(), msg.getTxid());
+		if (msg.getId() != null)
+			setId(msg.getId());
+	}
+
+	private PartialMessage() {
+		super(Type.ERROR, Method.UNKNOWN, 0);
+	}
+
+	public static PartialMessage of(Message msg) {
+		return msg == null ? BLANK : new PartialMessage(msg);
+	}
+
 	@Override
-	default Message2.Type getType() {
-		return Message2.Type.REQUEST;
+	public int estimateSize() {
+		return 0;
+	}
+
+	@Override
+	public byte[] serialize() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public void serialize(OutputStream out) {
+		throw new UnsupportedOperationException();
 	}
 }

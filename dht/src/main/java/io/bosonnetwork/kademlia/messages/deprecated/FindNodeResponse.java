@@ -21,17 +21,17 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
 /**
  * @hidden
  */
-public class AnnouncePeerResponse extends Message {
-	public AnnouncePeerResponse(int txid) {
-		super(Type.RESPONSE, Method.ANNOUNCE_PEER, txid);
+public class FindNodeResponse extends LookupResponse {
+	public FindNodeResponse(int txid) {
+		super(Method.FIND_NODE, txid);
 	}
 
-	protected AnnouncePeerResponse() {
+	public FindNodeResponse() {
 		this(0);
 	}
 }

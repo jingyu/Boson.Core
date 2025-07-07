@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,50 +21,61 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages2;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.IOException;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
 import io.bosonnetwork.Id;
 
+/**
+ * @hidden
+ */
 public class FindValueRequest extends LookupRequest {
 	// Only send the value if the real sequence number greater than this.
-	@JsonProperty("seq")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
-	private final int sequenceNumber;
+	private int sequenceNumber;
 
-	@JsonCreator
-	protected FindValueRequest(@JsonProperty(value = "t", required = true) Id target,
-							   @JsonProperty(value = "w", required = true) int want,
-							   @JsonProperty(value = "seq") int sequenceNumber) {
-		super(target, want);
-		this.sequenceNumber = sequenceNumber < 0 ? 0 : sequenceNumber;
+	public FindValueRequest(Id targetId) {
+		super(Method.FIND_VALUE, targetId);
+		setWantToken(true);
 	}
 
-	public FindValueRequest(Id target, boolean want4, boolean want6, int sequenceNumber) {
-		super(target, want4, want6, true);
-		this.sequenceNumber = sequenceNumber;
+	public FindValueRequest() {
+		this(null);
 	}
 
 	public int getSequenceNumber() {
 		return sequenceNumber;
 	}
 
-	@Override
-	public int hashCode() {
-		return 0xF1AD5A1E + super.hashCode() + Integer.hashCode(sequenceNumber);
+	public void setSequenceNumber(int sequenceNumber) {
+		this.sequenceNumber = sequenceNumber;
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
+	protected void _serialize(JsonGenerator gen) throws IOException {
+		if (sequenceNumber > 0)
+			gen.writeNumberField("seq", sequenceNumber);
+	}
 
-		if (obj instanceof FindValueRequest that)
-			return sequenceNumber == that.sequenceNumber && super.equals(obj);
+	@Override
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
+		if (fieldName.equals("seq"))
+			sequenceNumber = parser.getIntValue();
+		else
+			System.out.println("Unknown field: " + fieldName);
+	}
 
-		return false;
+	@Override
+	public int estimateSize() {
+		return super.estimateSize() + 9;
+	}
+
+	@Override
+	protected void _toString(StringBuilder b) {
+		if (sequenceNumber >= 0)
+			b.append(",seq:").append(sequenceNumber);
 	}
 }

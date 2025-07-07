@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 

@@ -33,8 +33,8 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
-import io.bosonnetwork.kademlia.messages.LookupResponse;
-import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.LookupResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**

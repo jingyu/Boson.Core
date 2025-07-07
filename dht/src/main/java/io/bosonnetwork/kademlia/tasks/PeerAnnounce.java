@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.messages.AnnouncePeerRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.AnnouncePeerRequest;
 
 /**
  * @hidden

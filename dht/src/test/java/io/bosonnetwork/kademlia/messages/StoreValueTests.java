@@ -42,9 +42,11 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.StoreValueRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.StoreValueResponse;
 
 public class StoreValueTests extends MessageTests {
 	@Deprecated
@@ -153,7 +155,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -212,7 +214,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -272,7 +274,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());

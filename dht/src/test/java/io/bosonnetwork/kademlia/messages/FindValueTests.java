@@ -46,9 +46,11 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.Message.Method;
-import io.bosonnetwork.kademlia.messages.Message.Type;
-import io.bosonnetwork.kademlia.messages2.Message2;
+import io.bosonnetwork.kademlia.messages.deprecated.FindValueRequest;
+import io.bosonnetwork.kademlia.messages.deprecated.FindValueResponse;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
 
 public class FindValueTests extends MessageTests {
 	@Deprecated
@@ -102,7 +104,7 @@ public class FindValueTests extends MessageTests {
 		assertFalse(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -150,7 +152,7 @@ public class FindValueTests extends MessageTests {
 		assertTrue(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -198,7 +200,7 @@ public class FindValueTests extends MessageTests {
 		assertTrue(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -311,7 +313,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes4();
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -372,7 +374,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes4();
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -441,7 +443,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes6();
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -521,7 +523,7 @@ public class FindValueTests extends MessageTests {
 		nodes = m.getNodes6();
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages2.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());

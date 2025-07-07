@@ -28,7 +28,7 @@ import static io.bosonnetwork.utils.Functional.tap;
 import java.util.Arrays;
 import java.util.Formatter;
 
-import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 
 /**
  * Class to track and analyze round-trip times (RTTs) of RPC calls using a histogram

@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,11 +22,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
-/**
- * @hidden
- */
-public class PingRequest extends Message {
-	public PingRequest() {
-		super(Type.REQUEST, Method.PING);
+public interface Response extends Message2.Body {
+	@Override
+	default Message2.Type getType() {
+		return Message2.Type.RESPONSE;
 	}
 }

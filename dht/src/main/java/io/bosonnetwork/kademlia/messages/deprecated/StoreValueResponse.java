@@ -21,42 +21,17 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages;
-
-import java.io.OutputStream;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
 /**
  * @hidden
  */
-public class PartialMessage extends Message {
-	public static final PartialMessage BLANK = new PartialMessage();
-
-	private PartialMessage(Message msg) {
-		super(msg.getType(), msg.getMethod(), msg.getTxid());
-		if (msg.getId() != null)
-			setId(msg.getId());
+public class StoreValueResponse extends Message {
+	public StoreValueResponse(int txid) {
+		super(Type.RESPONSE, Method.STORE_VALUE, txid);
 	}
 
-	private PartialMessage() {
-		super(Type.ERROR, Method.UNKNOWN, 0);
-	}
-
-	public static PartialMessage of(Message msg) {
-		return msg == null ? BLANK : new PartialMessage(msg);
-	}
-
-	@Override
-	public int estimateSize() {
-		return 0;
-	}
-
-	@Override
-	public byte[] serialize() {
-		throw new UnsupportedOperationException();
-	}
-
-	@Override
-	public void serialize(OutputStream out) {
-		throw new UnsupportedOperationException();
+	protected StoreValueResponse() {
+		super(Type.RESPONSE, Method.STORE_VALUE, 0);
 	}
 }

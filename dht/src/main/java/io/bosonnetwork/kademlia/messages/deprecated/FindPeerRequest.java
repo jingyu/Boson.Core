@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,56 +21,20 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.messages2;
+package io.bosonnetwork.kademlia.messages.deprecated;
 
-import java.util.Objects;
+import io.bosonnetwork.Id;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({"c", "m"})
-public class Error implements Message2.Body {
-	@JsonProperty("c")
-	private final int code;
-	@JsonProperty("m")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	private final String message;
-
-	@JsonCreator()
-	public Error(@JsonProperty(value = "c", required = true) int code,
-				 @JsonProperty("m") String message) {
-		this.code = code;
-		this.message = message;
+/**
+ * @hidden
+ */
+public class FindPeerRequest extends LookupRequest {
+	public FindPeerRequest(Id target) {
+		super(Method.FIND_PEER, target);
+		setWantToken(true);
 	}
 
-	@Override
-	public Message2.Type getType() {
-		return Message2.Type.ERROR;
-	}
-
-	public int getCode() {
-		return code;
-	}
-
-	public String getMessage() {
-		return message;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(code, message);
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-
-		if (obj instanceof Error that)
-			return code == that.code && Objects.equals(message, that.message);
-
-		return false;
+	protected FindPeerRequest() {
+		this(null);
 	}
 }

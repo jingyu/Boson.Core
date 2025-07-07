@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia;
 
-import io.bosonnetwork.kademlia.messages.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.Message;
 
 /**
  * Class which objects should derive from, if they want to know the result of a call.
