@@ -26,7 +26,7 @@ package io.bosonnetwork.kademlia.messages.deprecated;
 /**
  * @hidden
  */
-public class AnnouncePeerResponse extends Message {
+public class AnnouncePeerResponse extends OldMessage {
 	public AnnouncePeerResponse(int txid) {
 		super(Type.RESPONSE, Method.ANNOUNCE_PEER, txid);
 	}

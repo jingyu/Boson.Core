@@ -46,7 +46,7 @@ import io.bosonnetwork.utils.Json;
 /**
  * @hidden
  */
-public abstract class Message {
+public abstract class OldMessage {
 	private static final int READ_LIMIT = 2048;
 
 	private static final int TYPE_MASK = 0x000000E0;
@@ -144,13 +144,13 @@ public abstract class Message {
 		}
 	}
 
-	protected Message(Type type, Method method, int txid) {
+	protected OldMessage(Type type, Method method, int txid) {
 		this.type = type.value | method.value;
 		this.txid = txid;
 		this.version = 0;
 	}
 
-	protected Message(Type type, Method method) {
+	protected OldMessage(Type type, Method method) {
 		this.type = type.value | method.value;
 	}
 
@@ -275,13 +275,13 @@ public abstract class Message {
 		gen.writeEndObject();
 	}
 
-	public static Message parse(byte[] data) throws MessageException {
+	public static OldMessage parse(byte[] data) throws MessageException {
 		checkArgument(data != null && data.length >= MIN_SIZE, "Invalid data");
 
 		return parse(() -> (Json.cborFactory().createParser(data)));
 	}
 
-	public static Message parse(InputStream in) throws MessageException {
+	public static OldMessage parse(InputStream in) throws MessageException {
 		checkArgument(in.markSupported(), "Input stream shoud support mark()");
 		in.mark(READ_LIMIT);
 
@@ -293,8 +293,8 @@ public abstract class Message {
 	}
 
 	// According to my tests, streaming deserialization is about 25x faster than the object mapping
-	private static Message parse(ThrowingSupplier<CBORParser, IOException> ps) throws MessageException {
-		Message msg = null;
+	private static OldMessage parse(ThrowingSupplier<CBORParser, IOException> ps) throws MessageException {
+		OldMessage msg = null;
 
 		try {
 			int typeCode = Integer.MAX_VALUE;
@@ -410,7 +410,7 @@ public abstract class Message {
 	protected void parse(String fieldName, CBORParser parser) throws MessageException, IOException {
 	}
 
-	private static Message createMessage(Type type, Method method) throws MessageException {
+	private static OldMessage createMessage(Type type, Method method) throws MessageException {
 		return switch (type) {
 			case REQUEST -> switch (method) {
 				case PING -> new PingRequest();

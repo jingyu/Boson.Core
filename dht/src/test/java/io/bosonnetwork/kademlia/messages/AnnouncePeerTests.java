@@ -44,9 +44,9 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.deprecated.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.AnnouncePeerResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 
 public class AnnouncePeerTests extends MessageTests {
 	@Deprecated
@@ -110,7 +110,7 @@ public class AnnouncePeerTests extends MessageTests {
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(nodeId);
 		assertInstanceOf(AnnouncePeerRequest.class, pm);
 		AnnouncePeerRequest m = (AnnouncePeerRequest)pm;
@@ -126,7 +126,7 @@ public class AnnouncePeerTests extends MessageTests {
 		assertEquals(peer, rPeer);
 
 		// Compatibility
-		var msg2 = Message2.parse(bin, peer.getNodeId());
+		var msg2 = Message.parse(bin, peer.getNodeId());
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -165,7 +165,7 @@ public class AnnouncePeerTests extends MessageTests {
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(nodeId);
 		assertInstanceOf(AnnouncePeerRequest.class, pm);
 		AnnouncePeerRequest m = (AnnouncePeerRequest)pm;
@@ -179,7 +179,7 @@ public class AnnouncePeerTests extends MessageTests {
 		assertEquals(peer, m.getPeer());
 
 		// Compatibility
-		var msg2 = Message2.parse(bin, peer.getNodeId());
+		var msg2 = Message.parse(bin, peer.getNodeId());
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -221,7 +221,7 @@ public class AnnouncePeerTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(AnnouncePeerResponse.class, pm);
 		AnnouncePeerResponse m = (AnnouncePeerResponse)pm;
@@ -233,7 +233,7 @@ public class AnnouncePeerTests extends MessageTests {
 		assertEquals(0, m.getVersion());
 
 		// Compatibility
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -263,7 +263,7 @@ public class AnnouncePeerTests extends MessageTests {
 	void testRequest(String name, PeerInfo peer, int expectedSize) throws Exception {
 		var txid = 0x87654321;
 		var token = 0x76543210;
-		var msg = Message2.announcePeerRequest(txid, peer, token);
+		var msg = Message.announcePeerRequest(txid, peer, token);
 		msg.setId(peer.getNodeId());
 
 		var bin = msg.toBytes();
@@ -271,13 +271,13 @@ public class AnnouncePeerTests extends MessageTests {
 
 		assertEquals(expectedSize, bin.length);
 
-		assertEquals(Message2.Type.REQUEST, msg.getType());
-		assertEquals(Message2.Method.ANNOUNCE_PEER, msg.getMethod());
+		assertEquals(Message.Type.REQUEST, msg.getType());
+		assertEquals(Message.Method.ANNOUNCE_PEER, msg.getMethod());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(token, msg.getBody().getToken());
 		assertEquals(peer, msg.getBody().getPeer());
 
-		var msg2 = Message2.parse(bin, peer.getNodeId());
+		var msg2 = Message.parse(bin, peer.getNodeId());
 		msg2.setId(peer.getNodeId());
 
 		assertEquals(msg, msg2);
@@ -288,7 +288,7 @@ public class AnnouncePeerTests extends MessageTests {
 	void testResponse() throws Exception {
 		var nodeId = Id.random();
 		var txid = 0x78901234;
-		var msg = Message2.announcePeerResponse(txid);
+		var msg = Message.announcePeerResponse(txid);
 		msg.setId(nodeId);
 
 		var bin = msg.toBytes();
@@ -296,12 +296,12 @@ public class AnnouncePeerTests extends MessageTests {
 
 		assertEquals(20, bin.length);
 
-		assertEquals(Message2.Type.RESPONSE, msg.getType());
-		assertEquals(Message2.Method.ANNOUNCE_PEER, msg.getMethod());
+		assertEquals(Message.Type.RESPONSE, msg.getType());
+		assertEquals(Message.Method.ANNOUNCE_PEER, msg.getMethod());
 		assertEquals(txid, msg.getTxid());
 		assertNull(msg.getBody());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -323,7 +323,7 @@ public class AnnouncePeerTests extends MessageTests {
 			msg.setPeer(peer);
 
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -334,7 +334,7 @@ public class AnnouncePeerTests extends MessageTests {
 				msg.setPeer(peer);
 
 				bin = msg.serialize();
-				AnnouncePeerRequest m = (AnnouncePeerRequest) Message.parse(bin);
+				AnnouncePeerRequest m = (AnnouncePeerRequest) OldMessage.parse(bin);
 				m.setId(peer.getNodeId());
 				m.getPeer();
 			}
@@ -342,17 +342,17 @@ public class AnnouncePeerTests extends MessageTests {
 			System.out.printf(">>>>>>>> AnnouncePeerRequest: %dms\n", (end - start));
 		}
 
-		var msg = Message2.announcePeerRequest(txid, peer, token);
+		var msg = Message.announcePeerRequest(txid, peer, token);
 		msg.setId(peer.getNodeId());
 		var bin = msg.toBytes();
-		Message2.parse(bin, peer.getNodeId());
+		Message.parse(bin, peer.getNodeId());
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			var msg2 = Message2.announcePeerRequest(txid, peer, token);
+			var msg2 = Message.announcePeerRequest(txid, peer, token);
 			msg2.setId(peer.getNodeId());
 			var bin2 = msg2.toBytes();
-			Message2.parse(bin2, peer.getNodeId());
+			Message.parse(bin2, peer.getNodeId());
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> AnnouncePeerRequest: %dms, estimated: streaming ~= 610ms, *mapping ~= 1300ms @ MBP-13-m1pro\n", (end - start));
@@ -367,31 +367,31 @@ public class AnnouncePeerTests extends MessageTests {
 			var msg = new AnnouncePeerResponse(txid);
 			msg.setId(nodeId);
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
 				msg = new AnnouncePeerResponse(txid);
 				msg.setId(nodeId);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> AnnouncePeerResponse: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.announcePeerResponse(txid);
+		var msg = Message.announcePeerResponse(txid);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			var msg2 = Message2.announcePeerResponse(txid);
+			var msg2 = Message.announcePeerResponse(txid);
 			msg2.setId(nodeId);
 			var bin2 = msg2.toBytes();
-			Message2.parse(bin2);
+			Message.parse(bin2);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> AnnouncePeerResponse: %dms, estimated: streaming ~= 360ms, *mapping ~= 240ms @ MBP-13-m1pro\n", (end - start));

@@ -48,9 +48,9 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.deprecated.FindValueRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.FindValueResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 
 public class FindValueTests extends MessageTests {
 	@Deprecated
@@ -89,7 +89,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueRequest.class, pm);
 		FindValueRequest m = (FindValueRequest)pm;
@@ -104,7 +104,7 @@ public class FindValueTests extends MessageTests {
 		assertFalse(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -138,7 +138,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueRequest.class, pm);
 		FindValueRequest m = (FindValueRequest)pm;
@@ -152,7 +152,7 @@ public class FindValueTests extends MessageTests {
 		assertTrue(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -186,7 +186,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueRequest.class, pm);
 		FindValueRequest m = (FindValueRequest)pm;
@@ -200,7 +200,7 @@ public class FindValueTests extends MessageTests {
 		assertTrue(m.doesWant6());
 		assertEquals(seq, m.getSequenceNumber());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueRequest>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -294,7 +294,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueResponse.class, pm);
 		FindValueResponse m = (FindValueResponse)pm;
@@ -313,7 +313,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes4();
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -355,7 +355,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueResponse.class, pm);
 		FindValueResponse m = (FindValueResponse)pm;
@@ -374,7 +374,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes4();
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -424,7 +424,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueResponse.class, pm);
 		FindValueResponse m = (FindValueResponse)pm;
@@ -443,7 +443,7 @@ public class FindValueTests extends MessageTests {
 		List<NodeInfo> nodes = m.getNodes6();
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -500,7 +500,7 @@ public class FindValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindValueResponse.class, pm);
 		FindValueResponse m = (FindValueResponse)pm;
@@ -523,7 +523,7 @@ public class FindValueTests extends MessageTests {
 		nodes = m.getNodes6();
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindValueResponse>) Message.parse(bin);
 		msg2.setId(id);
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -573,7 +573,7 @@ public class FindValueTests extends MessageTests {
 		var target = Id.random();
 		var txid = 0x76543210;
 		var seq = 0x78654321;
-		var msg = Message2.findValueRequest(txid, target, want4, want6, seq);
+		var msg = Message.findValueRequest(txid, target, want4, want6, seq);
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
@@ -581,8 +581,8 @@ public class FindValueTests extends MessageTests {
 
 		assertEquals(72, bin.length);
 
-		assertEquals(Message2.Type.REQUEST, msg.getType());
-		assertEquals(Message2.Method.FIND_VALUE, msg.getMethod());
+		assertEquals(Message.Type.REQUEST, msg.getType());
+		assertEquals(Message.Method.FIND_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
@@ -591,7 +591,7 @@ public class FindValueTests extends MessageTests {
 		assertEquals(want6, msg.getBody().doesWant6());
 		assertEquals(seq, msg.getBody().getSequenceNumber());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -651,7 +651,7 @@ public class FindValueTests extends MessageTests {
 	void testResponse(String name, List<NodeInfo> nodes4, List<NodeInfo> nodes6, Value value, int expectedSize) throws Exception {
 		var nodeId = Id.random();
 		var txid = 0x76543210;
-		var msg = Message2.findValueResponse(txid, nodes4, nodes6, value);
+		var msg = Message.findValueResponse(txid, nodes4, nodes6, value);
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
@@ -659,8 +659,8 @@ public class FindValueTests extends MessageTests {
 
 		//assertEquals(expectedSize, bin.length);
 
-		assertEquals(Message2.Type.RESPONSE, msg.getType());
-		assertEquals(Message2.Method.FIND_VALUE, msg.getMethod());
+		assertEquals(Message.Type.RESPONSE, msg.getType());
+		assertEquals(Message.Method.FIND_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
@@ -677,7 +677,7 @@ public class FindValueTests extends MessageTests {
 
 		assertEquals(value, msg.getBody().getValue());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -699,7 +699,7 @@ public class FindValueTests extends MessageTests {
 			msg.setVersion(Constants.VERSION);
 
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -711,24 +711,24 @@ public class FindValueTests extends MessageTests {
 				msg.setVersion(Constants.VERSION);
 
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> FindValueRequest: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.findValueRequest(txid, target, true, false, seq);
+		var msg = Message.findValueRequest(txid, target, true, false, seq);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.findValueRequest(txid, target, true, false, seq);
+			msg = Message.findValueRequest(txid, target, true, false, seq);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> FindValueRequest: %dms,estimated: streaming ~= 570ms, *mapping ~= 780ms @ MBP-13-m1pro\n", (end - start));
@@ -750,7 +750,7 @@ public class FindValueTests extends MessageTests {
 			msg.setValue(value);
 			msg.setVersion(Constants.VERSION);
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -759,24 +759,24 @@ public class FindValueTests extends MessageTests {
 				msg.setValue(value);
 				msg.setVersion(Constants.VERSION);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> FindValueResponse: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.findValueResponse(txid, null, null, value);
+		var msg = Message.findValueResponse(txid, null, null, value);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.findValueResponse(txid, null, null, value);
+			msg = Message.findValueResponse(txid, null, null, value);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> FindValueResponse: %dms, estimated: streaming ~= 700ms, *mapping ~= 1400ms @ MBP-13-m1pro\n", (end - start));

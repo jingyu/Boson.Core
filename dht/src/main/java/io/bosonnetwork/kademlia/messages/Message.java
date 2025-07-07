@@ -50,9 +50,9 @@ import io.bosonnetwork.Version;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.utils.Json;
 
-@JsonDeserialize(using = Message2.Deserializer.class)
-@JsonSerialize(using = Message2.Serializer.class)
-public class Message2<T> {
+@JsonDeserialize(using = Message.Deserializer.class)
+@JsonSerialize(using = Message.Serializer.class)
+public class Message<T> {
 	protected static final Object ATTR_NODE_ID = new Object();
 
 	// The DHT node id of the message sender
@@ -154,7 +154,7 @@ public class Message2<T> {
 		Type getType();
 	}
 
-	protected Message2(Type type, Method method, int txid, T body, int version) {
+	protected Message(Type type, Method method, int txid, T body, int version) {
 		this.type = type;
 		this.method = method;
 		this.txid = txid;
@@ -162,7 +162,7 @@ public class Message2<T> {
 		this.version = version;
 	}
 
-	protected Message2(Type type, Method method, int txid, T body) {
+	protected Message(Type type, Method method, int txid, T body) {
 		this(type, method, txid, body, Constants.VERSION);
 	}
 
@@ -232,7 +232,7 @@ public class Message2<T> {
 		if (this == obj)
 			return true;
 
-		if (obj instanceof Message2<?> that)
+		if (obj instanceof Message<?> that)
 			return Objects.equals(id, that.id)
 					&& type == that.type
 					&& method == that.method
@@ -243,13 +243,13 @@ public class Message2<T> {
 		return false;
 	}
 
-	private static final ObjectReader cborReader = Json.cborMapper().readerFor(Message2.class);
-	private static final ObjectWriter cborWriter = Json.cborMapper().writerFor(Message2.class);
-	private static final ObjectReader jsonReader = Json.objectMapper().readerFor(Message2.class);
-	private static final ObjectWriter jsonWriter = Json.objectMapper().writerFor(Message2.class);
+	private static final ObjectReader cborReader = Json.cborMapper().readerFor(Message.class);
+	private static final ObjectWriter cborWriter = Json.cborMapper().writerFor(Message.class);
+	private static final ObjectReader jsonReader = Json.objectMapper().readerFor(Message.class);
+	private static final ObjectWriter jsonWriter = Json.objectMapper().writerFor(Message.class);
 
 	// ndodeId -Source node ID, required to correctly deserialize inbound messages
-	public static Message2<?> parse(byte[] bytes, Id nodeId) {
+	public static Message<?> parse(byte[] bytes, Id nodeId) {
 		try {
 			/*
 			return nodeId == null ?
@@ -264,12 +264,12 @@ public class Message2<T> {
 		}
 	}
 
-	public static Message2<?> parse(String json) {
+	public static Message<?> parse(String json) {
 		return parse(json, null);
 	}
 
 	// nodeId -Source node ID, required to correctly deserialize inbound messages
-	public static Message2<?> parse(String json, Id nodeId) {
+	public static Message<?> parse(String json, Id nodeId) {
 		try {
 			/*
 			return nodeId == null ?
@@ -284,7 +284,7 @@ public class Message2<T> {
 		}
 	}
 
-	public static Message2<?> parse(byte[] bytes) {
+	public static Message<?> parse(byte[] bytes) {
 		return parse(bytes, null);
 	}
 
@@ -328,72 +328,72 @@ public class Message2<T> {
 		return repr.toString();
 	}
 
-	public static Message2<Void> pingRequest(int txid) {
-		return new Message2<>(Type.REQUEST, Method.PING, txid, null);
+	public static Message<Void> pingRequest(int txid) {
+		return new Message<>(Type.REQUEST, Method.PING, txid, null);
 	}
 
-	public static Message2<Void> pingResponse(int txid) {
-		return new Message2<>(Type.RESPONSE, Method.PING, txid, null);
+	public static Message<Void> pingResponse(int txid) {
+		return new Message<>(Type.RESPONSE, Method.PING, txid, null);
 	}
 
-	public static Message2<FindNodeRequest> findNodeRequest(int txid, Id target, boolean want4, boolean want6, boolean wantToken) {
-		return new Message2<>(Type.REQUEST, Method.FIND_NODE, txid, new FindNodeRequest(target, want4, want6, wantToken));
+	public static Message<FindNodeRequest> findNodeRequest(int txid, Id target, boolean want4, boolean want6, boolean wantToken) {
+		return new Message<>(Type.REQUEST, Method.FIND_NODE, txid, new FindNodeRequest(target, want4, want6, wantToken));
 	}
 
-	public static Message2<FindNodeResponse> findNodeResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, int token) {
-		return new Message2<>(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
+	public static Message<FindNodeResponse> findNodeResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, int token) {
+		return new Message<>(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 
-	public static Message2<FindPeerRequest> findPeerRequest(int txid, Id target, boolean want4, boolean want6) {
-		return new Message2<>(Type.REQUEST, Method.FIND_PEER, txid, new FindPeerRequest(target, want4, want6));
+	public static Message<FindPeerRequest> findPeerRequest(int txid, Id target, boolean want4, boolean want6) {
+		return new Message<>(Type.REQUEST, Method.FIND_PEER, txid, new FindPeerRequest(target, want4, want6));
 	}
 
-	public static Message2<FindPeerResponse> findPeerResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, List<PeerInfo> peers) {
-		return new Message2<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
+	public static Message<FindPeerResponse> findPeerResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, List<PeerInfo> peers) {
+		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
 	}
 
-	public static Message2<AnnouncePeerRequest> announcePeerRequest(int txid, PeerInfo peer, int token) {
-		return new Message2<>(Type.REQUEST, Method.ANNOUNCE_PEER, txid, new AnnouncePeerRequest(peer, token));
+	public static Message<AnnouncePeerRequest> announcePeerRequest(int txid, PeerInfo peer, int token) {
+		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, txid, new AnnouncePeerRequest(peer, token));
 	}
 
-	public static Message2<Void> announcePeerResponse(int txid) {
-		return new Message2<>(Type.RESPONSE, Method.ANNOUNCE_PEER, txid, null);
+	public static Message<Void> announcePeerResponse(int txid) {
+		return new Message<>(Type.RESPONSE, Method.ANNOUNCE_PEER, txid, null);
 	}
 
-	public static Message2<FindValueRequest> findValueRequest(int txid, Id target, boolean want4, boolean want6, int sequenceNumber) {
-		return new Message2<>(Type.REQUEST, Method.FIND_VALUE, txid, new FindValueRequest(target, want4, want6, sequenceNumber));
+	public static Message<FindValueRequest> findValueRequest(int txid, Id target, boolean want4, boolean want6, int sequenceNumber) {
+		return new Message<>(Type.REQUEST, Method.FIND_VALUE, txid, new FindValueRequest(target, want4, want6, sequenceNumber));
 	}
 
-	public static Message2<FindValueResponse> findValueResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, Value value) {
-		return new Message2<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6, value));
+	public static Message<FindValueResponse> findValueResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, Value value) {
+		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6, value));
 	}
 
-	public static Message2<StoreValueRequest> storeValueRequest(int txid, Value value, int token, int expectedSequenceNumber) {
-		return new Message2<>(Type.REQUEST, Method.STORE_VALUE, txid, new StoreValueRequest(value, token, expectedSequenceNumber));
+	public static Message<StoreValueRequest> storeValueRequest(int txid, Value value, int token, int expectedSequenceNumber) {
+		return new Message<>(Type.REQUEST, Method.STORE_VALUE, txid, new StoreValueRequest(value, token, expectedSequenceNumber));
 	}
 
-	public static Message2<Void> storeValueResponse(int txid) {
-		return new Message2<>(Type.RESPONSE, Method.STORE_VALUE, txid, null);
+	public static Message<Void> storeValueResponse(int txid) {
+		return new Message<>(Type.RESPONSE, Method.STORE_VALUE, txid, null);
 	}
 
-	public static Message2<Error> error(Method method, int txid, int code, String message) {
-		return new Message2<>(Type.ERROR, method, txid, new Error(code, message));
+	public static Message<Error> error(Method method, int txid, int code, String message) {
+		return new Message<>(Type.ERROR, method, txid, new Error(code, message));
 	}
 
 	@SuppressWarnings("rawtypes")
-	static class Serializer extends StdSerializer<Message2> {
+	static class Serializer extends StdSerializer<Message> {
 		private static final long serialVersionUID = -5377850531790575309L;
 
 		public Serializer() {
-			this(Message2.class);
+			this(Message.class);
 		}
 
-		public Serializer(Class<Message2> vc) {
+		public Serializer(Class<Message> vc) {
 			super(vc);
 		}
 
 		@Override
-		public void serialize(Message2 value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+		public void serialize(Message value, JsonGenerator gen, SerializerProvider provider) throws IOException {
 			gen.writeStartObject();
 			gen.writeNumberField("y", value.getCompositeType());
 			gen.writeNumberField("t", value.getTxid());
@@ -405,11 +405,11 @@ public class Message2<T> {
 		}
 	}
 
-	static class Deserializer extends StdDeserializer<Message2<?>> {
+	static class Deserializer extends StdDeserializer<Message<?>> {
 		private static final long serialVersionUID = -46020275686127311L;
 
 		public Deserializer() {
-			this(Message2.class);
+			this(Message.class);
 		}
 
 		public Deserializer(Class<?> vc) {
@@ -417,9 +417,9 @@ public class Message2<T> {
 		}
 
 		@Override
-		public Message2<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JacksonException {
+		public Message<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JacksonException {
 			if (p.currentToken() != JsonToken.START_OBJECT)
-				throw ctxt.wrongTokenException(p, Message2.class, JsonToken.START_ARRAY,
+				throw ctxt.wrongTokenException(p, Message.class, JsonToken.START_ARRAY,
 						"Invalid Message: should be an object");
 
 			Type type = null;
@@ -451,7 +451,7 @@ public class Message2<T> {
 				case "q":
 				case "r":
 					if (type == null || method == null) {
-						ctxt.reportInputMismatch(Message2.class, "Not seen 'y' field before + '" + fieldName + "' field");
+						ctxt.reportInputMismatch(Message.class, "Not seen 'y' field before + '" + fieldName + "' field");
 						return null; // should never here
 					}
 
@@ -481,9 +481,9 @@ public class Message2<T> {
 			}
 
 			if (txid == 0)
-				ctxt.reportInputMismatch(Message2.class, "Missing '[t]xid' field");
+				ctxt.reportInputMismatch(Message.class, "Missing '[t]xid' field");
 
-			return new Message2<>(type, method, txid, body, version);
+			return new Message<>(type, method, txid, body, version);
 		}
 	}
 }

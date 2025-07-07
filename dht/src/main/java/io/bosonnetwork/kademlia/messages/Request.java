@@ -22,9 +22,9 @@
 
 package io.bosonnetwork.kademlia.messages;
 
-public interface Request extends Message2.Body {
+public interface Request extends Message.Body {
 	@Override
-	default Message2.Type getType() {
-		return Message2.Type.REQUEST;
+	default Message.Type getType() {
+		return Message.Type.REQUEST;
 	}
 }

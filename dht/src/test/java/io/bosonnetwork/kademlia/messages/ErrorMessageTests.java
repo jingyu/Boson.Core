@@ -38,9 +38,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 
 public class ErrorMessageTests extends MessageTests {
 	@Deprecated
@@ -73,7 +73,7 @@ public class ErrorMessageTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		assertInstanceOf(ErrorMessage.class, pm);
 		ErrorMessage m = (ErrorMessage)pm;
 
@@ -85,7 +85,7 @@ public class ErrorMessageTests extends MessageTests {
 		assertEquals(error, m.getMessage());
 
 		// Compatibility
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -115,7 +115,7 @@ public class ErrorMessageTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		assertInstanceOf(ErrorMessage.class, pm);
 		ErrorMessage m = (ErrorMessage)pm;
 
@@ -127,7 +127,7 @@ public class ErrorMessageTests extends MessageTests {
 		assertEquals(error, m.getMessage());
 
 		// Compatibility
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -151,7 +151,7 @@ public class ErrorMessageTests extends MessageTests {
 		var txid = 0xF7654321;
 		var code = 0x87654321;
 
-		var msg = Message2.error(Message2.Method.PING, txid, code, errorMessage);
+		var msg = Message.error(Message.Method.PING, txid, code, errorMessage);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
 
@@ -163,15 +163,15 @@ public class ErrorMessageTests extends MessageTests {
 		var size = errorMessage.getBytes().length + 33 + (errorMessage.getBytes().length > 0x17 ? 1 : 0);
 		assertEquals(size, bin.length);
 
-		assertEquals(Message2.Type.ERROR, msg.getType());
-		assertEquals(Message2.Method.PING, msg.getMethod());
+		assertEquals(Message.Type.ERROR, msg.getType());
+		assertEquals(Message.Method.PING, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
 		assertEquals(code, msg.getBody().getCode());
 		assertEquals(errorMessage, msg.getBody().getMessage());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -189,7 +189,7 @@ public class ErrorMessageTests extends MessageTests {
 			msg.setId(nodeId);
 			msg.setVersion(Constants.VERSION);
 			byte[] bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -197,24 +197,24 @@ public class ErrorMessageTests extends MessageTests {
 				msg.setId(nodeId);
 				msg.setVersion(Constants.VERSION);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> Error: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.error(Message2.Method.PING, txid, code, errorMessage);
+		var msg = Message.error(Message.Method.PING, txid, code, errorMessage);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			var msg2 = Message2.error(Message2.Method.PING, txid, code, errorMessage);
+			var msg2 = Message.error(Message.Method.PING, txid, code, errorMessage);
 			msg2.setId(nodeId);
 			bin = msg2.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> Error: %dms, estimated: streaming ~= 550ms, *mapping ~= 550ms @ MBP-13-m1pro\n", (end - start));

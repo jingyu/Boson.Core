@@ -28,10 +28,10 @@ import java.io.OutputStream;
 /**
  * @hidden
  */
-public class PartialMessage extends Message {
+public class PartialMessage extends OldMessage {
 	public static final PartialMessage BLANK = new PartialMessage();
 
-	private PartialMessage(Message msg) {
+	private PartialMessage(OldMessage msg) {
 		super(msg.getType(), msg.getMethod(), msg.getTxid());
 		if (msg.getId() != null)
 			setId(msg.getId());
@@ -41,7 +41,7 @@ public class PartialMessage extends Message {
 		super(Type.ERROR, Method.UNKNOWN, 0);
 	}
 
-	public static PartialMessage of(Message msg) {
+	public static PartialMessage of(OldMessage msg) {
 		return msg == null ? BLANK : new PartialMessage(msg);
 	}
 

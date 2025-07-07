@@ -34,7 +34,7 @@ import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 /**
  * @hidden
  */
-public class ErrorMessage extends Message {
+public class ErrorMessage extends OldMessage {
 	private int code;
 	private String message;
 

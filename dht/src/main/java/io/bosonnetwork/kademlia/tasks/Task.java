@@ -41,7 +41,7 @@ import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.RPCCallListener;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 
 /**
  * @hidden
@@ -283,11 +283,11 @@ public abstract class Task implements Comparable<Task> {
 		return inFlight.size() < Constants.MAX_CONCURRENT_TASK_REQUESTS;
 	}
 
-	protected boolean sendCall(NodeInfo node, Message request) {
+	protected boolean sendCall(NodeInfo node, OldMessage request) {
 		return sendCall(node, request, null);
 	}
 
-	protected boolean sendCall(NodeInfo node, Message request, Consumer<RPCCall> modifyCallBeforeSubmit) {
+	protected boolean sendCall(NodeInfo node, OldMessage request, Consumer<RPCCall> modifyCallBeforeSubmit) {
 		if (!canDoRequest())
 			return false;
 
@@ -311,7 +311,7 @@ public abstract class Task implements Comparable<Task> {
 	protected void callSent(RPCCall call) {
 	}
 
-	protected void callResponsed(RPCCall call, Message response) {
+	protected void callResponsed(RPCCall call, OldMessage response) {
 	}
 
 	protected void callError(RPCCall call) {

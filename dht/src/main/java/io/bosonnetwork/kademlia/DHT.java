@@ -69,7 +69,7 @@ import io.bosonnetwork.kademlia.messages.deprecated.FindPeerResponse;
 import io.bosonnetwork.kademlia.messages.deprecated.FindValueRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.FindValueResponse;
 import io.bosonnetwork.kademlia.messages.deprecated.LookupResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.messages.deprecated.PingRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.PingResponse;
 import io.bosonnetwork.kademlia.messages.deprecated.StoreValueRequest;
@@ -535,7 +535,7 @@ public class DHT {
 		return running;
 	}
 
-	protected void onMessage(Message msg) {
+	protected void onMessage(OldMessage msg) {
 		if (!isRunning())
 			return;
 
@@ -560,7 +560,7 @@ public class DHT {
 		received(msg);
 	}
 
-	private void onRequest(Message msg) {
+	private void onRequest(OldMessage msg) {
 		switch (msg.getMethod()) {
 		case PING:
 			onPing((PingRequest) msg);
@@ -736,7 +736,7 @@ public class DHT {
 		}
 	}
 
-	private void onResponse(Message r) {
+	private void onResponse(OldMessage r) {
 		// Nothing to do
 	}
 
@@ -767,13 +767,13 @@ public class DHT {
 		routingTable.onSend(nodeId);
 	}
 
-	private void sendError(Message q, int code, String msg) {
+	private void sendError(OldMessage q, int code, String msg) {
 		ErrorMessage em = new ErrorMessage(q.getMethod(), q.getTxid(), code, msg);
 		em.setRemote(q.getId(), q.getOrigin());
 		server.sendMessage(em);
 	}
 
-	void received(Message msg) {
+	void received(OldMessage msg) {
 		InetSocketAddress addr = msg.getOrigin();
 		boolean bogon = Constants.DEVELOPMENT_ENVIRONMENT ?
 				!AddressUtils.isAnyUnicast(addr.getAddress()) : AddressUtils.isBogon(addr);

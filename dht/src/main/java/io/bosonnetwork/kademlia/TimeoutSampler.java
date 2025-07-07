@@ -28,7 +28,7 @@ import static io.bosonnetwork.utils.Functional.tap;
 import java.util.Arrays;
 import java.util.Formatter;
 
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 
 /**
  * Class to track and analyze round-trip times (RTTs) of RPC calls using a histogram
@@ -63,7 +63,7 @@ public class TimeoutSampler {
 
 	private final RPCCallListener listener = new RPCCallListener() {
 		@Override
-		public void onResponse(RPCCall call, Message msg) {
+		public void onResponse(RPCCall call, OldMessage msg) {
 			updateAndRecalc(call.getRTT());
 		}
 	};

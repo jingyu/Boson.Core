@@ -45,9 +45,9 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.messages.deprecated.FindNodeRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.FindNodeResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 
 public class FindNodeTests extends MessageTests {
 	@Deprecated
@@ -84,7 +84,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -100,7 +100,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -138,7 +138,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -154,7 +154,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -190,7 +190,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -205,7 +205,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -242,7 +242,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -257,7 +257,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -293,7 +293,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -308,7 +308,7 @@ public class FindNodeTests extends MessageTests {
 		assertFalse(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -345,7 +345,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeRequest.class, pm);
 		FindNodeRequest m = (FindNodeRequest)pm;
@@ -360,7 +360,7 @@ public class FindNodeTests extends MessageTests {
 		assertTrue(m.doesWantToken());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getType().value(), msg2.getType().value());
 		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
@@ -436,7 +436,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -454,7 +454,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -494,7 +494,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -512,7 +512,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes4.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -551,7 +551,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -569,7 +569,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -609,7 +609,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -627,7 +627,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -673,7 +673,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -694,7 +694,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -741,7 +741,7 @@ public class FindNodeTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(FindNodeResponse.class, pm);
 		FindNodeResponse m = (FindNodeResponse)pm;
@@ -762,7 +762,7 @@ public class FindNodeTests extends MessageTests {
 		assertArrayEquals(nodes6.toArray(), nodes.toArray());
 
 		// Compatibility
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.FindNodeResponse>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getId(), msg2.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
@@ -795,7 +795,7 @@ public class FindNodeTests extends MessageTests {
 		var nodeId = Id.random();
 		var target = Id.random();
 		var txid = 0x76543210;
-		var msg = Message2.findNodeRequest(txid, target, want4, want6, wantToken);
+		var msg = Message.findNodeRequest(txid, target, want4, want6, wantToken);
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
@@ -803,8 +803,8 @@ public class FindNodeTests extends MessageTests {
 
 		assertEquals(63, bin.length);
 
-		assertEquals(Message2.Type.REQUEST, msg.getType());
-		assertEquals(Message2.Method.FIND_NODE, msg.getMethod());
+		assertEquals(Message.Type.REQUEST, msg.getType());
+		assertEquals(Message.Method.FIND_NODE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
@@ -813,7 +813,7 @@ public class FindNodeTests extends MessageTests {
 		assertEquals(want6, msg.getBody().doesWant6());
 		assertEquals(wantToken, msg.getBody().doesWantToken());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -863,7 +863,7 @@ public class FindNodeTests extends MessageTests {
 		var nodeId = Id.random();
 		var txid = 0x76543210;
 
-		var msg = Message2.findNodeResponse(txid, nodes4, nodes6, token);
+		var msg = Message.findNodeResponse(txid, nodes4, nodes6, token);
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
@@ -871,8 +871,8 @@ public class FindNodeTests extends MessageTests {
 
 		assertEquals(expectedSize, bin.length);
 
-		assertEquals(Message2.Type.RESPONSE, msg.getType());
-		assertEquals(Message2.Method.FIND_NODE, msg.getMethod());
+		assertEquals(Message.Type.RESPONSE, msg.getType());
+		assertEquals(Message.Method.FIND_NODE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
@@ -889,7 +889,7 @@ public class FindNodeTests extends MessageTests {
 
 		assertEquals(token, msg.getBody().getToken());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -911,7 +911,7 @@ public class FindNodeTests extends MessageTests {
 			msg.setVersion(Constants.VERSION);
 
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -923,24 +923,24 @@ public class FindNodeTests extends MessageTests {
 				msg.setVersion(Constants.VERSION);
 
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> FindNodeRequest: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.findNodeRequest(txid, target, true, false, true);
+		var msg = Message.findNodeRequest(txid, target, true, false, true);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.findNodeRequest(txid, target, true, false, true);
+			msg = Message.findNodeRequest(txid, target, true, false, true);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> FindNodeRequest: %dms, estimated: streaming ~= 560ms, *mapping ~= 900ms @ MBP-13-m1pro\n", (end - start));
@@ -985,7 +985,7 @@ public class FindNodeTests extends MessageTests {
 			msg.setToken(token);
 			msg.setVersion(Constants.VERSION);
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -996,24 +996,24 @@ public class FindNodeTests extends MessageTests {
 				msg.setToken(token);
 				msg.setVersion(Constants.VERSION);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> FindNodeResponse: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.findNodeResponse(txid, nodes4, nodes6, token);
+		var msg = Message.findNodeResponse(txid, nodes4, nodes6, token);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.findNodeResponse(txid, nodes4, nodes6, token);
+			msg = Message.findNodeResponse(txid, nodes4, nodes6, token);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> FindNodeResponse: %dms, estimated: streaming ~= 2500ms, *mapping ~= 2600ms @ MBP-13-m1pro\n", (end - start));

@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia;
 
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 
 /**
  * Class which objects should derive from, if they want to know the result of a call.
@@ -46,7 +46,7 @@ public interface RPCCallListener {
 	 * @param c the RPC call
 	 * @param response the response
 	 */
-	public default void onResponse (RPCCall c, Message response) {}
+	public default void onResponse (RPCCall c, OldMessage response) {}
 
 
 	/**

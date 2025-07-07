@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 
 /**
  * A KBucket is just a list of KBucketEntry objects.
@@ -515,8 +515,8 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	// TODO: CHECKME!!!
-	void _notifyOfResponse(Message msg) {
-		if (msg.getType() != Message.Type.RESPONSE || msg.getAssociatedCall() == null)
+	void _notifyOfResponse(OldMessage msg) {
+		if (msg.getType() != OldMessage.Type.RESPONSE || msg.getAssociatedCall() == null)
 			return;
 
 		List<KBucketEntry> entriesRef = getEntries();

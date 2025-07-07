@@ -42,7 +42,7 @@ import io.bosonnetwork.NodeInfo;
 /**
  * @hidden
  */
-public abstract class LookupResponse extends Message {
+public abstract class LookupResponse extends OldMessage {
 	private List<NodeInfo> nodes4;
 	private List<NodeInfo> nodes6;
 

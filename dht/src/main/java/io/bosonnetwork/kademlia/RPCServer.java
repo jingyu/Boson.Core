@@ -60,7 +60,7 @@ import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.messages.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.messages.deprecated.MessageException;
 import io.bosonnetwork.utils.AddressUtils;
 
@@ -91,7 +91,7 @@ public class RPCServer implements Selectable {
 	private AtomicInteger callQueueGuard;
 	private Map<Integer, RPCCall> calls;
 	private Queue<RPCCall> callQueue;
-	private Queue<Message> pipeline;
+	private Queue<OldMessage> pipeline;
 
 	private Throttle inboundThrottle;
 	private Throttle outboundThrottle;
@@ -248,7 +248,7 @@ public class RPCServer implements Selectable {
 			}
 		}
 
-		Stream.of(calls.values().stream(), callQueue.stream(), pipeline.stream().map(Message::getAssociatedCall)
+		Stream.of(calls.values().stream(), callQueue.stream(), pipeline.stream().map(OldMessage::getAssociatedCall)
 				.filter(Objects::nonNull)).flatMap(s -> s).forEach(RPCCall::cancel);
 		pipeline.clear();
 
@@ -334,7 +334,7 @@ public class RPCServer implements Selectable {
 		}
 
 		@Override
-		public void onResponse(RPCCall call, Message msg) {
+		public void onResponse(RPCCall call, OldMessage msg) {
 			if(call.knownReachableAtCreationTime())
 				verifiedEntryLossrate.updateAverage(0.0);
 			else
@@ -343,7 +343,7 @@ public class RPCServer implements Selectable {
 	};
 
 	private void dispatchCall(RPCCall call) {
-		Message msg = call.getRequest();
+		OldMessage msg = call.getRequest();
 		assert(msg.getRemoteAddress() != null);
 
 		call.addListener(callListener);
@@ -364,12 +364,12 @@ public class RPCServer implements Selectable {
 		fillPipeline(msg);
 	}
 
-	public void sendMessage(Message msg) {
+	public void sendMessage(OldMessage msg) {
 		checkArgument(msg.getRemoteAddress() != null, "message destination can not be null");
 		fillPipeline(msg);
 	}
 
-	private void fillPipeline(Message msg) {
+	private void fillPipeline(OldMessage msg) {
 		if(msg.getId() == null)
 			msg.setId(getNode().getId());
 
@@ -393,7 +393,7 @@ public class RPCServer implements Selectable {
 
 		// we are now the exclusive writer for this socket
 		while(true) {
-			Message msg = pipeline.poll();
+			OldMessage msg = pipeline.poll();
 			if(msg == null)
 				break;
 
@@ -473,7 +473,7 @@ public class RPCServer implements Selectable {
 	}
 
 	// The package format: [32 bytes id][[16 bytes mac][encrypted message]]
-	private static final int MIN_PACKET_SIZE = Message.MIN_SIZE + Id.BYTES + CryptoBox.MAC_BYTES;
+	private static final int MIN_PACKET_SIZE = OldMessage.MIN_SIZE + Id.BYTES + CryptoBox.MAC_BYTES;
 
 	private void processPackets() throws IOException {
 		ByteBuffer readBuffer = RPCServer.readBuffer.get();
@@ -515,7 +515,7 @@ public class RPCServer implements Selectable {
 	}
 
 	private void handlePacket(byte[] packet, InetSocketAddress sa) {
-		Message msg = null;
+		OldMessage msg = null;
 		Id sender = Id.of(packet, 0);
 
 		Blacklist blacklist = getNode().getBlacklist();
@@ -531,7 +531,7 @@ public class RPCServer implements Selectable {
 		try {
 			byte[] encryptedMsg = Arrays.copyOfRange(packet, Id.BYTES, packet.length);
 			byte[] decryptedMsg = getNode().decrypt(sender, encryptedMsg);
-			msg = Message.parse(decryptedMsg);
+			msg = OldMessage.parse(decryptedMsg);
 			msg.setId(sender);
 		} catch (MessageException e) {
 			log.warn("Got a wrong packet from {}, ignored.", AddressUtils.toString(sa));
@@ -569,7 +569,7 @@ public class RPCServer implements Selectable {
 		*/
 
 		// just respond to incoming requests, no need to match them to pending requests
-		if(msg.getType() == Message.Type.REQUEST) {
+		if(msg.getType() == OldMessage.Type.REQUEST) {
 			handleMessage(msg);
 			return;
 		}
@@ -602,10 +602,10 @@ public class RPCServer implements Selectable {
 			log.warn("Transaction id matched, socket address did not, ignoring message, request: {} -> response: {}, version: {}",
 					call.getRequest().getRemoteAddress(), msg.getOrigin(), msg.getReadableVersion());
 
-			if(msg.getType() == Message.Type.RESPONSE && dht.getType() == Network.IPv6) {
+			if(msg.getType() == OldMessage.Type.RESPONSE && dht.getType() == Network.IPv6) {
 				// this is more likely due to incorrect binding implementation in ipv6. notify peers about that
 				// don't bother with ipv4, there are too many complications
-				Message err = new ErrorMessage(msg.getMethod(), msg.getTxid(), ErrorCode.ProtocolError.value(),
+				OldMessage err = new ErrorMessage(msg.getMethod(), msg.getTxid(), ErrorCode.ProtocolError.value(),
 						"A request was sent to " + call.getRequest().getRemoteAddress() +
 						" and a response with matching transaction id was received from " + msg.getOrigin() +
 						" . Multihomed nodes should ensure that sockets are properly bound and responses are sent with the correct source socket address. See BEPs 32 and 45.");
@@ -623,8 +623,8 @@ public class RPCServer implements Selectable {
 		// b) didn't find a call
 		// c) up-time is high enough that it's not a stray from a restart
 		// did not expect this response
-		if (msg.getType() == Message.Type.RESPONSE && Duration.between(startTime, Instant.now()).getSeconds() > 2 * 60) {
-			log.warn("Cannot find RPC call for {} {}", msg.getType() == Message.Type.RESPONSE
+		if (msg.getType() == OldMessage.Type.RESPONSE && Duration.between(startTime, Instant.now()).getSeconds() > 2 * 60) {
+			log.warn("Cannot find RPC call for {} {}", msg.getType() == OldMessage.Type.RESPONSE
 					? "response" : "error", msg.getTxid());
 			ErrorMessage err = new ErrorMessage(msg.getMethod(), msg.getTxid(), ErrorCode.ProtocolError.value(),
 					"Received a response message whose transaction ID did not match a pending request or transaction expired");
@@ -633,7 +633,7 @@ public class RPCServer implements Selectable {
 			return;
 		}
 
-		if (msg.getType() == Message.Type.ERROR) {
+		if (msg.getType() == OldMessage.Type.ERROR) {
 			handleMessage(msg);
 			return;
 		}
@@ -641,7 +641,7 @@ public class RPCServer implements Selectable {
 		log.debug("Ignored message: {}", msg);
 	}
 
-	public void handleMessage(Message msg) {
+	public void handleMessage(OldMessage msg) {
 		dht.onMessage(msg);
 	}
 

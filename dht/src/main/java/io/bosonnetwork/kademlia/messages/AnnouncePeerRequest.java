@@ -149,7 +149,7 @@ public class AnnouncePeerRequest implements Request {
 			String alternativeURL = null;
 			byte[] signature = null;
 
-			Id nodeId = (Id) ctxt.getAttribute(Message2.ATTR_NODE_ID);
+			Id nodeId = (Id) ctxt.getAttribute(Message.ATTR_NODE_ID);
 			if (nodeId == null)
 				ctxt.reportInputMismatch(AnnouncePeerRequest.class, "Missing nodeId attribute in the deserialization context");
 

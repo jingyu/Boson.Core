@@ -35,7 +35,7 @@ import io.bosonnetwork.Id;
 /**
  * @hidden
  */
-public abstract class LookupRequest extends Message {
+public abstract class LookupRequest extends OldMessage {
 	private Id target;
 	private boolean want4;
 	private boolean want6;

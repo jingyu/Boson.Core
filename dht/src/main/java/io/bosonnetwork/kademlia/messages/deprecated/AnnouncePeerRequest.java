@@ -39,7 +39,7 @@ import io.bosonnetwork.utils.Hex;
 /**
  * @hidden
  */
-public class AnnouncePeerRequest extends Message {
+public class AnnouncePeerRequest extends OldMessage {
 	private int token;
 	private Id peerId;
 	private Id origin; // Optional, only for the delegated peers

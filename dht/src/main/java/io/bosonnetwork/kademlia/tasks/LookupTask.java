@@ -34,7 +34,7 @@ import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.messages.deprecated.LookupResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**
@@ -121,7 +121,7 @@ public abstract class LookupTask extends Task {
 	}
 
 	@Override
-	protected void callResponsed(RPCCall call, Message response) {
+	protected void callResponsed(RPCCall call, OldMessage response) {
 		CandidateNode cn = removeCandidate(call.getTargetId());
 		if (cn != null) {
 			cn.setReplied();

@@ -37,7 +37,7 @@ import io.bosonnetwork.utils.Hex;
 /**
  * @hidden
  */
-public class StoreValueRequest extends Message {
+public class StoreValueRequest extends OldMessage {
 	private int token;
 	private Id publicKey;
 	private Id recipient;

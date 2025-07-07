@@ -30,7 +30,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({"c", "m"})
-public class Error implements Message2.Body {
+public class Error implements Message.Body {
 	@JsonProperty("c")
 	private final int code;
 	@JsonProperty("m")
@@ -45,8 +45,8 @@ public class Error implements Message2.Body {
 	}
 
 	@Override
-	public Message2.Type getType() {
-		return Message2.Type.ERROR;
+	public Message.Type getType() {
+		return Message.Type.ERROR;
 	}
 
 	public int getCode() {

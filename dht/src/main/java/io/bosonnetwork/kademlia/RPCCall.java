@@ -32,15 +32,15 @@ import java.util.concurrent.TimeUnit;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.tasks.CandidateNode;
 
 /**
  * @hidden
  */
 public class RPCCall {
-	private final Message request;
-	private Message response;
+	private final OldMessage request;
+	private OldMessage response;
 
 	private final NodeInfo target;
 	private boolean sourceWasKnownReachable;
@@ -67,9 +67,9 @@ public class RPCCall {
 		RESPONDED
 	}
 
-	public RPCCall(NodeInfo target, Message request) {
+	public RPCCall(NodeInfo target, OldMessage request) {
 		assert(request != null) : "null request";
-		assert(request.getType() == Message.Type.REQUEST) : "Invalid request message";
+		assert(request.getType() == OldMessage.Type.REQUEST) : "Invalid request message";
 
 		this.target = target;
 		this.request = request;
@@ -120,11 +120,11 @@ public class RPCCall {
 		return response.getOrigin().equals(request.getRemoteAddress());
 	}
 
-	public Message getRequest() {
+	public OldMessage getRequest() {
 		return request;
 	}
 
-	public Message getResponse() {
+	public OldMessage getResponse() {
 		return response;
 	}
 
@@ -197,10 +197,10 @@ public class RPCCall {
 				expectedRTT * 1000 + smear, TimeUnit.MICROSECONDS);
 	}
 
-	void responsed(Message response) {
+	void responsed(OldMessage response) {
 		assert(response != null);
-		assert(response.getType() == Message.Type.RESPONSE ||
-				response.getType() == Message.Type.ERROR) : "Invalid request message";
+		assert(response.getType() == OldMessage.Type.RESPONSE ||
+				response.getType() == OldMessage.Type.ERROR) : "Invalid request message";
 
 		if (timeoutTimer != null)
 			timeoutTimer.cancel(false);

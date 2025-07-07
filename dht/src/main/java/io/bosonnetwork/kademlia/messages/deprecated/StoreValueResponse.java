@@ -26,7 +26,7 @@ package io.bosonnetwork.kademlia.messages.deprecated;
 /**
  * @hidden
  */
-public class StoreValueResponse extends Message {
+public class StoreValueResponse extends OldMessage {
 	public StoreValueResponse(int txid) {
 		super(Type.RESPONSE, Method.STORE_VALUE, txid);
 	}

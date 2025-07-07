@@ -51,7 +51,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.messages.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.messages.deprecated.MessageException;
 import io.bosonnetwork.kademlia.messages.deprecated.PingRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.PingResponse;
@@ -69,7 +69,7 @@ public class RPCServerTests {
 	private final static InetSocketAddress sa1 = new InetSocketAddress(localAddr, 8888);
 	private final static InetSocketAddress sa2 = new InetSocketAddress(localAddr, 9999);
 
-	static class InvalidMessage extends Message {
+	static class InvalidMessage extends OldMessage {
 		public InvalidMessage() {
 			super(Type.REQUEST, Method.UNKNOWN);
 		}
@@ -110,7 +110,7 @@ public class RPCServerTests {
 		}
 
 		@Override
-		public void onMessage(Message msg) {
+		public void onMessage(OldMessage msg) {
 		}
 
 		@Override
@@ -227,9 +227,9 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
-					Message response;
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
+					OldMessage response;
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPings.incrementAndGet();
@@ -246,7 +246,7 @@ public class RPCServerTests {
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPingResponses.incrementAndGet();
@@ -256,7 +256,7 @@ public class RPCServerTests {
 						System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
 						break;
 					}
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					System.out.format("%s: error - should never heppen - %s\n", node.getId(), msg);
 				} else {
 					System.out.format("%s: timeout - should never heppen - %s\n", node.getId(), msg);
@@ -273,7 +273,7 @@ public class RPCServerTests {
 			@Override
 			public void run() {
 				for (int i = 0; i < Random.random().nextInt(16, 32); i++) {
-					Message msg = new PingRequest();
+					OldMessage msg = new PingRequest();
 					try {
 						Thread.sleep(Random.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
@@ -314,16 +314,16 @@ public class RPCServerTests {
 		assertEquals(node2.dht.sentPingResponses.get(), node1.dht.receivedPingResponses.get());
 
 		assertEquals(node1.testRoutine.sentPings + node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.receivedPingResponses.get(), node1.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.RESPONSE));
+		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.receivedPingResponses.get(), node1.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
 
 		assertEquals(node2.testRoutine.sentPings + node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getTotalReceivedMessages());
-		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node2.dht.receivedPingResponses.get(), node2.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.RESPONSE));
+		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node2.dht.receivedPingResponses.get(), node2.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
 
 		assertEquals(node1.rpcServer.getNumberOfSentMessages(), node1.rpcServer.getStats().getTotalSentMessages());
 		assertEquals(node1.rpcServer.getNumberOfReceivedMessages(), node1.rpcServer.getStats().getTotalReceivedMessages());
@@ -342,12 +342,12 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
 					System.out.format("%s: unexpected request - should never heppen - %s\n", node.getId(), msg);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					receivedErrors.incrementAndGet();
 				} else {
 					System.out.format("%s: unknown - should never heppen - %s\n", node.getId(), msg);
@@ -364,7 +364,7 @@ public class RPCServerTests {
 			@Override
 			public void run() {
 				for (int i = 0; i < Random.random().nextInt(16, 32); i++) {
-					Message msg = new InvalidMessage();
+					OldMessage msg = new InvalidMessage();
 					try {
 						Thread.sleep(Random.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
@@ -405,11 +405,11 @@ public class RPCServerTests {
 		assertEquals(node2.testRoutine.sentPings, node2.dht.timeoutMessages.get());
 
 		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(Message.Method.UNKNOWN, Message.Type.REQUEST));
+		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(OldMessage.Method.UNKNOWN, OldMessage.Type.REQUEST));
 		assertEquals(node2.testRoutine.sentPings, node1.rpcServer.getStats().getDroppedPackets());
 
 		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(Message.Method.UNKNOWN, Message.Type.REQUEST));
+		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(OldMessage.Method.UNKNOWN, OldMessage.Type.REQUEST));
 		assertEquals(node1.testRoutine.sentPings, node2.rpcServer.getStats().getDroppedPackets());
 
 		assertEquals(node1.rpcServer.getNumberOfSentMessages(), node1.rpcServer.getStats().getTotalSentMessages());
@@ -429,9 +429,9 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
-					Message response;
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
+					OldMessage response;
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPings.incrementAndGet();
@@ -448,7 +448,7 @@ public class RPCServerTests {
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					switch (msg.getMethod()) {
 					case PING:
 						System.out.format("%s: unexpected ping response - should never heppen - %s\n", node.getId(), msg);
@@ -459,7 +459,7 @@ public class RPCServerTests {
 						System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
 						break;
 					}
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					System.out.format("%s: error - should never heppen - %s\n", node.getId(), msg);
 				} else {
 					System.out.format("%s: unknown - should never heppen - %s\n", node.getId(), msg);
@@ -476,7 +476,7 @@ public class RPCServerTests {
 			@Override
 			public void run() {
 				for (int i = 0; i < Random.random().nextInt(16, 32); i++) {
-					Message msg = new PingRequest();
+					OldMessage msg = new PingRequest();
 					try {
 						Thread.sleep(Random.random().nextInt(100, 500));
 					} catch (InterruptedException e) {
@@ -517,17 +517,17 @@ public class RPCServerTests {
 		assertEquals(node2.testRoutine.sentPings, node2.dht.timeoutMessages.get());
 
 		assertEquals(node1.testRoutine.sentPings + node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.timeoutMessages.get(), node1.rpcServer.getStats().getTimeoutMessages(Message.Method.PING));
+		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.timeoutMessages.get(), node1.rpcServer.getStats().getTimeoutMessages(OldMessage.Method.PING));
 		assertEquals(node1.dht.timeoutMessages.get(), node1.rpcServer.getStats().getTotalTimeoutMessages());
 
 		assertEquals(node2.testRoutine.sentPings + node2.dht.sentPingResponses.get() , node2.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node2.dht.timeoutMessages.get(), node2.rpcServer.getStats().getTimeoutMessages(Message.Method.PING));
+		assertEquals(node2.testRoutine.sentPings, node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node2.dht.timeoutMessages.get(), node2.rpcServer.getStats().getTimeoutMessages(OldMessage.Method.PING));
 		assertEquals(node2.dht.timeoutMessages.get(), node2.rpcServer.getStats().getTotalTimeoutMessages());
 
 		assertEquals(node1.rpcServer.getNumberOfSentMessages(), node1.rpcServer.getStats().getTotalSentMessages());
@@ -547,9 +547,9 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
-					Message response;
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
+					OldMessage response;
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPings.incrementAndGet();
@@ -566,7 +566,7 @@ public class RPCServerTests {
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPingResponses.incrementAndGet();
@@ -576,7 +576,7 @@ public class RPCServerTests {
 						System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
 						break;
 					}
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					System.out.format("%s: error - should never heppen - %s\n", node.getId(), msg);
 				} else {
 					System.out.format("%s: unknown - should never heppen - %s\n", node.getId(), msg);
@@ -593,7 +593,7 @@ public class RPCServerTests {
 			@Override
 			public void run() {
 				for (int i = 0; i < Random.random().nextInt(20, 32); i++) {
-					Message msg = new PingRequest();
+					OldMessage msg = new PingRequest();
 					RPCCall call = new RPCCall(node.peer.getInfo(), msg);
 					msg.setRemote(node.peer.getId(), node.peer.getAddress());
 					node.rpcServer.sendCall(call);
@@ -625,14 +625,14 @@ public class RPCServerTests {
 		assertEquals(node2.dht.sentPingResponses.get(), node1.dht.receivedPingResponses.get());
 
 		assertEquals(node1.testRoutine.sentPings + node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getTotalSentMessages());
-		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node1.dht.receivedPingResponses.get(), node1.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.RESPONSE));
+		assertEquals(node1.testRoutine.sentPings, node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.sentPingResponses.get(), node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node1.dht.receivedPings.get(), node1.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node1.dht.receivedPingResponses.get(), node1.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
 
-		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE));
-		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.REQUEST));
-		assertEquals(node2.dht.receivedPingResponses.get(), node2.rpcServer.getStats().getReceivedMessages(Message.Method.PING, Message.Type.RESPONSE));
+		assertEquals(node2.dht.sentPingResponses.get(), node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
+		assertEquals(node2.dht.receivedPings.get(), node2.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.REQUEST));
+		assertEquals(node2.dht.receivedPingResponses.get(), node2.rpcServer.getStats().getReceivedMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE));
 
 		assertEquals(node1.rpcServer.getNumberOfSentMessages(), node1.rpcServer.getStats().getTotalSentMessages());
 		assertEquals(node1.rpcServer.getNumberOfReceivedMessages(), node1.rpcServer.getStats().getTotalReceivedMessages());
@@ -651,9 +651,9 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
-					Message response;
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
+					OldMessage response;
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPings.incrementAndGet();
@@ -670,7 +670,7 @@ public class RPCServerTests {
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPingResponses.incrementAndGet();
@@ -680,7 +680,7 @@ public class RPCServerTests {
 						System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
 						break;
 					}
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					System.out.format("%s: error - should never heppen - %s\n", node.getId(), msg);
 				} else {
 					System.out.format("%s: unknown - should never heppen - %s\n", node.getId(), msg);
@@ -699,7 +699,7 @@ public class RPCServerTests {
 				ByteBuffer writeBuffer = ByteBuffer.allocate(2048);
 				// oughly send messages through the raw socket
 				for (int i = 0; i < Random.random().nextInt(20, 32); i++) {
-					Message msg = new PingRequest();
+					OldMessage msg = new PingRequest();
 					msg.setId(node.getId());
 					msg.setRemote(node.peer.getId(), node.peer.getAddress());
 					msg.setTxid(i+1);
@@ -743,8 +743,8 @@ public class RPCServerTests {
 		assertTrue(node1.testRoutine.sentPings > node2.dht.receivedPings.get());
 		assertTrue(node2.testRoutine.sentPings > node1.dht.receivedPings.get());
 
-		assertEquals(node1.testRoutine.sentPings + node1.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE), node2.dht.receivedPings.get() + node2.rpcServer.getStats().getDroppedPackets());
-		assertEquals(node2.testRoutine.sentPings + node2.rpcServer.getStats().getSentMessages(Message.Method.PING, Message.Type.RESPONSE), node1.dht.receivedPings.get() + node1.rpcServer.getStats().getDroppedPackets());
+		assertEquals(node1.testRoutine.sentPings + node1.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE), node2.dht.receivedPings.get() + node2.rpcServer.getStats().getDroppedPackets());
+		assertEquals(node2.testRoutine.sentPings + node2.rpcServer.getStats().getSentMessages(OldMessage.Method.PING, OldMessage.Type.RESPONSE), node1.dht.receivedPings.get() + node1.rpcServer.getStats().getDroppedPackets());
 
 		assertEquals(node1.rpcServer.getNumberOfSentMessages(), node1.rpcServer.getStats().getTotalSentMessages());
 		assertEquals(node1.rpcServer.getNumberOfReceivedMessages(), node1.rpcServer.getStats().getTotalReceivedMessages());
@@ -763,9 +763,9 @@ public class RPCServerTests {
 
 		class MyDHT  extends TestDHT {
 			@Override
-			public void onMessage(Message msg) {
-				if (msg.getType() == Message.Type.REQUEST) {
-					Message response;
+			public void onMessage(OldMessage msg) {
+				if (msg.getType() == OldMessage.Type.REQUEST) {
+					OldMessage response;
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPings.incrementAndGet();
@@ -787,7 +787,7 @@ public class RPCServerTests {
 					response.setRemote(msg.getId(), msg.getOrigin());
 					sentPingResponses.incrementAndGet();
 					node.getScheduler().schedule(() -> node.rpcServer.sendMessage(response), delay, TimeUnit.MILLISECONDS);
-				} else if (msg.getType() == Message.Type.RESPONSE) {
+				} else if (msg.getType() == OldMessage.Type.RESPONSE) {
 					switch (msg.getMethod()) {
 					case PING:
 						receivedPingResponses.incrementAndGet();
@@ -797,7 +797,7 @@ public class RPCServerTests {
 						System.out.format("%s: unexpected response - should never heppen - %s\n", node.getId(), msg);
 						break;
 					}
-				} else if (msg.getType() == Message.Type.ERROR) {
+				} else if (msg.getType() == OldMessage.Type.ERROR) {
 					System.out.format("%s: error - should never heppen - %s\n", node.getId(), msg);
 				} else {
 					System.out.format("%s: unknown - should never heppen - %s\n", node.getId(), msg);
@@ -814,7 +814,7 @@ public class RPCServerTests {
 			@Override
 			public void run() {
 				for (int i = 0; i < Random.random().nextInt(256, 512); i++) {
-					Message msg = new PingRequest();
+					OldMessage msg = new PingRequest();
 					try {
 						Thread.sleep(Random.random().nextInt(200, 500));
 					} catch (InterruptedException e) {

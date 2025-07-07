@@ -42,9 +42,9 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 import io.bosonnetwork.kademlia.messages.deprecated.StoreValueRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.StoreValueResponse;
 
@@ -140,7 +140,7 @@ public class StoreValueTests extends MessageTests {
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(nodeId);
 		assertInstanceOf(StoreValueRequest.class, pm);
 		StoreValueRequest m = (StoreValueRequest)pm;
@@ -155,7 +155,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -198,7 +198,7 @@ public class StoreValueTests extends MessageTests {
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(nodeId);
 		assertInstanceOf(StoreValueRequest.class, pm);
 		StoreValueRequest m = (StoreValueRequest)pm;
@@ -214,7 +214,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -258,7 +258,7 @@ public class StoreValueTests extends MessageTests {
 		byte[] bin = msg.serialize();
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(nodeId);
 		assertTrue(pm instanceof StoreValueRequest);
 		StoreValueRequest m = (StoreValueRequest)pm;
@@ -274,7 +274,7 @@ public class StoreValueTests extends MessageTests {
 		assertNotNull(v);
 		assertEquals(value, v);
 
-		var msg2 = (Message2<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message2.parse(bin);
+		var msg2 = (Message<io.bosonnetwork.kademlia.messages.StoreValueRequest>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -316,7 +316,7 @@ public class StoreValueTests extends MessageTests {
 
 		printMessage(msg, bin);
 
-		Message pm = Message.parse(bin);
+		OldMessage pm = OldMessage.parse(bin);
 		pm.setId(id);
 		assertInstanceOf(StoreValueResponse.class, pm);
 		StoreValueResponse m = (StoreValueResponse)pm;
@@ -327,7 +327,7 @@ public class StoreValueTests extends MessageTests {
 		assertEquals(txid, m.getTxid());
 		assertEquals(0, m.getVersion());
 
-		var msg2 = (Message2<Void>) Message2.parse(bin);
+		var msg2 = (Message<Void>) Message.parse(bin);
 		msg2.setId(msg.getId());
 		assertEquals(msg.getTxid(), msg2.getTxid());
 		assertEquals(msg.getId(), msg2.getId());
@@ -377,7 +377,7 @@ public class StoreValueTests extends MessageTests {
 		var token = 0x87654321;
 		var cas = value.isMutable() ? value.getSequenceNumber() - 1 : 0;
 
-		var msg = Message2.storeValueRequest(txid, value, token, cas);
+		var msg = Message.storeValueRequest(txid, value, token, cas);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
 
@@ -385,8 +385,8 @@ public class StoreValueTests extends MessageTests {
 
 		assertEquals(expectedSize, bin.length);
 
-		assertEquals(Message2.Type.REQUEST, msg.getType());
-		assertEquals(Message2.Method.STORE_VALUE, msg.getMethod());
+		assertEquals(Message.Type.REQUEST, msg.getType());
+		assertEquals(Message.Method.STORE_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
@@ -394,7 +394,7 @@ public class StoreValueTests extends MessageTests {
 		assertEquals(cas, msg.getBody().getExpectedSequenceNumber());
 		assertEquals(value, msg.getBody().getValue());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -404,7 +404,7 @@ public class StoreValueTests extends MessageTests {
 	void testResponse() throws Exception {
 		var nodeId = Id.random();
 		var txid = 0x78901234;
-		var msg = Message2.storeValueResponse(txid);
+		var msg = Message.storeValueResponse(txid);
 		msg.setId(nodeId);
 
 		var bin = msg.toBytes();
@@ -412,12 +412,12 @@ public class StoreValueTests extends MessageTests {
 
 		assertEquals(20, bin.length);
 
-		assertEquals(Message2.Type.RESPONSE, msg.getType());
-		assertEquals(Message2.Method.STORE_VALUE, msg.getMethod());
+		assertEquals(Message.Type.RESPONSE, msg.getType());
+		assertEquals(Message.Method.STORE_VALUE, msg.getMethod());
 		assertEquals(txid, msg.getTxid());
 		assertNull(msg.getBody());
 
-		var msg2 = Message2.parse(bin);
+		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
@@ -438,7 +438,7 @@ public class StoreValueTests extends MessageTests {
 			msg.setVersion(Constants.VERSION);
 			msg.setExpectedSequenceNumber(8);
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
@@ -448,24 +448,24 @@ public class StoreValueTests extends MessageTests {
 				msg.setVersion(Constants.VERSION);
 				msg.setExpectedSequenceNumber(8);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> StoreValueRequest: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.storeValueRequest(txid, value, token, 8);
+		var msg = Message.storeValueRequest(txid, value, token, 8);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.storeValueRequest(txid, value, token, 8);
+			msg = Message.storeValueRequest(txid, value, token, 8);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> StoreValueRequest: %dms, estimated: streaming ~= 800ms, *mapping ~= 1500ms @ MBP-13-m1pro\n", (end - start));
@@ -480,31 +480,31 @@ public class StoreValueTests extends MessageTests {
 			var msg = new StoreValueResponse(txid);
 			msg.setId(nodeId);
 			var bin = msg.serialize();
-			Message.parse(bin);
+			OldMessage.parse(bin);
 
 			var start = System.currentTimeMillis();
 			for (var i = 0; i < TIMING_ITERATIONS; i++) {
 				msg = new StoreValueResponse(txid);
 				msg.setId(nodeId);
 				bin = msg.serialize();
-				Message.parse(bin);
+				OldMessage.parse(bin);
 			}
 			var end = System.currentTimeMillis();
 			System.out.printf(">>>>>>>> StoreValueResponse: %dms\n", (end - start));
 		}
 
 		// warmup
-		var msg = Message2.storeValueResponse(txid);
+		var msg = Message.storeValueResponse(txid);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
-		Message2.parse(bin);
+		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message2.storeValueResponse(txid);
+			msg = Message.storeValueResponse(txid);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
-			Message2.parse(bin);
+			Message.parse(bin);
 		}
 		var end = System.currentTimeMillis();
 		System.out.printf(">>>>>>>> StoreValueResponse: %dms, estimated: streaming ~= 360ms, *mapping ~= 240ms @ MBP-13-m1pro\n", (end - start));

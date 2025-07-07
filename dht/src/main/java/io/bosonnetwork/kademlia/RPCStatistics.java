@@ -27,9 +27,9 @@ import java.util.Arrays;
 import java.util.Formatter;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Method;
-import io.bosonnetwork.kademlia.messages.deprecated.Message.Type;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Method;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage.Type;
 
 /**
  * @hidden
@@ -187,7 +187,7 @@ public class RPCStatistics {
 		this.sentBytes.addAndGet(sentBytes);
 	}
 
-	protected void sentMessage(Message msg) {
+	protected void sentMessage(OldMessage msg) {
 		sentMessages[msg.getMethod().ordinal()][msg.getType().ordinal()].incrementAndGet();
 	}
 
@@ -197,7 +197,7 @@ public class RPCStatistics {
 	}
 	 */
 
-	protected void receivedMessage(Message msg) {
+	protected void receivedMessage(OldMessage msg) {
 		receivedMessages[msg.getMethod().ordinal()][msg.getType().ordinal()].incrementAndGet();
 	}
 
@@ -207,7 +207,7 @@ public class RPCStatistics {
 	}
 	 */
 
-	protected void timeoutMessage(Message msg) {
+	protected void timeoutMessage(OldMessage msg) {
 		timeoutMessages[msg.getMethod().ordinal()].incrementAndGet();
 	}
 

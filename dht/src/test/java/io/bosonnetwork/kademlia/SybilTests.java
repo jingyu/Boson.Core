@@ -41,7 +41,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.messages.deprecated.FindNodeRequest;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 
@@ -105,7 +105,7 @@ public class SybilTests {
 			AtomicBoolean result = new AtomicBoolean(false);
 			call.addListener(new RPCCallListener() {
 				@Override
-				public void onResponse(RPCCall c, Message response) {
+				public void onResponse(RPCCall c, OldMessage response) {
 					synchronized(result) {
 						result.set(true);
 						result.notifyAll();
@@ -181,7 +181,7 @@ public class SybilTests {
 			AtomicBoolean result = new AtomicBoolean(false);
 			call.addListener(new RPCCallListener() {
 				@Override
-				public void onResponse(RPCCall c, Message response) {
+				public void onResponse(RPCCall c, OldMessage response) {
 					synchronized(result) {
 						result.set(true);
 						result.notifyAll();

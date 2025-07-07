@@ -40,7 +40,7 @@ import io.bosonnetwork.kademlia.KClosestNodes;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.messages.deprecated.FindNodeRequest;
 import io.bosonnetwork.kademlia.messages.deprecated.FindNodeResponse;
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 
 /**
  * @hidden
@@ -110,13 +110,13 @@ public class NodeLookup extends LookupTask {
 	}
 
 	@Override
-	protected void callResponsed(RPCCall call, Message response) {
+	protected void callResponsed(RPCCall call, OldMessage response) {
 		super.callResponsed(call, response);
 
 		if (!call.matchesId())
 			return; // Ignore
 
-		if (response.getType() != Message.Type.RESPONSE || response.getMethod() != Message.Method.FIND_NODE)
+		if (response.getType() != OldMessage.Type.RESPONSE || response.getMethod() != OldMessage.Method.FIND_NODE)
 			return;
 
 		FindNodeResponse r = (FindNodeResponse)response;

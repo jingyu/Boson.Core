@@ -26,7 +26,7 @@ package io.bosonnetwork.kademlia.messages.deprecated;
 /**
  * @hidden
  */
-public class PingRequest extends Message {
+public class PingRequest extends OldMessage {
 	public PingRequest() {
 		super(Type.REQUEST, Method.PING);
 	}

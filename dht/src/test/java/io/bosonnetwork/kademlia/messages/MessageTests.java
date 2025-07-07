@@ -25,7 +25,7 @@ package io.bosonnetwork.kademlia.messages;
 
 import java.io.IOException;
 
-import io.bosonnetwork.kademlia.messages.deprecated.Message;
+import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.Json;
 
@@ -36,7 +36,7 @@ public abstract class MessageTests {
 	protected static int TIMING_ITERATIONS = 1_000_000;
 	protected static String DEFAULT_VERSION_STR = "Orca/1";
 
-	protected void printMessage(Message msg, byte[] bin) throws IOException {
+	protected void printMessage(OldMessage msg, byte[] bin) throws IOException {
 		System.out.println("======== " + msg.getType().name() + ":" + msg.getMethod().name());
 		System.out.println("String: " +  msg.toString());
 		System.out.println("   Hex: " + bin.length + "/" + msg.estimateSize() + " : " + Hex.encode(bin));
@@ -44,7 +44,7 @@ public abstract class MessageTests {
 		System.out.println();
 	}
 
-	protected void printMessage(Message2<?> msg) throws IOException {
+	protected void printMessage(Message<?> msg) throws IOException {
 		var cbor = msg.toBytes();
 		var json = msg.toJson();
 
