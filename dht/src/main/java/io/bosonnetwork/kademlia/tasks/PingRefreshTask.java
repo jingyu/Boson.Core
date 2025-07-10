@@ -35,7 +35,7 @@ import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.KBucket;
 import io.bosonnetwork.kademlia.KBucketEntry;
 import io.bosonnetwork.kademlia.RPCCall;
-import io.bosonnetwork.kademlia.messages.deprecated.PingRequest;
+import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
 
 /**
  * @hidden

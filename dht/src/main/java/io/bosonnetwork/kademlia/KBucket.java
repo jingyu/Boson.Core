@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 
 /**
  * A KBucket is just a list of KBucketEntry objects.

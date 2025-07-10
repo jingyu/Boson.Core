@@ -41,7 +41,7 @@ import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.RPCCallListener;
-import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 
 /**
  * @hidden

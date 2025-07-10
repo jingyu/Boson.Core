@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,50 +20,56 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.tasks;
+package io.bosonnetwork.kademlia.protocol;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.Objects;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.protocol.deprecated.AnnouncePeerRequest;
+@JsonPropertyOrder({"c", "m"})
+public class Error implements Message.Body {
+	@JsonProperty("c")
+	private final int code;
+	@JsonProperty("m")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	private final String message;
 
-/**
- * @hidden
- */
-public class PeerAnnounce extends Task {
-	private final Deque<CandidateNode> todo;
-	private final PeerInfo peer;
-
-	private static final Logger log = LoggerFactory.getLogger(PeerAnnounce.class);
-
-	public PeerAnnounce(DHT dht, ClosestSet closest, PeerInfo peer) {
-		super(dht);
-		this.todo = new ArrayDeque<>(closest.getEntries());
-		this.peer = peer;
+	@JsonCreator()
+	public Error(@JsonProperty(value = "c", required = true) int code,
+				 @JsonProperty("m") String message) {
+		this.code = code;
+		this.message = message;
 	}
 
 	@Override
-	protected void update() {
-		while (!todo.isEmpty() && canDoRequest()) {
-			CandidateNode cn = todo.peekFirst();
+	public Message.Type getType() {
+		return Message.Type.ERROR;
+	}
 
-			AnnouncePeerRequest q = new AnnouncePeerRequest(peer, cn.getToken());
-			sendCall(cn, q, c -> todo.remove(cn));
-		}
+	public int getCode() {
+		return code;
+	}
+
+	public String getMessage() {
+		return message;
 	}
 
 	@Override
-	protected boolean isDone() {
-		return todo.isEmpty() && super.isDone();
+	public int hashCode() {
+		return Objects.hash(code, message);
 	}
 
 	@Override
-	protected Logger getLogger() {
-		return log;
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+
+		if (obj instanceof Error that)
+			return code == that.code && Objects.equals(message, that.message);
+
+		return false;
 	}
 }

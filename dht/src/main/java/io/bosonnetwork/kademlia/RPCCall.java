@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.tasks.CandidateNode;
 
 /**

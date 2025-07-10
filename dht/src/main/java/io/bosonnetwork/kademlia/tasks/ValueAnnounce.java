@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.messages.deprecated.StoreValueRequest;
+import io.bosonnetwork.kademlia.protocol.deprecated.StoreValueRequest;
 
 /**
  * @hidden

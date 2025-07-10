@@ -21,45 +21,42 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.protocol.deprecated;
 
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import java.io.OutputStream;
 
 /**
- * Class which objects should derive from, if they want to know the result of a call.
- *
  * @hidden
  */
-public interface RPCCallListener {
-	/**
-	 * The state of the RPCCall changed.
-	 *
-	 * @param c the RPC call
-	 * @param previous previous state
-	 * @param current current state
-	 */
-	public default void onStateChange(RPCCall c, RPCCall.State previous, RPCCall.State current) {}
+public class PartialMessage extends OldMessage {
+	public static final PartialMessage BLANK = new PartialMessage();
 
-	/**
-	 * A response was received.
-	 *
-	 * @param c the RPC call
-	 * @param response the response
-	 */
-	public default void onResponse (RPCCall c, OldMessage response) {}
+	private PartialMessage(OldMessage msg) {
+		super(msg.getType(), msg.getMethod(), msg.getTxid());
+		if (msg.getId() != null)
+			setId(msg.getId());
+	}
 
+	private PartialMessage() {
+		super(Type.ERROR, Method.UNKNOWN, 0);
+	}
 
-	/**
-	 * The call has not timed out yet but is estimated to be unlikely to succeed
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onStall(RPCCall c) {}
+	public static PartialMessage of(OldMessage msg) {
+		return msg == null ? BLANK : new PartialMessage(msg);
+	}
 
-	/**
-	 * The call has timed out.
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onTimeout (RPCCall c) {}
+	@Override
+	public int estimateSize() {
+		return 0;
+	}
+
+	@Override
+	public byte[] serialize() {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public void serialize(OutputStream out) {
+		throw new UnsupportedOperationException();
+	}
 }

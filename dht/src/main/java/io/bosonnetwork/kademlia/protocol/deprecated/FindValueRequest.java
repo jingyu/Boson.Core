@@ -21,50 +21,61 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia.tasks;
+package io.bosonnetwork.kademlia.protocol.deprecated;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.io.IOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
-import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.protocol.deprecated.AnnouncePeerRequest;
+import io.bosonnetwork.Id;
 
 /**
  * @hidden
  */
-public class PeerAnnounce extends Task {
-	private final Deque<CandidateNode> todo;
-	private final PeerInfo peer;
+public class FindValueRequest extends LookupRequest {
+	// Only send the value if the real sequence number greater than this.
+	private int sequenceNumber;
 
-	private static final Logger log = LoggerFactory.getLogger(PeerAnnounce.class);
+	public FindValueRequest(Id targetId) {
+		super(Method.FIND_VALUE, targetId);
+		setWantToken(true);
+	}
 
-	public PeerAnnounce(DHT dht, ClosestSet closest, PeerInfo peer) {
-		super(dht);
-		this.todo = new ArrayDeque<>(closest.getEntries());
-		this.peer = peer;
+	public FindValueRequest() {
+		this(null);
+	}
+
+	public int getSequenceNumber() {
+		return sequenceNumber;
+	}
+
+	public void setSequenceNumber(int sequenceNumber) {
+		this.sequenceNumber = sequenceNumber;
 	}
 
 	@Override
-	protected void update() {
-		while (!todo.isEmpty() && canDoRequest()) {
-			CandidateNode cn = todo.peekFirst();
-
-			AnnouncePeerRequest q = new AnnouncePeerRequest(peer, cn.getToken());
-			sendCall(cn, q, c -> todo.remove(cn));
-		}
+	protected void _serialize(JsonGenerator gen) throws IOException {
+		if (sequenceNumber > 0)
+			gen.writeNumberField("seq", sequenceNumber);
 	}
 
 	@Override
-	protected boolean isDone() {
-		return todo.isEmpty() && super.isDone();
+	protected void _parse(String fieldName, CBORParser parser) throws IOException {
+		if (fieldName.equals("seq"))
+			sequenceNumber = parser.getIntValue();
+		else
+			System.out.println("Unknown field: " + fieldName);
 	}
 
 	@Override
-	protected Logger getLogger() {
-		return log;
+	public int estimateSize() {
+		return super.estimateSize() + 9;
+	}
+
+	@Override
+	protected void _toString(StringBuilder b) {
+		if (sequenceNumber >= 0)
+			b.append(",seq:").append(sequenceNumber);
 	}
 }

@@ -21,45 +21,34 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.protocol.deprecated;
 
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import io.bosonnetwork.Id;
 
 /**
- * Class which objects should derive from, if they want to know the result of a call.
- *
  * @hidden
  */
-public interface RPCCallListener {
-	/**
-	 * The state of the RPCCall changed.
-	 *
-	 * @param c the RPC call
-	 * @param previous previous state
-	 * @param current current state
-	 */
-	public default void onStateChange(RPCCall c, RPCCall.State previous, RPCCall.State current) {}
+public class FindNodeRequest extends LookupRequest {
+	public FindNodeRequest(Id targetId, boolean wantToken) {
+		super(Method.FIND_NODE, targetId);
+		setWantToken(wantToken);
+	}
 
-	/**
-	 * A response was received.
-	 *
-	 * @param c the RPC call
-	 * @param response the response
-	 */
-	public default void onResponse (RPCCall c, OldMessage response) {}
+	public FindNodeRequest(Id targetId) {
+		this(targetId, false);
+	}
 
+	protected FindNodeRequest() {
+		this(null, false);
+	}
 
-	/**
-	 * The call has not timed out yet but is estimated to be unlikely to succeed
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onStall(RPCCall c) {}
+    @Override
+	public void setWantToken(boolean wantToken) {
+		super.setWantToken(wantToken);
+	}
 
-	/**
-	 * The call has timed out.
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onTimeout (RPCCall c) {}
+    @Override
+	public boolean doesWantToken() {
+		return super.doesWantToken();
+	}
 }

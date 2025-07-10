@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2022 - 2023 trinity-tech.io
  * Copyright (c) 2023 -      bosonnetwork.io
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,45 +20,31 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.protocol;
 
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import java.util.List;
 
-/**
- * Class which objects should derive from, if they want to know the result of a call.
- *
- * @hidden
- */
-public interface RPCCallListener {
-	/**
-	 * The state of the RPCCall changed.
-	 *
-	 * @param c the RPC call
-	 * @param previous previous state
-	 * @param current current state
-	 */
-	public default void onStateChange(RPCCall c, RPCCall.State previous, RPCCall.State current) {}
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-	/**
-	 * A response was received.
-	 *
-	 * @param c the RPC call
-	 * @param response the response
-	 */
-	public default void onResponse (RPCCall c, OldMessage response) {}
+import io.bosonnetwork.NodeInfo;
+
+public class FindNodeResponse extends LookupResponse {
+	@JsonCreator
+	public FindNodeResponse(@JsonProperty("n4") List<NodeInfo> nodes4,
+							@JsonProperty("n6") List<NodeInfo> nodes6,
+							@JsonProperty("tok") int token) {
+		super(nodes4, nodes6, token);
+	}
 
 
-	/**
-	 * The call has not timed out yet but is estimated to be unlikely to succeed
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onStall(RPCCall c) {}
+	@Override
+	public int hashCode() {
+		return 0xF1ADA00D + super.hashCode();
+	}
 
-	/**
-	 * The call has timed out.
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onTimeout (RPCCall c) {}
+	@Override
+	public boolean equals(Object obj) {
+		return obj instanceof FindNodeResponse && super.equals(obj);
+	}
 }

@@ -50,11 +50,11 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.exceptions.KadException;
-import io.bosonnetwork.kademlia.messages.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.messages.deprecated.OldMessage;
-import io.bosonnetwork.kademlia.messages.deprecated.MessageException;
-import io.bosonnetwork.kademlia.messages.deprecated.PingRequest;
-import io.bosonnetwork.kademlia.messages.deprecated.PingResponse;
+import io.bosonnetwork.kademlia.protocol.deprecated.ErrorMessage;
+import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.protocol.deprecated.MessageException;
+import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
+import io.bosonnetwork.kademlia.protocol.deprecated.PingResponse;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.ByteBufferOutputStream;
 

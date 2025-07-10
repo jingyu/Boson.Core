@@ -21,45 +21,17 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
-
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+package io.bosonnetwork.kademlia.protocol.deprecated;
 
 /**
- * Class which objects should derive from, if they want to know the result of a call.
- *
  * @hidden
  */
-public interface RPCCallListener {
-	/**
-	 * The state of the RPCCall changed.
-	 *
-	 * @param c the RPC call
-	 * @param previous previous state
-	 * @param current current state
-	 */
-	public default void onStateChange(RPCCall c, RPCCall.State previous, RPCCall.State current) {}
+public class StoreValueResponse extends OldMessage {
+	public StoreValueResponse(int txid) {
+		super(Type.RESPONSE, Method.STORE_VALUE, txid);
+	}
 
-	/**
-	 * A response was received.
-	 *
-	 * @param c the RPC call
-	 * @param response the response
-	 */
-	public default void onResponse (RPCCall c, OldMessage response) {}
-
-
-	/**
-	 * The call has not timed out yet but is estimated to be unlikely to succeed
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onStall(RPCCall c) {}
-
-	/**
-	 * The call has timed out.
-	 *
-	 * @param c the RPC call
-	 */
-	public default void onTimeout (RPCCall c) {}
+	protected StoreValueResponse() {
+		super(Type.RESPONSE, Method.STORE_VALUE, 0);
+	}
 }
