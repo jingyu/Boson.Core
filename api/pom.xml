@@ -70,14 +70,22 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
+      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-cbor</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+      <optional>true</optional>
     </dependency>
 
     <dependency>
@@ -88,7 +96,7 @@
       <groupId>io.tmio</groupId>
       <artifactId>tuweni-crypto</artifactId>
     </dependency>
-    
+
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-core</artifactId>

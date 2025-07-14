@@ -77,6 +77,7 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.kademlia.tasks.TaskFuture;
 import io.bosonnetwork.utils.AddressUtils;
@@ -166,7 +167,16 @@ public class Node implements io.bosonnetwork.Node {
 
 		log.info("Boson Kademlia node: {}", id);
 
-		blacklist = new Blacklist();
+		try {
+			Path blacklistFile = dataPath.resolve("blacklist.yaml");
+			if (persistent && Files.exists(blacklistFile))
+				blacklist = Blacklist.load(blacklistFile);
+			else
+				blacklist = Blacklist.empty();
+		} catch (IOException e) {
+			throw new IOError("Load blacklist error", e);
+		}
+
 		statusListeners = new ArrayList<>();
 		connectionStatusListeners = new ArrayList<>();
 		tokenMan = new TokenManager();

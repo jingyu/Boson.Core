@@ -74,6 +74,7 @@ import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
 import io.bosonnetwork.kademlia.protocol.deprecated.PingResponse;
 import io.bosonnetwork.kademlia.protocol.deprecated.StoreValueRequest;
 import io.bosonnetwork.kademlia.protocol.deprecated.StoreValueResponse;
+import io.bosonnetwork.kademlia.security.SuspiciousNodeTracker;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
 import io.bosonnetwork.kademlia.tasks.NodeLookup;
 import io.bosonnetwork.kademlia.tasks.PeerAnnounce;
@@ -113,6 +114,8 @@ public class DHT {
 	private final Cache<InetSocketAddress, Id> knownNodes;
 
 	private final TaskManager taskMan;
+
+	private final SuspiciousNodeTracker suspiciousNodeTracker;
 
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
 
@@ -186,6 +189,8 @@ public class DHT {
 				.initialCapacity(256)
 				.expireAfterAccess(Constants.KBUCKET_OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS)
 				.build();
+
+		this.suspiciousNodeTracker = new SuspiciousNodeTracker();
 
 		this.taskMan = new TaskManager(this);
 	}
@@ -271,6 +276,10 @@ public class DHT {
 
 	public Collection<Id> getBootstrapIds() {
 		return bootstrapNodes.stream().map(NodeInfo::getId).collect(Collectors.toUnmodifiableSet());
+	}
+
+	SuspiciousNodeTracker getSuspiciousNodeTracker() {
+		return suspiciousNodeTracker;
 	}
 
 	protected void bootstrap() {

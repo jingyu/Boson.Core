@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
@@ -58,6 +57,9 @@ import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import io.vertx.core.json.jackson.DatabindCodec;
 
 import io.bosonnetwork.Id;
@@ -70,18 +72,24 @@ import io.bosonnetwork.identifier.DIDConstants;
  * Common JSON utility methods for JSON process.
  */
 public class Json {
-	public static final TypeReference<HashMap<String, Object>> MAP_TYPE = new TypeReference<>() { };
+	private static final String BOSON_JSON_MODULE_NAME = "io.bosonnetwork.utils.json.module";
 
-	private final static SimpleModule bosonModule = createBosonModule();
+	private static TypeReference<Map<String, Object>> _mapType;
 
-	private final static ObjectMapper objectMapper = createObjectMapper();
-	private final static CBORMapper cborMapper = createCBORMapper();
-	private final static JsonFactory jsonFactory = createJSONFactory();
-	private final static CBORFactory cborFactory = createCBORFactory();
+	private static SimpleModule _bosonJsonModule;
 
-	private final static TimeZone UTC = TimeZone.getTimeZone("UTC");
-	private final static String ISO_8601 = "yyyy-MM-dd'T'HH:mm:ss'Z'";
-	private final static String ISO_8601_WITH_MILLISECONDS = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+	private static JsonFactory _jsonFactory;
+	private static CBORFactory _cborFactory;
+
+	private static ObjectMapper _objectMapper;
+	private static CBORMapper _cborMapper;
+	private static YAMLMapper _yamlMapper;
+
+	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+	@SuppressWarnings("SpellCheckingInspection")
+	private static final String ISO_8601 = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+	@SuppressWarnings("SpellCheckingInspection")
+	private static final String ISO_8601_WITH_MILLISECONDS = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
 	public static boolean isBinaryFormat(JsonParser p) {
 		// Now we only sport JSON, CBOR and TOML formats, CBOR is the only binary format
@@ -127,7 +135,7 @@ public class Json {
 		}
 
 		@Override
-		public Id deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
+		public Id deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			return isBinaryFormat(p) ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 		}
 	}
@@ -166,7 +174,7 @@ public class Json {
 		}
 
 		@Override
-		public InetAddress deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
+		public InetAddress deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			return isBinaryFormat(p) ? InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
 					InetAddress.getByName(p.getText());
 		}
@@ -207,8 +215,7 @@ public class Json {
 		}
 
 		@Override
-		public Date deserialize(JsonParser p, DeserializationContext ctx)
-				throws IOException, JsonProcessingException {
+		public Date deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			if (p.getCurrentToken() == JsonToken.VALUE_NUMBER_INT) {
 				// Binary format: epoch milliseconds
 				return new Date(p.getValueAsLong());
@@ -304,7 +311,7 @@ public class Json {
 		}
 
 		@Override
-		public NodeInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
+		public NodeInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			if (p.currentToken() != JsonToken.START_ARRAY)
 				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo, should be an array");
 
@@ -416,7 +423,7 @@ public class Json {
 		}
 
 		@Override
-		public PeerInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
+		public PeerInfo deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			if (p.currentToken() != JsonToken.START_ARRAY)
 				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo, should be an array");
 
@@ -542,7 +549,7 @@ public class Json {
 		}
 
 		@Override
-		public Value deserialize(JsonParser p, DeserializationContext ctx) throws IOException, JacksonException {
+		public Value deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
 			if (p.currentToken() != JsonToken.START_OBJECT)
 				throw MismatchedInputException.from(p, Value.class, "Invalid Value: should be an object");
 
@@ -597,24 +604,27 @@ public class Json {
 	 *
 	 * @return the {@code SimpleModule} object.
 	 */
-	protected static SimpleModule createBosonModule() {
-		String name = "io.bosonnetwork.utils.json.module";
-		SimpleModule module = new SimpleModule(name);
-		module.addSerializer(Date.class, new DateSerializer());
-		module.addDeserializer(Date.class, new DateDeserializer());
-		module.addSerializer(Id.class, new IdSerializer());
-		module.addDeserializer(Id.class, new IdDeserializer());
-		module.addSerializer(InetAddress.class, new InetAddressSerializer());
-		module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
+	protected static SimpleModule bosonJsonModule() {
+		if (_bosonJsonModule == null) {
+			SimpleModule module = new SimpleModule(BOSON_JSON_MODULE_NAME);
+			module.addSerializer(Date.class, new DateSerializer());
+			module.addDeserializer(Date.class, new DateDeserializer());
+			module.addSerializer(Id.class, new IdSerializer());
+			module.addDeserializer(Id.class, new IdDeserializer());
+			module.addSerializer(InetAddress.class, new InetAddressSerializer());
+			module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
 
-		module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
-		module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
-		module.addSerializer(PeerInfo.class, new PeerInfoSerializer());
-		module.addDeserializer(PeerInfo.class, new PeerInfoDeserializer());
-		module.addSerializer(Value.class, new ValueSerializer());
-		module.addDeserializer(Value.class, new ValueDeserializer());
+			module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
+			module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
+			module.addSerializer(PeerInfo.class, new PeerInfoSerializer());
+			module.addDeserializer(PeerInfo.class, new PeerInfoDeserializer());
+			module.addSerializer(Value.class, new ValueSerializer());
+			module.addDeserializer(Value.class, new ValueDeserializer());
 
-		return module;
+			_bosonJsonModule = module;
+		}
+
+		return _bosonJsonModule;
 	}
 
 	/**
@@ -622,11 +632,15 @@ public class Json {
 	 *
 	 * @return the {@code JsonFactory} object.
 	 */
-	protected static JsonFactory createJSONFactory() {
-		JsonFactory factory = new JsonFactory();
-		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-		return factory;
+	public static JsonFactory jsonFactory() {
+		if (_jsonFactory == null) {
+			JsonFactory factory = new JsonFactory();
+			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+			_jsonFactory = factory;
+		}
+
+		return _jsonFactory;
 	}
 
 	/**
@@ -634,11 +648,15 @@ public class Json {
 	 *
 	 * @return the {@code CBORFactory} object.
 	 */
-	protected static CBORFactory createCBORFactory() {
-		CBORFactory factory = new CBORFactory();
-		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-		return factory;
+	public static CBORFactory cborFactory() {
+		if (_cborFactory == null) {
+			CBORFactory factory = new CBORFactory();
+			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+			_cborFactory = factory;
+		}
+
+		return _cborFactory;
 	}
 
 	/**
@@ -646,21 +664,25 @@ public class Json {
 	 *
 	 * @return the new {@code ObjectMapper} object.
 	 */
-	protected static ObjectMapper createObjectMapper() {
-		return JsonMapper.builder(createJSONFactory())
-				.disable(MapperFeature.AUTO_DETECT_CREATORS)
-				.disable(MapperFeature.AUTO_DETECT_FIELDS)
-				.disable(MapperFeature.AUTO_DETECT_GETTERS)
-				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
-				.disable(MapperFeature.AUTO_DETECT_SETTERS)
-				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-				// .defaultDateFormat(getDateFormat())
-				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-				.addModule(bosonModule)
-				.build();
+	public static ObjectMapper objectMapper() {
+		if (_objectMapper == null) {
+			_objectMapper = JsonMapper.builder(jsonFactory())
+					.disable(MapperFeature.AUTO_DETECT_CREATORS)
+					.disable(MapperFeature.AUTO_DETECT_FIELDS)
+					.disable(MapperFeature.AUTO_DETECT_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_SETTERS)
+					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					// .defaultDateFormat(getDateFormat())
+					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+					.addModule(bosonJsonModule())
+					.build();
+		}
+
+		return _objectMapper;
 	}
 
 	/**
@@ -668,29 +690,66 @@ public class Json {
 	 *
 	 * @return the new {@code CBORMapper} object.
 	 */
-	protected static CBORMapper createCBORMapper() {
-		return CBORMapper.builder(createCBORFactory())
-				.disable(MapperFeature.AUTO_DETECT_CREATORS)
-				.disable(MapperFeature.AUTO_DETECT_FIELDS)
-				.disable(MapperFeature.AUTO_DETECT_GETTERS)
-				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
-				.disable(MapperFeature.AUTO_DETECT_SETTERS)
-				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-				// .defaultDateFormat(getDateFormat())
-				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-				.addModule(bosonModule)
-				.build();
+	public static CBORMapper cborMapper() {
+		if (_cborMapper == null) {
+			_cborMapper = CBORMapper.builder(cborFactory())
+					.disable(MapperFeature.AUTO_DETECT_CREATORS)
+					.disable(MapperFeature.AUTO_DETECT_FIELDS)
+					.disable(MapperFeature.AUTO_DETECT_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_SETTERS)
+					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					// .defaultDateFormat(getDateFormat())
+					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+					.addModule(bosonJsonModule())
+					.build();
+		}
+
+		return _cborMapper;
+	}
+
+	/**
+	 * Creates the Jackson YAML mapper, with basic Boson types support.
+	 *
+	 * @return the new {@code YAMLMapper} object.
+	 */
+	public static YAMLMapper yamlMapper() {
+		if (_yamlMapper == null) {
+			YAMLFactory factory = new YAMLFactory();
+			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+
+			_yamlMapper = YAMLMapper.builder(factory)
+					.disable(MapperFeature.AUTO_DETECT_CREATORS)
+					.disable(MapperFeature.AUTO_DETECT_FIELDS)
+					.disable(MapperFeature.AUTO_DETECT_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+					.disable(MapperFeature.AUTO_DETECT_SETTERS)
+					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					.disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+					.enable(YAMLGenerator.Feature.INDENT_ARRAYS)
+					.enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
+					//.defaultDateFormat(getDateFormat())
+					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+					.addModule(bosonJsonModule())
+					.build();
+		}
+
+		return _yamlMapper;
 	}
 
 	public static String toString(Object object, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return objectMapper.writeValueAsString(object);
+				return objectMapper().writeValueAsString(object);
 			else
-				return objectMapper.writer(context).writeValueAsString(object);
+				return objectMapper().writer(context).writeValueAsString(object);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
@@ -703,8 +762,8 @@ public class Json {
 	public static String toPrettyString(Object object, JsonContext context) {
 		try {
 			ObjectWriter writer = context == null || context.isEmpty() ?
-					objectMapper.writerWithDefaultPrettyPrinter() :
-					objectMapper.writerWithDefaultPrettyPrinter().with(context);
+					objectMapper().writerWithDefaultPrettyPrinter() :
+					objectMapper().writerWithDefaultPrettyPrinter().with(context);
 
 			return writer.writeValueAsString(object);
 		} catch (JsonProcessingException e) {
@@ -719,9 +778,9 @@ public class Json {
 	public static byte[] toBytes(Object object, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return cborMapper.writeValueAsBytes(object);
+				return cborMapper().writeValueAsBytes(object);
 			else
-				return cborMapper.writer(context).writeValueAsBytes(object);
+				return cborMapper().writer(context).writeValueAsBytes(object);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("object can not be serialized", e);
 		}
@@ -731,20 +790,27 @@ public class Json {
 		return toBytes(object, null);
 	}
 
+	public static TypeReference<Map<String, Object>> mapType() {
+		if (_mapType == null)
+			_mapType = new TypeReference<>() { };
+
+		return _mapType;
+	}
+
 	public static Map<String, Object> parse(String json, JsonContext context) {
-		return parse(json, MAP_TYPE, context);
+		return parse(json, mapType(), context);
 	}
 
 	public static Map<String, Object> parse(String json) {
-		return parse(json, MAP_TYPE, null);
+		return parse(json, mapType(), null);
 	}
 
 	public static <T> T parse(String json, Class<T> clazz, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return objectMapper.readValue(json, clazz);
+				return objectMapper().readValue(json, clazz);
 			else
-				return objectMapper.reader(context).forType(clazz).readValue(json);
+				return objectMapper().reader(context).forType(clazz).readValue(json);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("json can not be parsed", e);
 		}
@@ -757,9 +823,9 @@ public class Json {
 	public static <T> T parse(String json, TypeReference<T> type, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return objectMapper.readValue(json, type);
+				return objectMapper().readValue(json, type);
 			else
-				return objectMapper.reader(context).forType(type).readValue(json);
+				return objectMapper().reader(context).forType(type).readValue(json);
 		} catch (JsonProcessingException e) {
 			throw new IllegalArgumentException("json can not be parsed", e);
 		}
@@ -770,19 +836,19 @@ public class Json {
 	}
 
 	public static Map<String, Object> parse(byte[] cbor, JsonContext context) {
-		return parse(cbor, MAP_TYPE, context);
+		return parse(cbor, mapType(), context);
 	}
 
 	public static Map<String, Object> parse(byte[] cbor) {
-		return parse(cbor, MAP_TYPE, null);
+		return parse(cbor, mapType(), null);
 	}
 
 	public static <T> T parse(byte[] cbor, Class<T> clazz, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return cborMapper.readValue(cbor, clazz);
+				return cborMapper().readValue(cbor, clazz);
 			else
-				return cborMapper.reader(context).forType(clazz).readValue(cbor);
+				return cborMapper().reader(context).forType(clazz).readValue(cbor);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
 		}
@@ -795,9 +861,9 @@ public class Json {
 	public static <T> T parse(byte[] cbor, TypeReference<T> type, JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
-				return cborMapper.readValue(cbor, type);
+				return cborMapper().readValue(cbor, type);
 			else
-				return cborMapper.reader(context).forType(type).readValue(cbor);
+				return cborMapper().reader(context).forType(type).readValue(cbor);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
 		}
@@ -809,26 +875,10 @@ public class Json {
 
 	public static void initializeBosonJsonModule() {
 		if (DatabindCodec.mapper().getRegisteredModuleIds().stream()
-				.anyMatch(id -> id.equals(bosonModule.getModuleName())))
+				.anyMatch(id -> id.equals(BOSON_JSON_MODULE_NAME)))
 			return; // already registered
 
-		DatabindCodec.mapper().registerModule(bosonModule);
-	}
-
-	public static ObjectMapper objectMapper() {
-		return objectMapper;
-	}
-
-	public static CBORMapper cborMapper() {
-		return cborMapper;
-	}
-
-	public static JsonFactory jsonFactory() {
-		return jsonFactory;
-	}
-
-	public static CBORFactory cborFactory() {
-		return cborFactory;
+		DatabindCodec.mapper().registerModule(bosonJsonModule());
 	}
 
 	public static class JsonContext extends ContextAttributes.Impl {
@@ -935,6 +985,7 @@ public class Json {
 					// except if non-mutable shared list has no entry, we don't care
 					return this;
 				} else {
+					//noinspection RedundantCollectionOperation
 					if (_nonShared.containsKey(key)) // avoid exception on immutable map
 						_nonShared.remove(key);
 					return this;

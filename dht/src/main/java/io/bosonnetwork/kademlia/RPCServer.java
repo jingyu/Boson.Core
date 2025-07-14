@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
+import io.vertx.core.net.SocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +61,11 @@ import io.bosonnetwork.kademlia.NetworkEngine.Selectable;
 import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.protocol.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 import io.bosonnetwork.kademlia.protocol.deprecated.MessageException;
+import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.security.Blacklist;
+import io.bosonnetwork.kademlia.security.SpamThrottle;
+import io.bosonnetwork.kademlia.security.SuspiciousNodeTracker;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**
@@ -93,8 +97,8 @@ public class RPCServer implements Selectable {
 	private Queue<RPCCall> callQueue;
 	private Queue<OldMessage> pipeline;
 
-	private Throttle inboundThrottle;
-	private Throttle outboundThrottle;
+	private SpamThrottle inboundThrottle;
+	private SpamThrottle outboundThrottle;
 	private TimeoutSampler timeoutSampler;
 	private RPCStatistics stats;
 	private ExponentialWeightendMovingAverage unverifiedLossrate;
@@ -130,8 +134,8 @@ public class RPCServer implements Selectable {
 		this.callQueue = new ConcurrentLinkedQueue<>();
 		this.pipeline = new ConcurrentLinkedQueue<>();
 
-		this.outboundThrottle = enableThrottle ? Throttle.enabled() : Throttle.disabled();
-		this.inboundThrottle = enableThrottle ? Throttle.enabled() : Throttle.disabled();
+		this.outboundThrottle = enableThrottle ? new SpamThrottle() : SpamThrottle.disabled();
+		this.inboundThrottle = enableThrottle ? new SpamThrottle() : SpamThrottle.disabled();
 		this.timeoutSampler = new TimeoutSampler();
 		this.stats = new RPCStatistics();
 
@@ -519,8 +523,9 @@ public class RPCServer implements Selectable {
 		Id sender = Id.of(packet, 0);
 
 		Blacklist blacklist = getNode().getBlacklist();
-		if (blacklist.isBanned(sa)) {
-			log.warn("Ignored the message from banned address {}", AddressUtils.toString(sa));
+		SuspiciousNodeTracker tracker = getDHT().getSuspiciousNodeTracker();
+		if (blacklist.isBanned(sa.getHostString()) || tracker.isBanned(sa.getHostString())) {
+			log.warn("Ignored the message from banned address {}", sa.getHostString());
 			return;
 		}
 		if (blacklist.isBanned(sender)) {
@@ -537,17 +542,15 @@ public class RPCServer implements Selectable {
 			log.warn("Got a wrong packet from {}, ignored.", AddressUtils.toString(sa));
 
 			stats.droppedPacket(packet.length);
-			blacklist.observeInvalidMessage(sa);
+			tracker.observe(SocketAddress.inetSocketAddress(sa));
 			return;
 		} catch (CryptoError e) {
 			log.warn("Decrypt packet error from {}, ignored.", AddressUtils.toString(sa));
 
 			stats.droppedPacket(packet.length);
-			blacklist.observeInvalidMessage(sa);
+			tracker.observe(SocketAddress.inetSocketAddress(sa));
 			return;
 		}
-
-		blacklist.observe(sa, sender);
 
 		log.trace("Received {}/{} from {}: [{}]{}", msg.getMethod(), msg.getType(),
 				AddressUtils.toString(sa), packet.length, msg);
@@ -592,6 +595,8 @@ public class RPCServer implements Selectable {
 
 				return;
 			}
+
+			tracker.observe(SocketAddress.inetSocketAddress(msg.getOrigin()), msg.getId());
 
 			// 1. the message is not a request
 			// 2. transaction ID matched
