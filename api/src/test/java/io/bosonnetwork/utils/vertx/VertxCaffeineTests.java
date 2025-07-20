@@ -23,7 +23,7 @@ public class VertxCaffeineTests {
 	@Test
 	public void testAsyncCache(Vertx vertx, VertxTestContext context) {
 		Context ctx = vertx.getOrCreateContext();
-		Variable<Long> tid = new Variable<>();
+		Variable<Long> tid = Variable.empty();
 
 		System.out.println("Test thread: " + Thread.currentThread().getName());
 
@@ -62,7 +62,7 @@ public class VertxCaffeineTests {
 	@Test
 	public void testAsyncLoadingCache(Vertx vertx, VertxTestContext context) {
 		Context ctx = vertx.getOrCreateContext();
-		Variable<Long> tid = new Variable<>(0L);
+		Variable<Long> tid = Variable.empty();
 
 		System.out.println("Test thread: " + Thread.currentThread().getName());
 
@@ -75,7 +75,7 @@ public class VertxCaffeineTests {
 					ctx.runOnContext(v -> {
 						System.out.println("Loader thread: " + Thread.currentThread().getName());
 
-						if (tid.get() == 0L)
+						if (tid.isEmpty())
 							tid.set(Thread.currentThread().getId());
 
 						try {

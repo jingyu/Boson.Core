@@ -465,6 +465,13 @@ public class PeerInfo {
 		return Signature.verify(getSignData(), signature, pk);
 	}
 
+	public PeerInfo withoutPrivateKey() {
+		if (privateKey == null)
+			return this;
+
+		return new PeerInfo(publicKey, null, nodeId, origin, port, alternativeURL, signature);
+	}
+
 	@Override
 	public int hashCode() {
 		return 0x6030A + Objects.hash(publicKey, nodeId, origin, port, alternativeURL, Arrays.hashCode(signature));

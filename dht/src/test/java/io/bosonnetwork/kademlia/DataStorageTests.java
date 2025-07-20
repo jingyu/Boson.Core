@@ -57,7 +57,7 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.kademlia.exceptions.CasFail;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
 public class DataStorageTests {
@@ -244,7 +244,7 @@ public class DataStorageTests {
 		// update: CAS fail
 		Value v2 = Value.createSignedValue(keypair, nonce, seq + 1, newData);
 		assertEquals(valueId, v.getId());
-		assertThrows(CasFail.class, () -> {
+		assertThrows(SequenceNotExpected.class, () -> {
 			ds.putValue(v2, 9);
 		});
 
@@ -314,7 +314,7 @@ public class DataStorageTests {
 		// update: CAS fail
 		Value v2 = Value.createEncryptedValue(keypair, recipient, nonce, seq + 1, newData);
 		assertEquals(valueId, v.getId());
-		assertThrows(CasFail.class, () -> {
+		assertThrows(SequenceNotExpected.class, () -> {
 			ds.putValue(v2, 9);
 		});
 

@@ -31,7 +31,7 @@ public class VertxFutureTests {
 		Context ctx = vertx.getOrCreateContext();
 
 		Promise<String> promise = Promise.promise();
-		Variable<Long> tid = new Variable<>();
+		Variable<Long> tid = Variable.empty();
 
 		ctx.runOnContext(v -> {
 			tid.set(Thread.currentThread().getId());
@@ -105,7 +105,7 @@ public class VertxFutureTests {
 		var ctx = vertx.getOrCreateContext();
 		Promise<String> promise = Promise.promise();
 
-		Variable<Long> tid = new Variable<>();
+		Variable<Long> tid = Variable.empty();
 
 		ctx.runOnContext(v -> {
 			tid.set(Thread.currentThread().getId());

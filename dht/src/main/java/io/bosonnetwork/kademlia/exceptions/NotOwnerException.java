@@ -26,18 +26,19 @@ package io.bosonnetwork.kademlia.exceptions;
 import io.bosonnetwork.kademlia.ErrorCode;
 
 /**
- * Signals that the expected sequence number not equals the value's current sequence number.
+ * Signals that the node is not the value or peer owner, it means the node does not have the
+ * private key for the value or peer.
  */
-public class CasFail extends KadException {
-	private static final long serialVersionUID = 3450451642376582940L;
+public class NotOwnerException extends KadException {
+	private static final long serialVersionUID = -7371954332788603314L;
 
 	/**
 	 * Constructs a new exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public CasFail() {
-		super(ErrorCode.CasFail.value());
+	public NotOwnerException() {
+		super(ErrorCode.NotValueOwner.value());
 	}
 
 	/**
@@ -48,8 +49,8 @@ public class CasFail extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public CasFail(String message) {
-		super(ErrorCode.CasFail.value(), message);
+	public NotOwnerException(String message) {
+		super(ErrorCode.NotValueOwner.value(), message);
 	}
 
 	/**
@@ -66,8 +67,8 @@ public class CasFail extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public CasFail(String message, Throwable cause) {
-		super(ErrorCode.CasFail.value(), message, cause);
+	public NotOwnerException(String message, Throwable cause) {
+		super(ErrorCode.NotValueOwner.value(), message, cause);
 	}
 
 	/**
@@ -84,7 +85,7 @@ public class CasFail extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public CasFail(Throwable cause) {
-		super(ErrorCode.CasFail.value(), cause);
+	public NotOwnerException(Throwable cause) {
+		super(ErrorCode.NotValueOwner.value(), cause);
 	}
 }

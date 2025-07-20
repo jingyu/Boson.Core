@@ -494,8 +494,14 @@ public class Value {
 		Signature.KeyPair kp = Signature.KeyPair.fromPrivateKey(getPrivateKey());
 		CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
 
-
 		return new Value(kp, recipient, nonce, sequenceNumber + 1, data);
+	}
+
+	public Value withoutPrivateKey() {
+		if (privateKey == null)
+			return this;
+
+		return new Value(publicKey, recipient, nonce, sequenceNumber, signature, data);
 	}
 
 	@Override

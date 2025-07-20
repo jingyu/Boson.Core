@@ -54,12 +54,12 @@ import org.sqlite.SQLiteDataSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.kademlia.exceptions.CasFail;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
 import io.bosonnetwork.kademlia.exceptions.InvalidSignature;
 import io.bosonnetwork.kademlia.exceptions.KadException;
-import io.bosonnetwork.kademlia.exceptions.NotValueOwner;
+import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
 /**
@@ -85,7 +85,7 @@ public class SQLiteStorage implements DataStorage {
 		") WITHOUT ROWID";
 
 	private static final String CREATE_VALUES_INDEX =
-			"CREATE INDEX IF NOT EXISTS idx_valores_timpstamp ON valores(timestamp)";
+			"CREATE INDEX IF NOT EXISTS idx_valores_timestamp ON valores(timestamp)";
 
 	private static final String CREATE_PEERS_TABLE = "CREATE TABLE IF NOT EXISTS peers(" +
 			"id BLOB NOT NULL, " +
@@ -102,7 +102,7 @@ public class SQLiteStorage implements DataStorage {
 		") WITHOUT ROWID";
 
 	private static final String CREATE_PEERS_INDEX =
-			"CREATE INDEX IF NOT EXISTS idx_peers_timpstamp ON peers(timestamp)";
+			"CREATE INDEX IF NOT EXISTS idx_peers_timestamp ON peers(timestamp)";
 
 	private static final String CREATE_PEERS_ID_INDEX =
 			"CREATE INDEX IF NOT EXISTS idx_peers_id ON peers(id)";
@@ -189,10 +189,10 @@ public class SQLiteStorage implements DataStorage {
 			// we should check the user version, do the schema update,
 			// then increase the user_version;
 			if (userVersion < 4) {
-				stmt.executeUpdate("DROP INDEX IF EXISTS idx_valores_timpstamp");
+				stmt.executeUpdate("DROP INDEX IF EXISTS idx_valores_timestamp");
 				stmt.executeUpdate("DROP TABLE IF EXISTS valores");
 
-				stmt.executeUpdate("DROP INDEX IF EXISTS idx_peers_timpstamp");
+				stmt.executeUpdate("DROP INDEX IF EXISTS idx_peers_timestamp");
 				stmt.executeUpdate("DROP INDEX IF EXISTS idx_peers_id");
 				stmt.executeUpdate("DROP TABLE IF EXISTS peers");
 			}
@@ -350,11 +350,11 @@ public class SQLiteStorage implements DataStorage {
 			if (!value.isMutable())
 				throw new ImmutableSubstitutionFail("Can not replace mutable value with immutable is not supported");
 			if (old.hasPrivateKey() && !value.hasPrivateKey())
-				throw new NotValueOwner("Not the owner of the value");
+				throw new NotOwnerException("Not the owner of the value");
 			if (value.getSequenceNumber() < old.getSequenceNumber())
 				throw new SequenceNotMonotonic("Sequence number less than current");
 			if (expectedSeq >= 0 && old.getSequenceNumber() >= 0 && old.getSequenceNumber() != expectedSeq)
-				throw new CasFail("CAS failure");
+				throw new SequenceNotExpected("CAS failure");
 		}
 
 		try (PreparedStatement stmt = getConnection().prepareStatement(UPSERT_VALUE)) {
@@ -447,7 +447,7 @@ public class SQLiteStorage implements DataStorage {
 		}
 
 		final ResultSet vrs = rs;
-		Stream<Value> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<Value>(
+		Stream<Value> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<>(
 				Long.MAX_VALUE, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.ORDERED) {
 			@Override
 			public boolean tryAdvance(Consumer<? super Value> consumer) {
@@ -528,7 +528,7 @@ public class SQLiteStorage implements DataStorage {
 		}
 
 		final ResultSet idrs = rs;
-		Stream<Id> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<Id>(
+		Stream<Id> s = StreamSupport.stream(new Spliterators.AbstractSpliterator<>(
 				Long.MAX_VALUE, Spliterator.NONNULL | Spliterator.IMMUTABLE | Spliterator.ORDERED) {
 			@Override
 			public boolean tryAdvance(Consumer<? super Id> consumer) {
