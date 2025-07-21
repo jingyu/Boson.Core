@@ -78,6 +78,8 @@ import io.bosonnetwork.kademlia.exceptions.CryptoError;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.security.Blacklist;
+import io.bosonnetwork.kademlia.storage.deprecated.DataStorage;
+import io.bosonnetwork.kademlia.storage.deprecated.SQLiteStorage;
 import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.kademlia.tasks.TaskFuture;
 import io.bosonnetwork.utils.AddressUtils;

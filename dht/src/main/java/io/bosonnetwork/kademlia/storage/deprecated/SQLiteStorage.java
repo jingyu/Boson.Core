@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.storage.deprecated;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -54,6 +54,7 @@ import org.sqlite.SQLiteDataSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;

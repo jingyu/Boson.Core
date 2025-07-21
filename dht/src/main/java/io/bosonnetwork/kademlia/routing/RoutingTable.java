@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,6 +57,8 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.Constants;
+import io.bosonnetwork.kademlia.DHT;
 import io.bosonnetwork.kademlia.tasks.PingRefreshTask;
 import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.utils.Json;
@@ -293,7 +295,7 @@ public final class RoutingTable {
 		processPipeline();
 	}
 
-	void maintenance() {
+	public void maintenance() {
 		pipeline.add(Operation.maintenance());
 		processPipeline();
 	}
@@ -502,7 +504,7 @@ public final class RoutingTable {
 		}
 	}
 
-	void tryPingMaintenance(KBucket bucket, EnumSet<PingRefreshTask.Options> options, String name) {
+	public void tryPingMaintenance(KBucket bucket, EnumSet<PingRefreshTask.Options> options, String name) {
 		if (maintenanceTasks.containsKey(bucket))
 			return;
 
@@ -514,7 +516,7 @@ public final class RoutingTable {
 		}
 	}
 
-	CompletableFuture<Void> pingBuckets() {
+	public CompletableFuture<Void> pingBuckets() {
 		List<KBucket> bucketsRef = getBuckets();
 		if (bucketsRef.isEmpty())
 			return CompletableFuture.completedFuture(null);
@@ -536,7 +538,7 @@ public final class RoutingTable {
 			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
 	}
 
-	CompletableFuture<Void> fillBuckets() {
+	public CompletableFuture<Void> fillBuckets() {
 		List<KBucket> bucketsRef = getBuckets();
 		if (bucketsRef.isEmpty())
 			return CompletableFuture.completedFuture(null);

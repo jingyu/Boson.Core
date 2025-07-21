@@ -74,7 +74,12 @@ import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
 import io.bosonnetwork.kademlia.protocol.deprecated.PingResponse;
 import io.bosonnetwork.kademlia.protocol.deprecated.StoreValueRequest;
 import io.bosonnetwork.kademlia.protocol.deprecated.StoreValueResponse;
+import io.bosonnetwork.kademlia.routing.KBucket;
+import io.bosonnetwork.kademlia.routing.KBucketEntry;
+import io.bosonnetwork.kademlia.routing.KClosestNodes;
+import io.bosonnetwork.kademlia.routing.RoutingTable;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeTracker;
+import io.bosonnetwork.kademlia.storage.deprecated.DataStorage;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
 import io.bosonnetwork.kademlia.tasks.NodeLookup;
 import io.bosonnetwork.kademlia.tasks.PeerAnnounce;
@@ -254,7 +259,7 @@ public class DHT {
 		return routingTable;
 	}
 
-	TaskManager getTaskManager() {
+	public TaskManager getTaskManager() {
 		return taskMan;
 	}
 

@@ -13,7 +13,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 
-import io.bosonnetwork.kademlia.KBucketEntry;
+import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.utils.Json;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;

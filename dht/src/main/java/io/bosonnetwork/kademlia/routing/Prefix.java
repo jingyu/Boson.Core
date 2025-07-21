@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -86,7 +86,7 @@ public class Prefix extends Id {
 	/**
 	 * Constructs a Prefix from an Id with a specified depth.
 	 *
-	 * @param id The Id to base the prefix on.
+	 * @param id    The Id to base the prefix on.
 	 * @param depth The depth of the prefix, in the range [-1, {@link Id#SIZE}).
 	 * @throws IllegalArgumentException If the id is null or depth is out of range.
 	 */
@@ -103,6 +103,11 @@ public class Prefix extends Id {
 		this.depth = depth;
 	}
 
+	/**
+	 * Returns the constant prefix that covers the entire key-space.
+	 *
+	 * @return The prefix representing the entire key-space.
+	 */
 	public static Prefix all() {
 		return ALL;
 	}
@@ -166,7 +171,7 @@ public class Prefix extends Id {
 		if (depth == -1)
 			return this;
 
-		return new Prefix(this, depth -1);
+		return new Prefix(this, depth - 1);
 	}
 
 	/**
@@ -177,8 +182,8 @@ public class Prefix extends Id {
 	 * @throws IllegalStateException If the prefix is not splittable.
 	 */
 	public Prefix splitBranch(boolean highBranch) {
-		if (depth >= Id.SIZE - 1)
-			throw new IllegalStateException("Prefix is not splittable");
+		if (!isSplittable())
+			throw new IllegalStateException("Prefix is not splittable (depth >= " + (Id.SIZE - 1) + ")");
 
 		final int branchDepth = depth + 1;
 		Prefix branch = new Prefix(this, branchDepth);
@@ -213,9 +218,10 @@ public class Prefix extends Id {
 	 * @return A random Id that falls under this prefix.
 	 */
 	public Id createRandomId() {
-		// first generate a random one
+		// Generate a random Id
 		Id id = Id.random();
 
+		// Copy the prefix bits to ensure the random Id falls within this prefix
 		if (depth != -1)
 			bitsCopy(this, id, depth);
 
@@ -227,11 +233,11 @@ public class Prefix extends Id {
 	 *
 	 * @param ids The collection of Ids to find the common prefix for.
 	 * @return The Prefix representing the common prefix of all provided Ids.
-	 * @throws IllegalArgumentException If the collection is empty.
+	 * @throws IllegalArgumentException If the collection is null or empty.
 	 */
 	public static Prefix getCommonPrefix(Collection<Id> ids) {
-		if (ids.isEmpty())
-			throw new IllegalArgumentException("ids cannot be empty");
+		if (ids == null || ids.isEmpty())
+			throw new IllegalArgumentException("ids cannot be null or empty");
 
 		final byte[] first = Collections.min(ids).bytes();
 		final byte[] last = Collections.max(ids).bytes();
@@ -240,18 +246,20 @@ public class Prefix extends Id {
 		int depth = -1;
 
 		int i = 0;
+		// Find complete matching bytes
 		for (; i < Id.BYTES && first[i] == last[i]; i++) {
 			prefixBytes[i] = first[i];
 			depth += 8;
 		}
 
+		// Handle partial byte match
 		if (i < Id.BYTES) {
-			// first differing byte
+			// Find the first differing bit within the byte
 			prefixBytes[i] = (byte) (first[i] & last[i]);
 			for (int j = 0; j < 8; j++) {
 				int mask = 0x80 >>> j;
 
-				// find leftmost differing bit and then zero out all following bits
+				// Find leftmost differing bit and zero out all following bits
 				if (((first[i] ^ last[i]) & mask) != 0) {
 					prefixBytes[i] = (byte) (prefixBytes[i] & ~(0xFF >>> j));
 					break;
@@ -286,9 +294,9 @@ public class Prefix extends Id {
 	}
 
 	/**
-	 *	Returns a hash code for this prefix.
+	 * Returns a hash code for this prefix.
 	 *
-	 *	@return the hash code value.
+	 * @return the hash code value.
 	 */
 	@Override
 	public int hashCode() {
@@ -306,11 +314,17 @@ public class Prefix extends Id {
 		if (depth == -1)
 			return "all";
 
-		StringBuilder repr = new StringBuilder(withSpaces ? depth + 4: depth + depth >>> 3 + 4);
+		// Calculate more accurate capacity
+		int capacity = depth + 1; // bits
+		if (withSpaces)
+			capacity += (depth / 8); // spaces between bytes
+		capacity += 4; // for "..." suffix
+
+		StringBuilder repr = new StringBuilder(capacity);
 		final byte[] bytes = bytes();
 		final char[] bits = new char[8];
 
-		final int prefixBytes = ((depth + 1) >>> 3);
+		final int prefixBytes = (depth + 1) >>> 3;
 		for (int i = 0; i < prefixBytes; i++) {
 			int b = bytes[i] & 0xFF;
 			for (int j = 7; j >= 0; j--) {
@@ -323,6 +337,7 @@ public class Prefix extends Id {
 				repr.append(' ');
 		}
 
+		// Handle remaining bits in the last byte
 		final int remainingBits = (depth + 1) & 0x07;
 		if (remainingBits > 0) {
 			int b = bytes[prefixBytes] & 0xFF;

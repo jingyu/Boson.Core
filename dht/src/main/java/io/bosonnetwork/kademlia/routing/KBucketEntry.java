@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import java.math.RoundingMode;
 import java.net.InetAddress;
@@ -35,6 +35,8 @@ import java.util.Map;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.kademlia.Constants;
+import io.bosonnetwork.kademlia.ExponentialWeightedMovingAverage;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**
@@ -66,7 +68,7 @@ public class KBucketEntry extends NodeInfo {
 	 * -1 = never queried / learned about it from incoming requests 0 = last query
 	 * was a success > 0 = query failed
 	 */
-	private final ExponentialWeightendMovingAverage avgRTT = new ExponentialWeightendMovingAverage(RTT_EMA_WEIGHT);
+	private final ExponentialWeightedMovingAverage avgRTT = new ExponentialWeightedMovingAverage(RTT_EMA_WEIGHT);
 
 	private long created;
 	private long lastSeen;
@@ -213,7 +215,7 @@ public class KBucketEntry extends NodeInfo {
 		if (other.isReachable())
 			setReachable(true);
 		if (!Double.isNaN(other.avgRTT.getAverage()))
-			avgRTT.updateAverage(other.avgRTT.getAverage());
+			avgRTT.update(other.avgRTT.getAverage());
 		if (other.failedRequests() > 0)
 			failedRequests = Math.min(failedRequests, other.failedRequests());
 	}
@@ -231,7 +233,7 @@ public class KBucketEntry extends NodeInfo {
 		failedRequests = 0;
 		reachable = true;
 		if (rtt > 0)
-			avgRTT.updateAverage(rtt);
+			avgRTT.update(rtt);
 	}
 
 	public void mergeRequestTime(long requestSent) {

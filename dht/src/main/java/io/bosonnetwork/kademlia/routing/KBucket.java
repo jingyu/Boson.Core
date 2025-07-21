@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.Constants;
 import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 
 /**

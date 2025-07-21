@@ -31,7 +31,7 @@ import java.util.stream.Stream;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.kademlia.DataStorage;
+import io.bosonnetwork.kademlia.storage.deprecated.DataStorage;
 import io.bosonnetwork.shell.StorageCommand.ListPeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ListValueCommand;
 import io.bosonnetwork.shell.StorageCommand.PeerCommand;

@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -91,7 +91,7 @@ public class PrefixTests {
 					assertTrue(olderChild.isSiblingOf(youngerChild));
 				} else {
 					var ex = assertThrows(IllegalStateException.class, () -> prefix.splitBranch(true));
-					assertEquals("Prefix is not splittable", ex.getMessage());
+					assertTrue(ex.getMessage().startsWith("Prefix is not splittable"));
 				}
 			}
 		}

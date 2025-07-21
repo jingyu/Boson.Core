@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.storage.deprecated;
 
 import java.io.Closeable;
 import java.util.Collection;

@@ -101,8 +101,8 @@ public class RPCServer implements Selectable {
 	private SpamThrottle outboundThrottle;
 	private TimeoutSampler timeoutSampler;
 	private RPCStatistics stats;
-	private ExponentialWeightendMovingAverage unverifiedLossrate;
-	private ExponentialWeightendMovingAverage verifiedEntryLossrate;
+	private ExponentialWeightedMovingAverage unverifiedLossrate;
+	private ExponentialWeightedMovingAverage verifiedEntryLossrate;
 
 	private static final ThreadLocal<ByteBuffer> writeBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(1500));
 	private static final ThreadLocal<ByteBuffer> readBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(Constants.RECEIVE_BUFFER_SIZE));
@@ -142,8 +142,8 @@ public class RPCServer implements Selectable {
 		this.receivedMessages = new AtomicLong();
 		this.sentMessages = new AtomicLong();
 
-		this.unverifiedLossrate = new ExponentialWeightendMovingAverage(0.01, 0.5);
-		this.verifiedEntryLossrate = new ExponentialWeightendMovingAverage(0.01, 0.5);
+		this.unverifiedLossrate = new ExponentialWeightedMovingAverage(0.01, 0.5);
+		this.verifiedEntryLossrate = new ExponentialWeightedMovingAverage(0.01, 0.5);
 
 		dht.setRPCServer(this);
 	}
@@ -329,9 +329,9 @@ public class RPCServer implements Selectable {
 
 			stats.timeoutMessage(call.getRequest());
 			if(call.knownReachableAtCreationTime())
-				verifiedEntryLossrate.updateAverage(1.0);
+				verifiedEntryLossrate.update(1.0);
 			else
-				unverifiedLossrate.updateAverage(1.0);
+				unverifiedLossrate.update(1.0);
 
 			dht.onTimeout(call);
 			processCallQueue();
@@ -340,9 +340,9 @@ public class RPCServer implements Selectable {
 		@Override
 		public void onResponse(RPCCall call, OldMessage msg) {
 			if(call.knownReachableAtCreationTime())
-				verifiedEntryLossrate.updateAverage(0.0);
+				verifiedEntryLossrate.update(0.0);
 			else
-				unverifiedLossrate.updateAverage(0.0);
+				unverifiedLossrate.update(0.0);
 		}
 	};
 

@@ -32,8 +32,8 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.KBucket;
-import io.bosonnetwork.kademlia.KBucketEntry;
+import io.bosonnetwork.kademlia.routing.KBucket;
+import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.RPCCall;
 import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
 

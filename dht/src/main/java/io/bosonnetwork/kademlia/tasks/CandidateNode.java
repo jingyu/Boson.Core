@@ -27,7 +27,7 @@ import java.util.Comparator;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.KBucketEntry;
+import io.bosonnetwork.kademlia.routing.KBucketEntry;
 
 /**
  * @hidden

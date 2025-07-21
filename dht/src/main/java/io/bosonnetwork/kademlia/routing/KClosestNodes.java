@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.routing;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -32,6 +32,8 @@ import java.util.function.Predicate;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.kademlia.Constants;
+import io.bosonnetwork.kademlia.DHT;
 
 /**
  * @hidden
