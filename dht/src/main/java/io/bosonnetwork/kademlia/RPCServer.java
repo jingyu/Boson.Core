@@ -63,6 +63,7 @@ import io.bosonnetwork.kademlia.exceptions.IOError;
 import io.bosonnetwork.kademlia.protocol.deprecated.ErrorMessage;
 import io.bosonnetwork.kademlia.protocol.deprecated.MessageException;
 import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import io.bosonnetwork.kademlia.rpc.TimeoutSampler;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SpamThrottle;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeTracker;
@@ -136,7 +137,7 @@ public class RPCServer implements Selectable {
 
 		this.outboundThrottle = enableThrottle ? new SpamThrottle() : SpamThrottle.disabled();
 		this.inboundThrottle = enableThrottle ? new SpamThrottle() : SpamThrottle.disabled();
-		this.timeoutSampler = new TimeoutSampler();
+		this.timeoutSampler = new TimeoutSampler(50, 0, Constants.RPC_CALL_TIMEOUT_MAX, Constants.RPC_CALL_TIMEOUT_BASELINE_MIN);
 		this.stats = new RPCStatistics();
 
 		this.receivedMessages = new AtomicLong();
@@ -705,7 +706,7 @@ public class RPCServer implements Selectable {
 		f.format("rx: %d tx: %d active: %d baseRTT: %d loss: %f  loss (verified): %f uptime: %s%n",
 				getNumberOfReceivedMessages(), getNumberOfSentMessages(), getNumberOfActiveRPCCalls(),
 				timeoutSampler.getStallTimeout(), unverifiedLossrate.getAverage(), verifiedEntryLossrate.getAverage(), age());
-		f.format("RTT stats (%dsamples) %s", timeoutSampler.getSampleCount(), timeoutSampler.getStats());
+		// f.format("RTT stats (%dsamples) %s", timeoutSampler.getSampleCount(), timeoutSampler.getStats());
 
 		return f.toString();
 	}

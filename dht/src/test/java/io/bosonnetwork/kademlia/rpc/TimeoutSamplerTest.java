@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.rpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -32,69 +32,74 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.crypto.Random;
 
 public class TimeoutSamplerTest {
+	private static final int BIN_SIZE = 50;
+	private static final int TIMEOUT_MIN = 0;
+	private static final int TIMEOUT_MAX = 10 * 1000;
+	private static final int TIMEOUT_BASELINE_MIN = 100;
+
 	@Test
 	public void testStatisticalProperties() {
-		TimeoutSampler f = new TimeoutSampler();
+		TimeoutSampler ts = new TimeoutSampler(BIN_SIZE, TIMEOUT_MIN, TIMEOUT_MAX, TIMEOUT_BASELINE_MIN);
 
 		// decay otherwise sensible defaults
-		IntStream.range(0, 10).forEach(i -> f.decay());
+		IntStream.range(0, 10).forEach(i -> ts.decay());
 
-		f.update(300);
-		f.update(7000);
+		ts.update(300);
+		ts.update(7000);
 
-		IntStream.range(0, 300).forEach(i -> f.update(1500));
-		IntStream.range(0, 300).forEach(i -> f.update(1600));
-		IntStream.range(0, 300).forEach(i -> f.update(1700));
-		IntStream.range(0, 300).forEach(i -> f.update(1800));
-		IntStream.range(0, 300).forEach(i -> f.update(1900));
-		IntStream.range(0, 1000).forEach(i -> f.update(3000));
-		f.makeSnapshot();
-		TimeoutSampler.Snapshot ss = f.getStats();
+		IntStream.range(0, 300).forEach(i -> ts.update(1500));
+		IntStream.range(0, 300).forEach(i -> ts.update(1600));
+		IntStream.range(0, 300).forEach(i -> ts.update(1700));
+		IntStream.range(0, 300).forEach(i -> ts.update(1800));
+		IntStream.range(0, 300).forEach(i -> ts.update(1900));
+		IntStream.range(0, 1000).forEach(i -> ts.update(3000));
+		ts.makeSnapshot();
+		TimeoutSampler.Snapshot ss = ts.getStats();
 
 		System.out.println(ss);
 
 		int expectedAvg = (1500*300 + 1600*300 + 1700*300 + 1800 * 300 + 1900 * 300 + 1000 * 3000) / (300 * 5 + 1000);
 
-		assertEquals(expectedAvg, ss.mean, TimeoutSampler.BIN_SIZE);
-		assertEquals(3000, ss.mode, TimeoutSampler.BIN_SIZE);
-		assertEquals(300, ss.getQuantile(0.0001f), TimeoutSampler.BIN_SIZE);
-		assertEquals(1500, ss.getQuantile(0.01f), TimeoutSampler.BIN_SIZE);
-		assertEquals(1900, ss.getQuantile(0.5f), TimeoutSampler.BIN_SIZE);
-		assertEquals(3000, ss.getQuantile(0.9f), TimeoutSampler.BIN_SIZE);
-		assertEquals(7000, ss.getQuantile(0.9999f), TimeoutSampler.BIN_SIZE);
+		assertEquals(expectedAvg, ss.mean, ts.getBinSize());
+		assertEquals(3000, ss.mode, ts.getBinSize());
+		assertEquals(300, ss.getQuantile(0.0001f), ts.getBinSize());
+		assertEquals(1500, ss.getQuantile(0.01f), ts.getBinSize());
+		assertEquals(1900, ss.getQuantile(0.5f), ts.getBinSize());
+		assertEquals(3000, ss.getQuantile(0.9f), ts.getBinSize());
+		assertEquals(7000, ss.getQuantile(0.9999f), ts.getBinSize());
 	}
 
 	@Test
 	public void testCorrectnessUnderDecay() {
-		TimeoutSampler f = new TimeoutSampler();
+		TimeoutSampler ts =  new TimeoutSampler(BIN_SIZE, TIMEOUT_MIN, TIMEOUT_MAX, TIMEOUT_BASELINE_MIN);
 
 		IntStream.range(0, 2000).forEach(i -> {
-			f.update((long) (Random.random().nextGaussian() * 100 + 5000));
+			ts.update((long) (Random.random().nextGaussian() * 100 + 5000));
 			if((i % 10) == 0)
-				f.decay();
+				ts.decay();
 		});
 
-		f.makeSnapshot();
-		TimeoutSampler.Snapshot ss = f.getStats();
+		ts.makeSnapshot();
+		TimeoutSampler.Snapshot ss = ts.getStats();
 
 		System.out.println(ss);
 
-		assertEquals(5000, ss.mean, TimeoutSampler.BIN_SIZE);
-		assertEquals(5000, ss.getQuantile(0.5f), TimeoutSampler.BIN_SIZE);
-		assertEquals(5000, ss.mode, 2 * TimeoutSampler.BIN_SIZE);
+		assertEquals(5000, ss.mean, ts.getBinSize());
+		assertEquals(5000, ss.getQuantile(0.5f), ts.getBinSize());
+		assertEquals(5000, ss.mode, 2 * ts.getBinSize());
 	}
 
 	@Test
 	public void testRandomRTTs() {
-		TimeoutSampler f = new TimeoutSampler();
+		TimeoutSampler ts =  new TimeoutSampler(BIN_SIZE, TIMEOUT_MIN, TIMEOUT_MAX, TIMEOUT_BASELINE_MIN);
 
 		IntStream.range(0, 1000000).forEach(i -> {
 			int rtt = Random.random().nextInt(100, 500);
-			f.update(rtt + (rtt % 10 == 0 ? 5000 : 0));
+			ts.update(rtt + (rtt % 10 == 0 ? 5000 : 0));
 		});
 
-		f.makeSnapshot();
-		TimeoutSampler.Snapshot ss = f.getStats();
+		ts.makeSnapshot();
+		TimeoutSampler.Snapshot ss = ts.getStats();
 
 		System.out.println(ss);
 	}

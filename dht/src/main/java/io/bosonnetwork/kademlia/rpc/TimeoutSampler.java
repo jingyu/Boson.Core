@@ -21,45 +21,52 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.rpc;
 
 import static io.bosonnetwork.utils.Functional.tap;
 
 import java.util.Arrays;
 import java.util.Formatter;
 
+import io.bosonnetwork.kademlia.RPCCall;
+import io.bosonnetwork.kademlia.RPCCallListener;
 import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 
 /**
- * Class to track and analyze round-trip times (RTTs) of RPC calls using a histogram
- * for adaptive timeout calculation based on observed network latency.
+ * Estimates adaptive RPC timeouts by analyzing round-trip times (RTTs)
+ * using a decaying histogram and quantile-based sampling. The configuration
+ * is provided via constructor parameters for bin size, timeout bounds,
+ * and minimum baseline.
  */
 public class TimeoutSampler {
-	// public static final int NUM_SAMPLES = 256;
-	// public static final int HIGH_QUANTILE_INDEX = (int) (NUM_SAMPLES * 0.9f);
-	// public static final int LOW_QUANTILE_INDEX = (int) (NUM_SAMPLES * 0.1f);
+	// Minimum allowed timeout in milliseconds. Used as a floor in timeout estimation.
+	private final int timeoutMin;
+	// Maximum allowed timeout in milliseconds. Used as a cap in timeout estimation.
+	private final int timeoutMax;
+	// Minimum baseline increment added to the lower quantile to prevent timeouts from being too aggressive.
+	private final int timeoutBaselineMin;
 
 	// Minimum value for the histogram bins (typically 0 ms)
-	protected static final int MIN_BIN = 0;
+	// Logically derived from timeoutMin, kept separately for clarity.
+	protected final int minBin;
 	// Maximum value for the histogram bins, defined by a constant for max RPC timeout
-	protected static final int MAX_BIN = Constants.RPC_CALL_TIMEOUT_MAX;
+	// Logically derived from timeoutMax, kept separately for clarity.
+	protected final int maxBin;
 	// Size of each histogram bin in milliseconds (each bin represents a 50ms range)
-	protected static final int BIN_SIZE = 50;
-	// Number of bins in the histogram, calculated to cover the range [MIN_BIN, MAX_BIN]
-	protected static final int NUM_BINS = (int) Math.ceil((MAX_BIN - MIN_BIN) * 1.0f / BIN_SIZE);
+	protected final int binSize;
 
 	// Histogram bins storing frequency counts of RTTs
-	private final float[] bins = new float[NUM_BINS];
+	private final float[] bins;
 	// Count of total updates to the histogram (volatile for thread safety if needed)
 	private /*volatile*/ long updateCount;
 	// Upper bound for timeout (90th percentile of RTTs)
-	private long timeoutCeiling;
+	private int timeoutCeiling;
 	// Lower bound for timeout (10th percentile of RTTs)
-	private long timeoutBaseline;
+	private int timeoutBaseline;
 
 	// Current snapshot of the histogram for statistical analysis
 	// Initialize snapshot with a bias toward MAX_BIN for conservative initial timeouts
-	private Snapshot snapshot = new Snapshot(tap(bins.clone(), array -> array[array.length - 1] = 1.0f));
+	private Snapshot snapshot;
 
 	private final RPCCallListener listener = new RPCCallListener() {
 		@Override
@@ -71,7 +78,7 @@ public class TimeoutSampler {
 	/**
 	 * Class to hold a snapshot of the histogram and compute statistics
 	 */
-	protected static class Snapshot {
+	protected class Snapshot {
 		// Array of normalized bin values representing the distribution of RTTs
 		final float[] values;
 		// Mean RTT calculated from the histogram
@@ -114,7 +121,7 @@ public class TimeoutSampler {
 			// Iterate through bins to compute mean and mode
 			for (int bin = 0; bin < values.length; bin++) {
 				// Midpoint of the bin
-				float midpoint = (bin + 0.5f) * BIN_SIZE;
+				float midpoint = (bin + 0.5f) * binSize;
 				// Mean: Weighted average of bin midpoints
 				mean += values[bin] * midpoint;
 				// Mode: Find bin with the highest population
@@ -161,11 +168,11 @@ public class TimeoutSampler {
 			for (int i = 0; i < values.length; i++) {
 				quant -= values[i];
 				if (quant <= 0) // Return midpoint of the bin where quantile is reached
-					return (i + 0.5f) * BIN_SIZE;
+					return (i + 0.5f) * binSize;
 			}
 
 			// If quantile not found, return maximum bin value
-			return MAX_BIN;
+			return maxBin;
 		}
 
 		/**
@@ -190,7 +197,7 @@ public class TimeoutSampler {
 			Formatter l2 = new Formatter(); // Normalized bin values (per mille)
 			for (int i = 0; i < values.length; i++) {
 				if (values[i] >= 0.001) {
-					l1.format(" %5d | ", i * BIN_SIZE);
+					l1.format(" %5d | ", i * binSize);
 					l2.format("%5d‰ | ", Math.round(values[i] * 1000));
 				}
 			}
@@ -203,19 +210,51 @@ public class TimeoutSampler {
 	}
 
 	/**
-	 * Default constructor
+	 * Constructs a TimeoutSampler with configurable histogram and timeout bounds.
+	 *
+	 * @param binSize             Size of each histogram bin in milliseconds.
+	 * @param timeoutMin          Minimum allowed timeout in milliseconds.
+	 * @param timeoutMax          Maximum allowed timeout in milliseconds.
+	 * @param timeoutBaselineMin  Minimum baseline offset added to the 10th percentile during timeout estimation.
+	 * @throws IllegalArgumentException if parameters are invalid.
 	 */
-	public TimeoutSampler() {
+	public TimeoutSampler(int binSize, int timeoutMin, int timeoutMax, int timeoutBaselineMin) {
+		if (binSize <= 0 || timeoutMin >= timeoutMax || timeoutBaselineMin < 0)
+			throw new IllegalArgumentException("Invalid TimeoutSampler configuration");
+
+		this.timeoutMin = timeoutMin;
+		this.timeoutMax = timeoutMax;
+		this.timeoutBaselineMin = timeoutBaselineMin;
+
+		this.minBin = timeoutMin;
+		this.maxBin = timeoutMax;
+		this.binSize = binSize;
+
+		// Number of bins in the histogram, calculated to cover the range [minBin, maxBin]
+		int numBins = (int) Math.ceil((maxBin - minBin) * 1.0f / this.binSize);
+		bins = new float[numBins];
+
+		snapshot = new Snapshot(tap(bins.clone(), array -> array[array.length - 1] = 1.0f));
 		reset();
 	}
 
 	/**
-	 * Resets the histogram and timeout values to initial state.
+	 * Resets the histogram and timeout statistics to their initial state.
+	 * Initializes all bins evenly and sets conservative timeout bounds.
 	 */
 	public void reset() {
 		updateCount = 0;
-		timeoutBaseline = timeoutCeiling = Constants.RPC_CALL_TIMEOUT_MAX;
+		timeoutBaseline = timeoutCeiling = timeoutMax;
 		Arrays.fill(bins, 1.0f / bins.length);
+	}
+
+	/**
+	 * Returns the size of each histogram bin in milliseconds.
+	 *
+	 * @return bin size
+	 */
+	protected int getBinSize() {
+		return binSize;
 	}
 
 	/**
@@ -257,7 +296,7 @@ public class TimeoutSampler {
 	 */
 	protected void update(long newRTT) {
 		// Calculate which bin the RTT falls into
-		int bin = (int) (newRTT - MIN_BIN) / BIN_SIZE;
+		int bin = (int) (newRTT - minBin) / binSize;
 		// Clamp bin index to valid range [0, NUM_BINS-1]
 		bin = Math.max(Math.min(bin, bins.length - 1), 0);
 
@@ -278,11 +317,14 @@ public class TimeoutSampler {
 	// - Consider time-based decay instead of update-based decay. For example, decay bins based on elapsed time
 	//   since the last snapshot (requires tracking timestamps).
 	/*
-	private long lastDecayTime;
+	private long lastDecayTime = System.currentTimeMillis();
 
 	protected void decay2() {
 		long now = System.currentTimeMillis();
-		double decayFactor = Math.pow(0.95, (now - lastDecayTime) / 1000.0); // Decay based on seconds elapsed
+		long elapsedMillis = Math.max(now - lastDecayTime, 0);
+
+		// Smooth exponential decay over time
+		double decayFactor = Math.pow(0.95, elapsedMillis / 1000.0);
 		for (int i = 0; i < bins.length; i++) {
 			bins[i] *= decayFactor;
 		}
@@ -295,8 +337,8 @@ public class TimeoutSampler {
 	 */
 	protected void makeSnapshot() {
 		snapshot = new Snapshot(bins.clone());
-		timeoutBaseline = (long) snapshot.getQuantile(0.1f);
-		timeoutCeiling = (long) snapshot.getQuantile(0.9f);
+		timeoutBaseline = (int) snapshot.getQuantile(0.1f);
+		timeoutCeiling = (int) snapshot.getQuantile(0.9f);
 	}
 
 	/**
@@ -309,18 +351,22 @@ public class TimeoutSampler {
 	}
 
 	/**
-	 * Calculates the stall timeout based on histogram statistics
+	 * Estimates the current stall timeout using the observed RTT distribution.
+	 * Uses the higher of (10th percentile + baseline) or 90th percentile,
+	 * and clamps the result to [timeoutMin, timeoutMax].
 	 *
-	 * @return the stall timeout
+	 * @return the estimated timeout value in milliseconds
 	 */
 	public long getStallTimeout() {
 		// Use the higher of: 90th percentile or 10th percentile + 100ms baseline.
 		// Ensures timeout doesn't drop too low and miss packets.
 		// Whichever is HIGHER (to prevent descent to zero and missing more
 		// than 10% of the packets in the worst case).
-		long timeout = Math.max(timeoutBaseline + Constants.RPC_CALL_TIMEOUT_BASELINE_MIN, timeoutCeiling);
+		long timeout = Math.max(timeoutBaseline + timeoutBaselineMin, timeoutCeiling);
 
 		// Cap the timeout at the maximum allowed value
-		return Math.min(timeout, Constants.RPC_CALL_TIMEOUT_MAX);
+		timeout = Math.min(timeout, timeoutMax);
+		// Ensure timeout is not less than minimum allowed timeout
+		return Math.max(timeout, timeoutMin);
 	}
 }
