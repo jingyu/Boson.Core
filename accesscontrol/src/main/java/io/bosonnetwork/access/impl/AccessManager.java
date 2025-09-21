@@ -36,20 +36,14 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
-import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.access.Permission;
 import io.bosonnetwork.utils.Json;
 
@@ -122,6 +116,7 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 
 			loadDefaults();
 
+			/*/
 			node.addStatusListener(new NodeStatusListener() {
 				ScheduledFuture<?> future;
 
@@ -156,6 +151,7 @@ public class AccessManager implements io.bosonnetwork.access.AccessManager {
 					log.info("Finished the cleanup");
 				}
 			});
+			*/
 
 			log.info("Initialized @ {}", repo);
 		} else {

@@ -45,7 +45,7 @@ public abstract class LookupResponse implements Response {
 	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	protected final int token;
 
-	protected LookupResponse(List<NodeInfo> nodes4, List<NodeInfo> nodes6, int token) {
+	protected LookupResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6, int token) {
 		this.nodes4 = nodes4 == null || nodes4.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes4);
 		this.nodes6 = nodes6 == null || nodes6.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes6);
 		this.token = token;

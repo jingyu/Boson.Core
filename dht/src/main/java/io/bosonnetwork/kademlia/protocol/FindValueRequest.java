@@ -30,30 +30,34 @@ import io.bosonnetwork.Id;
 
 public class FindValueRequest extends LookupRequest {
 	// Only send the value if the real sequence number greater than this.
-	@JsonProperty("seq")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
-	private final int sequenceNumber;
+	private final int expectedSequenceNumber;
 
 	@JsonCreator
 	protected FindValueRequest(@JsonProperty(value = "t", required = true) Id target,
 							   @JsonProperty(value = "w", required = true) int want,
-							   @JsonProperty(value = "seq") int sequenceNumber) {
+							   @JsonProperty(value = "cas") Integer expectedSequenceNumber) {
 		super(target, want);
-		this.sequenceNumber = sequenceNumber < 0 ? 0 : sequenceNumber;
+		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
 	}
 
-	public FindValueRequest(Id target, boolean want4, boolean want6, int sequenceNumber) {
+	public FindValueRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber) {
 		super(target, want4, want6, true);
-		this.sequenceNumber = sequenceNumber;
+		this.expectedSequenceNumber = expectedSequenceNumber;
 	}
 
-	public int getSequenceNumber() {
-		return sequenceNumber;
+	public int getExpectedSequenceNumber() {
+		return expectedSequenceNumber;
+	}
+
+	@JsonProperty("cas")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private Integer getCas() {
+		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
 	}
 
 	@Override
 	public int hashCode() {
-		return 0xF1AD5A1E + super.hashCode() + Integer.hashCode(sequenceNumber);
+		return 0xF1AD5A1E + super.hashCode() + Integer.hashCode(expectedSequenceNumber);
 	}
 
 	@Override
@@ -62,7 +66,7 @@ public class FindValueRequest extends LookupRequest {
 			return true;
 
 		if (obj instanceof FindValueRequest that)
-			return sequenceNumber == that.sequenceNumber && super.equals(obj);
+			return expectedSequenceNumber == that.expectedSequenceNumber && super.equals(obj);
 
 		return false;
 	}

@@ -39,7 +39,13 @@ import io.bosonnetwork.crypto.Signature;
  * Represents peer information in the Boson network.
  */
 public class PeerInfo {
+	/**
+	 * Attribute key to omit the peer ID in the peer info used in JsonContext.
+	 */
 	public static final Object ATTRIBUTE_OMIT_PEER_ID = new Object();
+	/**
+	 * Attribute key of the peer ID used in JsonContext.
+	 */
 	public static final Object ATTRIBUTE_PEER_ID = new Object();
 
 	private final Id publicKey;			// Peer ID
@@ -50,6 +56,19 @@ public class PeerInfo {
 	private final String alternativeURL;
 	private final byte[] signature;
 
+	/**
+	 * Constructs an instance of PeerInfo with the specified parameters.
+	 *
+	 * @param peerId the identifier of the peer; must not be null
+	 * @param privateKey the private key associated with the peer; should be of length {@link Signature.PrivateKey#BYTES}, or null if not provided
+	 * @param nodeId the node identifier of the peer; must not be null
+	 * @param origin the origin identifier of the peer; can be null or the same as nodeId
+	 * @param port the port number associated with the peer; must be greater than 0 and less than or equal to 65535
+	 * @param alternativeURL an optional alternative URL associated with the peer; may be null or an empty string
+	 * @param signature the signature associated with the peer; must not be null and should be of length {@link Signature#BYTES}
+	 * @throws IllegalArgumentException if peerId is null, the privateKey length is invalid, nodeId is null,
+	 *                                  the port is out of the valid range, or the signature is invalid
+	 */
 	private PeerInfo(Id peerId, byte[] privateKey, Id nodeId, Id origin, int port,
 			String alternativeURL, byte[] signature) {
 		if (peerId == null)
@@ -79,10 +98,30 @@ public class PeerInfo {
 		this.signature = signature;
 	}
 
+	/**
+	 * Constructor for the PeerInfo class.
+	 *
+	 * @param peerId         The unique identifier for the peer.
+	 * @param nodeId         The unique identifier for the node.
+	 * @param origin         The origin identifier associated with the peer.
+	 * @param port           The port number used by the peer.
+	 * @param alternativeURL An alternative URL for accessing the peer.
+	 * @param signature      A byte array representing the signature for security validation.
+	 */
 	protected PeerInfo(Id peerId, Id nodeId, Id origin, int port, String alternativeURL, byte[] signature) {
 		this(peerId, null, nodeId, origin, port, alternativeURL, signature);
 	}
 
+	/**
+	 * Constructs a PeerInfo object with the specified parameters.
+	 *
+	 * @param keypair the key pair to be used for signing and key generation; must not be null
+	 * @param nodeId the unique identifier of the node; must not be null
+	 * @param origin the origin node's identifier; can be null or equal to nodeId
+	 * @param port the port number for the peer; must be between 1 and 65535
+	 * @param alternativeURL an optional alternative URL for the peer; can be null or empty
+	 * @throws IllegalArgumentException if the keypair is null, nodeId is null, or port is invalid
+	 */
 	private PeerInfo(Signature.KeyPair keypair, Id nodeId, Id origin, int port, String alternativeURL) {
 		if (keypair == null)
 			throw new IllegalArgumentException("Invalid keypair");
@@ -465,6 +504,13 @@ public class PeerInfo {
 		return Signature.verify(getSignData(), signature, pk);
 	}
 
+	/**
+	 * Returns a new PeerInfo instance with the same properties as the current instance,
+	 * but with the private key set to null. If the current instance already has a null
+	 * private key, it returns the current instance itself.
+	 *
+	 * @return a new PeerInfo instance without a private key, or the current instance if the private key is already null.
+	 */
 	public PeerInfo withoutPrivateKey() {
 		if (privateKey == null)
 			return this;

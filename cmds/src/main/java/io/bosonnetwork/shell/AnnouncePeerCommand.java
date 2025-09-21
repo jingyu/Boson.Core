@@ -24,16 +24,16 @@
 package io.bosonnetwork.shell;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
+
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
+import io.bosonnetwork.utils.vertx.VertxFuture;
 
 /**
  * @hidden
@@ -44,7 +44,10 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 	@Option(names = { "-p", "--persistent" }, description = "Persistent peer, default is false.")
 	private boolean persistent = false;
 
-   	@Option(names = {"-k", "--private-key"}, description = "The private key.")
+	@Option(names = { "-l", "--localOnly" }, description = "Only store the value in the local node")
+	private boolean localOnly = false;
+
+	@Option(names = {"-k", "--private-key"}, description = "The private key.")
 	private String privateKey = null;
 
    	@Option(names = {"-n", "--node-id"}, description = "The node id.")
@@ -82,8 +85,11 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 		}
 
 		PeerInfo peer = PeerInfo.create(keypair, peerNodeId, Main.getBosonNode().getId(), port, alt);
-		CompletableFuture<Void> f = Main.getBosonNode().announcePeer(peer, persistent);
-		f.get();
+		if (localOnly)
+			VertxFuture.of(Main.getBosonNode().getStorage().putPeer(peer)).get();
+		else
+			Main.getBosonNode().announcePeer(peer, persistent).get();
+
 		System.out.println("Peer " + peer.getId() + " announced with private key " +
 				Hex.encode(peer.getPrivateKey()));
 

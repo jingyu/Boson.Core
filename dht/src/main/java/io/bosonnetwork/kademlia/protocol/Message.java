@@ -23,9 +23,11 @@
 package io.bosonnetwork.kademlia.protocol;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -41,34 +43,43 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import io.vertx.core.net.SocketAddress;
+import io.vertx.core.net.impl.SocketAddressImpl;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
-import io.bosonnetwork.kademlia.Constants;
+import io.bosonnetwork.kademlia.KadNode;
+import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.utils.Json;
 
 @JsonDeserialize(using = Message.Deserializer.class)
 @JsonSerialize(using = Message.Serializer.class)
 public class Message<T> {
+	// The minimum size of message: 10 bytes
+	public static final int MIN_BYTES = 10;
+
 	protected static final Object ATTR_NODE_ID = new Object();
+	private static final AtomicInteger nextTxId = new AtomicInteger(1);
 
 	// The DHT node id of the message sender
 	private Id id;
 
 	private final Type type;
 	private final Method method;
-	// Transaction id, should be non-zero integer.
-	private final int txid;
+	// Transaction id, should be unsigned integer.
+	private final long txid;
 	private final T body;
 	private final int version;
+
+	private RpcCall associatedCall;
 
 	// Source address of the inbound message (where it came from)
 	// or
 	// Destination address of the outbound message (where it is being sent)
-	private InetSocketAddress remoteAddr;
+	private SocketAddress remoteAddress; // Use Vert.x SocketAddress for efficiency
 	// Source node ID for inbound messages (the node the message came from)
 	// or
 	// Destination node ID for outbound messages (the node the message is being sent to)
@@ -154,7 +165,7 @@ public class Message<T> {
 		Type getType();
 	}
 
-	protected Message(Type type, Method method, int txid, T body, int version) {
+	protected Message(Type type, Method method, long txid, T body, int version) {
 		this.type = type;
 		this.method = method;
 		this.txid = txid;
@@ -162,8 +173,8 @@ public class Message<T> {
 		this.version = version;
 	}
 
-	protected Message(Type type, Method method, int txid, T body) {
-		this(type, method, txid, body, Constants.VERSION);
+	protected Message(Type type, Method method, long txid, T body) {
+		this(type, method, txid, body, KadNode.VERSION);
 	}
 
 	protected int getCompositeType() {
@@ -178,6 +189,18 @@ public class Message<T> {
 		return method;
 	}
 
+	public boolean isRequest() {
+		return type == Type.REQUEST;
+	}
+
+	public boolean isResponse() {
+		return type == Type.RESPONSE;
+	}
+
+	public boolean isError() {
+		return type == Type.ERROR;
+	}
+
 	public Id getId() {
 		return id;
 	}
@@ -186,7 +209,7 @@ public class Message<T> {
 		this.id = id;
 	}
 
-	public int getTxid() {
+	public long getTxid() {
 		return txid;
 	}
 
@@ -209,17 +232,48 @@ public class Message<T> {
 		return Version.toString(version);
 	}
 
-	public InetSocketAddress getRemoteAddress() {
-		return remoteAddr;
+	public Message<T> setAssociatedCall(RpcCall associatedCall) {
+		this.associatedCall = associatedCall;
+		return this;
+	}
+
+	public RpcCall getAssociatedCall() {
+		return associatedCall;
 	}
 
 	public Id getRemoteId() {
 		return remoteId;
 	}
 
-	public void setRemote(Id id, InetSocketAddress address) {
+	public SocketAddress getRemoteAddress() {
+		return remoteAddress;
+	}
+
+	public InetAddress getRemoteIpAddress() {
+		SocketAddressImpl sai = (SocketAddressImpl) remoteAddress;
+		return sai.ipAddress();
+	}
+
+	public int getRemotePort() {
+		return remoteAddress.port();
+	}
+
+	public Message<T> setRemote(Id id, SocketAddress address) {
 		this.remoteId = id;
-		this.remoteAddr = address;
+		this.remoteAddress = address;
+		return this;
+	}
+
+	public Message<T> setRemote(Id id, InetAddress address, int port) {
+		this.remoteId = id;
+		this.remoteAddress = SocketAddress.inetSocketAddress(new InetSocketAddress(address, port));
+		return this;
+	}
+
+	public Message<T> setRemote(Id id, InetSocketAddress address) {
+		this.remoteId = id;
+		this.remoteAddress = SocketAddress.inetSocketAddress(address);
+		return this;
 	}
 
 	@Override
@@ -318,65 +372,97 @@ public class Message<T> {
 		if (version != 0)
 			repr.append(", version: ").append(Version.toString(version));
 
-		if (remoteId != null && remoteAddr != null) {
+		if (remoteId != null && remoteAddress != null) {
 			if (remoteId.equals(id))
-				repr.append(", from: ").append(remoteAddr);
+				repr.append(", from: ").append(remoteAddress);
 			else
-				repr.append(", to: ").append(remoteId).append("/").append(remoteAddr);
+				repr.append(", to: ").append(remoteId).append("@").append(remoteAddress);
 		}
 
 		return repr.toString();
 	}
 
-	public static Message<Void> pingRequest(int txid) {
-		return new Message<>(Type.REQUEST, Method.PING, txid, null);
+	protected static void setTxidBase(int base) {
+		nextTxId.set(base);
 	}
 
-	public static Message<Void> pingResponse(int txid) {
+	private static long nextTxid() {
+		return Integer.toUnsignedLong(nextTxId.getAndIncrement());
+	}
+
+	public static <B> Message<B> message(Type type, Method method, long txid, B body) {
+		return new Message<>(type, method, txid, body);
+	}
+
+	public static Message<Void> pingRequest() {
+		return new Message<>(Type.REQUEST, Method.PING, nextTxid(), null);
+	}
+
+	public static Message<Void> pingResponse(long txid) {
 		return new Message<>(Type.RESPONSE, Method.PING, txid, null);
 	}
 
-	public static Message<FindNodeRequest> findNodeRequest(int txid, Id target, boolean want4, boolean want6, boolean wantToken) {
-		return new Message<>(Type.REQUEST, Method.FIND_NODE, txid, new FindNodeRequest(target, want4, want6, wantToken));
+	public static Message<FindNodeRequest> findNodeRequest(Id target, boolean want4, boolean want6) {
+		return new Message<>(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, false));
 	}
 
-	public static Message<FindNodeResponse> findNodeResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, int token) {
+	public static Message<FindNodeRequest> findNodeRequest(Id target, boolean want4, boolean want6, boolean wantToken) {
+		return new Message<>(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, wantToken));
+	}
+
+	public static Message<FindNodeResponse> findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, int token) {
 		return new Message<>(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 
-	public static Message<FindPeerRequest> findPeerRequest(int txid, Id target, boolean want4, boolean want6) {
-		return new Message<>(Type.REQUEST, Method.FIND_PEER, txid, new FindPeerRequest(target, want4, want6));
+	public static Message<FindPeerRequest> findPeerRequest(Id target, boolean want4, boolean want6) {
+		return new Message<>(Type.REQUEST, Method.FIND_PEER, nextTxid(), new FindPeerRequest(target, want4, want6));
 	}
 
-	public static Message<FindPeerResponse> findPeerResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, List<PeerInfo> peers) {
+	public static Message<FindPeerResponse> findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
+		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6));
+	}
+
+	public static Message<FindPeerResponse> findPeerResponse(long txid, List<PeerInfo> peers) {
+		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(peers));
+	}
+
+	protected static Message<FindPeerResponse> findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, List<PeerInfo> peers) {
 		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
 	}
 
-	public static Message<AnnouncePeerRequest> announcePeerRequest(int txid, PeerInfo peer, int token) {
-		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, txid, new AnnouncePeerRequest(peer, token));
+	public static Message<AnnouncePeerRequest> announcePeerRequest(PeerInfo peer, int token) {
+		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, nextTxid(), new AnnouncePeerRequest(peer, token));
 	}
 
-	public static Message<Void> announcePeerResponse(int txid) {
+	public static Message<Void> announcePeerResponse(long txid) {
 		return new Message<>(Type.RESPONSE, Method.ANNOUNCE_PEER, txid, null);
 	}
 
-	public static Message<FindValueRequest> findValueRequest(int txid, Id target, boolean want4, boolean want6, int sequenceNumber) {
-		return new Message<>(Type.REQUEST, Method.FIND_VALUE, txid, new FindValueRequest(target, want4, want6, sequenceNumber));
+	public static Message<FindValueRequest> findValueRequest(Id target, boolean want4, boolean want6, int sequenceNumber) {
+		return new Message<>(Type.REQUEST, Method.FIND_VALUE, nextTxid(), new FindValueRequest(target, want4, want6, sequenceNumber));
 	}
 
-	public static Message<FindValueResponse> findValueResponse(int txid, List<NodeInfo> n4, List<NodeInfo> n6, Value value) {
+	public static Message<FindValueResponse> findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
+		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6));
+	}
+
+	public static Message<FindValueResponse> findValueResponse(long txid, Value value) {
+		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(value));
+	}
+
+	protected static Message<FindValueResponse> findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, Value value) {
 		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6, value));
 	}
 
-	public static Message<StoreValueRequest> storeValueRequest(int txid, Value value, int token, int expectedSequenceNumber) {
-		return new Message<>(Type.REQUEST, Method.STORE_VALUE, txid, new StoreValueRequest(value, token, expectedSequenceNumber));
+	public static Message<StoreValueRequest> storeValueRequest(Value value, int token, int expectedSequenceNumber) {
+		return new Message<>(Type.REQUEST, Method.STORE_VALUE, nextTxid(), new StoreValueRequest(value, token, expectedSequenceNumber));
 	}
 
-	public static Message<Void> storeValueResponse(int txid) {
+	public static Message<Void> storeValueResponse(long txid) {
 		return new Message<>(Type.RESPONSE, Method.STORE_VALUE, txid, null);
 	}
 
-	public static Message<Error> error(Method method, int txid, int code, String message) {
+	public static Message<Error> error(Method method, long txid, int code, String message) {
 		return new Message<>(Type.ERROR, method, txid, new Error(code, message));
 	}
 
@@ -384,6 +470,7 @@ public class Message<T> {
 	static class Serializer extends StdSerializer<Message> {
 		private static final long serialVersionUID = -5377850531790575309L;
 
+		@SuppressWarnings("unused")
 		public Serializer() {
 			this(Message.class);
 		}
@@ -408,6 +495,7 @@ public class Message<T> {
 	static class Deserializer extends StdDeserializer<Message<?>> {
 		private static final long serialVersionUID = -46020275686127311L;
 
+		@SuppressWarnings("unused")
 		public Deserializer() {
 			this(Message.class);
 		}
@@ -424,7 +512,7 @@ public class Message<T> {
 
 			Type type = null;
 			Method method = null;
-			int txid = 0;
+			long txid = 0;
 			int version = 0;
 
 			Body body = null;
@@ -442,7 +530,7 @@ public class Message<T> {
 					break;
 				}
 				case "t":
-					txid = p.getIntValue();
+					txid = p.getLongValue();
 					if (txid == 0)
 						throw ctxt.weirdNumberException(txid, Integer.class,
 								"Invalid `[t]xid` field: should be non-zero integer");

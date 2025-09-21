@@ -39,19 +39,19 @@ public interface ConnectionStatusListener {
 	}
 
 	/**
+	 * Called when the Boson node is connecting to the Boson network.
+	 *
+	 * @param network the DHT network, IPv4 or IPv6.
+	 */
+	default void connecting(Network network) {
+	}
+
+	/**
 	 * Called when the Boson node connected to the Boson network.
 	 *
 	 * @param network the DHT network, IPv4 or IPv6.
 	 */
 	default void connected(Network network) {
-	}
-
-	/**
-	 * Called when the Boson node profound-connected to the Boson network.
-	 *
-	 * @param network the DHT network, IPv4 or IPv6.
-	 */
-	default void profound(Network network) {
 	}
 
 	/**

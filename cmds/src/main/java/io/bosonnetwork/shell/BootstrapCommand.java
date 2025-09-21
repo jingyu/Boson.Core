@@ -26,11 +26,11 @@ package io.bosonnetwork.shell;
 import java.net.InetAddress;
 import java.util.concurrent.Callable;
 
-import io.bosonnetwork.Id;
-import io.bosonnetwork.NodeInfo;
-
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
+
+import io.bosonnetwork.Id;
+import io.bosonnetwork.NodeInfo;
 
 /**
  * @hidden

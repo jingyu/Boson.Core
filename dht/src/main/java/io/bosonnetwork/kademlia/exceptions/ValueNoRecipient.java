@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia.exceptions;
 
-import io.bosonnetwork.kademlia.ErrorCode;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
  * Signals that the value does not have recipient property.
@@ -88,4 +88,3 @@ public class ValueNoRecipient extends KadException {
 		super(ErrorCode.ValueNoRecipient.value(), cause);
 	}
 }
-

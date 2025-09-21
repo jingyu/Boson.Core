@@ -59,7 +59,7 @@ public class InMemoryStorage implements DataStorage {
 	}
 
 	@Override
-	public Future<Integer> initialize(Vertx vertx, String connectionUri, long valueExpiration, long peerInfoExpiration) {
+	public Future<Integer> initialize(Vertx vertx, long valueExpiration, long peerInfoExpiration) {
 		if (initialized)
 			return Future.failedFuture(new DataStorageException("Storage already initialized"));
 
@@ -91,12 +91,12 @@ public class InMemoryStorage implements DataStorage {
 
 	@Override
 	public Future<Value> putValue(Value value) {
-		return putValue(value, false, 0);
+		return putValue(value, false, -1);
 	}
 
 	@Override
 	public Future<Value> putValue(Value value, boolean persistent) {
-		return putValue(value, persistent, 0);
+		return putValue(value, persistent, -1);
 	}
 
 	private void updateValueEntry(StorageEntry<Value> entry, Value value, boolean persistent,
@@ -110,7 +110,7 @@ public class InMemoryStorage implements DataStorage {
 		if (value.getSequenceNumber() < existing.getSequenceNumber())
 			throw new SequenceNotMonotonic("Sequence number less than current");
 
-		if (expectedSequenceNumber > 0 && existing.getSequenceNumber() != expectedSequenceNumber)
+		if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber)
 			throw new SequenceNotExpected("Sequence number not expected");
 
 		if (existing.hasPrivateKey() && !value.hasPrivateKey()) {

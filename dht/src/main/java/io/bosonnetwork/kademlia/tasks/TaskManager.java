@@ -23,136 +23,203 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
-import static com.google.common.base.Preconditions.checkState;
-
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentSkipListSet;
 
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.DHT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.bosonnetwork.kademlia.impl.KadContext;
 
 /**
- * @hidden
+ * A class for managing Kademlia tasks, handling queuing, execution, removal, and cancellation.
+ * Enforces limits on active tasks and concurrent RPC requests to prevent overload in a single-threaded
+ * Vert.x event loop. Integrated with {@link KadContext} for task scheduling. Designed for single-threaded
+ * use; not thread-safe.
  */
 public class TaskManager {
-	private final DHT dht;
-	private final Deque<Task> queued;
-	private final Set<Task> running;
+	/** Maximum number of active tasks. */
+	static final int MAX_ACTIVE_TASKS = 32;
+	/** Maximum concurrent RPC requests for normal tasks. */
+	static final int MAX_CONCURRENT_TASK_REQUESTS = 16;
+	/** Maximum concurrent RPC requests for low-priority tasks. */
+	static final int MAX_CONCURRENT_TASK_REQUESTS_LOW_PRIORITY = 4;
+
+	private final KadContext context;
+	private final Deque<Task<?>> queuedTasks;
+	private final Set<Task<?>> runningTasks;
 	private boolean canceling;
 
-	public TaskManager(DHT dht) {
-		this.dht = dht;
+	private static final Logger log = LoggerFactory.getLogger(TaskManager.class);
 
-		queued = new ConcurrentLinkedDeque<>();
-		running = new ConcurrentSkipListSet<>();
+	/**
+	 * Constructs a new TaskManager with the given context and default limits.
+	 *
+	 * @param context the Kademlia context
+	 */
+	public TaskManager(KadContext context) {
+		this.context = context;
+
+		queuedTasks = new LinkedList<>();
+		runningTasks = new HashSet<>();
 	}
 
-	public void add(Task task, boolean prior) {
-		checkState(!canceling, "Can not add new tasks when stopping");
+	/**
+	 * Adds a task to the manager, queuing it if not running and starting it when ready.
+	 *
+	 * @param task  the task to add
+	 * @param prior true to add to the front of the queue (priority), false to the end
+	 */
+	public void add(Task<?> task, boolean prior) {
+		assert (task != null) : "Invalid task";
+		assert (!task.isEnd()) : "Task is end";
 
-		// remove finished and dequeue the queued
-		task.addListener(t -> {
-			if (!running.remove(t))
-				queued.remove(t);
+		if (canceling)
+			throw new IllegalStateException("TaskManager is canceling");
 
+		// Remove terminated task and dequeue queued
+		task.endHandler(t -> {
+			remove(t);
 			dequeue();
 		});
 
 		if (task.getState() == Task.State.RUNNING) {
-			running.add(task);
+			log.trace("Add running task directly: {}", task);
+			runningTasks.add(task);
 			return;
 		}
 
-		if (!task.setState(Task.State.INITIAL, Task.State.QUEUED))
+		if (!task.setState(Task.State.INITIAL, Task.State.QUEUED)) {
+			log.error("!!!INTERNAL ERROR: task is not in INITIAL state: {}", task);
+			task.endHandler(null);
 			return;
+		}
 
+		log.trace("Add task to queue: {}", task);
 		if (prior)
-			queued.addFirst(task);
+			queuedTasks.addFirst(task);
 		else
-			queued.addLast(task);
+			queuedTasks.addLast(task);
 
-		dequeue();
+		context.runOnContext(v -> dequeue());
 	}
 
-	public void add(Task task) {
+	/**
+	 * Adds a task to the manager without priority.
+	 *
+	 * @param task the task to add
+	 */
+	public void add(Task<?> task) {
 		add(task, false);
 	}
 
-	public synchronized void dequeue() {
-		Task t;
+	/**
+	 * Removes a task from the manager.
+	 *
+	 * @param task the task to remove
+	 * @return true if removed, false otherwise
+	 */
+	public boolean remove(Task<?> task) {
+		log.trace("Remove task: {}", task);
+		if (queuedTasks.remove(task)) {
+			log.debug("Removed queued task: {}", task);
+			return true;
+		}
+		if (runningTasks.remove(task)) {
+			log.debug("Removed running task: {}", task);
+			return true;
+		}
+		return false;
+	}
 
-		while (true) {
-			if (!canStartTask())
+	/**
+	 * Dequeues and starts tasks when the manager is ready.
+	 */
+	protected void dequeue() {
+		log.trace("Dequeue: running={}, queued={}", runningTasks.size(), queuedTasks.size());
+		while (isReady()) {
+			Task<?> task = queuedTasks.pollFirst();
+			if (task == null) {
+				log.debug("Queue drained");
 				break;
+			}
 
-			t = queued.pollFirst();
-			if (t == null)
-				break;
-
-			if (t.isFinished())
+			if (task.isEnd())
 				continue;
 
-			running.add(t);
-
-			dht.getNode().getScheduler().execute(t::start);
+			log.debug("Start task: {}", task);
+			runningTasks.add(task);
+			context.runOnContext(task::start);
 		}
 	}
 
-	List<Task> getRunningTasks() {
-		return new ArrayList<>(running);
+	/**
+	 * Returns the number of running tasks.
+	 *
+	 * @return the number of running tasks
+	 */
+	public int getRunningTasks() {
+		return runningTasks.size();
 	}
 
-	List<Task> getQueuedTasks() {
-		return new ArrayList<>(queued);
+	/**
+	 * Returns the number of queued tasks.
+	 *
+	 * @return the number of queued tasks
+	 */
+	public int getQueuedTasks() {
+		return queuedTasks.size();
 	}
 
-	/// Get the number of running tasks
-	public int getNumRunningTasks() {
-		return running.size();
+	/**
+	 * Checks if the manager is ready to start more tasks.
+	 *
+	 * @return true if ready, false otherwise
+	 */
+	public boolean isReady() {
+		return !canceling && (runningTasks.size() < MAX_ACTIVE_TASKS);
 	}
 
-	/// Get the number of queued tasks
-	public int getNumQueuedTasks() {
-		return queued.size();
-	}
-
-	public boolean canStartTask() {
-		return !canceling && (running.size() <= Constants.MAX_ACTIVE_TASKS);
-	}
-
-	public int queuedCount() {
-		return queued.size();
-	}
-
-	public void cancleAll() {
+	/**
+	 * Cancels all tasks and clears the manager.
+	 */
+	public void cancelAll() {
 		canceling = true;
 
-		for (Task t : running)
-			t.cancel();
-
-		for (Task t : queued)
-			t.cancel();
+		log.info("Canceling all tasks: running={}, queued={}", runningTasks.size(), queuedTasks.size());
+		for (Task<?> task : queuedTasks) {
+			task.endHandler(null);
+			task.cancel();
+		}
+		queuedTasks.clear();
+		for (Task<?> task : runningTasks) {
+			task.endHandler(null);
+			task.cancel();
+		}
+		runningTasks.clear();
 
 		canceling = false;
 	}
 
+	/**
+	 * Returns a string representation of the manager's state.
+	 *
+	 * @return the string representation
+	 */
 	@Override
 	public String toString() {
-		StringBuilder b = new StringBuilder();
-		b.append("#### active: \n");
+		StringBuilder repr = new StringBuilder();
 
-		for (Task t : getRunningTasks())
-			b.append(t.toString()).append('\n');
+		repr.append("# Running: \n");
+		for (Task<?> t : runningTasks)
+			repr.append(" - ").append(t).append('\n');
 
-		b.append("#### queued: \n");
+		repr.append("# Queued: \n");
+		for (Task<?> t : queuedTasks)
+			repr.append(" - ").append(t.toString()).append('\n');
 
-		for (Task t : getQueuedTasks())
-			b.append(t.toString()).append('\n');
-
-		return b.toString();
+		return repr.toString();
 	}
 }

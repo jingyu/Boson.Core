@@ -87,6 +87,16 @@ public class Value {
 		this.data = data;
 	}
 
+	/**
+	 * Constructs a new Value object with the specified parameters.
+	 *
+	 * @param publicKey the identifier of the public key associated with this value
+	 * @param recipient the identifier of the recipient
+	 * @param nonce a byte array representing the nonce value
+	 * @param sequenceNumber the sequence number of this value
+	 * @param signature a byte array containing the signature
+	 * @param data a byte array containing the associated data
+	 */
 	protected Value(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
 		this(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
@@ -497,6 +507,14 @@ public class Value {
 		return new Value(kp, recipient, nonce, sequenceNumber + 1, data);
 	}
 
+	/**
+	 * Returns a new Value instance without the private key, or the current instance if the private key is already null.
+	 *
+	 * This method checks if the private key is null. If it is, the current instance is returned.
+	 * Otherwise, a new Value instance is created and returned with the same properties as the current instance, excluding the private key.
+	 *
+	 * @return the current Value instance if the private key is null, or a new Value instance without the private key.
+	 */
 	public Value withoutPrivateKey() {
 		if (privateKey == null)
 			return this;

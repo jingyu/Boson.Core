@@ -24,13 +24,46 @@
 package io.bosonnetwork.kademlia.tasks;
 
 /**
- * @hidden
+ * A functional interface for listening to lifecycle events of Kademlia tasks, such as
+ * {@link LookupTask}, {@link PingRefreshTask}, {@link NodeLookupTask}, {@link PeerLookupTask},
+ * {@link ValueLookupTask}, {@link PeerAnnounceTask}, and {@link ValueAnnounceTask}.
+ * Provides callbacks for task start, completion, failure, cancelation, and termination.
+ * Designed for single-threaded use in a Vert.x event loop; not thread-safe. Listeners
+ * are registered via {@link Task#addListener} and receive events during task execution.
+ *
+ * @param <S> the specific task type, extending {@link Task}
  */
-public interface TaskListener {
+@FunctionalInterface
+public interface TaskListener<S extends Task<S>> {
 	/**
-	 * The task is finished.
+	 * Called when the task starts execution.
 	 *
-	 * @param task the Task object that finished.
+	 * @param task the task that started
 	 */
-	void finished(Task task);
+	default void started(S task) {
+	}
+
+	/**
+	 * Called when the task completes successfully.
+	 *
+	 * @param task   the task that completed
+	 */
+	default void completed(S task) {
+	}
+
+	/**
+	 * Called when the task is canceled.
+	 *
+	 * @param task  the task that was canceled
+	 */
+	default void canceled(S task) {
+	}
+
+	/**
+	 * Called when the task ends, regardless of outcome (success, failure, or cancelation).
+	 * Must be implemented by listeners.
+	 *
+	 * @param task the task that ended
+	 */
+	void ended(S task);
 }

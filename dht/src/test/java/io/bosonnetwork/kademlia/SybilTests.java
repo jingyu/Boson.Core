@@ -26,6 +26,7 @@ package io.bosonnetwork.kademlia;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.file.Files;
@@ -33,86 +34,115 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
-import io.bosonnetwork.Configuration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
+import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.protocol.deprecated.FindNodeRequest;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.kademlia.protocol.FindNodeRequest;
+import io.bosonnetwork.kademlia.protocol.Message;
+import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.kademlia.rpc.RpcCallListener;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.FileUtils;
+import io.bosonnetwork.utils.vertx.VertxFuture;
 
 @EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class SybilTests {
-	private InetAddress getIPv4Address() {
-		return AddressUtils.getAllAddresses()
-				.filter(Inet4Address.class::isInstance)
-				.filter((a) -> AddressUtils.isAnyUnicast(a))
-				.distinct()
-				.findFirst()
-				.orElse(null);
+	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "SybilTests");
+
+	private Vertx vertx;
+	private KadNode target;
+	private NodeInfo targetInfo;
+
+	private static final InetAddress localAddr = AddressUtils.getAllAddresses()
+			.filter(Inet4Address.class::isInstance)
+			.filter(AddressUtils::isAnyUnicast)
+			.distinct()
+			.findFirst()
+			.orElse(null);
+
+	@BeforeEach
+	void setUp() throws Exception {
+		Files.createDirectories(testDir);
+
+		vertx = Vertx.vertx(new VertxOptions()
+				.setEventLoopPoolSize(32)
+				.setWorkerPoolSize(8)
+				.setBlockedThreadCheckIntervalUnit(TimeUnit.SECONDS)
+				.setBlockedThreadCheckInterval(120));
+
+		target = new KadNode(NodeConfiguration.builder()
+				.vertx(vertx)
+				.address4(localAddr)
+				.port(39001)
+				.generatePrivateKey()
+				.dataPath(testDir.resolve("nodes"  + File.separator + "node-target"))
+				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
+				.enableDeveloperMode()
+				.build());
+		target.run().get();
+
+		targetInfo = target.getNodeInfo().getV4();
+	}
+
+	@AfterEach
+	void tearDown() throws Exception {
+		target.shutdown().get();
+
+		VertxFuture.of(vertx.close()).get();
+
+		FileUtils.deleteFile(testDir);
 	}
 
 	@Test
-	public void TestAddresses() throws Exception {
-		Configuration targetNodeConfig = new Configuration() {
-			@Override
-			public Inet4Address address4() {
-				 return (Inet4Address)getIPv4Address();
-			}
-		};
+	void TestAddresses() throws Exception {
+		final int SYBIL_NODES = 10;
+		final int ALLOWED_ATTEMPTS = 8;
 
-		Node target = new Node(targetNodeConfig);
-		target.start();
-
-		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.address4(), targetNodeConfig.port());
-
-		Node sybil;
-		Path sybilDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "sybil");
-		if (Files.notExists(sybilDir))
-			Files.createDirectories(sybilDir);
-
-		for (int i = 0; i < 36; i++) {
+		String sybilKey = Base58.encode(Signature.KeyPair.random().privateKey().bytes());
+		KadNode sybil;
+		for (int i = 0; i < SYBIL_NODES; i++) {
 			System.out.format("\n\n======== Testing request #%d ...\n\n", i);
+			NodeConfiguration sybilConfig = NodeConfiguration.builder()
+					.vertx(vertx)
+					.address4(localAddr)
+					.port(39002 + i)
+					.privateKey(sybilKey)
+					.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + i))
+					.enableDeveloperMode()
+					.build();
 
-			int port = 39002 + i;
-			Configuration sybilConfig = new Configuration() {
-				@Override
-				public Inet4Address address4() {
-					 return (Inet4Address)getIPv4Address();
-				}
+			sybil = new KadNode(sybilConfig);
+			sybil.run().get();
 
-				@Override
-				public int port() {
-					return port;
-				}
-
-				@Override
-				public Path dataPath() {
-					return sybilDir;
-				}
-			};
-
-			sybil = new Node(sybilConfig);
-			sybil.start();
-
-			FindNodeRequest fnr = new FindNodeRequest(Id.random(), false);
-			RPCCall call = new RPCCall(targetInfo, fnr);
+			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
+			RpcCall call = new RpcCall(targetInfo, request);
 
 			AtomicBoolean result = new AtomicBoolean(false);
-			call.addListener(new RPCCallListener() {
+			call.addListener(new RpcCallListener() {
 				@Override
-				public void onResponse(RPCCall c, OldMessage response) {
+				public void onStateChange(RpcCall call, RpcCall.State previous, RpcCall.State state) {}
+
+				@Override
+				public void onResponse(RpcCall c) {
 					synchronized(result) {
 						result.set(true);
 						result.notifyAll();
 					}
 				}
+
 				@Override
-				public void onTimeout(RPCCall c) {
+				public void onTimeout(RpcCall c) {
 					synchronized(result) {
 						result.set(false);
 						result.notifyAll();
@@ -120,75 +150,61 @@ public class SybilTests {
 				}
 			});
 
-			sybil.getDHT(Network.IPv4).getServer().sendCall(call);
+			sybil.getDHT(Network.IPv4).getRpcServer().sendCall(call);
 
 			synchronized(result) {
 				result.wait();
 			}
 
-			if (i <= 31)
+			if (i < ALLOWED_ATTEMPTS)
 				assertTrue(result.get());
 			else
 				assertFalse(result.get());
 
-			sybil.stop();
+			sybil.shutdown().get();
 
 			TimeUnit.SECONDS.sleep(2);
 		}
-
-		target.stop();
-
-		FileUtils.deleteFile(sybilDir);
 	}
 
 	@Test
-	public void TestIds() throws Exception {
-		Configuration targetNodeConfig = new Configuration() {
-			@Override
-			public Inet4Address address4() {
-				 return (Inet4Address)getIPv4Address();
-			}
-		};
+	void TestIds() throws Exception {
+		final int SYBIL_NODES = 36;
+		final int ALLOWED_ATTEMPTS = 32;
 
-		Node target = new Node(targetNodeConfig);
-		target.start();
-
-		NodeInfo targetInfo = new NodeInfo(target.getId(), targetNodeConfig.address4(), targetNodeConfig.port());
-
-		Node sybil;
-
-		for (int i = 0; i < 36; i++) {
+		KadNode sybil;
+		for (int i = 0; i < SYBIL_NODES; i++) {
 			System.out.format("\n\n======== Testing request #%d ...\n\n", i);
 
-			Configuration sybilConfig = new Configuration() {
-				@Override
-				public Inet4Address address4() {
-					 return (Inet4Address)getIPv4Address();
-				}
+			NodeConfiguration sybilConfig = NodeConfiguration.builder()
+					.vertx(vertx)
+					.generatePrivateKey()
+					.address4(localAddr)
+					.port(39002)
+					.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + i))
+					.enableDeveloperMode()
+					.build();
 
-				@Override
-				public int port() {
-					return 39002;
-				}
-			};
+			sybil = new KadNode(sybilConfig);
+			sybil.run().get();
 
-			sybil = new Node(sybilConfig);
-			sybil.start();
-
-			FindNodeRequest fnr = new FindNodeRequest(Id.random(), false);
-			RPCCall call = new RPCCall(targetInfo, fnr);
+			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
+			RpcCall call = new RpcCall(targetInfo, request);
 
 			AtomicBoolean result = new AtomicBoolean(false);
-			call.addListener(new RPCCallListener() {
+			call.addListener(new RpcCallListener() {
 				@Override
-				public void onResponse(RPCCall c, OldMessage response) {
+				public void onStateChange(RpcCall call, RpcCall.State previous, RpcCall.State state) {}
+
+				@Override
+				public void onResponse(RpcCall c) {
 					synchronized(result) {
 						result.set(true);
 						result.notifyAll();
 					}
 				}
 				@Override
-				public void onTimeout(RPCCall c) {
+				public void onTimeout(RpcCall c) {
 					synchronized(result) {
 						result.set(false);
 						result.notifyAll();
@@ -196,22 +212,20 @@ public class SybilTests {
 				}
 			});
 
-			sybil.getDHT(Network.IPv4).getServer().sendCall(call);
+			sybil.getDHT(Network.IPv4).getRpcServer().sendCall(call);
 
 			synchronized(result) {
 				result.wait();
 			}
 
-			if (i <= 31)
+			if (i <= ALLOWED_ATTEMPTS)
 				assertTrue(result.get());
 			else
 				assertFalse(result.get());
 
-			sybil.stop();
+			sybil.shutdown().get();
 
 			TimeUnit.SECONDS.sleep(2);
 		}
-
-		target.stop();
 	}
 }

@@ -25,129 +25,16 @@ package io.bosonnetwork.kademlia.protocol;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Method;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Type;
-import io.bosonnetwork.kademlia.protocol.deprecated.PingRequest;
-import io.bosonnetwork.kademlia.protocol.deprecated.PingResponse;
 
 public class PingTests extends MessageTests {
-	@Deprecated
-	@Test
-	public void testPingRequestSize() throws Exception {
-		PingRequest msg = new PingRequest();
-		msg.setId(Id.random());
-		msg.setTxid(0xF8901234);
-		msg.setVersion(VERSION);
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testPingRequest() throws Exception {
-		Id id = Id.random();
-		int txid = Random.random().nextInt();
-
-		PingRequest msg = new PingRequest();
-		msg.setId(id);
-		msg.setTxid(txid);
-		msg.setVersion(VERSION);
-
-		byte[] bin = msg.serialize();
-		assertTrue(bin.length <= msg.estimateSize());
-
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		pm.setId(id);
-		assertInstanceOf(PingRequest.class, pm);
-		PingRequest m = (PingRequest)pm;
-
-		assertEquals(Type.REQUEST, m.getType());
-		assertEquals(Method.PING, m.getMethod());
-		assertEquals(id, m.getId());
-		assertEquals(txid, m.getTxid());
-		assertEquals(VERSION_STR, m.getReadableVersion());
-
-		// Compatibility
-		var msg2 = Message.parse(bin);
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		assertNull(msg2.getBody());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		printMessage(msg2);
-
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
-	@Deprecated
-	@Test
-	public void testPingResponseSize() throws Exception {
-		PingResponse msg = new PingResponse();
-		msg.setId(Id.random());
-		msg.setTxid(0x78901234);
-		msg.setVersion(VERSION);
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testPingResponse() throws Exception {
-		Id id = Id.random();
-		int txid = Random.random().nextInt();
-
-		PingResponse msg = new PingResponse(txid);
-		msg.setId(id);
-
-		byte[] bin = msg.serialize();
-		assertTrue(bin.length <= msg.estimateSize());
-
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		pm.setId(id);
-		assertInstanceOf(PingResponse.class, pm);
-		PingResponse m = (PingResponse)pm;
-
-		assertEquals(Type.RESPONSE, m.getType());
-		assertEquals(Method.PING, m.getMethod());
-		assertEquals(id, m.getId());
-		assertEquals(txid, m.getTxid());
-		assertEquals(0, m.getVersion());
-
-		// Compatibility
-		var msg2 = Message.parse(bin);
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		assertNull(msg2.getBody());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
 	@Test
 	void testRequest() throws Exception {
 		var nodeId = Id.random();
-		var txid = 0x78901234;
-		var msg = Message.pingRequest(txid);
+		var msg = Message.pingRequest();
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
@@ -158,7 +45,6 @@ public class PingTests extends MessageTests {
 		assertEquals(Message.Type.REQUEST, msg.getType());
 		assertEquals(Message.Method.PING, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
-		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
 
 		var msg2 = Message.parse(bin);
@@ -192,40 +78,18 @@ public class PingTests extends MessageTests {
 	}
 
 	@Test
-	void timingRequest() throws Exception {
+	void timingRequest() {
 		var nodeId = Id.random();
-		var txid = 0x78901234;
-
-		{	// TODO: remove this block
-			var msg = new PingRequest();
-			msg.setId(nodeId);
-			msg.setTxid(txid);
-			msg.setVersion(Constants.VERSION);
-			var bin = msg.serialize();
-			OldMessage.parse(bin);
-
-			var start = System.currentTimeMillis();
-			for (var i = 0; i < TIMING_ITERATIONS; i++) {
-				msg = new PingRequest();
-				msg.setId(nodeId);
-				msg.setTxid(txid);
-				msg.setVersion(Constants.VERSION);
-				bin = msg.serialize();
-				OldMessage.parse(bin);
-			}
-			var end = System.currentTimeMillis();
-			System.out.printf(">>>>>>>> PingRequest: %dms\n", (end - start));
-		}
 
 		// warmup
-		var msg = Message.pingRequest(txid);
+		var msg = Message.pingRequest();
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
 		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message.pingRequest(txid);
+			msg = Message.pingRequest();
 			msg.setId(nodeId);
 			bin = msg.toBytes();
 			Message.parse(bin);
@@ -235,30 +99,9 @@ public class PingTests extends MessageTests {
 	}
 
 	@Test
-	void timingResponse() throws Exception {
+	void timingResponse() {
 		var nodeId = Id.random();
 		var txid = 0x78901234;
-
-		{	// TODO: remove this block
-			var msg = new PingResponse();
-			msg.setId(nodeId);
-			msg.setTxid(txid);
-			msg.setVersion(Constants.VERSION);
-			var bin = msg.serialize();
-			OldMessage.parse(bin);
-
-			var start = System.currentTimeMillis();
-			for (var i = 0; i < TIMING_ITERATIONS; i++) {
-				msg = new PingResponse();
-				msg.setId(nodeId);
-				msg.setTxid(txid);
-				msg.setVersion(Constants.VERSION);
-				bin = msg.serialize();
-				OldMessage.parse(bin);
-			}
-			var end = System.currentTimeMillis();
-			System.out.printf(">>>>>>>> PingResponse: %dms\n", (end - start));
-		}
 
 		// warmup
 		var msg = Message.pingResponse(txid);

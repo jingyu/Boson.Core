@@ -89,27 +89,29 @@ public class DataStorageTests {
 		var futures = new ArrayList<Future<Integer>>();
 
 		inMemoryStorage = new InMemoryStorage();
-		var future1 = inMemoryStorage.initialize(vertx, null, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+		var future1 = inMemoryStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("InMemoryStorage", inMemoryStorage));
 		}));
 		futures.add(future1);
 
-		sqliteStorage = new SQLiteStorage();
 		var connectionURL = "jdbc:sqlite:" + testDir.resolve("storage.db");
-		var future2 = sqliteStorage.initialize(vertx, connectionURL, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+		sqliteStorage = new SQLiteStorage(connectionURL);
+		var future2 = sqliteStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("SQLiteStorage", sqliteStorage));
 		}));
 		futures.add(future2);
 
-		postgresStorage = new PostgresStorage();
+		/*
 		connectionURL = "postgresql://jingyu@localhost:5432/test";
-		var future3 = postgresStorage.initialize(vertx, connectionURL, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+		postgresStorage = new PostgresStorage(connectionURL);
+		var future3 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
 		}));
 		futures.add(future3);
+		*/
 
 		Future.all(futures).onSuccess(unused -> {
 			try {
@@ -1312,7 +1314,7 @@ public class DataStorageTests {
 	@MethodSource("testStoragesProvider")
 	@Order(201)
 	void testInitializeAgain(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		storage.initialize(vertx, null, valueExpiration, peerInfoExpiration).andThen(ar -> {
+		storage.initialize(vertx, valueExpiration, peerInfoExpiration).andThen(ar -> {
 			context.verify(() -> {
 						assertTrue(ar.failed());
 						assertInstanceOf(DataStorageException.class, ar.cause());

@@ -25,126 +25,19 @@ package io.bosonnetwork.kademlia.protocol;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.protocol.deprecated.ErrorMessage;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Method;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Type;
 
 public class ErrorMessageTests extends MessageTests {
-	@Deprecated
-	@Test
-	public void testErrorMessageSize() throws Exception {
-		byte[] em = new byte[1025];
-		Arrays.fill(em, (byte)'E');
-
-		ErrorMessage msg = new ErrorMessage(Method.PING, 0xF7654321, 0x87654321, new String(em));
-		msg.setId(Id.random());
-		msg.setVersion(VERSION);
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testErrorMessage() throws Exception {
-		int txid = Random.random().nextInt();
-		int code = Random.random().nextInt();
-		String error = "Test error message";
-
-		ErrorMessage msg = new ErrorMessage(Method.PING, txid, code, error);
-		msg.setId(Id.random());
-		msg.setVersion(Constants.VERSION);
-
-		byte[] bin = msg.serialize();
-		assertTrue(bin.length <= msg.estimateSize());
-
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		assertInstanceOf(ErrorMessage.class, pm);
-		ErrorMessage m = (ErrorMessage)pm;
-
-		assertEquals(Type.ERROR, m.getType());
-		assertEquals(Method.PING, m.getMethod());
-		assertEquals(txid, m.getTxid());
-		assertEquals("Orca/1", m.getReadableVersion());
-		assertEquals(code, m.getCode());
-		assertEquals(error, m.getMessage());
-
-		// Compatibility
-		var msg2 = Message.parse(bin);
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		var e = msg2.getBody(Error.class);
-		assertEquals(msg.getCode(), e.getCode());
-		assertEquals(msg.getMessage(), e.getMessage());
-		printMessage(msg2);
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
-	@Deprecated
-	@Test
-	public void testErrorMessagei18n() throws Exception {
-		int txid = Random.random().nextInt();
-		int code = Random.random().nextInt();
-		String error = "错误信息；エラーメッセージ；에러 메시지；Message d'erreur";
-
-		ErrorMessage msg = new ErrorMessage(Method.UNKNOWN, txid, code, error);
-		msg.setId(Id.random());
-		msg.setVersion(VERSION);
-
-		byte[] bin = msg.serialize();
-		assertTrue(bin.length <= msg.estimateSize());
-
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		assertInstanceOf(ErrorMessage.class, pm);
-		ErrorMessage m = (ErrorMessage)pm;
-
-		assertEquals(Type.ERROR, m.getType());
-		assertEquals(Method.UNKNOWN, m.getMethod());
-		assertEquals(txid, m.getTxid());
-		assertEquals(VERSION_STR, m.getReadableVersion());
-		assertEquals(code, m.getCode());
-		assertEquals(error, m.getMessage());
-
-		// Compatibility
-		var msg2 = Message.parse(bin);
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		var e = msg2.getBody(Error.class);
-		assertEquals(msg.getCode(), e.getCode());
-		assertEquals(error, e.getMessage());
-		printMessage(msg2);
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
+	@SuppressWarnings("SpellCheckingInspection")
 	@ParameterizedTest
 	@ValueSource(strings = {
 			"Test error message",
-			"错误信息；エラーメッセージ；에러 메시지；Message d'erreur"
+			"错误信息；エラーメッセージ；에러 메시지；Chybová zpráva testu"
 	})
 	void testError(String errorMessage) throws Exception {
 		var nodeId = Id.random();
@@ -178,30 +71,11 @@ public class ErrorMessageTests extends MessageTests {
 	}
 
 	@Test
-	void timingError() throws Exception {
+	void timingError() {
 		var nodeId = Id.random();
 		var errorMessage = "This is a test error message.";
 		var code = 0x1234;
 		var txid = 0x76543210;
-
-		{ // TODO: remove
-			var msg = new ErrorMessage(Method.PING, txid, code, errorMessage);
-			msg.setId(nodeId);
-			msg.setVersion(Constants.VERSION);
-			byte[] bin = msg.serialize();
-			OldMessage.parse(bin);
-
-			var start = System.currentTimeMillis();
-			for (var i = 0; i < TIMING_ITERATIONS; i++) {
-				msg = new ErrorMessage(Method.PING, txid, code, errorMessage);
-				msg.setId(nodeId);
-				msg.setVersion(Constants.VERSION);
-				bin = msg.serialize();
-				OldMessage.parse(bin);
-			}
-			var end = System.currentTimeMillis();
-			System.out.printf(">>>>>>>> Error: %dms\n", (end - start));
-		}
 
 		// warmup
 		var msg = Message.error(Message.Method.PING, txid, code, errorMessage);

@@ -108,9 +108,9 @@ public class StoreValueRequest implements Request {
 	}
 
 	@JsonProperty("cas")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
-	protected int getCas() {
-		return expectedSequenceNumber;
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Integer getCas() {
+		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
 	}
 
 	@Override
@@ -151,7 +151,7 @@ public class StoreValueRequest implements Request {
 			final boolean binaryFormat = Json.isBinaryFormat(p);
 
 			int tok = 0;
-			int cas = 0;
+			int cas = -1;
 			Id publicKey = null;
 			Id recipient = null;
 			byte[] nonce = null;

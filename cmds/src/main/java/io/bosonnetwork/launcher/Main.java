@@ -25,59 +25,51 @@ package io.bosonnetwork.launcher;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 
-import io.bosonnetwork.Configuration;
-import io.bosonnetwork.DefaultConfiguration;
-import io.bosonnetwork.NodeStatusListener;
-import io.bosonnetwork.access.impl.AccessManager;
-import io.bosonnetwork.kademlia.Node;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.bosonnetwork.DefaultNodeConfiguration;
+import io.bosonnetwork.Id;
+import io.bosonnetwork.NodeConfiguration;
+import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.access.AccessManager;
+import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.service.BosonService;
 import io.bosonnetwork.service.BosonServiceException;
 import io.bosonnetwork.service.DefaultServiceContext;
 import io.bosonnetwork.service.ServiceContext;
 import io.bosonnetwork.utils.ApplicationLock;
+import io.bosonnetwork.utils.Json;
 
 /**
  * @hidden
  */
 public class Main {
-	private static Configuration config;
-	private static Object shutdown = new Object();
+	private static NodeConfiguration config;
+	private static final Object shutdown = new Object();
 
-	private static Node node;
+	private static KadNode node;
 	private static AccessManager accessManager;
-	private static List<BosonService> services = new ArrayList<>();
+	private static final List<BosonService> services = new ArrayList<>();
 
 	private static void initBosonNode() {
 		try {
-			shutdown = new Object();
-			node = new Node(config);
+			node = new KadNode(config);
 
 			// TODO: initialize the user defined access manager
+			accessManager = AccessManager.getDefault();
 
-			accessManager = config.accessControlsPath() != null ?
-					new io.bosonnetwork.access.impl.AccessManager(config.accessControlsPath()) :
-					new io.bosonnetwork.access.impl.AccessManager();
-
-			accessManager.init(node);
-
-			node.addStatusListener(new NodeStatusListener() {
-				@Override
-				public void stopped() {
-					synchronized(shutdown) {
-						shutdown.notifyAll();
-					}
-				}
-			});
-			node.start();
-
-			System.out.format("Boson node %s is running.\n", node.getId());
+			node.run().thenRun(() -> System.out.format("Boson node %s is running.\n", node.getId())).get();
 		} catch (Exception e) {
 			System.out.println("Start boson super node failed, error: " + e.getMessage());
 			e.printStackTrace(System.err);
@@ -85,42 +77,75 @@ public class Main {
 		}
 	}
 
-	private static void loadServices() {
-		if (config.services().isEmpty())
-			return;
+	private static int compareConfigFileName(Path p1, Path p2) {
+		String n1 = p1.getFileName().toString();
+		String n2 = p2.getFileName().toString();
 
-		config.services().forEach(Main::loadService);
+		int order1 = Integer.parseInt(n1.substring(0, n1.indexOf("-")));
+		int order2 = Integer.parseInt(n2.substring(0, n1.indexOf("-")));
+
+		return Integer.compare(order1, order2);
 	}
 
-	private static void loadService(String className, Map<String, Object> configuration) {
+	private static class ServiceConfig {
+		@JsonProperty("class")
+		public String className;
+		@JsonProperty("configuration")
+		public Map<String, Object> configuration;
+	}
+
+	private static ServiceConfig loadConfig(Path configFile) {
 		try {
-			Class<?> clazz = Class.forName(className);
+			ObjectMapper mapper = configFile.toString().endsWith(".json") ? Json.objectMapper() : Json.yamlMapper();
+			return mapper.readValue(configFile.toFile(), ServiceConfig.class);
+		} catch (IOException e) {
+			System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
+			e.printStackTrace(System.err);
+			return null;
+		}
+	}
+
+	private static void loadServices() throws IOException {
+		if (config.dataPath() == null)
+			return;
+
+		Path servicesDir = config.dataPath().resolve("services");
+		try (Stream<Path> stream = Files.list(servicesDir)) {
+			stream.filter(Files::isRegularFile)
+					.sorted(Main::compareConfigFileName)
+					.map(Main::loadConfig)
+					.filter(Objects::nonNull)
+					.forEach(Main::loadService);
+		}
+	}
+
+	private static void loadService(ServiceConfig serviceConfig) {
+		try {
+			Class<?> clazz = Class.forName(serviceConfig.className);
 			Object o = clazz.getDeclaredConstructor().newInstance();
-			if (!(o instanceof BosonService)) {
-				System.out.println("Class isn't a boson service: " + className);
+			if (!(o instanceof BosonService svc)) {
+				System.out.println("Class isn't a boson service: " + serviceConfig.className);
 				return;
 			}
 
-			BosonService svc = (BosonService)o;
-			Path dataPath = config.dataPath() == null ? null :
-				config.dataPath().resolve(svc.getId()).toAbsolutePath();
-			ServiceContext ctx = new DefaultServiceContext(node, accessManager, configuration, dataPath);
+			Path dataPath = config.dataPath() == null ? null : config.dataPath().resolve(svc.getId()).toAbsolutePath();
+			ServiceContext ctx = new DefaultServiceContext(node, accessManager, serviceConfig.configuration, dataPath);
 			svc.init(ctx);
-			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), className);
+			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), serviceConfig.className);
 
 			svc.start().get();
-			System.out.format("Service %s[%s] is started.\n", svc.getName(), className);
+			System.out.format("Service %s[%s] is started.\n", svc.getName(), serviceConfig.className);
 
 			services.add(svc);
-
-		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException e) {
-			System.out.println("Can not load service: " + className);
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException |
+				 InvocationTargetException | NoSuchMethodException | SecurityException e) {
+			System.out.println("Can not load service: " + serviceConfig.className);
 			e.printStackTrace(System.err);
-		} catch (BosonServiceException e) {
-			System.out.println("Failed to start service: " + className);
+		} catch (BosonServiceException | ExecutionException e) {
+			System.out.println("Failed to start service: " + serviceConfig.className);
 			e.printStackTrace(System.err);
-		} catch (InterruptedException | ExecutionException e) {
-			System.out.println("Failed to start service: " + className);
+		} catch (InterruptedException  e) {
+			System.out.println("Interrupted during service starting: " + serviceConfig.className);
 			e.printStackTrace(System.err);
 		}
 	}
@@ -144,7 +169,7 @@ public class Main {
 	}
 
 	private static void parseArgs(String[] args) {
-		DefaultConfiguration.Builder builder = new DefaultConfiguration.Builder();
+		DefaultNodeConfiguration.Builder builder = NodeConfiguration.builder();
 
 		int i = 0;
 		while (i < args.length) {
@@ -174,38 +199,54 @@ public class Main {
 					System.exit(-1);
 				}
 
-				builder.setAddress4(args[++i]);
+				builder.host4(args[++i]);
 			} else if (args[i].equals("--address6") || args[i].equals("-6")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setAddress6(args[++i]);
+				builder.host6(args[++i]);
 			} else if (args[i].equals("--port") || args[i].equals("-p")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setPort(Integer.valueOf(args[++i]));
+				builder.port(Integer.parseInt(args[++i]));
 			} else if (args[i].equals("--data-dir") || args[i].equals("-d")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
 					System.exit(-1);
 				}
 
-				builder.setDataPath(args[++i]);
-			} else if (args[i].equals("--help") || args[i].equals("-h")) {
-				System.out.println("Usage: launcher [OPTIONS]");
-				System.out.println("Available options:");
-				System.out.println("  -c, --config <configFile>    The configuration file.");
-				System.out.println("  -4, --address4 <addr4>       IPv4 address to listen.");
-				System.out.println("  -6, --address6 <addr6>       IPv6 address to listen.");
-				System.out.println("  -p, --port <port>            The port to listen.");
-				System.out.println("  -d, --data-dir <DIR>         The directory to store the node data.");
-				System.out.println("  -h, --help                   Show this help message and exit.");
+				builder.dataPath(args[++i]);
+			} else if (args[i].equals("--bootstrap") || args[i].equals("-b")) {
+				if (i + 1 >= args.length) {
+					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
+					System.exit(-1);
+				}
 
+				String[] parts = args[++i].split(":");
+				if (parts.length != 3) {
+					System.out.format("Invalid bootstrap format: %s\n", args[i]);
+					System.exit(-1);
+				}
+
+				try {
+					Id id = Id.of(parts[0]);
+					String addr = parts[1];
+					int port = Integer.parseInt(parts[2]);
+					NodeInfo ni = new NodeInfo(id, addr, port);
+					builder.addBootstrap(ni);
+				} catch (Exception e) {
+					System.out.format("Invalid bootstrap format: %s\n", args[i]);
+					System.exit(-1);
+				}
+			} else if (args[i].equals("--developerMode")) {
+				builder.enableDeveloperMode();
+			} else if (args[i].equals("--help") || args[i].equals("-h")) {
+				printUsage();
 				System.exit(0);
 			}
 
@@ -215,11 +256,28 @@ public class Main {
 		config = builder.build();
 	}
 
+	private static void printUsage() {
+		System.out.println("Usage: launcher [OPTIONS]");
+		System.out.println("Available options:");
+		System.out.println("  -c, --config <CONFIGFILE>    The configuration file.");
+		System.out.println("  -4, --address4 <ADDR4>       IPv4 address to listen.");
+		System.out.println("  -6, --address6 <ADDR6>       IPv6 address to listen.");
+		System.out.println("  -p, --port <PORT>            The port to listen.");
+		System.out.println("  -d, --data-dir <DIR>         The directory to store the node data.");
+		System.out.println("  -b, --bootstrap <NODE>       The bootstrap node, format: ID:ADDRESS:PORT.");
+		System.out.println("      --developerMode          Enable developer mode.");
+		System.out.println("  -h, --help                   Show this help message and exit.");
+	}
+
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			if (node != null) {
 				unloadServices();
-				node.stop();
+				node.shutdown().whenComplete((v, t) -> {
+					synchronized(shutdown) {
+						shutdown.notifyAll();
+					}
+				});
 				node = null;
 			}
 		}));
@@ -241,7 +299,7 @@ public class Main {
 				}
 			}
 		} catch (IOException | IllegalStateException e) {
-			System.out.println("Another boson instance alreay running at " +
+			System.out.println("Another boson instance already running at " +
 					(config.dataPath() != null ? config.dataPath() : "."));
 		}
 	}

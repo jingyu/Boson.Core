@@ -31,12 +31,11 @@ import io.bosonnetwork.NodeInfo;
 
 public class FindNodeResponse extends LookupResponse {
 	@JsonCreator
-	public FindNodeResponse(@JsonProperty("n4") List<NodeInfo> nodes4,
-							@JsonProperty("n6") List<NodeInfo> nodes6,
+	public FindNodeResponse(@JsonProperty("n4") List<? extends NodeInfo> nodes4,
+							@JsonProperty("n6") List<? extends NodeInfo> nodes6,
 							@JsonProperty("tok") int token) {
 		super(nodes4, nodes6, token);
 	}
-
 
 	@Override
 	public int hashCode() {

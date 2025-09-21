@@ -23,17 +23,15 @@
 
 package io.bosonnetwork.shell;
 
-import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-
-import io.bosonnetwork.Id;
-import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.PeerInfo;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+
+import io.bosonnetwork.Id;
+import io.bosonnetwork.LookupOption;
+import io.bosonnetwork.PeerInfo;
 
 /**
  * @hidden
@@ -61,14 +59,14 @@ public class FindPeerCommand implements Callable<Integer> {
 		}
 
 		Id peerId = Id.of(id);
-		CompletableFuture<List<PeerInfo>> f = Main.getBosonNode().findPeer(peerId, expected, option);
-		List<PeerInfo> pl = f.get();
-		if (!pl.isEmpty()) {
-			for (PeerInfo p : pl)
-				System.out.println(p);
-		} else {
-			System.out.println("Not found.");
-		}
+		Main.getBosonNode().findPeer(peerId, expected, option).thenAccept(peers -> {
+			if (!peers.isEmpty()) {
+				for (PeerInfo p : peers)
+					System.out.println(p);
+			} else {
+				System.out.println("Not found.");
+			}
+		}).get();
 
 		return 0;
 	}

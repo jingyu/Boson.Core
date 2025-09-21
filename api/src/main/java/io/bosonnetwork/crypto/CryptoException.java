@@ -41,7 +41,6 @@ public class CryptoException extends BosonException {
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public CryptoException(String message, Throwable cause) {
 		super(message, cause);
@@ -59,7 +58,6 @@ public class CryptoException extends BosonException {
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public CryptoException(Throwable cause) {
 		super(cause);

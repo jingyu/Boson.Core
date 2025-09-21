@@ -194,15 +194,15 @@ public class JsonPerfTests {
 
 		if (binaryFormat) {
 			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
-			byte[] addr = value.getAddress().getAddress().getAddress();
+			byte[] addr = value.getIpAddress().getAddress();
 			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
 		} else {
 			gen.writeString(value.getId().toBase58String());
-			gen.writeString(value.getAddress().getHostString());
+			gen.writeString(value.getHost());
 		}
 
 		// port
-		gen.writeNumber(value.getAddress().getPort());
+		gen.writeNumber(value.getPort());
 
 		gen.writeEndArray();
 	}
@@ -316,7 +316,7 @@ public class JsonPerfTests {
 		public abstract Id getId();
 
 		@JsonProperty("a")
-		public abstract InetAddress getInetAddress();
+		public abstract InetAddress getIpAddress();
 
 		@JsonProperty("p")
 		public abstract int getPort();

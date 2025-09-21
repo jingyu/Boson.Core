@@ -22,61 +22,60 @@
 
 package io.bosonnetwork;
 
+/**
+ * Exception thrown when an operation is attempted before its valid period.
+ * <p>
+ * This exception indicates that the current time or state is before the allowed
+ * valid period for a particular operation or action within the Boson network.
+ * </p>
+ */
 public class BeforeValidPeriodException extends BosonException {
 	private static final long serialVersionUID = 7465022365373073472L;
 
 	/**
-	 * Constructs a new Boson exception with {@code null} as its detail message.
-	 * The cause is not initialized, and may subsequently be initialized by a
-	 * call to {@link #initCause}.
+	 * Constructs a new {@code BeforeValidPeriodException} with {@code null} as its
+	 * detail message. The cause is not initialized and may be initialized later
+	 * by a call to {@link #initCause}.
 	 */
 	public BeforeValidPeriodException() {
 		super();
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message.  The
-	 * cause is not initialized, and may subsequently be initialized by
-	 * a call to {@link #initCause}.
+	 * Constructs a new {@code BeforeValidPeriodException} with the specified detail
+	 * message. The cause is not initialized and may be initialized later by a call
+	 * to {@link #initCause}.
 	 *
-	 * @param   message   the detail message. The detail message is saved for
-	 *		  later retrieval by the {@link #getMessage()} method.
+	 * @param message the detail message saved for later retrieval by
+	 *                {@link #getMessage()}
 	 */
 	public BeforeValidPeriodException(String message) {
 		super(message);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message and
-	 * cause.  <p>Note that the detail message associated with
-	 * {@code cause} is <i>not</i> automatically incorporated in
-	 * this exception's detail message.
+	 * Constructs a new {@code BeforeValidPeriodException} with the specified detail
+	 * message and cause. Note that the detail message associated with {@code cause}
+	 * is <i>not</i> automatically incorporated into this exception's detail message.
 	 *
-	 * @param  message the detail message (which is saved for later retrieval
-	 *		 by the {@link #getMessage()} method).
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param message the detail message saved for later retrieval by
+	 *                {@link #getMessage()}
+	 * @param cause   the cause saved for later retrieval by {@link #getCause()};
+	 *                may be {@code null} if the cause is nonexistent or unknown
 	 */
 	public BeforeValidPeriodException(String message, Throwable cause) {
 		super(message, cause);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified cause and a detail
-	 * message of {@code (cause==null ? null : cause.toString())} (which
-	 * typically contains the class and detail message of {@code cause}).
-	 * This constructor is useful for exceptions that are little more than
-	 * wrappers for other throwables (for example, {@link
-	 * java.security.PrivilegedActionException}).
+	 * Constructs a new {@code BeforeValidPeriodException} with the specified cause
+	 * and a detail message of {@code (cause==null ? null : cause.toString())},
+	 * which typically contains the class and detail message of {@code cause}.
+	 * This constructor is useful for exceptions that serve as wrappers for other
+	 * throwables.
 	 *
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param cause the cause saved for later retrieval by {@link #getCause()};
+	 *              may be {@code null} if the cause is nonexistent or unknown
 	 */
 	public BeforeValidPeriodException(Throwable cause) {
 		super(cause);

@@ -64,6 +64,11 @@ public class VertxFutureTests {
 		CompletableFuture<String> future = CompletableFuture.completedFuture("Foo bar");
 		long threadId = Thread.currentThread().getId();
 
+		// NOTICE:
+		// The Java SE API for CompletableFuture explicitly states this non-determinism for non-async methods:
+		//   Actions supplied for dependent completions of non-async methods may be performed by the thread
+		//   that completes the current CompletableFuture, or by any other thread.
+
 		future.thenApply(s -> {
 			printThreadContext("Future.thenApply");
 			assertEquals(threadId, Thread.currentThread().getId());
@@ -84,7 +89,8 @@ public class VertxFutureTests {
 			return s + " ==>> appliedAsync";
 		}).thenCompose(s -> {
 			printThreadContext("Future.thenCompose");
-			assertNotEquals(threadId, Thread.currentThread().getId());
+			// main thread or ForkJoinPool.commonPool-worker-*
+			assertTrue(threadId == Thread.currentThread().getId() || Thread.currentThread().getName().startsWith("ForkJoinPool.commonPool-worker-"));
 			return CompletableFuture.completedFuture(s + " ==>> composed");
 		}).thenComposeAsync(s -> {
 			printThreadContext("Future.thenComposeAsync");
@@ -92,7 +98,8 @@ public class VertxFutureTests {
 			return CompletableFuture.completedFuture(s + " ==>> composedAsync");
 		}).thenCompose(s -> {
 			printThreadContext("Future.thenCompose");
-			assertNotEquals(threadId, Thread.currentThread().getId());
+			// main thread or ForkJoinPool.commonPool-worker-*
+			assertTrue(threadId == Thread.currentThread().getId() || Thread.currentThread().getName().startsWith("ForkJoinPool.commonPool-worker-"));
 			return CompletableFuture.completedFuture(s + " ==>> composed");
 		}).thenRunAsync(() -> {
 			printThreadContext("Future.thenRunAsync");

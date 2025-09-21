@@ -1,16 +1,49 @@
 package io.bosonnetwork.crypto;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-
+/**
+ * Utility class for hashing passwords using different security levels and Argon2 algorithms.
+ * <p>
+ * This class provides static methods for hashing passwords using interactive, moderate, or sensitive security levels,
+ * as well as direct parameterized hashing. It supports Argon2i and Argon2id algorithms, and delegates cryptographic
+ * operations to Tuweni Sodium.
+ * </p>
+ */
 public class PasswordHash {
+	/**
+	 * Maximum allowed size (in bytes) for password hash output as defined by the underlying sodium implementation.
+	 */
 	public static final int MAX_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.maxHashLength();
+	/**
+	 * Minimum allowed size (in bytes) for password hash output as defined by the underlying sodium implementation.
+	 */
 	public static final int MIN_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.minHashLength();
 
+	/**
+	 * Enum representing the Argon2 algorithms available for password hashing.
+	 * <p>
+	 * Provides Argon2i (version 1.3) and Argon2id (version 1.3) algorithms. The {@link #DEFAULT} selection checks
+	 * if Argon2id is supported in the native library and uses it; otherwise, falls back to Argon2i.
+	 * </p>
+	 */
 	public enum Algorithm {
-		ARGON2I13(1), ARGON2ID13(2);
+		/**
+		 * Argon2i version 1.3 algorithm.
+		 */
+		ARGON2I13(1),
+		/**
+		 * Argon2id version 1.3 algorithm.
+		 */
+		ARGON2ID13(2);
 
 		private final int id;
 
+		/**
+		 * The default algorithm to use for password hashing.
+		 * <p>
+		 * If Argon2id is supported by the loaded sodium library, it is selected; otherwise, Argon2i is used.
+		 * </p>
+		 */
 		public static final Algorithm DEFAULT =
 				org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm.argon2id13().isSupported() ?
 				ARGON2ID13 : ARGON2I13;
@@ -19,6 +52,13 @@ public class PasswordHash {
 			this.id = id;
 		}
 
+		/**
+		 * Returns the Algorithm corresponding to the given id.
+		 *
+		 * @param id the algorithm id (1 for Argon2i, 2 for Argon2id)
+		 * @return the Algorithm enum value
+		 * @throws IllegalArgumentException if the id is invalid
+		 */
 		public static Algorithm valueOf(int id) {
 			if (id == 1)
 				return ARGON2I13;
@@ -28,7 +68,11 @@ public class PasswordHash {
 				throw new IllegalArgumentException("Invalid algorithm id: " + id);
 		}
 
-
+		/**
+		 * Returns the integer id for this algorithm.
+		 *
+		 * @return the algorithm id
+		 */
 		public int id() {
 			return id;
 		}
@@ -41,8 +85,16 @@ public class PasswordHash {
 		}
 	}
 
-
+	/**
+	 * Represents a salt value used for password hashing.
+	 * <p>
+	 * Provides methods to generate a random salt or create a salt from an existing byte array.
+	 * </p>
+	 */
 	public static class Salt {
+		/**
+		 * The fixed number of bytes required for a valid salt.
+		 */
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.Salt.length();
 
 		private final org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt;
@@ -52,11 +104,23 @@ public class PasswordHash {
 			this.salt = salt;
 		}
 
+		/**
+		 * Creates a salt object from the given byte array.
+		 *
+		 * @param salt the byte array containing the salt value
+		 * @return a new {@code Salt} instance wrapping the given bytes
+		 * @throws IllegalArgumentException if the byte array is not of the correct length
+		 */
 		public static Salt fromBytes(byte[] salt) {
 			// No SodiumException raised
 			return new Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt.fromBytes(salt));
 		}
 
+		/**
+		 * Generates a new random salt suitable for password hashing.
+		 *
+		 * @return a new randomly generated {@code Salt} instance
+		 */
 		public static Salt random() {
 			// No SodiumException raised
 			return new Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt.random());
@@ -67,9 +131,9 @@ public class PasswordHash {
 		}
 
 		/**
-		 * Provides the bytes of this key.
+		 * Provides the bytes of this salt.
 		 *
-		 * @return the bytes of this key.
+		 * @return the bytes of this salt
 		 */
 		public byte[] bytes() {
 			if (bytes == null)

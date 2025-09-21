@@ -15,11 +15,13 @@ public class SpamThrottleTests {
 
 	@Test
 	public void testIncrementAndCheck() throws Exception {
-		var throttle = new SpamThrottle(LIMIT_PER_SECOND, BURST_CAPACITY);
+		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
 		var addr = InetAddress.getByName("192.168.8.1");
 
 		for (var i = 1; i < BURST_CAPACITY + 8; i++) {
+			System.out.print("Throttle - incrementAndCheck: " + i + " ... ");
 			var limited = throttle.incrementAndCheck(addr);
+			System.out.println(limited);
 			if (i < BURST_CAPACITY)
 				assertFalse(limited);
 			else
@@ -32,11 +34,13 @@ public class SpamThrottleTests {
 
 	@Test
 	public void testIncrementAndEstimateDelay() throws Exception {
-		var throttle = new SpamThrottle(LIMIT_PER_SECOND, BURST_CAPACITY);
+		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
 		var addr = InetAddress.getByName("192.168.8.1");
 
 		for (var i = 1; i < BURST_CAPACITY + 8; i++) {
+			System.out.print("Throttle - incrementAndEstimateDelay: " + i + " ... ");
 			var delay = throttle.incrementAndEstimateDelay(addr);
+			System.out.println(delay);
 			if (i < BURST_CAPACITY) {
 				assertEquals(0, delay);
 			} else {
@@ -52,10 +56,12 @@ public class SpamThrottleTests {
 	@Test
 	public void testDecay() throws Exception {
 		var addr = InetAddress.getByName("192.168.8.1");
-		var throttle = new SpamThrottle(LIMIT_PER_SECOND, BURST_CAPACITY);
+		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
 
 		for (var i = 1; i < BURST_CAPACITY * 8; i++) {
+			System.out.print("Throttle - incrementAndCheck: " + i + " ... ");
 			var limited = throttle.incrementAndCheck(addr);
+			System.out.println(limited);
 			assertFalse(limited);
 
 			var delay = i < BURST_CAPACITY ? 1000 / BURST_CAPACITY + 1 : 1000 / LIMIT_PER_SECOND + 1;
@@ -67,10 +73,12 @@ public class SpamThrottleTests {
 	@Test
 	public void testDecay2() throws Exception {
 		var addr = InetAddress.getByName("192.168.8.1");
-		var throttle = new SpamThrottle(LIMIT_PER_SECOND, BURST_CAPACITY);
+		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
 
 		for (var i = 1; i < BURST_CAPACITY * 8; i++) {
+			System.out.print("Throttle - incrementAndEstimateDelay: " + i + " ... ");
 			var delay = throttle.incrementAndEstimateDelay(addr);
+			System.out.println(delay);
 			if (delay > 0)
 				TimeUnit.MILLISECONDS.sleep(delay);
 

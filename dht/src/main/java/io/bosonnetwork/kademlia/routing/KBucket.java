@@ -23,94 +23,103 @@
 
 package io.bosonnetwork.kademlia.routing;
 
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
 
 /**
- * A KBucket is just a list of KBucketEntry objects.
- *
- * The list is sorted by time last seen : The first element is the least
- * recently seen, the last the most recently seen.
- *
- * This is a lock-free k-bucket implementation.
- *
- * The k-bucket is a Copy-on-Write k-bucket entry list.
- * Which all mutative operations(add, remove, ...) are implemented by
- * making a fresh copy of the underlying list.
- *
- * This is ordinarily too costly, but may be more efficient for routing
- * table reading. All mutative operations are synchronized, this means
- * only one writer at the same time.
- *
- * CAUTION:
- *   All methods name leading with _ means that method will WRITE the
- *   list, it can only be called inside the routing table's
- *   pipeline processing.
- *
- *   Due the heavy implementation the stream operations are significant
- *   slow than the for-loops. so we should avoid the stream operations
- *   on the KBucket entries and the cache entries, use for-loop instead.
- *
- * @hidden
+ * Represents a k-bucket in a Kademlia routing table.
+ * <p>
+ * A KBucket is a list of {@link KBucketEntry} objects, maintaining up to {@link #MAX_ENTRIES} entries.
+ * This implementation prefers nodes with older creation times for stability.
+ * </p>
+ * <b>CAUTION:</b> This is a non-thread-safe k-bucket implementation, designed for use
+ * inside a Vert.x verticle or other single-threaded environment.
  */
 public class KBucket implements Comparable<KBucket> {
-	private final Prefix prefix;
-
-	final boolean homeBucket;
+	/**
+	 * The maximum number of entries in a k-bucket (K).
+	 */
+	public static final int MAX_ENTRIES = 8;
+	/**
+	 * The minimum interval (in milliseconds) between required bucket refreshes.
+	 */
+	public static final int REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes in milliseconds
+	/**
+	 * The minimum interval (in milliseconds) between pings to replacement entries.
+	 */
+	public static final int REPLACEMENT_PING_MIN_INTERVAL = 30 * 1000; // 30 seconds in milliseconds
 
 	/**
-	 * using copy-on-write semantics for this list, referencing it is safe if you
-	 * make local copy
+	 * The prefix this bucket covers in the routing table.
 	 */
-	private volatile List<KBucketEntry> entries;
-	private volatile List<KBucketEntry> cache;
+	private final Prefix prefix;
 
+	/**
+	 * Indicates if this bucket is the "home" bucket for the local node.
+	 */
+	private final boolean homeBucket;
+
+	/**
+	 * The main list of entries in this bucket (up to MAX_ENTRIES).
+	 */
+	// Sorting after every update is inexpensive (MAX_ENTRIES = 8).
+	// Keeps entries strictly age-ordered for iteration.
+	private final List<KBucketEntry> entries;
+
+	/**
+	 * The list of replacement entries for this bucket.
+	 * Used to replace failed or stale entries in the main list.
+	 */
+	private final List<KBucketEntry> replacements;
+
+	/**
+	 * The last time this bucket was refreshed, in milliseconds since the epoch.
+	 */
 	private long lastRefresh;
 
-	private static final Logger log = LoggerFactory.getLogger(KBucket.class);
-
-	public KBucket(Prefix prefix, Predicate<Prefix> isHome) {
-		assert (prefix != null);
-
+	protected KBucket(Prefix prefix, Predicate<Prefix> isHome) {
 		this.prefix = prefix;
 		this.homeBucket = isHome.test(prefix);
 
 		// using ArrayList here since reading/iterating is far more common than writing.
-		entries = new ArrayList<>(Constants.MAX_ENTRIES_PER_BUCKET);
-		cache = new ArrayList<>(Constants.MAX_ENTRIES_PER_BUCKET);
+		entries = new ArrayList<>(MAX_ENTRIES);
+		replacements = new ArrayList<>(MAX_ENTRIES);
 	}
 
-	public KBucket(Prefix prefix) {
-		this(prefix, x -> false);
+	private static Logger log() {
+		return RoutingTable.log;
 	}
 
+	/**
+	 * Returns the prefix associated with this bucket.
+	 *
+	 * @return The prefix of this bucket.
+	 */
 	public Prefix prefix() {
 		return prefix;
 	}
 
+	/**
+	 * Returns whether this bucket is the "home" bucket for the local node.
+	 *
+	 * @return true if this is the home bucket; false otherwise.
+	 */
 	public boolean isHomeBucket() {
 		return homeBucket;
-	}
-
-	private List<KBucketEntry> getEntries() {
-		return entries;
-	}
-
-	private void setEntries(List<KBucketEntry> entries) {
-		this.entries = entries;
 	}
 
 	/**
@@ -119,24 +128,97 @@ public class KBucket implements Comparable<KBucket> {
 	 * @return The number of entries in this Bucket
 	 */
 	public int size() {
-		return getEntries().size();
+		return entries.size();
 	}
 
 	/**
+	 * Returns an unmodifiable view of the entries in this bucket.
+	 *
 	 * @return the entries
 	 */
 	public List<KBucketEntry> entries() {
-		return Collections.unmodifiableList(getEntries());
+		return Collections.unmodifiableList(entries);
 	}
 
-	public KBucketEntry get(Id id, boolean includeCache) {
-		for (KBucketEntry entry : getEntries()) {
+	/**
+	 * Returns a stream of the entries in this bucket.
+	 *
+	 * @return a stream of KBucketEntry objects in this bucket.
+	 */
+	public Stream<KBucketEntry> stream() {
+		return entries.stream();
+	}
+
+	/**
+	 * Checks if this bucket has no entries.
+	 *
+	 * @return true if the bucket is empty; false otherwise.
+	 */
+	public boolean isEmpty() {
+		return entries.isEmpty();
+	}
+
+	/**
+	 * Checks if this bucket is full (i.e., contains MAX_ENTRIES entries).
+	 *
+	 * @return true if the bucket is full; false otherwise.
+	 */
+	public boolean isFull() {
+		return entries.size() >= MAX_ENTRIES;
+	}
+
+	/**
+	 * Returns the number of replacement entries in this bucket.
+	 *
+	 * @return the number of replacement entries.
+	 */
+	public int replacementSize() {
+		return replacements.size();
+	}
+
+	/**
+	 * Returns an unmodifiable view of the replacement entries in this bucket.
+	 *
+	 * @return the replacement entries.
+	 */
+	public List<KBucketEntry> replacements() {
+		return Collections.unmodifiableList(replacements);
+	}
+
+	/**
+	 * Returns a stream of the replacement entries in this bucket.
+	 *
+	 * @return a stream of KBucketEntry objects in the replacement list.
+	 */
+	public Stream<KBucketEntry> replacementStream() {
+		return replacements.stream();
+	}
+
+	/**
+	 * Returns the entry at the specified index in the main entries list.
+	 *
+	 * @param index the index of the entry to return.
+	 * @return the KBucketEntry at the specified index.
+	 */
+	protected KBucketEntry get(int index) {
+		return entries.get(index);
+	}
+
+	/**
+	 * Returns the entry with the specified ID, searching the main entries and optionally the replacements.
+	 *
+	 * @param id the ID to search for.
+	 * @param includeReplacement if true, also search the replacement list.
+	 * @return the found KBucketEntry, or null if not found.
+	 */
+	public KBucketEntry get(Id id, boolean includeReplacement) {
+		for (KBucketEntry entry : entries) {
 			if (entry.getId().equals(id))
 				return entry;
 		}
 
-		if (includeCache) {
-			for (KBucketEntry entry : getCache()) {
+		if (includeReplacement) {
+			for (KBucketEntry entry : replacements) {
 				if (entry.getId().equals(id))
 					return entry;
 			}
@@ -145,59 +227,39 @@ public class KBucket implements Comparable<KBucket> {
 		return null;
 	}
 
-	public Stream<KBucketEntry> stream() {
-		return getEntries().stream();
+	public boolean contains(Id id, boolean includeReplacements) {
+		if (findAny(e -> e.getId().equals(id)) != null)
+			return true;
+
+		if (includeReplacements)
+			return findAnyInReplacements(e -> e.getId().equals(id)) != null;
+		else
+			return false;
 	}
 
-	private List<KBucketEntry> getCache() {
-		return cache;
-	}
-
-	private void setCache(List<KBucketEntry> cache) {
-		this.cache = cache;
-	}
-
-	public int cacheSize() {
-		return getCache().size();
-	}
-
-	public List<KBucketEntry> cacheEntries() {
-		return Collections.unmodifiableList(getCache());
-	}
-
-	public Stream<KBucketEntry> cacheStream() {
-		return getCache().stream();
-	}
-
-
-	public boolean isFull() {
-		return getEntries().size() >= Constants.MAX_ENTRIES_PER_BUCKET;
-	}
-
-	public KBucketEntry random() {
-		List<KBucketEntry> entriesRef = getEntries();
-
-		return entriesRef.isEmpty() ? null : entriesRef.get(Random.random().nextInt(entriesRef.size()));
+	/**
+	 * Returns a random entry from the main entries list, or null if empty.
+	 *
+	 * @return a random KBucketEntry, or null if the bucket is empty.
+	 */
+	public KBucketEntry getAny() {
+		return entries.isEmpty() ? null : entries.get(Random.random().nextInt(entries.size()));
 	}
 
 	private KBucketEntry findAny(Predicate<KBucketEntry> predicate) {
-		// Stream is heavy and slow, use for loop(more fast) instead
 		// return getEntries().stream().filter(predicate).findAny().orElse(null);
-
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
+		// Stream is heavy and slow, use for loop(more fast) instead
+		for (KBucketEntry entry : entries) {
 			if (predicate.test(entry))
 				return entry;
 		}
 		return null;
 	}
 
-	private KBucketEntry cacheFindAny(Predicate<KBucketEntry> predicate) {
-		// Stream is heavy and slow, use for loop(more fast) instead
+	private KBucketEntry findAnyInReplacements(Predicate<KBucketEntry> predicate) {
 		// return getCache().stream().filter(predicate).findAny().orElse(null);
-
-		List<KBucketEntry> entriesRef = getCache();
-		for (KBucketEntry entry : entriesRef) {
+		// Stream is heavy and slow, use for loop(more fast) instead
+		for (KBucketEntry entry : replacements) {
 			if (predicate.test(entry))
 				return entry;
 		}
@@ -208,334 +270,355 @@ public class KBucket implements Comparable<KBucket> {
 		return findAny(predicate) != null;
 	}
 
-	private boolean cacheAnyMatch(Predicate<KBucketEntry> predicate) {
-		return cacheFindAny(predicate) != null;
+	private boolean anyMatchInReplacements(Predicate<KBucketEntry> predicate) {
+		return findAnyInReplacements(predicate) != null;
 	}
 
-	public KBucketEntry find(Id id, InetSocketAddress addr) {
+	protected KBucketEntry find(Id id, InetSocketAddress addr) {
 		return findAny(e -> e.getId().equals(id) || e.getAddress().equals(addr));
 	}
 
-	public boolean exists(Id id) {
-		return findAny(e -> e.getId().equals(id)) != null;
-	}
-
-	public KBucketEntry findPingableCacheEntry() {
-		return cacheFindAny(KBucketEntry::isNeverContacted);
-	}
-
 	/**
-	 * Check if the bucket needs to be refreshed
+	 * Find a pingable replacement entry.
 	 *
-	 * @return true if it needs to be refreshed
+	 * @return the pingable replacement entry, or null if not found
 	 */
-	public boolean needsToBeRefreshed() {
-		long now = System.currentTimeMillis();
-		// TODO: timer may be somewhat redundant with needsPing logic
-		return now - lastRefresh > Constants.BUCKET_REFRESH_INTERVAL
-				&& anyMatch(KBucketEntry::needsPing);
-	}
-
-	boolean needsCachePing() {
-		long now = System.currentTimeMillis();
-
-		return now - lastRefresh > Constants.BUCKET_CACHE_PING_MIN_INTERVAL
-				&& (anyMatch(KBucketEntry::needsReplacement) || getEntries().size() < Constants.MAX_ENTRIES_PER_BUCKET)
-				&& cacheAnyMatch(KBucketEntry::isNeverContacted);
-	}
-
-	boolean needsReplacement() {
-		return anyMatch(KBucketEntry::needsReplacement);
+	public KBucketEntry findPingableReplacement() {
+		return findAnyInReplacements(KBucketEntry::isNeverContacted);
 	}
 
 	/**
 	 * Resets the last modified for this Bucket
 	 */
-	public void updateRefreshTimer() {
-		lastRefresh = System.currentTimeMillis();
+	public void updateRefreshTime() {
+		updateRefreshTime(System.currentTimeMillis());
+	}
+
+	// for internal and testing
+	protected void updateRefreshTime(long lastRefresh) {
+		this.lastRefresh = lastRefresh;
 	}
 
 	/**
-	 * Notify bucket of new incoming packet from a node, perform update or insert
+	 * Checks if the bucket needs to be refreshed, based on the refresh interval and the presence of entries needing a ping.
+	 *
+	 * @return true if the bucket needs to be refreshed; false otherwise.
+	 */
+	public boolean needsToBeRefreshed() {
+		long now = System.currentTimeMillis();
+		return now - lastRefresh > REFRESH_INTERVAL && anyMatch(KBucketEntry::needsPing);
+	}
+
+	/**
+	 * Checks if a replacement entry should be pinged, based on timing and entry status.
+	 *
+	 * @return true if a replacement entry should be pinged; false otherwise.
+	 */
+	public boolean needsReplacementPing() {
+		long now = System.currentTimeMillis();
+		return now - lastRefresh > REPLACEMENT_PING_MIN_INTERVAL &&
+				(anyMatch(KBucketEntry::needsReplacement) || entries.size() < MAX_ENTRIES) &&
+				anyMatchInReplacements(KBucketEntry::isNeverContacted);
+	}
+
+	protected boolean needsReplacement() {
+		return anyMatch(KBucketEntry::needsReplacement);
+	}
+
+	/**
+	 * Notify bucket of a new entry learned from a node, perform update or insert
 	 * existing nodes where appropriate
 	 *
-	 * @param newEntry The entry to insert
+	 * @param entry The entry to insert
 	 */
-	void _put(final KBucketEntry newEntry) {
-		if (newEntry == null)
-			return;
-
-		List<KBucketEntry> entriesRef = getEntries();
+	protected void put(KBucketEntry entry) {
 		// find existing
-		for (KBucketEntry existing : entriesRef) {
+		for (KBucketEntry existing : entries) {
 			// Update entry if existing
-			if (existing.equals(newEntry)) {
-				existing.merge(newEntry);
+			if (existing.equals(entry)) {
+				existing.merge(entry);
 				return;
 			}
 
-			// Node id and address conflict
+			// Node is inconsistent: id and address conflict
 			// Log the conflict and keep the existing entry
-			if (existing.matches(newEntry)) {
-				log.info("New node {} claims same ID or IP as  {}, might be impersonation attack or IP change. "
-						+ "ignoring until old entry times out", newEntry, existing);
+			if (existing.matches(entry)) {
+				//noinspection LoggingSimilarMessage
+				log().debug("New node {} claims same ID or IP as {}, might be impersonation attack or IP change. "
+						+ "ignoring until old entry times out", entry, existing);
 
 				// Should not be so aggressive, keep the existing entry.
 				return;
 			}
 		}
 
-		// new entry
-		if (newEntry.isReachable()) {
-			if (entriesRef.size() < Constants.MAX_ENTRIES_PER_BUCKET) {
-				// insert to the list if it still has room
-				_update(null, newEntry);
+		// not found, add the new entry, and remove from replacements if exists avoid duplicated entries
+		if (entry.isReachable()) {
+			if (entries.size() < MAX_ENTRIES) {
+				putAsMainEntry(entry);
 				return;
 			}
 
 			// Try to replace the bad entry
-			if (_replaceBadEntry(newEntry))
+			if (replaceBadWith(entry))
 				return;
 
-			// try to check the youngest entry
-			KBucketEntry youngest = entriesRef.get(entriesRef.size() - 1);
-
-			// older entries displace younger ones (although that kind of stuff should
-			// probably go through #update directly)
-			// entries with a 2.5times lower RTT than the current youngest one displace the
-			// youngest. safety factor to prevent fibrilliation due to changing
-			// RTT-estimates / to only replace when it's really worth it
-			if (youngest.creationTime() > newEntry.creationTime()
-					|| youngest.getRTT() >= (newEntry.getRTT() * 2.5)) {
-				// Replace the youngest entry
-				_update(youngest, newEntry);
-				// it was a useful entry, see if we can use it to replace something questionable
-				_insertIntoCache(youngest);
-				return;
-			}
-
+			// When bucket full and new reachable entry arrives, Kademlia(original paper) pings the
+			// oldest/least-recent when full; if unresponsive, replace from cache, else cache the new one.
+			// now we reset the last refresh timestamp
+			// This will force a refresh to run PingRefreshTask with probe replacement on the current bucket
+			// Assumes PingRefreshTask pings least-recent-seen entries for LRS eviction.
+			lastRefresh = 0;
 		}
 
-		// put the new entry to replacement
-		_insertIntoCache(newEntry);
+		// put the new entry to the replacements
+		log().debug("New node {} is not reachable, putting in replacements", entry);
+		putAsReplacement(entry);
+	}
+
+	protected void updateIfPresent(KBucketEntry entry) {
+		for (KBucketEntry existing : entries) {
+			if (existing.equals(entry)) {
+				existing.merge(entry);
+				return;
+			}
+		}
+
+		for (KBucketEntry existing : replacements) {
+			if (existing.equals(entry)) {
+				existing.merge(entry);
+				return;
+			}
+		}
 	}
 
 	/**
-	 * Tries to instert entry by replacing a bad entry.
+	 * Tries to insert the entry by replacing a bad entry.
 	 *
-	 * @param newEntry Entry to insert
+	 * @param entry Entry to insert
 	 * @return true if replace was successful
 	 */
-	private boolean _replaceBadEntry(KBucketEntry newEntry) {
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
-			if (entry.needsReplacement()) {
-				// bad one get rid of it
-				_update(entry, newEntry);
-				return true;
+	private boolean replaceBadWith(KBucketEntry entry) {
+		boolean badRemoved = false;
+
+		for (int i = 0; i < entries.size(); i++) {
+			if (entries.get(i).needsReplacement()) {
+				entries.remove(i);
+				badRemoved = true;
+				break;
 			}
 		}
-		return false;
+
+		if (badRemoved)
+			putAsMainEntry(entry);
+
+		return badRemoved;
 	}
 
 	/**
-	 * @param toRemove Entry to remove, if its bad
-	 * @param force    if true entry will be removed regardless of its state
+	 * @param id entry to remove, if it's bad
+	 * @param force    if true, the entry will be removed regardless of its state
 	 */
-	void _removeIfBad(KBucketEntry toRemove, boolean force) {
-		_removeFromCache(toRemove);
+	protected KBucketEntry removeIfBad(Id id, boolean force) {
+		for (int i = 0; i < entries.size(); i++) {
+			KBucketEntry entry = entries.get(i);
+			if (entry.getId().equals(id)) {
+				boolean removed = false;
 
-		List<KBucketEntry> entriesRef = getEntries();
-		if (entriesRef.contains(toRemove) && (force || toRemove.needsReplacement())) {
-			KBucketEntry replacement = null;
-			replacement = _pollVerifiedCacheEntry();
+				if (force || entry.needsReplacement()) {
+					KBucketEntry replacement = pollVerifiedReplacement();
+					// only remove if we have a replacement or really need to
+					if (replacement != null) {
+						entries.set(i, replacement);
+						entries.sort(KBucketEntry::ageOrder);
+						removed = true;
+					} else if (force) {
+						entries.remove(i);
+						removed = true;
+					}
+				}
 
-			// only remove if we have a replacement or really need to
-			if (replacement != null || force)
-				_update(toRemove, replacement);
-		}
-	}
-
-	/**
-	 * main list not full or contains entry that needs a replacement -> promote
-	 * verified entry (if any) from cache
-	 */
-	void _promoteVerifiedCacheEntry() {
-		List<KBucketEntry> entriesRef = getEntries();
-		KBucketEntry toRemove = findAny(KBucketEntry::needsReplacement);
-		if (toRemove == null && entriesRef.size() >= Constants.MAX_ENTRIES_PER_BUCKET)
-			return;
-
-		KBucketEntry replacement = _pollVerifiedCacheEntry();
-		if (replacement != null)
-			_update(toRemove, replacement);
-	}
-
-	// TODO: CHECKME!!!
-	void _update(KBucketEntry toRefresh) {
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
-			if (entry.equals(toRefresh)) {
-				entry.merge(toRefresh);
-				return;
+				return removed ? entry : null;
 			}
 		}
 
-		entriesRef = getCache();
-		for (KBucketEntry entry : entriesRef) {
-			if (entry.equals(toRefresh)) {
-				entry.merge(toRefresh);
-				return;
-			}
-		}
-	}
-
-	private void _update(KBucketEntry toRemove, KBucketEntry toInsert) {
-		List<KBucketEntry> entriesRef = getEntries();
-
-		if (toInsert != null && anyMatch(toInsert::matches))
-			return;
-
-		List<KBucketEntry> newEntries = new ArrayList<>(entriesRef);
-		boolean removed = false;
-		boolean added = false;
-
-		// removal never violates ordering constraint, no checks required
-		if (toRemove != null)
-			removed = newEntries.remove(toRemove);
-
-		if (toInsert != null) {
-			int oldSize = newEntries.size();
-			boolean wasFull = oldSize >= Constants.MAX_ENTRIES_PER_BUCKET;
-
-			KBucketEntry youngest = oldSize > 0 ? newEntries.get(oldSize - 1) : null;
-			boolean unorderedInsert = youngest != null && toInsert.creationTime() < youngest.creationTime();
-
-			added = !wasFull || unorderedInsert;
-			if (added) {
-				newEntries.add(toInsert);
-				KBucketEntry cacheEntry = _removeFromCache(toInsert);
-				if (cacheEntry != null)
-					toInsert.merge(cacheEntry);
-			} else {
-				_insertIntoCache(toInsert);
-			}
-
-			if (unorderedInsert)
-				newEntries.sort(KBucketEntry.AGE_ORDER);
-
-			if (wasFull && added)
-				while (newEntries.size() > Constants.MAX_ENTRIES_PER_BUCKET)
-					_insertIntoCache(newEntries.remove(newEntries.size() - 1));
-		}
-
-		// make changes visible
-		if (added || removed)
-			setEntries(newEntries);
-	}
-
-	private static int cacheOrder(KBucketEntry e1, KBucketEntry e2) {
-		if (e1.getRTT() < e2.getRTT())
-			return -1;
-
-		if (e1.getRTT() > e2.getRTT())
-			return 1;
-
-		if (e1.lastSeen() > e2.lastSeen())
-			return -1;
-
-		if (e1.lastSeen() < e2.lastSeen())
-			return 1;
-
-		return Long.compare(e1.creationTime(), e2.creationTime());
-	}
-
-	void _insertIntoCache(KBucketEntry toInsert) {
-		if (toInsert == null)
-			return;
-
-		// Check the existing, avoid the duplicated entry
-		List<KBucketEntry> cacheRef = getCache();
-		for (KBucketEntry existing : cacheRef) {
-			// Update entry if existing
-			if (existing.equals(toInsert)) {
-				existing.merge(toInsert);
-				return;
-			}
-
-			// Node id and address conflict
-			// Log the conflict and keep the existing entry
-			if (existing.matches(toInsert)) {
-				log.info("New node {} claims same ID or IP as  {}, might be impersonation attack or IP change. "
-						+ "ignoring until old entry times out", toInsert, existing);
-				return;
-			}
-		}
-
-		List<KBucketEntry> newCache = new ArrayList<>(cacheRef);
-		newCache.add(toInsert);
-		if (newCache.size() > Constants.MAX_ENTRIES_PER_BUCKET) {
-			newCache.sort(KBucket::cacheOrder);
-			KBucketEntry removed = newCache.remove(newCache.size() - 1);
-			if (removed.equals(toInsert))
-				return;
-		}
-
-		setCache(newCache);
-	}
-
-
-	private KBucketEntry _pollVerifiedCacheEntry() {
-		List<KBucketEntry> cacheRef = getCache();
-		if (cacheRef.isEmpty())
-			return null;
-
-		List<KBucketEntry> newCache = new ArrayList<>(cacheRef);
-		newCache.sort(KBucket::cacheOrder);
-		KBucketEntry entry = newCache.remove(0);
-		setCache(newCache);
-
-		return entry;
-	}
-
-	private KBucketEntry _removeFromCache(KBucketEntry toRemove) {
-		if (!getCache().contains(toRemove))
-			return null;
-
-		List<KBucketEntry> newCache = new ArrayList<>(getCache());
-		for (int i = 0; i < newCache.size(); i++) {
-			KBucketEntry entry = newCache.get(i);
-			if (entry.equals(toRemove)) {
-				newCache.remove(i);
-				setCache(newCache);
-				return entry;
+		for (int i = 0; i < replacements.size(); i++) {
+			KBucketEntry entry = replacements.get(i);
+			if (entry.getId().equals(id)) {
+				// Note: stale replacements under capacity are left until periodic cleanup.
+				if (force || (replacements.size() >= MAX_ENTRIES && entry.oldAndStale())) {
+					replacements.remove(i);
+					return entry;
+				}
+				return null;
 			}
 		}
 
 		return null;
 	}
 
-	// TODO: CHECKME!!!
-	void _notifyOfResponse(OldMessage msg) {
-		if (msg.getType() != OldMessage.Type.RESPONSE || msg.getAssociatedCall() == null)
-			return;
+	protected boolean remove(Id id) {
+		return entries.removeIf(entry -> entry.getId().equals(id)) ||
+				replacements.removeIf(entry -> entry.getId().equals(id));
+	}
 
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
-			// update last responded. insert will be invoked soon, thus we don't have to do
-			// the move-to-end stuff
-			if (entry.getId().equals(msg.getId())) {
-				entry.signalResponse(msg.getAssociatedCall().getRTT());
+	private void putAsMainEntry(KBucketEntry entry) {
+		// try to check the youngest entry
+		KBucketEntry youngest = entries.isEmpty() ? null : entries.get(entries.size() - 1);
+
+		// insert to the list if it still has room, keep the age order
+		entries.add(entry);
+		boolean unordered = youngest != null && entry.creationTime() < youngest.creationTime();
+		if (unordered)
+			entries.sort(KBucketEntry::ageOrder);
+
+		// remove from the replacements if exists avoid duplicated entries
+		for (int i = 0; i < replacements.size(); i++) {
+			KBucketEntry replacement = replacements.get(i);
+			if (replacement.matches(entry)) {
+				replacements.remove(i);
+
+				// merge the replacement entry into the main entry if possible: restrict to the same id
+				if (replacement.getId().equals(entry.getId()))
+					entry.merge(replacement);
+
+				return;
+			}
+		}
+	}
+
+	protected void putAsReplacement(KBucketEntry entry) {
+		// Check the existing, avoid the duplicated entry
+		for (KBucketEntry existing : replacements) {
+			// Update entry if existing
+			if (existing.equals(entry)) {
+				existing.merge(entry);
+				return;
+			}
+
+			// Node is inconsistent: id and address conflict
+			// Log the conflict and keep the existing entry
+			if (existing.matches(entry)) {
+				//noinspection LoggingSimilarMessage
+				log().debug("New node {} claims same ID or IP as {}, might be impersonation attack or IP change. "
+						+ "ignoring until old entry times out", entry, existing);
+
+				// Should not be so aggressive, keep the existing entry.
 				return;
 			}
 		}
 
-		entriesRef = getCache();
-		for (KBucketEntry entry : entriesRef) {
-			// update last responded. insert will be invoked soon, thus we don't have to do
-			// the move-to-end stuff
-			if (entry.getId().equals(msg.getId())) {
-				entry.signalResponse(msg.getAssociatedCall().getRTT());
+		replacements.add(entry);
+		if (replacements.size() > MAX_ENTRIES) {
+			replacements.sort(KBucketEntry::replacementOrder);
+			replacements.remove(replacements.size() - 1);
+		}
+	}
+
+	/**
+	 * Promotes a verified replacement entry to the main entries list if possible.
+	 * <p>
+	 * If the main list is not full, a verified (reachable) replacement is added.
+	 * Otherwise, if any entry in the main list needs replacement, it is replaced by a verified replacement.
+	 * No operation if no verified replacements are available.
+	 */
+	protected void promoteVerifiedReplacement() {
+		if (replacements.isEmpty())
+			return;
+
+		// If not full, promote a verified replacement directly
+		// Promotes one per call for controlled updates.
+		if (entries.size() < MAX_ENTRIES) {
+			KBucketEntry replacement = pollVerifiedReplacement();
+			if (replacement != null) {
+				entries.add(replacement);
+				entries.sort(KBucketEntry::ageOrder);
+				return;
+			}
+		}
+
+		// Otherwise, try to replace an entry that needs replacement
+		for (int i = 0; i < entries.size(); i++) {
+			KBucketEntry entry = entries.get(i);
+			if (entry.needsReplacement()) {
+				KBucketEntry replacement = pollVerifiedReplacement();
+				if (replacement != null) {
+					entries.set(i, replacement);
+					entries.sort(KBucketEntry::ageOrder);
+					return;
+				}
+			}
+		}
+	}
+
+	private KBucketEntry pollVerifiedReplacement() {
+		if (replacements.isEmpty())
+			return null;
+
+		if (replacements.size() > 1)
+			replacements.sort(KBucketEntry::replacementOrder);
+
+		if (replacements.get(0).isReachable())
+			return replacements.remove(0);
+		else
+			return null;
+	}
+
+	/*/
+	protected void onIncomingRequest(Id id) {
+		for (KBucketEntry entry : entries) {
+			if (entry.getId().equals(id)) {
+				entry.onIncomingRequest();
+				return;
+			}
+		}
+
+		for (KBucketEntry entry : replacements)
+			if (entry.getId().equals(id)) {
+				entry.onIncomingRequest();
+				return;
+			}
+	}
+	 */
+
+	protected void onRequestSent(Id id) {
+		for (KBucketEntry entry : entries) {
+			if (entry.getId().equals(id)) {
+				entry.onRequestSent();
+				return;
+			}
+		}
+
+		for (KBucketEntry entry : replacements) {
+			if (entry.getId().equals(id)) {
+				entry.onRequestSent();
+				return;
+			}
+		}
+	}
+
+	protected void onResponded(Id id, int rtt) {
+		for (KBucketEntry entry : entries) {
+			// update last responded
+			if (entry.getId().equals(id)) {
+				entry.onResponded(rtt);
+				return;
+			}
+		}
+
+		for (int i = 0; i < replacements.size(); i++) {
+			KBucketEntry entry = replacements.get(i);
+			// update last responded
+			if (entry.getId().equals(id)) {
+				entry.onResponded(rtt);
+
+				// if the main entries list is not full, promote the verified replacement to the main entries list.
+				if (entries.size() < MAX_ENTRIES) {
+					replacements.remove(i);
+					entries.add(entry);
+					entries.sort(KBucketEntry::ageOrder);
+				}
+
 				return;
 			}
 		}
@@ -546,50 +629,118 @@ public class KBucket implements Comparable<KBucket> {
 	 *
 	 * @param id id of the node
 	 */
-	void _onTimeout(Id id) {
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
+	protected boolean onTimeout(Id id) {
+		for (int i = 0; i < entries.size(); i++) {
+			KBucketEntry entry = entries.get(i);
 			if (entry.getId().equals(id)) {
-				entry.signalRequestTimeout();
+				entry.onTimeout();
+				if (entry.needsReplacement()) {
+					KBucketEntry replacement = pollVerifiedReplacement();
+					// only remove if we have a replacement
+					if (replacement != null) {
+						entries.set(i, replacement);
+						entries.sort(KBucketEntry::ageOrder);
+						return true;
+					}
+				}
 
-				// NOTICE: Test only - merge buckets
-				//   remove when the entry needs replacement
-				// boolean force = e.needsReplacement();
-				// _removeIfBad(e, force);
-
-				// NOTICE: Product
-				//   only removes the entry if it is bad
-				_removeIfBad(entry, false);
-
-				return;
+				return false;
 			}
 		}
 
-		entriesRef = getCache();
-		for (KBucketEntry entry : entriesRef) {
+		for (int i = 0; i < replacements.size(); i++) {
+			KBucketEntry entry = replacements.get(i);
 			if (entry.getId().equals(id)) {
-				entry.signalRequestTimeout();
-				return;
+				entry.onTimeout();
+				// Cull stale replacements only if the replacement list is full
+				if (replacements.size() >= MAX_ENTRIES && entry.oldAndStale()) {
+					replacements.remove(i);
+					return true;
+				}
+
+				return false;
 			}
 		}
+
+		return false;
 	}
 
-	void _onSend(Id id) {
-		List<KBucketEntry> entriesRef = getEntries();
-		for (KBucketEntry entry : entriesRef) {
-			if (entry.getId().equals(id)) {
-				entry.signalRequest();
-				return;
+	/**
+	 * Cleans up the bucket by removing invalid, stale, or out-of-place entries.
+	 * <p>
+	 * This includes:
+	 * <ul>
+	 *   <li>Removing entries needing replacement from the replacement list.</li>
+	 *   <li>Removing entries that do not match this bucket's prefix.</li>
+	 *   <li>Removing the local node or bootstrap nodes from the main list if the bucket is full.</li>
+	 * </ul>
+	 * The handler is called for each dropped entry not matching the prefix.
+	 * Self/bootstrap entries are silently removed (not passed to dropHandler).
+	 *
+	 * @param localId The local node's ID.
+	 * @param bootstrapIds IDs of bootstrap nodes.
+	 * @param droppedEntryHandler Handler to be called for each dropped entry.
+	 */
+	protected void cleanup(Id localId, Collection<Id> bootstrapIds, Consumer<KBucketEntry> droppedEntryHandler) {
+		boolean modified = false;
+
+		Iterator<KBucketEntry> iterator = replacements.iterator();
+		while (iterator.hasNext()) {
+			KBucketEntry entry = iterator.next();
+			if (entry.needsReplacement()) {
+				// TODO: check me - should we cleanup the entries from replacements?
+				iterator.remove();
+				continue;
+			}
+
+			if (!prefix.isPrefixOf(entry.getId())) {
+				log().error("!!!KBucket {} has an replacement {} not belongs to him", prefix, entry);
+				iterator.remove();
+				droppedEntryHandler.accept(entry);
 			}
 		}
 
-		entriesRef = getCache();
-		for (KBucketEntry entry : entriesRef) {
-			if (entry.getId().equals(id)) {
-				entry.signalRequest();
-				return;
+		for (int i = 0; i < entries.size(); i++) {
+			KBucketEntry entry = entries.get(i);
+			// remove self and bootstrap nodes if the bucket is full
+			if (entry.getId().equals(localId) || (isFull() && bootstrapIds.contains(entry.getId()))) {
+				KBucketEntry replacement = pollVerifiedReplacement();
+				if (replacement != null) {
+					entries.set(i, replacement);
+					modified = true;
+				} else {
+					entries.remove(i);
+					modified = true;
+					--i;
+				}
+
+				continue;
+			}
+
+			// Fix the wrong entries
+			if (!prefix.isPrefixOf(entry.getId())) {
+				log().error("!!!KBucket {} has an entry {} not belongs to him", prefix, entry);
+				KBucketEntry replacement = pollVerifiedReplacement();
+				if (replacement != null) {
+					entries.set(i, replacement);
+					modified = true;
+				} else {
+					entries.remove(i);
+					modified = true;
+					--i;
+				}
+
+				droppedEntryHandler.accept(entry);
 			}
 		}
+
+		if (modified)
+			entries.sort(KBucketEntry::ageOrder);
+	}
+
+	@Override
+	public int hashCode() {
+		return prefix.hashCode();
 	}
 
 	@Override
@@ -611,26 +762,61 @@ public class KBucket implements Comparable<KBucket> {
 		return prefix.compareTo(bucket.prefix);
 	}
 
-	@Override
-	public String toString() {
-		StringBuilder repr = new StringBuilder(1024);
+	/**
+	 * Appends a human-readable representation of this bucket to the provided StringBuilder.
+	 * <p>
+	 * The last refresh time is shown as the time elapsed since the last refresh.
+	 *
+	 * @param repr the StringBuilder to append to.
+	 */
+	protected void toString(StringBuilder repr) {
+		repr.ensureCapacity(1024);
+
 		repr.append("Prefix: ").append(prefix);
 		if (isHomeBucket())
 			repr.append(" [Home]");
-		repr.append('\n');
+		// Show the duration since the last refresh, not an absolute timestamp.
+		repr.append(", lastRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastRefresh)).append(" ago\n");
 
-		List<KBucketEntry> entries = getEntries();
 		if (!entries.isEmpty()) {
+			repr.ensureCapacity(entries.size() * 100);
 			repr.append("  entries[").append(entries.size()).append("]:\n");
-			repr.append(entries.stream().map(KBucketEntry::toString).collect(Collectors.joining("\n    ", "    ", "\n")));
+			entries.forEach(entry -> repr.append("    ").append(entry).append('\n'));
+			repr.append('\n');
 		}
 
-		entries = getCache();
+		if (!replacements.isEmpty()) {
+			repr.ensureCapacity(replacements.size() * 100);
+			repr.append("  replacements[").append(replacements.size()).append("]:\n");
+			replacements.forEach(entry -> repr.append("    ").append(entry).append('\n'));
+			repr.append('\n');
+		}
+	}
+
+	protected void dump(PrintStream out) {
+		out.printf("Prefix: %s", prefix);
+		if (isHomeBucket())
+			out.print(" [Home]");
+		// Show the duration since the last refresh, not an absolute timestamp.
+		out.printf(", lastRefresh: %s\n", Duration.ofMillis(System.currentTimeMillis() - lastRefresh));
+
 		if (!entries.isEmpty()) {
-			repr.append("  cache[").append(entries.size()).append("]:\n");
-			repr.append(entries.stream().map(KBucketEntry::toString).collect(Collectors.joining("\n    ", "    ", "\n")));
+			out.printf("  entries[%d]:\n", entries.size());
+			entries.forEach(entry -> out.printf("    %s\n", entry));
+			out.println();
 		}
 
+		if (!replacements.isEmpty()) {
+			out.printf("  replacements[%d]:\n", replacements.size());
+			replacements.forEach(entry -> out.printf("    %s\n", entry));
+			out.println();
+		}
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder repr = new StringBuilder(1024);
+		toString(repr);
 		return repr.toString();
 	}
 }

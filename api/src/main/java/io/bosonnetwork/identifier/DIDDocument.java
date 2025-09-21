@@ -41,34 +41,68 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
 
+/**
+ * Representation of a W3C-compliant Decentralized Identifier (DID) Document
+ * in the Boson network.
+ * <p>
+ * A DID Document describes the public keys, authentication methods,
+ * verification methods, services, and credentials associated with a DID.
+ * This class provides methods to parse, validate, and convert DID Documents
+ * from/to {@link Card} objects, as well as to verify cryptographic proofs.
+ */
 @JsonPropertyOrder({"@context", "id", "verificationMethod", "authentication", "assertion", "verifiableCredential", "service", "proof"})
 public class DIDDocument extends W3CDIDFormat {
 	@JsonProperty("@context")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	/** The list of JSON-LD context URIs associated with this DID Document. */
 	private final List<String> contexts;
+	/** The unique identifier (DID) for this document. */
 	@JsonProperty("id")
 	private final Id id;
+	/** The list of verification methods (public keys, etc) for this DID. */
 	@JsonProperty("verificationMethod")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<VerificationMethod> verificationMethods;
+	/** The list of authentication methods (references or methods) for this DID. */
 	@JsonProperty("authentication")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<VerificationMethod> authentications;
+	/** The list of assertion methods (references or methods) for this DID. */
 	@JsonProperty("assertion")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<VerificationMethod> assertions;
+	/** The list of verifiable credentials associated with this DID. */
 	@JsonProperty("verifiableCredential")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<VerifiableCredential> credentials;
+	/** The list of service endpoints described by this DID Document. */
 	@JsonProperty("service")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final List<Service> services;
+	/** The cryptographic proof (signature) for this DID Document. */
 	@JsonProperty("proof")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private final Proof proof;
 
+	/**
+	 * The internal BosonCard adapter for this document, used for signature/serialization.
+	 */
 	private transient BosonCard bosonCard;
 
+	/**
+	 * Constructs a DIDDocument by deserializing all fields.
+	 * Resolves all verification method references in authentication and assertion lists.
+	 *
+	 * @param contexts JSON-LD context URIs for this document
+	 * @param id The DID identifier
+	 * @param verificationMethods List of verification methods (must NOT be references)
+	 * @param authentications List of authentication methods (may be references)
+	 * @param assertions List of assertion methods (may be references)
+	 * @param credentials List of verifiable credentials
+	 * @param services List of service endpoints
+	 * @param proof Cryptographic proof for the document
+	 * @throws IllegalArgumentException if references are invalid or required fields are missing
+	 */
 	@JsonCreator
 	public DIDDocument(@JsonProperty(value = "@context") List<String> contexts,
 					   @JsonProperty(value = "id", required = true) Id id,
@@ -85,6 +119,7 @@ public class DIDDocument extends W3CDIDFormat {
 		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
 		this.id = id;
 
+		// Validate that verificationMethods contains only concrete methods (no references)
 		List<VerificationMethod> methods = new ArrayList<>();
 		for (VerificationMethod vm : verificationMethods) {
 			if (vm.isReference())
@@ -93,29 +128,32 @@ public class DIDDocument extends W3CDIDFormat {
 			methods.add(vm);
 		}
 
+		// Resolve authentication references and ensure referenced methods exist
 		List<VerificationMethod> auths = new ArrayList<>();
 		for (VerificationMethod vm : authentications) {
 			if (vm instanceof VerificationMethod.Reference vmr) {
-				// check that the referenced verification method exists
+				// Check that the referenced verification method exists in methods list
 				VerificationMethod entity = methods.stream()
 						.filter(v -> v.getId().equals(vm.getId()))
 						.findAny()
 						.orElse(null);
 				if (entity == null)
 					throw new IllegalArgumentException("authentications contains an invalid reference");
-
+				// Update the reference to point to the actual method
 				vmr.updateReference(entity);
 				auths.add(vm);
 			} else {
+				// Add new method and reference if not a reference
 				methods.add(vm);
 				auths.add(vm.getReference());
 			}
 		}
 
+		// Resolve assertion references and ensure referenced methods exist
 		List<VerificationMethod> as = new ArrayList<>();
 		for (VerificationMethod vm : assertions) {
 			if (vm instanceof VerificationMethod.Reference vmr) {
-				// check that the referenced verification method exists
+				// Check that the referenced verification method exists in methods list
 				VerificationMethod entity = methods.stream()
 						.filter(v -> v.getId().equals(vm.getId()))
 						.findAny()
@@ -123,9 +161,11 @@ public class DIDDocument extends W3CDIDFormat {
 				if (entity == null)
 					throw new IllegalArgumentException("assertions contains an invalid reference");
 
+				// Update the reference to point to the actual method
 				vmr.updateReference(entity);
 				as.add(vm);
 			} else {
+				// Add new method and reference if not a reference
 				methods.add(vm);
 				as.add(vm.getReference());
 			}
@@ -138,8 +178,18 @@ public class DIDDocument extends W3CDIDFormat {
 		this.proof = proof;
 	}
 
-	// internal constructor used by builder.
-	// the caller should transfer ownership of the collections to the new instance
+	/**
+	 * Internal constructor used by builder.
+	 * The caller should transfer ownership of the collections to the new instance.
+	 *
+	 * @param contexts JSON-LD context URIs
+	 * @param id The DID identifier
+	 * @param verificationMethods Verification methods
+	 * @param authentications Authentication methods
+	 * @param assertions Assertion methods
+	 * @param credentials Verifiable credentials
+	 * @param services Service endpoints
+	 */
 	protected DIDDocument(List<String> contexts, Id id, List<VerificationMethod> verificationMethods,
 						  List<VerificationMethod> authentications, List<VerificationMethod> assertions,
 						  List<VerifiableCredential> credentials, List<Service> services) {
@@ -153,6 +203,13 @@ public class DIDDocument extends W3CDIDFormat {
 		this.proof = null;
 	}
 
+	/**
+	 * Constructs a new DIDDocument as a copy of an unsigned document with a given proof.
+	 * Used for signing a built document.
+	 *
+	 * @param unsigned The unsigned DIDDocument
+	 * @param proof The cryptographic proof to attach
+	 */
 	protected DIDDocument(DIDDocument unsigned, Proof proof) {
 		this.contexts = unsigned.getContexts();
 		this.id = unsigned.getId();
@@ -164,24 +221,46 @@ public class DIDDocument extends W3CDIDFormat {
 		this.proof = proof;
 	}
 
+	/**
+	 * Returns the list of JSON-LD context URIs associated with this document.
+	 * @return List of context URIs
+	 */
 	public List<String> getContexts() {
 		return contexts;
 	}
 
+	/**
+	 * Returns the unique DID identifier for this document.
+	 * @return The DID id
+	 */
 	public Id getId() {
 		return id;
 	}
 
+	/**
+	 * Returns all verification methods defined in this document.
+	 * @return List of verification methods
+	 */
 	public List<VerificationMethod> getVerificationMethods() {
 		return verificationMethods;
 	}
 
+	/**
+	 * Returns all verification methods of the specified type.
+	 * @param type The type of verification method
+	 * @return List of matching verification methods
+	 */
 	public List<VerificationMethod> getVerificationMethods(VerificationMethod.Type type) {
 		return verificationMethods.stream()
 				.filter(vm -> vm.getType()== type)
 				.collect(Collectors.toList());
 	}
 
+	/**
+	 * Returns the verification method with the specified id, or null if not found.
+	 * @param id The id of the verification method (DID URL or fragment)
+	 * @return The verification method, or null
+	 */
 	public VerificationMethod getVerificationMethod(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -190,6 +269,11 @@ public class DIDDocument extends W3CDIDFormat {
 		return getVerificationMethod(idUrl);
 	}
 
+	/**
+	 * Returns the verification method with the specified DIDURL, or null if not found.
+	 * @param id The DIDURL of the verification method
+	 * @return The verification method, or null
+	 */
 	public VerificationMethod getVerificationMethod(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
@@ -200,10 +284,19 @@ public class DIDDocument extends W3CDIDFormat {
 			.orElse(null);
 	}
 
+	/**
+	 * Returns the list of authentication methods for this DID.
+	 * @return List of authentication methods
+	 */
 	public List<VerificationMethod> getAuthentications() {
 		return authentications;
 	}
 
+	/**
+	 * Returns the authentication method with the specified id, or null if not found.
+	 * @param id The id of the authentication method (DID URL or fragment)
+	 * @return The authentication method, or null
+	 */
 	public VerificationMethod getAuthentication(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -212,6 +305,11 @@ public class DIDDocument extends W3CDIDFormat {
 		return getAuthentication(idUrl);
 	}
 
+	/**
+	 * Returns the authentication method with the specified DIDURL, or null if not found.
+	 * @param id The DIDURL of the authentication method
+	 * @return The authentication method, or null
+	 */
 	public VerificationMethod getAuthentication(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
@@ -222,10 +320,19 @@ public class DIDDocument extends W3CDIDFormat {
 			.orElse(null);
 	}
 
+	/**
+	 * Returns the list of assertion methods for this DID.
+	 * @return List of assertion methods
+	 */
 	public List<VerificationMethod> getAssertions() {
 		return assertions;
 	}
 
+	/**
+	 * Returns the assertion method with the specified id, or null if not found.
+	 * @param id The id of the assertion method (DID URL or fragment)
+	 * @return The assertion method, or null
+	 */
 	public VerificationMethod getAssertion(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -234,6 +341,11 @@ public class DIDDocument extends W3CDIDFormat {
 		return getAssertion(idUrl);
 	}
 
+	/**
+	 * Returns the assertion method with the specified DIDURL, or null if not found.
+	 * @param id The DIDURL of the assertion method
+	 * @return The assertion method, or null
+	 */
 	public VerificationMethod getAssertion(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
@@ -244,10 +356,19 @@ public class DIDDocument extends W3CDIDFormat {
 			.orElse(null);
 	}
 
+	/**
+	 * Returns the list of verifiable credentials associated with this DID.
+	 * @return List of verifiable credentials
+	 */
 	public List<VerifiableCredential> getCredentials() {
 		return credentials;
 	}
 
+	/**
+	 * Returns the list of verifiable credentials containing the specified type.
+	 * @param type Credential type to filter by
+	 * @return List of verifiable credentials of given type
+	 */
 	public List<VerifiableCredential> getCredentials(String type) {
 		Objects.requireNonNull(type, "type");
 		return credentials.stream()
@@ -255,6 +376,11 @@ public class DIDDocument extends W3CDIDFormat {
 				.collect(Collectors.toList());
 	}
 
+	/**
+	 * Returns the verifiable credential with the specified id, or null if not found.
+	 * @param id The id of the credential (DID URL or fragment)
+	 * @return The verifiable credential, or null
+	 */
 	public VerifiableCredential getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -263,6 +389,11 @@ public class DIDDocument extends W3CDIDFormat {
 		return getCredential(idUrl);
 	}
 
+	/**
+	 * Returns the verifiable credential with the specified DIDURL, or null if not found.
+	 * @param id The DIDURL of the credential
+	 * @return The verifiable credential, or null
+	 */
 	public VerifiableCredential getCredential(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
@@ -273,16 +404,30 @@ public class DIDDocument extends W3CDIDFormat {
 			.orElse(null);
 	}
 
+	/**
+	 * Returns the list of service endpoints described by this document.
+	 * @return List of service endpoints
+	 */
 	public List<Service> getServices() {
 		return services;
 	}
 
+	/**
+	 * Returns all services of the specified type.
+	 * @param type Service type to filter by
+	 * @return List of matching services
+	 */
 	public List<Service> getServices(String type) {
 		return services.stream()
 				.filter(service -> service.getType().equals(type))
 				.collect(Collectors.toList());
 	}
 
+	/**
+	 * Returns the service with the specified id, or null if not found.
+	 * @param id The id of the service (DID URL or fragment)
+	 * @return The service, or null
+	 */
 	public Service getService(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -291,6 +436,11 @@ public class DIDDocument extends W3CDIDFormat {
 		return getService(idUrl);
 	}
 
+	/**
+	 * Returns the service with the specified DIDURL, or null if not found.
+	 * @param id The DIDURL of the service
+	 * @return The service, or null
+	 */
 	public Service getService(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
@@ -301,10 +451,18 @@ public class DIDDocument extends W3CDIDFormat {
 			.orElse(null);
 	}
 
+	/**
+	 * Returns the cryptographic proof (signature) for this DID Document.
+	 * @return The proof, or null if unsigned
+	 */
 	public Proof getProof() {
 		return proof;
 	}
 
+	/**
+	 * Checks if the DID Document's proof is genuine (signature is valid).
+	 * @return true if the proof is valid, false otherwise
+	 */
 	public boolean isGenuine() {
 		if (proof == null)
 			return false;
@@ -312,11 +470,19 @@ public class DIDDocument extends W3CDIDFormat {
 		return proof.verify(id, getSignData());
 	}
 
+	/**
+	 * Validates the DID Document's proof, throwing if invalid.
+	 * @throws InvalidSignatureException if the proof is invalid
+	 */
 	public void validate() throws InvalidSignatureException {
 		if (!isGenuine())
 			throw new InvalidSignatureException();
 	}
 
+	/**
+	 * Converts this DID Document to a corresponding Boson Card object.
+	 * @return The Card representation of this DID Document
+	 */
 	public Card toCard() {
 		if (bosonCard == null)
 			bosonCard = new BosonCard(this);
@@ -324,6 +490,15 @@ public class DIDDocument extends W3CDIDFormat {
 		return bosonCard;
 	}
 
+	/**
+	 * Creates a DIDDocument from a Card object, using the specified document and credential contexts.
+	 * This adapts a Boson Card to a W3C-compliant DID Document.
+	 *
+	 * @param card The Card to convert
+	 * @param documentContexts Additional context URIs for the document
+	 * @param vcTypeContexts Map of credential type to context URIs
+	 * @return The corresponding DIDDocument
+	 */
 	public static DIDDocument fromCard(Card card, List<String> documentContexts,
 									   Map<String, List<String>> vcTypeContexts) {
 		if (card instanceof BosonCard bc)
@@ -357,14 +532,29 @@ public class DIDDocument extends W3CDIDFormat {
 		return doc;
 	}
 
+	/**
+	 * Creates a DIDDocument from a Card object with the given credential contexts.
+	 * @param card The Card to convert
+	 * @param vcTypeContexts Map of credential type to context URIs
+	 * @return The corresponding DIDDocument
+	 */
 	public static DIDDocument fromCard(Card card, Map<String, List<String>> vcTypeContexts) {
 		return fromCard(card, List.of(), vcTypeContexts);
 	}
 
+	/**
+	 * Creates a DIDDocument from a Card object with default contexts.
+	 * @param card The Card to convert
+	 * @return The corresponding DIDDocument
+	 */
 	public static DIDDocument fromCard(Card card) {
 		return fromCard(card, List.of(), Map.of());
 	}
 
+	/**
+	 * Returns the signable data for this document, used for signature verification.
+	 * @return Byte array of signable data
+	 */
 	protected byte[] getSignData() {
 		BosonCard unsigned = bosonCard != null ? bosonCard : new BosonCard(this, true);
 		return unsigned.getSignData();
@@ -391,22 +581,46 @@ public class DIDDocument extends W3CDIDFormat {
 		return false;
 	}
 
+	/**
+	 * Parses a DIDDocument from its JSON representation.
+	 * @param json The JSON string
+	 * @return The parsed DIDDocument
+	 */
 	public static DIDDocument parse(String json) {
 		return parse(json, DIDDocument.class);
 	}
 
+	/**
+	 * Parses a DIDDocument from its CBOR byte representation.
+	 * @param cbor The CBOR bytes
+	 * @return The parsed DIDDocument
+	 */
 	public static DIDDocument parse(byte[] cbor) {
 		return parse(cbor, DIDDocument.class);
 	}
 
+	/**
+	 * Creates a new builder for constructing a DIDDocument for the given subject.
+	 * @param subject The identity subject of the document
+	 * @return A new DIDDocumentBuilder
+	 */
 	public static DIDDocumentBuilder builder(Identity subject) {
 		Objects.requireNonNull(subject, "subject");
 		return new DIDDocumentBuilder(subject);
 	}
 
+	/**
+	 * Internal adapter class that wraps a DIDDocument as a {@link Card}.
+	 * Used for signature and serialization compatibility with Boson cards.
+	 */
 	protected static class BosonCard extends Card {
+		/** The wrapped DIDDocument instance. */
 		private final DIDDocument doc;
 
+		/**
+		 * Constructs a BosonCard from a DIDDocument (signed).
+		 * @param doc The DIDDocument to wrap
+		 */
 		protected BosonCard(DIDDocument doc) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
@@ -417,7 +631,11 @@ public class DIDDocument extends W3CDIDFormat {
 			this.doc = doc;
 		}
 
-		// unsigned is not used, just as the method signature for overriding
+		/**
+		 * Constructs a BosonCard from a DIDDocument (unsigned).
+		 * @param doc The DIDDocument to wrap
+		 * @param unsigned Unused marker parameter
+		 */
 		protected BosonCard(DIDDocument doc, boolean unsigned) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
@@ -427,6 +645,11 @@ public class DIDDocument extends W3CDIDFormat {
 			this.doc = doc;
 		}
 
+		/**
+		 * Constructs a BosonCard from an existing Card and DIDDocument.
+		 * @param card The Card to wrap
+		 * @param doc The associated DIDDocument
+		 */
 		protected BosonCard(Card card, DIDDocument doc) {
 			super(card, card.getSignedAt(), card.getSignature());
 			this.doc = doc;
@@ -437,23 +660,41 @@ public class DIDDocument extends W3CDIDFormat {
 			return super.getSignData();
 		}
 
+		/**
+		 * Returns the wrapped DIDDocument instance.
+		 * @return The DIDDocument
+		 */
 		public DIDDocument getDocument() {
 			return doc;
 		}
 	}
 
+	/**
+	 * Representation of a DID Document service endpoint.
+	 * Each service describes a protocol endpoint associated with the DID subject.
+	 */
 	@JsonPropertyOrder({"id", "type", "serviceEndpoint"})
 	public static class Service {
+		/** The unique identifier of the service (DID URL or fragment). */
 		@JsonProperty("id")
 		private final String id;
+		/** The type of the service (e.g., "LinkedDomains"). */
 		@JsonProperty("type")
 		private final String type;
+		/** The endpoint URI for the service. */
 		@JsonProperty("serviceEndpoint")
 		private final String endpoint;
+		/** Additional custom properties of the service. */
 		@JsonAnyGetter
 		@JsonAnySetter
 		private final Map<String, Object> properties;
 
+		/**
+		 * Constructs a Service instance from JSON properties.
+		 * @param id The service id
+		 * @param type The service type
+		 * @param endpoint The service endpoint URI
+		 */
 		@JsonCreator
 		protected Service(@JsonProperty(value = "id", required = true) String id,
 						  @JsonProperty(value = "type", required = true) String type,
@@ -468,6 +709,13 @@ public class DIDDocument extends W3CDIDFormat {
 			this.properties = new LinkedHashMap<>();
 		}
 
+		/**
+		 * Constructs a Service instance with explicit properties.
+		 * @param id The service id
+		 * @param type The service type
+		 * @param endpoint The service endpoint URI
+		 * @param properties Additional service properties
+		 */
 		protected Service(String id, String type, String endpoint, Map<String, Object> properties) {
 			this.id = id;
 			this.type = type;
@@ -475,22 +723,44 @@ public class DIDDocument extends W3CDIDFormat {
 			this.properties = properties == null || properties.isEmpty() ? Collections.emptyMap() : properties;
 		}
 
+		/**
+		 * Returns the service id.
+		 * @return The id
+		 */
 		public String getId() {
 			return id;
 		}
 
+		/**
+		 * Returns the service type.
+		 * @return The type
+		 */
 		public String getType() {
 			return type;
 		}
 
+		/**
+		 * Returns the service endpoint URI.
+		 * @return The endpoint URI
+		 */
 		public String getEndpoint() {
 			return endpoint;
 		}
 
+		/**
+		 * Returns an unmodifiable map of all additional service properties.
+		 * @return The properties map
+		 */
 		public Map<String, Object> getProperties() {
 			return Collections.unmodifiableMap(properties);
 		}
 
+		/**
+		 * Returns the value of a named property, or null if not present.
+		 * @param name Property name
+		 * @return The property value, or null
+		 * @param <T> The property type
+		 */
 		@SuppressWarnings("unchecked")
 		public <T> T getProperty(String name) {
 			return (T) properties.get(name);

@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.utils;
 
 import java.util.NoSuchElementException;
@@ -92,10 +114,11 @@ public class Variable<T> {
 	 * Sets the value contained by this {@code Variable} to the specified value,
 	 * which may be {@code null}, only if no value is currently present.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method is useful for conditionally setting a value when the
 	 * {@code Variable} is empty. To unconditionally set a nullable value, use
 	 * the constructor or {@link #ofNullable}.
+	 * </p>
 	 *
 	 * @param value the new value, which may be {@code null}
 	 */
@@ -105,12 +128,12 @@ public class Variable<T> {
 	}
 
 	/**
-	 * Returns the value if present, otherwise throws
-	 * {@code NoSuchElementException}.
+	 * Returns the value if present, otherwise throws {@code NoSuchElementException}.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method is provided for compatibility with {@link Optional#get()}.
 	 * The preferred alternative is {@link #orElseThrow()}.
+	 * </p>
 	 *
 	 * @return the value held by this {@code Variable}
 	 * @throws NoSuchElementException if no value is present
@@ -132,8 +155,7 @@ public class Variable<T> {
 	}
 
 	/**
-	 * If a value is  not present, returns {@code true}, otherwise
-	 * {@code false}.
+	 * If a value is  not present, returns {@code true}, otherwise {@code false}.
 	 *
 	 * @return  {@code true} if a value is not present, otherwise {@code false}
 	 */
@@ -202,9 +224,10 @@ public class Variable<T> {
 	 * <p>If the mapping function returns a {@code null} result then this method
 	 * returns an empty {@code Variable}.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method allows post-processing of the value without explicit null
 	 * checks. For example:
+	 * </p>
 	 * <pre>{@code
 	 *     Variable<String> var = Variable.of("hello");
 	 *     Variable<Integer> length = var.map(String::length);
@@ -231,10 +254,11 @@ public class Variable<T> {
 	 * {@code Variable}-bearing mapping function to the value, otherwise returns
 	 * an empty {@code Variable}.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method is similar to {@link #map}, but the mapper returns a
 	 * {@code Variable}, avoiding the need to wrap the result in an additional
 	 * {@code Variable}.
+	 * </p>
 	 *
 	 * @param <U> The type of value of the {@code Variable} returned by the
 	 *            mapping function
@@ -260,9 +284,10 @@ public class Variable<T> {
 	 * If a value is present, returns a sequential {@link Stream} containing
 	 * only that value, otherwise returns an empty {@code Stream}.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method can be used to transform a {@code Stream} of optional
 	 * elements to a {@code Stream} of present value elements:
+	 * </p>
 	 * <pre>{@code
 	 *     Stream<Variable<T>> vars = ..
 	 *     Stream<T> s = vars.flatMap(Variable::stream)
@@ -344,10 +369,11 @@ public class Variable<T> {
 	 * If a value is present, returns the value, otherwise throws an exception
 	 * produced by the exception supplying function.
 	 *
-	 * @apiNote
+	 * <p>
 	 * A method reference to the exception constructor with an empty argument
 	 * list can be used as the supplier. For example,
 	 * {@code IllegalStateException::new}
+	 * </p>
 	 *
 	 * @param <X> Type of the exception to be thrown
 	 * @param exceptionSupplier the supplying function that produces an
@@ -368,12 +394,13 @@ public class Variable<T> {
 	 * Converts this {@code Variable} to an {@link Optional} containing the same value.
 	 * If no value is present, returns an empty {@code Optional}.
 	 *
-	 * @apiNote
+	 * <p>
 	 * This method is useful for interoperability with APIs that expect an
 	 * {@code Optional}. Since {@code Variable} is mutable and {@code Optional}
 	 * is immutable, the returned {@code Optional} captures the current value
 	 * at the time of invocation, and subsequent changes to this {@code Variable}
 	 * do not affect the returned {@code Optional}.
+	 * </p>
 	 *
 	 * @return an {@code Optional} containing the value of this {@code Variable}
 	 *         if present, otherwise an empty {@code Optional}

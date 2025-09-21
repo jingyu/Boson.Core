@@ -24,14 +24,15 @@
 package io.bosonnetwork.shell;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
+
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
+import io.bosonnetwork.utils.vertx.VertxFuture;
 
 /**
  * @hidden
@@ -41,6 +42,9 @@ import picocli.CommandLine.Parameters;
 public class StoreValueCommand implements Callable<Integer> {
 	@Option(names = { "-p", "--persistent" }, description = "Persistent value, default is false.")
 	private boolean persistent = false;
+
+	@Option(names = { "-l", "--localOnly" }, description = "Only store the value in the local node")
+	private boolean localOnly = false;
 
 	@Option(names = { "-m", "--mutable" }, description = "Mutbale value, default is immutable value, no effect on update mode.")
 	private boolean mutable = false;
@@ -103,8 +107,11 @@ public class StoreValueCommand implements Callable<Integer> {
 			}
 		}
 
-		CompletableFuture<Void> f = Main.getBosonNode().storeValue(value, persistent);
-		f.get();
+		if (localOnly)
+			VertxFuture.of(Main.getBosonNode().getStorage().putValue(value, persistent)).get();
+		else
+			Main.getBosonNode().storeValue(value, persistent).get();
+
 		System.out.println("Value " + value.getId() + " stored.");
 		return 0;
 	}

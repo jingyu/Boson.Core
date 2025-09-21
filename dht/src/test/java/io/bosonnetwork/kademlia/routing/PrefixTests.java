@@ -99,12 +99,16 @@ public class PrefixTests {
 
 	@Test
 	void testIsPrefixOf() {
+		//noinspection SpellCheckingInspection
 		var id = Id.of("0x4833af415161cbd0a3ef83aa59a55fbadc9bd520a886a8fa214a3d09b6676cb8");
 		var prefix = new Prefix(id, 64);
 
 		assertTrue(prefix.isPrefixOf(id));
+		//noinspection SpellCheckingInspection
 		assertTrue(prefix.isPrefixOf(Id.of("0x4833af415161cbd0f3ef83aa59a55fbadc9bd520a886a8fa214a3d09b6676cb8")));
+		//noinspection SpellCheckingInspection
 		assertTrue(prefix.isPrefixOf(Id.of("0x4833af415161cbd0ffffffffffffffffffffffffffffffffffffffffffffffff")));
+		//noinspection SpellCheckingInspection
 		assertFalse(prefix.isPrefixOf(Id.of("0x4833af415161cbd1f3ef83aa59a55fbadc9bd520a886a8fa214a3d09b6676cb8")));
 	}
 
@@ -123,8 +127,11 @@ public class PrefixTests {
 
 	@Test
 	void testIsSiblingOf() {
+		//noinspection SpellCheckingInspection
 		var id  = Id.of("0x4833af415161cbd0a3ef83aa59a55fbadc9bd520a886a8fa214a3d09b6676cb8");
+		//noinspection SpellCheckingInspection
 		var id2 = Id.of("0x4833af415161cbd0a3ef8faa59a55fbadc9bd520a886a8fa214a3d09b6676cb8");
+		//noinspection SpellCheckingInspection
 		var id3 = Id.of("0x4833af415161cbd0a3ef93aa59a55fbadc9bd520a886a8fa214a3d09b6676cb8");
 
 		var p = new Prefix(id, 84);

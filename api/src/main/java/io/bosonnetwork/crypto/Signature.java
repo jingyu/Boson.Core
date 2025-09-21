@@ -160,6 +160,12 @@ public class Signature {
 			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromBytes(key));
 		}
 
+		/**
+		 * Creates a new {@code PrivateKey} object from the specified seed.
+		 *
+		 * @param seed the byte array representing the seed for the private key. Must not be null.
+		 * @return a new {@code PrivateKey} created from the given seed.
+		 */
 		public static PrivateKey fromSeed(byte[] seed) {
 			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromSeed(Seed.fromBytes(seed)));
 		}

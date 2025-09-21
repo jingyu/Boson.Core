@@ -50,6 +50,9 @@ public class NodeInfo {
 		if (addr == null)
 			throw new IllegalArgumentException("Invalid socket address: null");
 
+		if (addr.getPort() <= 0 || addr.getPort() > 65535)
+			throw new IllegalArgumentException("Invalid port: " + addr.getPort());
+
 		this.id = id;
 		this.addr = addr;
 	}
@@ -79,21 +82,25 @@ public class NodeInfo {
 	 * Construct a {@code NodeInfo} object.
 	 *
 	 * @param id the node id.
-	 * @param addr the node IP address.
+	 * @param host the node host name or address.
 	 * @param port the node port number.
 	 */
-	public NodeInfo(Id id, String addr, int port) {
+	public NodeInfo(Id id, String host, int port) {
 		if (id == null)
 			throw new IllegalArgumentException("Invalid node id: null");
 
-		if (addr == null)
+		if (host == null)
 			throw new IllegalArgumentException("Invalid socket address: null");
 
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
+		// TODO: not try to do the name resolution if the host is an host name
+		this.addr = new InetSocketAddress(host, port);
+		if (addr.isUnresolved())
+			throw new IllegalArgumentException("Unknown host");
+
 		this.id = id;
-		this.addr = new InetSocketAddress(addr, port);
 	}
 
 	/**
@@ -111,12 +118,13 @@ public class NodeInfo {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
-		this.id = id;
 		try {
 			this.addr = new InetSocketAddress(InetAddress.getByAddress(addr), port);
 		} catch (UnknownHostException e) {
 			throw new IllegalArgumentException("Invalid binary inet address", e);
 		}
+
+		this.id = id;
 	}
 
 	/**
@@ -156,7 +164,7 @@ public class NodeInfo {
 	 *
 	 * @return the IP address.
 	 */
-	public InetAddress getInetAddress() {
+	public InetAddress getIpAddress() {
 		return addr.getAddress();
 	}
 
@@ -164,7 +172,7 @@ public class NodeInfo {
 	 * Returns the String form of the IP address or hostname.
 	 * This method will <b>not</b> attempt to do a reverse lookup.
 	 *
-	 * @return the String of IP address or hostname.
+	 * @return the host name or string of IP address.
 	 */
 	public String getHost() {
 		return addr.getHostString();
@@ -201,7 +209,7 @@ public class NodeInfo {
 	 * Checks if the node information is identical with the other one.
 	 *
 	 * @param other another node info object to check
-	 * @return true if the two node info object is identical, false otherwise.
+	 * @return true if the other node info object is identical with this, false otherwise.
 	 */
 	public boolean matches(NodeInfo other) {
 		if (other != null)
@@ -222,14 +230,13 @@ public class NodeInfo {
 
 		if (o instanceof NodeInfo that)
 			return this.id.equals(that.id) &&
-					this.addr.equals(that.addr); //  &&
-					// this.version == that.version;
+					this.addr.equals(that.addr);
 
 		return false;
 	}
 
 	@Override
 	public String toString() {
-		return "<" + id + "," + addr.getAddress().toString() + "," + addr.getPort() + ">";
+		return id.toString() + "@" + getHost() + ":" + getPort();
 	}
 }

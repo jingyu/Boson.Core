@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia.exceptions;
 
-import io.bosonnetwork.kademlia.ErrorCode;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
  * Signals that the target value not exists.

@@ -31,7 +31,7 @@ import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 
 /**
- * Defined the supported DHT networks.
+ * Defined the DHT network types.
  */
 public enum Network {
 	/**
@@ -49,6 +49,15 @@ public enum Network {
 	private final int protocolHeaderSize;
 	private final int maxPacketSize;
 
+	/**
+	 * Constructs a Network enum constant with the specified protocol family, preferred address type,
+	 * UDP protocol header size, and maximum UDP packet size.
+	 *
+	 * @param family the protocol family (e.g., INET or INET6)
+	 * @param addressType the preferred InetAddress subclass for this network (e.g., Inet4Address or Inet6Address)
+	 * @param headerSize the size in bytes of the network and UDP headers for this protocol
+	 * @param maxPacketSize the maximum supported UDP packet size for this network type
+	 */
 	Network(ProtocolFamily family, Class<? extends InetAddress> addressType, int headerSize, int maxPacketSize) {
 		this.protocolFamily = family;
 		this.preferredAddressType = addressType;
@@ -121,6 +130,24 @@ public enum Network {
 	 */
 	public int maxPacketSize() {
 		return maxPacketSize;
+	}
+
+	/**
+	 * Determines if this network type is IPv4.
+	 *
+	 * @return true if this network type is IPv4, otherwise false.
+	 */
+	public boolean isIPv4() {
+		return this == IPv4;
+	}
+
+	/**
+	 * Determines if this network type is IPv6.
+	 *
+	 * @return true if this network type is IPv6, otherwise false.
+	 */
+	public boolean isIPv6() {
+		return this == IPv6;
 	}
 
 	/**

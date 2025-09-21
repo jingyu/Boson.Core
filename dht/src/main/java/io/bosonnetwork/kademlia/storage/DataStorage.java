@@ -23,6 +23,7 @@
 package io.bosonnetwork.kademlia.storage;
 
 import java.util.List;
+import java.util.Objects;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -41,12 +42,11 @@ public interface DataStorage {
 	 * Initializes the storage system by creating necessary tables and indexes.
 	 *
 	 * @param vertx the Vert.x instance to use for asynchronous operations
-	 * @param connectionUri the database connection URI
 	 * @param valueExpiration the expiration time for values in milliseconds
 	 * @param peerInfoExpiration the expiration time for peer information in milliseconds
 	 * @return a {@link Future} containing the current schema version of the storage system
 	 */
-	Future<Integer> initialize(Vertx vertx, String connectionUri, long valueExpiration, long peerInfoExpiration);
+	Future<Integer> initialize(Vertx vertx, long valueExpiration, long peerInfoExpiration);
 
 	/**
 	 * Closes the storage system.
@@ -91,7 +91,7 @@ public interface DataStorage {
 	 *
 	 * @param value               the value to store
 	 * @param persistent          true if the value should be stored persistently, false otherwise
-	 * @param expectedSequenceNumber the expected sequence number for the value
+	 * @param expectedSequenceNumber the expected sequence number for the value, -1 disable the check
 	 * @return a {@link Future} containing the stored {@link Value}
 	 */
 	Future<Value> putValue(Value value, boolean persistent, int expectedSequenceNumber);
@@ -265,4 +265,22 @@ public interface DataStorage {
 	 *         or {@code false} if no matching peer was found
 	 */
 	Future<Boolean> removePeers(Id id);
+
+	static boolean supports(String url) {
+		// now only support inmemory, sqlite and postgres
+		return url.equals("inmemory") || url.startsWith("jdbc:sqlite:") || url.startsWith("postgresql://");
+	}
+
+	static DataStorage create(String url) {
+		Objects.requireNonNull(url, "url");
+
+		if (url.equals("inmemory"))
+			return new InMemoryStorage();
+		if (url.startsWith("jdbc:sqlite:"))
+			return new SQLiteStorage(url);
+		if (url.startsWith("postgresql://"))
+			return new PostgresStorage(url);
+
+		throw new IllegalArgumentException("Unsupported storage: " + url);
+	}
 }

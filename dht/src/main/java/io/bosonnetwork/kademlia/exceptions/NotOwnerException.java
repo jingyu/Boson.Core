@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia.exceptions;
 
-import io.bosonnetwork.kademlia.ErrorCode;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
  * Signals that the node is not the value or peer owner, it means the node does not have the

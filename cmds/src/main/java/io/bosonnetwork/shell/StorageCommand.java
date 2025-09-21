@@ -23,22 +23,18 @@
 
 package io.bosonnetwork.shell;
 
-import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
+
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Value;
-import io.bosonnetwork.kademlia.storage.deprecated.DataStorage;
+import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.shell.StorageCommand.ListPeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ListValueCommand;
 import io.bosonnetwork.shell.StorageCommand.PeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ValueCommand;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Parameters;
+import io.bosonnetwork.utils.vertx.VertxFuture;
 
 /**
  * @hidden
@@ -62,14 +58,14 @@ public class StorageCommand {
 		public Integer call() throws Exception {
 			DataStorage storage = Main.getBosonNode().getStorage();
 
-			Stream<Id> ids = storage.getAllValues();
-			AtomicInteger n = new AtomicInteger(0);
-			ids.forEach(id -> {
-				System.out.println(id);
-				n.incrementAndGet();
-			});
+			VertxFuture.of(storage.getValues().map(values -> {
+				values.forEach(v -> {
+					System.out.printf("%44s, %s\n", v.getId(), v.isMutable() ? "mutable" : "immutable");
+				});
+				System.out.println("Total " + values.size() + " values.");
+				return null;
+			})).get();
 
-			System.out.println("Total " + n.get() + " values.");
 			return 0;
 		}
 	}
@@ -94,11 +90,14 @@ public class StorageCommand {
 			}
 
 			DataStorage storage = Main.getBosonNode().getStorage();
-			Value value = storage.getValue(valueId);
-			if (value != null)
-				System.out.println(value);
-			else
-				System.out.println("Value " + id + " not exists.");
+			VertxFuture.of(storage.getValue(valueId).map(value -> {
+				if (value != null)
+					System.out.println(value);
+				else
+					System.out.println("Value " + id + " not exists.");
+
+				return null;
+			})).get();
 
 			return 0;
 		}
@@ -115,14 +114,14 @@ public class StorageCommand {
 		public Integer call() throws Exception {
 			DataStorage storage = Main.getBosonNode().getStorage();
 
-			Stream<Id> ids = storage.getAllPeers();
-			AtomicInteger n = new AtomicInteger(0);
-			ids.forEach(id -> {
-				System.out.println(id);
-				n.incrementAndGet();
-			});
+			VertxFuture.of(storage.getPeers().map(peers -> {
+				peers.forEach(p -> {
+					System.out.printf("%s:%s\n", p.getId(), p.getNodeId());
+				});
+				System.out.println("Total " + peers.size() + " peers.");
+				return null;
+			})).get();
 
-			System.out.println("Total " + n.get() + " peers.");
 			return 0;
 		}
 	}
@@ -147,14 +146,12 @@ public class StorageCommand {
 			}
 
 			DataStorage storage = Main.getBosonNode().getStorage();
-			List<PeerInfo> peers = storage.getPeer(peerId, -1);
-			if (!peers.isEmpty()) {
-				for (PeerInfo peer : peers)
-					System.out.println(peer);
+
+			VertxFuture.of(storage.getPeers(peerId).map(peers -> {
+				peers.forEach(System.out::println);
 				System.out.println("Total " + peers.size() + " peers.");
-			} else {
-				System.out.println("Peer " + id + " not exists.");
-			}
+				return null;
+			})).get();
 
 			return 0;
 		}

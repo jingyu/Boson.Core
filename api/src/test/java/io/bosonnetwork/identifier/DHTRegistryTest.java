@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
 
 import io.vertx.core.Vertx;
 
@@ -23,7 +22,6 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
-import io.bosonnetwork.BosonException;
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.CryptoContext;
 import io.bosonnetwork.Id;
@@ -31,8 +29,6 @@ import io.bosonnetwork.Identity;
 import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.NodeStatus;
-import io.bosonnetwork.NodeStatusListener;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
@@ -64,23 +60,12 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public boolean isLocalId(Id id) {
-				return false;
-			}
-
-			@Override
 			public void setDefaultLookupOption(LookupOption option) {
-
 			}
 
 			@Override
-			public void addStatusListener(NodeStatusListener listener) {
-
-			}
-
-			@Override
-			public void removeStatusListener(NodeStatusListener listener) {
-
+			public LookupOption getDefaultLookupOption() {
+				return null;
 			}
 
 			@Override
@@ -94,33 +79,23 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public ScheduledExecutorService getScheduler() {
-				return null;
+			public CompletableFuture<Void> bootstrap(Collection<NodeInfo> bootstrapNodes){
+				return CompletableFuture.completedFuture(null);
 			}
 
 			@Override
-			public void bootstrap(NodeInfo node) throws BosonException {
-
+			public CompletableFuture<Void> run() {
+				return CompletableFuture.completedFuture(null);
 			}
 
 			@Override
-			public void bootstrap(Collection<NodeInfo> bootstrapNodes) throws BosonException {
-
+			public CompletableFuture<Void> shutdown() {
+				return CompletableFuture.completedFuture(null);
 			}
 
 			@Override
-			public void start() throws BosonException {
-
-			}
-
-			@Override
-			public void stop() {
-
-			}
-
-			@Override
-			public NodeStatus getStatus() {
-				return null;
+			public boolean isRunning() {
+				return true;
 			}
 
 			@Override
@@ -139,7 +114,7 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public byte[] decrypt(Id sender, byte[] data) throws BosonException {
+			public byte[] decrypt(Id sender, byte[] data) {
 				return new byte[0];
 			}
 
@@ -154,12 +129,12 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Value> findValue(Id id, LookupOption option) {
+			public CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
 				return values.get(id) == null ? CompletableFuture.completedFuture(null) : CompletableFuture.completedFuture(values.get(id));
 			}
 
 			@Override
-			public CompletableFuture<Void> storeValue(Value value, boolean persistent) {
+			public CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 				var updated = values.compute(value.getId(), (k, v) -> {
 					if (v != null) {
 						if (v.isMutable() && value.getSequenceNumber() < v.getSequenceNumber())
@@ -216,7 +191,7 @@ public class DHTRegistryTest {
 
 	@AfterAll
 	public static void cleanup() throws Exception {
-		node.stop();
+		node.shutdown();
 	}
 
 	private static Identity alice;

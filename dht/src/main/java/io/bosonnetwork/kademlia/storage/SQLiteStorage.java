@@ -30,6 +30,8 @@ import io.vertx.jdbcclient.JDBCPool;
 import io.vertx.sqlclient.PoolOptions;
 
 public class SQLiteStorage extends DatabaseStorage implements DataStorage {
+	public static final String IN_MEMORY_STORAGE_URL = "jdbc:sqlite:file:node?mode=memory";
+
 	private static final List<String> SCHEMA = List.of(
 			// Schema version
 			"""
@@ -85,6 +87,10 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 			// Initialize the schema version
 			"INSERT INTO schema_version (id, version) VALUES (1, " + SCHEMA_VERSION + ") ON CONFLICT (id) DO NOTHING"
 	);
+
+	protected SQLiteStorage(String connectionUri) {
+		super(connectionUri);
+	}
 
 	@Override
 	protected void setupSqlClient(Vertx vertx, String connectionUri) {

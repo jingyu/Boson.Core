@@ -29,6 +29,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import io.bosonnetwork.kademlia.exceptions.KadException;
+
 @JsonPropertyOrder({"c", "m"})
 public class Error implements Message.Body {
 	@JsonProperty("c")
@@ -55,6 +57,11 @@ public class Error implements Message.Body {
 
 	public String getMessage() {
 		return message;
+	}
+
+	public KadException getCause() {
+		// TODO: convert the error message to the corresponding KadException
+		return null;
 	}
 
 	@Override

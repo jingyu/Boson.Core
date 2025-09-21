@@ -7,7 +7,6 @@ package io.bosonnetwork.metrics;
 public interface Metrics {
 	/**
 	 * Used to close out the metrics, for example when a DHT node has been closed.
-	 * <p/>
 	 * No specific thread and context can be expected when this method is called.
 	 */
 	default void close() {

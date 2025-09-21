@@ -26,10 +26,11 @@ package io.bosonnetwork.am;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import io.bosonnetwork.Configuration;
-import io.bosonnetwork.DefaultConfiguration;
-import io.bosonnetwork.access.impl.AccessManager;
 import picocli.CommandLine.Option;
+
+import io.bosonnetwork.DefaultNodeConfiguration;
+import io.bosonnetwork.NodeConfiguration;
+import io.bosonnetwork.access.impl.AccessManager;
 
 /**
  * @hidden
@@ -44,7 +45,7 @@ public abstract class AmCommand {
 
 	protected AccessManager getAccessManager() throws IOException {
 		if (am == null) {
-			DefaultConfiguration.Builder builder = new DefaultConfiguration.Builder();
+			DefaultNodeConfiguration.Builder builder = NodeConfiguration.builder();
 
 			Path file = Path.of(configFile).normalize();
 			if (file.startsWith("~"))
@@ -60,7 +61,7 @@ public abstract class AmCommand {
 				System.exit(-1);
 			}
 
-			Configuration config = builder.build();
+			NodeConfiguration config = builder.build();
 			Path dataPath = config.dataPath();
 			if (dataPath == null) {
 				System.out.println("No data path in the configuration.");

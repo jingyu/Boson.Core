@@ -56,11 +56,23 @@ public class FindPeerResponse extends LookupResponse {
 
 	@JsonCreator
 	protected FindPeerResponse(
-			@JsonProperty("n4") List<NodeInfo> nodes4,
-			@JsonProperty("n6") List<NodeInfo> nodes6,
+			@JsonProperty("n4") List<? extends NodeInfo> nodes4,
+			@JsonProperty("n6") List<? extends NodeInfo> nodes6,
 			@JsonProperty("p") List<PeerInfo> peers) {
 		super(nodes4, nodes6, 0);
 		this.peers = peers == null || peers.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(peers);
+	}
+
+	protected FindPeerResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {
+		this(nodes4, nodes6, null);
+	}
+
+	protected FindPeerResponse(List<PeerInfo> peers) {
+		this(null, null, peers);
+	}
+
+	public boolean hasPeers() {
+		return !peers.isEmpty();
 	}
 
 	public List<PeerInfo> getPeers() {

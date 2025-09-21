@@ -24,64 +24,58 @@
 package io.bosonnetwork;
 
 /**
- * The class {@code BosonException} is the superclass of all checked exceptions
- * that can be thrown by the Boson library.
+ * Represents a checked exception that may be thrown by the Boson library to indicate
+ * an error condition specific to Boson operations.
+ * <p>
+ * This is the base class for all checked exceptions in the Boson API.
+ * </p>
  */
 public class BosonException extends Exception {
 	private static final long serialVersionUID = 7113857681570350392L;
 
 	/**
-	 * Constructs a new Boson exception with {@code null} as its detail message.
-	 * The cause is not initialized, and may subsequently be initialized by a
-	 * call to {@link #initCause}.
+	 * Constructs a new {@code BosonException} with {@code null} as its detail message.
+	 * The cause is not initialized and may be set later by a call to {@link #initCause}.
 	 */
 	public BosonException() {
 		super();
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message.  The
-	 * cause is not initialized, and may subsequently be initialized by
-	 * a call to {@link #initCause}.
+	 * Constructs a new {@code BosonException} with the specified detail message.
+	 * The cause is not initialized and may be set later by a call to {@link #initCause}.
 	 *
-	 * @param   message   the detail message. The detail message is saved for
-	 *		  later retrieval by the {@link #getMessage()} method.
+	 * @param message the detail message, which is saved for later retrieval by the {@link #getMessage()} method.
 	 */
 	public BosonException(String message) {
 		super(message);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message and
-	 * cause.  <p>Note that the detail message associated with
-	 * {@code cause} is <i>not</i> automatically incorporated in
-	 * this exception's detail message.
+	 * Constructs a new {@code BosonException} with the specified detail message and cause.
+	 * <p>
+	 * Note that the detail message associated with {@code cause} is not automatically
+	 * incorporated into this exception's detail message.
+	 * </p>
 	 *
-	 * @param  message the detail message (which is saved for later retrieval
-	 *		 by the {@link #getMessage()} method).
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param message the detail message, saved for later retrieval by {@link #getMessage()}.
+	 * @param cause the cause, which is saved for later retrieval by {@link #getCause()}.
+	 *              A {@code null} value is permitted and indicates that the cause is nonexistent or unknown.
 	 */
 	public BosonException(String message, Throwable cause) {
 		super(message, cause);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified cause and a detail
-	 * message of {@code (cause==null ? null : cause.toString())} (which
-	 * typically contains the class and detail message of {@code cause}).
-	 * This constructor is useful for exceptions that are little more than
-	 * wrappers for other throwables (for example, {@link
-	 * java.security.PrivilegedActionException}).
+	 * Constructs a new {@code BosonException} with the specified cause and a detail
+	 * message of {@code (cause == null ? null : cause.toString())}, which typically contains
+	 * the class and detail message of {@code cause}.
+	 * <p>
+	 * This constructor is useful for exceptions that are wrappers for other throwables.
+	 * </p>
 	 *
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param cause the cause, saved for later retrieval by {@link #getCause()}.
+	 *              A {@code null} value is permitted and indicates that the cause is nonexistent or unknown.
 	 */
 	public BosonException(Throwable cause) {
 		super(cause);

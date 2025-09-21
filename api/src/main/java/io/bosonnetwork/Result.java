@@ -31,7 +31,9 @@ import java.util.Objects;
  * @param <T> The type of values stored in the result.
  */
 public class Result<T> {
+	/** The value for the IPv4 network. */
 	private T v4;
+	/** The value for the IPv6 network. */
 	private T v6;
 
 	/**
@@ -43,6 +45,32 @@ public class Result<T> {
 	public Result(T v4, T v6) {
 		this.v4 = v4;
 		this.v6 = v6;
+	}
+
+	/**
+	 * Creates a new {@code Result} instance with the specified values for IPv4 and IPv6 networks.
+	 *
+	 * @param v4 the value for the IPv4 network.
+	 * @param v6 the value for the IPv6 network.
+	 * @param <T> the type of the values for the IPv4 and IPv6 networks.
+	 * @return a new {@code Result} instance containing the specified values.
+	 */
+	public static <T> Result<T> of(T v4, T v6) {
+		return new Result<>(v4, v6);
+	}
+
+	/**
+	 * Creates a {@code Result} object containing values for IPv4 and IPv6 networks
+	 * based on the specified {@code Network} type.
+	 *
+	 * @param <T> the type of the value for the network.
+	 * @param network the network type (IPv4 or IPv6) used to determine which value to include.
+	 * @param v the value to associate with the network type.
+	 * @return a {@code Result} object containing the value for IPv4 if the network is IPv4,
+	 *         the value for IPv6 if the network is IPv6, or {@code null} for unsupported networks.
+	 */
+	public static <T> Result<T> ofNetwork(Network network, T v) {
+		return new Result<>(network.isIPv4() ? v : null, network.isIPv6() ? v : null);
 	}
 
 	/**

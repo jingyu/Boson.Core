@@ -49,7 +49,7 @@ import io.bosonnetwork.utils.Json;
 public class FindValueResponse extends LookupResponse {
 	private final Value value;
 
-	protected FindValueResponse(List<NodeInfo> nodes4, List<NodeInfo> nodes6, Value value) {
+	protected FindValueResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6, Value value) {
 		super(nodes4, nodes6, 0);
 		this.value = value;
 	}
@@ -59,13 +59,17 @@ public class FindValueResponse extends LookupResponse {
 		this.value = value;
 	}
 
-	protected FindValueResponse(List<NodeInfo> nodes4, List<NodeInfo> nodes6) {
+	protected FindValueResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {
 		super(nodes4, nodes6, 0);
 		this.value = null;
 	}
 
 	public Value getValue() {
 		return value;
+	}
+
+	public boolean hasValue() {
+		return value != null;
 	}
 
 	@JsonProperty("k")

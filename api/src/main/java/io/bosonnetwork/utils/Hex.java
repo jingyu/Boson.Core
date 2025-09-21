@@ -26,7 +26,9 @@ package io.bosonnetwork.utils;
 import java.util.Objects;
 
 /**
- * Converts between binary bytes and hexadecimal Strings.
+ * Utility class for converting between binary bytes and hexadecimal strings.
+ * Provides methods for encoding binary data to hexadecimal representation and decoding
+ * hexadecimal strings back to binary.
  */
 public class Hex {
 	private static final byte[] EMPTY_BYTES = {};
@@ -52,11 +54,13 @@ public class Hex {
 	}
 
 	/**
-	 * Converts one byte from a String representing hexadecimal values.
+	 * Decodes a single byte from a hexadecimal-encoded character sequence.
 	 *
-	 * @param chars the {@code CharSequence} of the string.
-	 * @param offset the offset within the char sequence to decode.
-	 * @return the decoded byte.
+	 * @param chars   the character sequence containing hexadecimal digits
+	 * @param offset  the offset within the character sequence to decode from
+	 * @return the decoded byte
+	 * @throws NullPointerException if {@code chars} is null
+	 * @throws IllegalArgumentException if the characters at the given offset are not valid hexadecimal digits
 	 */
 	public static byte decodeByte(CharSequence chars, int offset) {
 		Objects.requireNonNull(chars, "Input chars cannot be null");
@@ -72,13 +76,14 @@ public class Hex {
 	}
 
 	/**
-	 * Converts a String representing hexadecimal values into an array of bytes of
-	 * those same values.
+	 * Decodes a portion of a character sequence containing hexadecimal digits into a byte array.
 	 *
-	 * @param chars the {@code CharSequence} of the string.
-	 * @param offset the offset within the char sequence to decode.
-	 * @param length the number of chars to decode.
-	 * @return a byte array containing binary data decoded from the supplied char array.
+	 * @param chars   the character sequence containing hexadecimal digits
+	 * @param offset  the offset within the character sequence to start decoding
+	 * @param length  the number of characters to decode (must be even)
+	 * @return a byte array containing binary data decoded from the supplied character sequence
+	 * @throws NullPointerException if {@code chars} is null
+	 * @throws IllegalArgumentException if {@code length} is negative or not even, or if any character is not valid hex
 	 */
 	public static byte[] decode(CharSequence chars, int offset, int length) {
 		Objects.requireNonNull(chars, "Input chars cannot be null");
@@ -97,24 +102,25 @@ public class Hex {
 	}
 
 	/**
-	 * Converts a String representing hexadecimal values into an array of bytes of
-	 * those same values.
+	 * Decodes a character sequence containing hexadecimal digits into a byte array.
 	 *
-	 * @param chars the {@code CharSequence} of the string.
-	 * @return a byte array containing binary data decoded from the supplied char array.
+	 * @param chars the character sequence containing hexadecimal digits
+	 * @return a byte array containing binary data decoded from the supplied character sequence
+	 * @throws NullPointerException if {@code chars} is null
+	 * @throws IllegalArgumentException if the length of {@code chars} is not even or contains invalid hex characters
 	 */
 	public static byte[] decode(CharSequence chars) {
 		return decode(chars, 0, chars.length());
 	}
 
 	/**
-	 * Converts an array of bytes into an array of characters representing
-	 * the hexadecimal values of each byte in order.
+	 * Encodes a range of a byte array into a hexadecimal string.
 	 *
-	 * @param bytes the byte array to convert to hex characters.
-	 * @param offset the offset in byte array to start encoding from.
-	 * @param length the number of bytes to encode.
-	 * @return a String represent the hexadecimal values of the given byte array.
+	 * @param bytes  the byte array to encode
+	 * @param offset the offset in the byte array to start encoding from
+	 * @param length the number of bytes to encode
+	 * @return a string representing the hexadecimal values of the given byte array
+	 * @throws NullPointerException if {@code bytes} is null
 	 */
 	public static String encode(byte[] bytes, int offset, int length) {
 		Objects.requireNonNull(bytes, "Input bytes cannot be null");
@@ -132,16 +138,22 @@ public class Hex {
 	}
 
 	/**
-	 * Converts an array of bytes into an array of characters representing
-	 * the hexadecimal values of each byte in order.
+	 * Encodes a byte array into a hexadecimal string.
 	 *
-	 * @param bytes the byte array to convert to hex characters.
-	 * @return a String represent the hexadecimal values of the given byte array.
+	 * @param bytes the byte array to encode
+	 * @return a string representing the hexadecimal values of the given byte array
+	 * @throws NullPointerException if {@code bytes} is null
 	 */
 	public static String encode(byte[] bytes) {
 		return encode(bytes, 0, bytes.length);
 	}
 
+	/**
+	 * Encodes a single byte value as a hexadecimal string.
+	 *
+	 * @param value the byte value to encode
+	 * @return a 2-character string representing the hexadecimal value of the byte
+	 */
 	public static String encode(byte value) {
 		char[] chars = new char[2];
 		chars[0] = HEX_CHARS[(value >>> 4) & 0x0F];
@@ -149,6 +161,12 @@ public class Hex {
 		return new String(chars);
 	}
 
+	/**
+	 * Encodes a short value as a hexadecimal string.
+	 *
+	 * @param value the short value to encode
+	 * @return a 4-character string representing the hexadecimal value of the short
+	 */
 	public static String encode(short value) {
 		char[] chars = new char[4];
 		chars[0] = HEX_CHARS[(value >>> 12) & 0x0F];
@@ -158,6 +176,12 @@ public class Hex {
 		return new String(chars);
 	}
 
+	/**
+	 * Encodes an int value as a hexadecimal string.
+	 *
+	 * @param value the int value to encode
+	 * @return an 8-character string representing the hexadecimal value of the int
+	 */
 	public static String encode(int value) {
 		char[] chars = new char[8];
 		chars[0] = HEX_CHARS[(value >>> 28) & 0x0F];
@@ -171,6 +195,12 @@ public class Hex {
 		return new String(chars);
 	}
 
+	/**
+	 * Encodes a long value as a hexadecimal string.
+	 *
+	 * @param value the long value to encode
+	 * @return a 16-character string representing the hexadecimal value of the long
+	 */
 	public static String encode(long value) {
 		char[] chars = new char[16];
 

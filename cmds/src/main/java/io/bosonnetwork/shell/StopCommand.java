@@ -34,8 +34,8 @@ import picocli.CommandLine.Command;
 		description = "Display the ID of current Boson node.")
 public class StopCommand implements Callable<Integer> {
 	@Override
-	public Integer call() {
-		Main.getBosonNode().stop();
+	public Integer call() throws Exception {
+		Main.getBosonNode().shutdown().thenRun(() -> System.out.println("Boson node stopped.")).get();
 		return 0;
 	}
 }

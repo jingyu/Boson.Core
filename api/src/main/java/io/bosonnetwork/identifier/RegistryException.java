@@ -24,61 +24,46 @@ package io.bosonnetwork.identifier;
 
 import io.bosonnetwork.BosonException;
 
+/**
+ * Exception class representing errors related to the Boson {@code Registry}.
+ */
 public class RegistryException extends BosonException {
 	private static final long serialVersionUID = 8284109061811829467L;
 
 	/**
-	 * Constructs a new Boson exception with {@code null} as its detail message.
-	 * The cause is not initialized, and may subsequently be initialized by a
-	 * call to {@link #initCause}.
+	 * Constructs a new RegistryException with {@code null} as its detail message.
+	 * The cause is not initialized and may be set later.
 	 */
 	public RegistryException() {
 		super();
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message.  The
-	 * cause is not initialized, and may subsequently be initialized by
-	 * a call to {@link #initCause}.
+	 * Constructs a new RegistryException with the specified detail message.
+	 * The cause is not initialized and may be set later.
 	 *
-	 * @param   message   the detail message. The detail message is saved for
-	 *		  later retrieval by the {@link #getMessage()} method.
+	 * @param message the detail message saved for later retrieval by {@link #getMessage()}.
 	 */
 	public RegistryException(String message) {
 		super(message);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message and
-	 * cause.  <p>Note that the detail message associated with
-	 * {@code cause} is <i>not</i> automatically incorporated in
-	 * this exception's detail message.
+	 * Constructs a new RegistryException with the specified detail message and cause.
+	 * The cause's detail message is not automatically included.
 	 *
-	 * @param  message the detail message (which is saved for later retrieval
-	 *		 by the {@link #getMessage()} method).
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param message the detail message saved for later retrieval by {@link #getMessage()}.
+	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}.
 	 */
 	public RegistryException(String message, Throwable cause) {
 		super(message, cause);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified cause and a detail
-	 * message of {@code (cause==null ? null : cause.toString())} (which
-	 * typically contains the class and detail message of {@code cause}).
-	 * This constructor is useful for exceptions that are little more than
-	 * wrappers for other throwables (for example, {@link
-	 * java.security.PrivilegedActionException}).
+	 * Constructs a new RegistryException with the specified cause.
+	 * The detail message is set to {@code (cause == null ? null : cause.toString())}.
 	 *
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}.
 	 */
 	public RegistryException(Throwable cause) {
 		super(cause);

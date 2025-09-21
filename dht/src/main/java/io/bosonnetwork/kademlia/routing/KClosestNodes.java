@@ -23,86 +23,138 @@
 
 package io.bosonnetwork.kademlia.routing;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.DHT;
 
 /**
- * @hidden
+ * Represents a collection of the k closest nodes to a target ID in a Kademlia routing table.
+ * <p>
+ * Nodes are collected from the closest bucket and expanded bidirectionally to neighboring buckets,
+ * sorted by XOR distance to the target, and trimmed to the requested capacity. Supports filtering
+ * and optional inclusion of replacement entries. Local node is always excluded to prevent self-referential lookups.
  */
 public class KClosestNodes {
-	private final DHT dht;
+	private final RoutingTable routingTable;
 	private final Id target;
+	private final int capacity;
 	private final List<KBucketEntry> entries;
-	private final int maxEntries;
-	private final Comparator<KBucketEntry> cmp;
-	private final Predicate<KBucketEntry> filter;
+	private Predicate<KBucketEntry> filter;
+	private boolean includeReplacements;
 
-	public KClosestNodes(DHT dht, Id id, int maxEntries) {
-		this(dht, id, maxEntries, KBucketEntry::isEligibleForNodesList);
-	}
-
-	public KClosestNodes(DHT dht, Id id, int maxEntries, Predicate<KBucketEntry> filter) {
-		this.dht = dht;
-		this.target = id;
-		this.maxEntries = maxEntries;
-		this.cmp = new KBucketEntry.DistanceOrder(id);
-		this.filter = filter;
-		this.entries = new ArrayList<>(maxEntries + Constants.MAX_ENTRIES_PER_BUCKET);
+	/**
+	 * Constructs a new KClosestNodes instance.
+	 *
+	 * @param routingTable the routing table to query
+	 * @param target the target node ID for distance calculation
+	 * @param capacity the maximum number of entries to return (k)
+	 */
+	protected KClosestNodes(RoutingTable routingTable, Id target, int capacity) {
+		this.routingTable = routingTable;
+		this.target = target;
+		this.capacity = capacity;
+		this.entries = new ArrayList<>(capacity + KBucket.MAX_ENTRIES);
+		this.filter = e -> e.eligibleForNodesList() && !e.getId().equals(routingTable.getLocalId());
+		this.includeReplacements = false;
 	}
 
 	/**
-	 * Gets the target node id.
+	 * Gets the target node ID.
 	 *
-	 * @return the Target node id of the search
+	 * @return the target node ID of the search
 	 */
 	public Id getTarget() {
 		return target;
 	}
 
 	/**
+	 * Returns the current number of collected entries.
+	 *
 	 * @return the number of entries
 	 */
 	public int size() {
 		return entries.size();
 	}
 
-	private void insertEntries(KBucket bucket) {
-		bucket.stream().filter(filter).forEach(entries::add);
+	/**
+	 * Checks if the collection has reached or exceeded the requested capacity.
+	 *
+	 * @return true if size >= capacity; false otherwise
+	 */
+	public boolean isFull() {
+		return entries.size() >= capacity;
 	}
 
-	private void shave() {
-		int overshoot = entries.size() - maxEntries;
-
-		if (overshoot <= 0)
-			return;
-
-		entries.sort(cmp);
-		entries.subList(entries.size() - overshoot, entries.size()).clear();
+	/**
+	 * Checks if the collection contains the full requested capacity.
+	 *
+	 * @return true if size >= capacity; false if fewer entries were found
+	 */
+	public boolean isComplete() {
+		return entries.size() >= capacity;
 	}
 
-	public void fill() {
-		fill(false);
+	/**
+	 * Sets a custom filter for entries. The filter must not include the local node.
+	 *
+	 * @param filter the predicate to filter entries
+	 * @return this instance for chaining
+	 * @throws NullPointerException if filter is null
+	 */
+	public KClosestNodes filter(Predicate<KBucketEntry> filter) {
+		this.filter = Objects.requireNonNull(filter, "Filter cannot be null")
+				.and(e -> !e.getId().equals(routingTable.getLocalId()));
+		return this;
 	}
 
-	public void fill(boolean includeSelf) {
-		List<KBucket> buckets = dht.getRoutingTable().buckets();
+	/**
+	 * Sets if include the replacements in the populated closest entries.
+	 *
+	 * @param includeReplacements if true, includes verified replacement entries
+	 * @return this instance for chaining
+	 */
+	public KClosestNodes includeReplacements(Boolean includeReplacements) {
+		this.includeReplacements = includeReplacements;
+		return this;
+	}
+
+	/**
+	 * Sets include the replacements in the populated closest entries.
+	 *
+	 * @return this instance for chaining
+	 */
+	public KClosestNodes includeReplacements() {
+		this.includeReplacements = true;
+		return this;
+	}
+
+	/**
+	 * Populates the collection with the closest entries to the target ID.
+	 * <p>
+	 * Starts from the target's bucket, expands bidirectionally to neighbors based on prefix distance,
+	 * and collects entries (and optionally replacements) until capacity is met or buckets are exhausted.
+	 * Assumes buckets cover the full ID space via sorted, contiguous prefixes. May collect extra entries
+	 * before trimming to ensure the closest k nodes are returned.
+	 *
+	 * @return this instance for chaining
+	 */
+	public KClosestNodes fill() {
+		final List<KBucket> buckets = routingTable.buckets();
+		if (buckets.isEmpty()) {
+			return this;
+		}
 
 		final int idx = RoutingTable.indexOf(buckets, target);
 		KBucket bucket = buckets.get(idx);
-		insertEntries(bucket);
+		addEntries(bucket);
 
 		int low = idx;
 		int high = idx;
-		while (entries.size() < maxEntries) {
+		while (entries.size() < capacity) {
 			KBucket lowBucket = null;
 			KBucket highBucket = null;
 
@@ -117,56 +169,71 @@ public class KClosestNodes {
 
 			if (lowBucket == null) {
 				high++;
-				insertEntries(highBucket);
+				addEntries(highBucket);
 			} else if (highBucket == null) {
 				low--;
-				insertEntries(lowBucket);
+				addEntries(lowBucket);
 			} else {
 				int dir = target.threeWayCompare(lowBucket.prefix().last(), highBucket.prefix().first());
 				if (dir < 0) {
 					low--;
-					insertEntries(lowBucket);
+					addEntries(lowBucket);
 				} else if (dir > 0) {
 					high++;
-					insertEntries(highBucket);
+					addEntries(highBucket);
 				} else {
 					low--;
 					high++;
-					insertEntries(lowBucket);
-					insertEntries(highBucket);
+					addEntries(lowBucket);
+					addEntries(highBucket);
 				}
 			}
 		}
 
-		if (entries.size() < maxEntries) {
-			for (NodeInfo n : dht.getNode().getConfig().bootstrapNodes()) {
-				if (dht.getType().canUseSocketAddress(n.getAddress()))
-					entries.add(new KBucketEntry(n));
-			}
-		}
-
-		if (includeSelf && entries.size() < maxEntries) {
-			InetSocketAddress sockAddr = dht.getServer().getAddress();
-			entries.add(new KBucketEntry(dht.getNode().getId(), sockAddr));
-		}
-
 		shave();
+		return this;
 	}
 
-	public boolean isFull() {
-		return entries.size() >= maxEntries;
+	private void addEntries(KBucket bucket) {
+		if (bucket == null)
+			return;
+
+		bucket.entries().forEach(e -> {
+			if (filter.test(e))
+				entries.add(e);
+		});
+
+		if (includeReplacements) {
+			bucket.replacementStream()
+					.filter(KBucketEntry::isReachable)
+					.filter(filter)
+					.forEach(entries::add);
+		}
+	}
+
+	private void shave() {
+		entries.sort((e1, e2) -> target.threeWayCompare(e1.getId(), e2.getId()));
+		int overshoot = entries.size() - capacity;
+		if (overshoot > 0)
+			entries.subList(entries.size() - overshoot, entries.size()).clear();
 	}
 
 	/**
-	 * Get all closed node entries.
+	 * Returns an unmodifiable view of the collected entries, sorted by XOR distance to the target.
+	 * May return fewer than capacity if the table lacks sufficient entries.
 	 *
-	 * @return a unmodifiable List of the entries
+	 * @return the list of closest entries
 	 */
 	public List<KBucketEntry> entries() {
-		return Collections.unmodifiableList(entries);
+		return entries;
 	}
 
-	public List<NodeInfo> asNodeList() {
-		return new ArrayList<>(entries());
+	/**
+	 * Returns the collected entries as a list of NodeInfo objects.
+	 *
+	 * @return the list of closest nodes as NodeInfo
+	 */
+	public List<NodeInfo> nodes() {
+		return new ArrayList<>(entries);
 	}
 }

@@ -25,12 +25,8 @@ package io.bosonnetwork.kademlia.protocol;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.SecureRandom;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -41,211 +37,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.protocol.deprecated.AnnouncePeerRequest;
-import io.bosonnetwork.kademlia.protocol.deprecated.AnnouncePeerResponse;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Method;
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage.Type;
 
 public class AnnouncePeerTests extends MessageTests {
-	@Deprecated
-	@Test
-	public void testAnnouncePeerRequestSize() throws Exception {
-		byte[] sig = new byte[64];
-		new SecureRandom().nextBytes(sig);
-		PeerInfo peer = PeerInfo.of(Id.random(), Id.random(), 65535, sig);
-
-		AnnouncePeerRequest msg = new AnnouncePeerRequest();
-		msg.setId(peer.getNodeId());
-		msg.setTxid(0x87654321);
-		msg.setToken(0x88888888);
-		msg.setVersion(VERSION);
-		msg.setPeer(peer);
-
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testAnnouncePeerRequestSize2() throws Exception {
-		byte[] sig = new byte[64];
-		new SecureRandom().nextBytes(sig);
-		PeerInfo peer = PeerInfo.of(Id.random(), Id.random(), Id.random(), 65535, "https://abc.example.com/", sig);
-
-		AnnouncePeerRequest msg = new AnnouncePeerRequest();
-		msg.setId(Id.random());
-		msg.setTxid(0x87654321);
-		msg.setToken(0x88888888);
-		msg.setVersion(VERSION);
-		msg.setPeer(peer);
-
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testAnnouncePeerRequest() throws Exception {
-		Id nodeId = Id.random();
-		Id peerId = Id.random();
-		int txid = Random.random().nextInt(0x7FFFFFFF);
-		int port = Random.random().nextInt(1, 0xFFFF);
-		int token = Random.random().nextInt();
-		byte[] sig = new byte[64];
-		new SecureRandom().nextBytes(sig);
-
-		PeerInfo peer = PeerInfo.of(peerId, nodeId, port, sig);
-
-		AnnouncePeerRequest msg = new AnnouncePeerRequest();
-		msg.setId(nodeId);
-		msg.setTxid(txid);
-		msg.setToken(token);
-		msg.setVersion(VERSION);
-		msg.setPeer(peer);
-
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		pm.setId(nodeId);
-		assertInstanceOf(AnnouncePeerRequest.class, pm);
-		AnnouncePeerRequest m = (AnnouncePeerRequest)pm;
-
-		assertEquals(Type.REQUEST, m.getType());
-		assertEquals(Method.ANNOUNCE_PEER, m.getMethod());
-		assertEquals(nodeId, m.getId());
-		assertEquals(txid, m.getTxid());
-		assertEquals(VERSION_STR, m.getReadableVersion());
-		assertEquals(token, m.getToken());
-		PeerInfo rPeer = m.getPeer();
-		assertNotNull(rPeer);
-		assertEquals(peer, rPeer);
-
-		// Compatibility
-		var msg2 = Message.parse(bin, peer.getNodeId());
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		var body = msg2.getBody(io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest.class);
-		assertEquals(msg.getToken(), body.getToken());
-		assertEquals(peer, body.getPeer());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		printMessage(msg2);
-
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
-	@Deprecated
-	@Test
-	public void testAnnouncePeerRequest2() throws Exception {
-		Id nodeId = Id.random();
-		Id origin = Id.random();
-		Id peerId = Id.random();
-		int txid = Random.random().nextInt(0x7FFFFFFF);
-		int port = Random.random().nextInt(1, 0xFFFF);
-		int token = Random.random().nextInt();
-		byte[] sig = new byte[64];
-		new SecureRandom().nextBytes(sig);
-
-		PeerInfo peer = PeerInfo.of(peerId, nodeId, origin, port, "http://abc.example.com/", sig);
-
-		AnnouncePeerRequest msg = new AnnouncePeerRequest();
-		msg.setId(nodeId);
-		msg.setTxid(txid);
-		msg.setToken(token);
-		msg.setVersion(VERSION);
-		msg.setPeer(peer);
-
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		pm.setId(nodeId);
-		assertInstanceOf(AnnouncePeerRequest.class, pm);
-		AnnouncePeerRequest m = (AnnouncePeerRequest)pm;
-
-		assertEquals(Type.REQUEST, m.getType());
-		assertEquals(Method.ANNOUNCE_PEER, m.getMethod());
-		assertEquals(nodeId, m.getId());
-		assertEquals(txid, m.getTxid());
-		assertEquals(VERSION_STR, m.getReadableVersion());
-		assertEquals(token, m.getToken());
-		assertEquals(peer, m.getPeer());
-
-		// Compatibility
-		var msg2 = Message.parse(bin, peer.getNodeId());
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		var body = msg2.getBody(io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest.class);
-		assertEquals(msg.getToken(), body.getToken());
-		assertEquals(peer, body.getPeer());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		printMessage(msg2);
-
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
-	@Deprecated
-	@Test
-	public void testAnnouncePeerResponseSize() throws Exception {
-		AnnouncePeerResponse msg = new AnnouncePeerResponse(0xf7654321);
-		msg.setId(Id.random());
-		msg.setTxid(0x87654321);
-		msg.setVersion(VERSION);
-
-		byte[] bin = msg.serialize();
-		printMessage(msg, bin);
-		assertTrue(bin.length <= msg.estimateSize());
-	}
-
-	@Deprecated
-	@Test
-	public void testAnnouncePeerResponse() throws Exception {
-		Id id = Id.random();
-		int txid = Random.random().nextInt();
-
-		AnnouncePeerResponse msg = new AnnouncePeerResponse(txid);
-		msg.setId(id);
-
-		byte[] bin = msg.serialize();
-		assertTrue(bin.length <= msg.estimateSize());
-
-		printMessage(msg, bin);
-
-		OldMessage pm = OldMessage.parse(bin);
-		pm.setId(id);
-		assertInstanceOf(AnnouncePeerResponse.class, pm);
-		AnnouncePeerResponse m = (AnnouncePeerResponse)pm;
-
-		assertEquals(Type.RESPONSE, m.getType());
-		assertEquals(Method.ANNOUNCE_PEER, m.getMethod());
-		assertEquals(id, m.getId());
-		assertEquals(txid, m.getTxid());
-		assertEquals(0, m.getVersion());
-
-		// Compatibility
-		var msg2 = Message.parse(bin);
-		msg2.setId(msg.getId());
-		assertEquals(msg.getType().value(), msg2.getType().value());
-		assertEquals(msg.getMethod().value(), msg2.getMethod().value());
-		assertEquals(msg.getId(), msg2.getId());
-		assertEquals(msg.getTxid(), msg2.getTxid());
-		assertNull(msg2.getBody());
-		assertEquals(msg.getVersion(), msg2.getVersion());
-		printMessage(msg2);
-
-		assertArrayEquals(bin, msg2.toBytes());
-	}
-
 	private static Stream<Arguments> requestParameters() {
 		byte[] sig = Random.randomBytes(64);
 		int port = 65516;
@@ -261,9 +54,8 @@ public class AnnouncePeerTests extends MessageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("requestParameters")
 	void testRequest(String name, PeerInfo peer, int expectedSize) throws Exception {
-		var txid = 0x87654321;
 		var token = 0x76543210;
-		var msg = Message.announcePeerRequest(txid, peer, token);
+		var msg = Message.announcePeerRequest(peer, token);
 		msg.setId(peer.getNodeId());
 
 		var bin = msg.toBytes();
@@ -273,7 +65,6 @@ public class AnnouncePeerTests extends MessageTests {
 
 		assertEquals(Message.Type.REQUEST, msg.getType());
 		assertEquals(Message.Method.ANNOUNCE_PEER, msg.getMethod());
-		assertEquals(txid, msg.getTxid());
 		assertEquals(token, msg.getBody().getToken());
 		assertEquals(peer, msg.getBody().getPeer());
 
@@ -308,48 +99,19 @@ public class AnnouncePeerTests extends MessageTests {
 	}
 
 	@Test
-	void timingRequest() throws Exception {
+	void timingRequest() {
 		byte[] sig = Random.randomBytes(64);
 		PeerInfo peer = PeerInfo.of(Id.random(), Id.random(), 65535, sig);
-	    var txid = 0x87654321;
 		var token = 0x76543210;
 
-		{ // TODO: remove
-			var msg = new AnnouncePeerRequest();
-			msg.setId(peer.getNodeId());
-			msg.setTxid(txid);
-			msg.setToken(token);
-			msg.setVersion(Constants.VERSION);
-			msg.setPeer(peer);
-
-			var bin = msg.serialize();
-			OldMessage.parse(bin);
-
-			var start = System.currentTimeMillis();
-			for (var i = 0; i < TIMING_ITERATIONS; i++) {
-				msg = new AnnouncePeerRequest();
-				msg.setTxid(txid);
-				msg.setToken(token);
-				msg.setVersion(Constants.VERSION);
-				msg.setPeer(peer);
-
-				bin = msg.serialize();
-				AnnouncePeerRequest m = (AnnouncePeerRequest) OldMessage.parse(bin);
-				m.setId(peer.getNodeId());
-				m.getPeer();
-			}
-			var end = System.currentTimeMillis();
-			System.out.printf(">>>>>>>> AnnouncePeerRequest: %dms\n", (end - start));
-		}
-
-		var msg = Message.announcePeerRequest(txid, peer, token);
+		var msg = Message.announcePeerRequest(peer, token);
 		msg.setId(peer.getNodeId());
 		var bin = msg.toBytes();
 		Message.parse(bin, peer.getNodeId());
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			var msg2 = Message.announcePeerRequest(txid, peer, token);
+			var msg2 = Message.announcePeerRequest(peer, token);
 			msg2.setId(peer.getNodeId());
 			var bin2 = msg2.toBytes();
 			Message.parse(bin2, peer.getNodeId());
@@ -359,26 +121,9 @@ public class AnnouncePeerTests extends MessageTests {
 	}
 
 	@Test
-	void timingResponse() throws Exception {
+	void timingResponse() {
 		var nodeId = Id.random();
 		var txid = 0x78901234;
-
-		{ // TODO: remove
-			var msg = new AnnouncePeerResponse(txid);
-			msg.setId(nodeId);
-			var bin = msg.serialize();
-			OldMessage.parse(bin);
-
-			var start = System.currentTimeMillis();
-			for (var i = 0; i < TIMING_ITERATIONS; i++) {
-				msg = new AnnouncePeerResponse(txid);
-				msg.setId(nodeId);
-				bin = msg.serialize();
-				OldMessage.parse(bin);
-			}
-			var end = System.currentTimeMillis();
-			System.out.printf(">>>>>>>> AnnouncePeerResponse: %dms\n", (end - start));
-		}
 
 		// warmup
 		var msg = Message.announcePeerResponse(txid);

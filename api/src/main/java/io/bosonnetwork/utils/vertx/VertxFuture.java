@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.utils.vertx;
 
 import java.util.concurrent.CancellationException;
@@ -20,9 +42,32 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
+/**
+ * VertxFuture is a {@link CompletableFuture}-compatible wrapper around Vert.x's {@link io.vertx.core.Future}.
+ * <p>
+ * It provides interoperability between the Vert.x asynchronous programming model and the Java
+ * {@link CompletableFuture}/{@link CompletionStage} APIs. This allows developers to:
+ * <ul>
+ *   <li>Use familiar CompletableFuture-style composition methods with Vert.x futures</li>
+ *   <li>Integrate Vert.x async results into standard Java concurrency flows</li>
+ *   <li>Optionally use blocking-style methods (e.g., {@link #get()}) outside the Vert.x event loop</li>
+ * </ul>
+ *
+ * <p><strong>Note:</strong> Blocking methods like {@code get()} and {@code join()} must never be called on
+ * Vert.x event loop or worker threads, as this will block the reactive runtime.
+ *
+ * @param <T> the result type
+ */
 public class VertxFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
+	/** The underlying Vert.x Future being wrapped. */
 	Future<T> future;
 
+	/**
+	 * Wraps an existing Vert.x {@link Future} into a VertxFuture.
+	 * Updates the internal state of this CompletableFuture whenever the Vert.x Future completes.
+	 *
+	 * @param future the Vert.x Future to wrap
+	 */
 	protected VertxFuture(Future<T> future) {
 		this.future = future;
 
@@ -35,22 +80,56 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		});
 	}
 
+	/**
+	 * Creates a VertxFuture wrapper around an existing Vert.x Future.
+	 *
+	 * @param future the Vert.x Future
+	 * @return a new VertxFuture wrapping the given future
+	 * @param <T> the type of the VertxFuture result
+	 */
 	public static <T> VertxFuture<T> of(Future<T> future) {
 		return new VertxFuture<>(future);
 	}
 
+	/**
+	 * Creates a failed VertxFuture from a Throwable.
+	 *
+	 * @param cause the cause of the failure
+	 * @return a new VertxFuture with a failure cause
+	 * @param <U> the type of the VertxFuture Future result
+	 */
 	public static <U> VertxFuture<U> failedFuture(Throwable cause) {
 		return new VertxFuture<>(Future.failedFuture(cause));
 	}
 
+	/**
+	 * Creates a failed VertxFuture from an error message.
+	 *
+	 * @param cause the error message of the failure
+	 * @return a new VertxFuture with a failure cause as a String.
+	 * @param <U> the type of the VertxFuture Future result
+	 */
 	public static <U> VertxFuture<U> failedFuture(String cause) {
 		return new VertxFuture<>(Future.failedFuture(cause));
 	}
 
+	/**
+	 * Creates a successfully completed VertxFuture with a {@code null} result.
+	 *
+	 * @return a new VertxFuture with a {@code null} result.
+	 * @param <U> the type of the VertxFuture Future result
+	 */
 	public static <U> VertxFuture<U> succeededFuture() {
 		return new VertxFuture<>(Future.succeededFuture());
 	}
 
+	/**
+	 * Creates a successfully completed VertxFuture with the given result.
+	 *
+	 * @param result the result of the future
+	 * @return a new VertxFuture with the given result
+	 * @param <U> the type of the VertxFuture Future result
+	 */
 	public static <U> VertxFuture<U> succeededFuture(U result) {
 		return new VertxFuture<>(Future.succeededFuture(result));
 	}
@@ -562,6 +641,11 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		return this;
 	}
 
+	/**
+	 * Converts this wrapper back into the underlying Vert.x Future.
+	 *
+	 * @return the underlying Vert.x Future.
+	 */
 	public Future<T> toVertxFuture() {
 		return future;
 	}
@@ -587,6 +671,17 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		return future.failed();
 	}
 
+	/**
+	 * Blocks and waits for the result of this future.
+	 * <p><strong>Warning:</strong> This method must not be called from a Vert.x event loop
+	 * or worker thread, as it will block the reactive runtime.
+	 *
+	 * @return the result of the future or {@code null}
+	 *
+	 * @throws IllegalStateException if called on a Vert.x thread
+	 * @throws ExecutionException if the future completed exceptionally
+	 * @throws InterruptedException if the thread was interrupted
+	 */
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
@@ -605,6 +700,19 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 			throw new InterruptedException("Context closed");
 	}
 
+	/**
+	 * Blocks and waits for the result of this future.
+	 * <p><strong>Warning:</strong> This method must not be called from a Vert.x event loop
+	 * or worker thread, as it will block the reactive runtime.
+	 *
+	 * @param timeout the maximum time to wait
+	 * @param unit the time unit of the timeout argument
+	 * @return the result of the future or {@code null} if the specified waiting time elapses before
+	 *
+	 * @throws IllegalStateException if called on a Vert.x thread
+	 * @throws ExecutionException if the future completed exceptionally
+	 * @throws InterruptedException if the thread was interrupted
+	 */
 	@Override
 	public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
@@ -732,6 +840,13 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		return new MinimalStage<>(future);
 	}
 
+	/**
+	 * A reduced view of VertxFuture that exposes only {@link CompletionStage} operations,
+	 * disabling mutation methods such as {@code complete()}, {@code cancel()}, etc.
+	 * <p>
+	 * This is used by {@link #minimalCompletionStage()} to comply with the
+	 * {@link CompletableFuture#minimalCompletionStage()} contract.
+	 */
 	static final class MinimalStage<T> extends VertxFuture<T> {
 		MinimalStage(Future<T> future) {
 			super(future);

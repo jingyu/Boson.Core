@@ -71,7 +71,8 @@ public class Id implements Comparable<Id> {
 	 * 3-way comparator. For sorting {@code Id} instances based on their
 	 * distance to a target identifier using the XOR metric.
 	 */
-	public static final class ThreeWayComparator implements java.util.Comparator<Id> {
+	@Deprecated
+	public static class ThreeWayComparator implements java.util.Comparator<Id> {
 		private final Id target;
 
 		/**

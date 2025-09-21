@@ -86,6 +86,10 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 			"INSERT INTO schema_version (id, version) VALUES (1, " + SCHEMA_VERSION + ") ON CONFLICT (id) DO NOTHING"
 	);
 
+	protected PostgresStorage(String connectionUri) {
+		super(connectionUri);
+	}
+
 	// postgresql://[user[:password]@][host][:port][,...][/dbname][?param1=value1&...]
 	@Override
 	protected void setupSqlClient(Vertx vertx, String connectionUri) {

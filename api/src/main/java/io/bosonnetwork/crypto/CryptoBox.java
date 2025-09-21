@@ -489,6 +489,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 
 	/**
 	 * Encrypt a message with the given keys
+	 *
 	 * @param message the message to encrypt.
 	 * @param receiver the public key of the receiver.
 	 * @param sender the private key of the sender.
@@ -501,16 +502,18 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 
 	/**
 	 * Encrypt a sealed message for a given key.
-	 * <p/>
+	 * <p>
 	 * Sealed boxes are designed to anonymously send messages to a recipient given its public key.
 	 * Only the recipient can decrypt these messages, using its private key. While
 	 * the recipient can verify the integrity of the message, it cannot verify
 	 * the identity of the sender.
-	 * <p/>
+	 * </p>
+	 * <p>
 	 * A message is encrypted using an ephemeral key pair, whose secret part is destroyed
 	 * right after the encryption process. Without knowing the secret key used for a given
 	 * message, the sender cannot decrypt its own message later. And without additional data,
 	 * a message cannot be correlated with the identity of its sender.
+	 * </p>
 	 *
 	 * @param message the message to encrypt.
 	 * @param receiver the public key of the receiver.

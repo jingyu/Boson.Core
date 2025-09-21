@@ -26,28 +26,19 @@ package io.bosonnetwork.kademlia.routing;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
@@ -55,138 +46,93 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.Constants;
-import io.bosonnetwork.kademlia.DHT;
-import io.bosonnetwork.kademlia.tasks.PingRefreshTask;
-import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.utils.Json;
 
 /**
- * This is a lock-free routing table implementation.
- *
- * The table itself and all buckets are Copy-on-Write list.
- * Which all mutative operations(add, remove, ...) are implemented by
- * making a fresh copy of the underlying list.
- *
- * This is ordinarily too costly, but may be more efficient for routing
- * table reading. All mutative operations are synchronized, this means
- * only one writer at the same time.
- *
- * CAUTION:
- *   All methods name leading with _ means that method will WRITE the
- *   routing table, it can only be called inside the pipeline processing.
- *
- * @hidden
+ * Represents a lock-free, non-thread-safe routing table used in the Kademlia Distributed Hash Table (DHT) implementation.
+ * <p>
+ * This routing table maintains a list of {@link KBucket} instances, each responsible for managing a subset of node entries
+ * based on their XOR distance from the local node's ID. It supports efficient lookup, insertion, and maintenance of node entries,
+ * adhering to Kademlia's bucket splitting and replacement policies.
+ * <p>
+ * Designed for use within single-threaded environments (e.g., Vert.x verticles), this implementation avoids synchronization overhead.
  */
-public final class RoutingTable {
-	private final DHT dht;
+public class RoutingTable {
+	private final Id localId;
+	private final List<KBucket> buckets;
 
-	private volatile List<KBucket> buckets;
+	protected static final Logger log = LoggerFactory.getLogger(RoutingTable.class);
 
-	private final AtomicInteger writeLock;
-	private final Queue<Operation> pipeline;
-
-	private long timeOfLastPingCheck;
-
-	private final Map<KBucket, Task> maintenanceTasks = new IdentityHashMap<>();
-
-	private static final Logger log = LoggerFactory.getLogger(RoutingTable.class);
-
-	private static class Operation {
-		public static final int PUT = 1;
-		public static final int REMOVE = 2;
-		public static final int ON_SEND = 3;
-		public static final int ON_TIMEOUT = 4;
-		public static final int MAINTENANCE = 5;
-
-		public final int code;
-		public final Id id;
-		public final KBucketEntry entry;
-
-		private Operation(int code, Id id, KBucketEntry entry) {
-			this.code = code;
-			this.id = id;
-			this.entry = entry;
-		}
-
-		public static Operation put(KBucketEntry entry) {
-			return new Operation(PUT, null, entry);
-		}
-
-		public static Operation remove(Id id) {
-			return new Operation(REMOVE, id, null);
-		}
-
-		public static Operation onSend(Id id) {
-			return new Operation(ON_SEND, id, null);
-		}
-
-		public static Operation onTimeout(Id id) {
-			return new Operation(ON_TIMEOUT, id, null);
-		}
-
-		public static Operation maintenance() {
-			return new Operation(MAINTENANCE, null, null);
-		}
-	}
-
-	public RoutingTable(DHT dht) {
-		this.dht = dht;
+	public RoutingTable(Id localId) {
+		this.localId = localId;
 		this.buckets = new ArrayList<>();
-		this.writeLock = new AtomicInteger(0);
-		this.pipeline = new ConcurrentLinkedQueue<>();
 		buckets.add(new KBucket(Prefix.all(), x -> true));
 	}
 
-	private List<KBucket> getBuckets() {
-		return buckets;
-	}
-
-	private void setBuckets(List<KBucket> buckets) {
-		this.buckets = buckets;
-	}
-
-	private DHT getDHT() {
-		return dht;
-	}
-
 	public int size() {
-		return getBuckets().size();
+		return buckets.size();
 	}
 
-	public KBucket get(int index) {
-		return getBuckets().get(index);
+	private boolean isHomeBucket(Prefix p) {
+		return p.isPrefixOf(localId);
 	}
 
-	public KBucketEntry getEntry(Id id, boolean includeCache) {
-		return bucketOf(id).get(id, includeCache);
+	protected Id getLocalId() {
+		return localId;
+	}
+
+	public boolean isEmpty() {
+		return buckets.isEmpty();
+	}
+
+	public KBucket getBucket(int index) {
+		return buckets.get(index);
+	}
+
+	public KBucketEntry getEntry(Id id, boolean includeReplacement) {
+		return bucketOf(id).get(id, includeReplacement);
+	}
+
+	public KBucketEntry getEntry(Id id) {
+		return bucketOf(id).get(id, true);
+	}
+
+	public boolean contains(Id id, boolean includeReplacement) {
+		return bucketOf(id).contains(id, includeReplacement);
+	}
+
+	public boolean contains(Id id) {
+		return bucketOf(id).contains(id, true);
 	}
 
 	public List<KBucket> buckets() {
-		return Collections.unmodifiableList(getBuckets());
+		return Collections.unmodifiableList(buckets);
 	}
 
 	public Stream<KBucket> stream() {
-		return getBuckets().stream();
-	}
-
-	public int indexOf(Id id) {
-		return indexOf(getBuckets(), id);
+		return buckets.stream();
 	}
 
 	public KBucket bucketOf(Id id) {
-		List<KBucket> bucketsRef = getBuckets();
-		return bucketsRef.get(indexOf(bucketsRef, id));
+		return buckets.get(indexOf(buckets, id));
 	}
 
-	static int indexOf(List<KBucket> bucketsRef, Id id) {
+	/**
+	 * Finds the index of the bucket that corresponds to the given node ID.
+	 * Uses a binary search on the sorted list of buckets based on their prefix.
+	 *
+	 * @param bucketsRef the list of buckets to search
+	 * @param id the node ID to locate
+	 * @return the index of the bucket containing or closest to the ID
+	 */
+	protected static int indexOf(List<KBucket> bucketsRef, Id id) {
 		int low = 0;
 		int mid = 0;
 		int high = bucketsRef.size() - 1;
 		int cmp = 0;
 
+		// Binary search for the bucket whose prefix matches or is closest to the id
 		while (low <= high) {
 			mid = (low + high) >>> 1;
 			KBucket bucket = bucketsRef.get(mid);
@@ -196,453 +142,436 @@ public final class RoutingTable {
 			else if (cmp < 0)
 				high = mid - 1;
 			else
-				return mid; // match the current bucket
+				return mid; // exact match found
 		}
 
+		// When no exact match, return closest bucket index
 		return cmp < 0 ? mid - 1 : mid;
 	}
 
 	/**
-	 * Get the number of entries in the routing table
+	 * Returns the total number of entries stored across all buckets.
 	 *
-	 * @return the number of entries
+	 * @return the total number of node entries in the routing table
 	 */
-	public int getNumBucketEntries() {
-		return getBuckets().stream().flatMapToInt(b -> IntStream.of(b.size())).sum();
+	public int getNumberOfEntries() {
+		return buckets.stream().mapToInt(KBucket::size).sum();
 	}
 
-	public int getNumCacheEntries() {
-		return getBuckets().stream().flatMapToInt(b -> IntStream.of(b.cacheSize())).sum();
+	/**
+	 * Returns the total number of replacement entries stored across all buckets.
+	 *
+	 * @return the total number of replacement node entries
+	 */
+	public int getNumberOfReplacements() {
+		return buckets.stream().mapToInt(KBucket::replacementSize).sum();
 	}
 
 	public KBucketEntry getRandomEntry() {
-		List<KBucket> bucketsRef = getBuckets();
-
-		int offset = Random.random().nextInt(bucketsRef.size());
-		return bucketsRef.get(offset).random();
+		int offset = Random.random().nextInt(buckets.size());
+		return buckets.get(offset).getAny();
 	}
 
-	public Set<NodeInfo> getRandomEntries(int expect) {
-		List<KBucket> bucketsRef = getBuckets();
+	public KClosestNodes getClosestNodes(Id target, int expected) {
+		return new KClosestNodes(this, target, expected);
+	}
 
-		List<List<KBucketEntry>> bucketsCopy = new ArrayList<>(bucketsRef.size());
-		int total = 0;
-		for (KBucket bucket : bucketsRef) {
-			List<KBucketEntry> entries = bucket.entries();
-			bucketsCopy.add(entries);
-			total += entries.size();
-		}
+	/*/
+	// TODO: Remove
+	public List<KBucketEntry> getRandomEntries(int expect) {
+		final int total = getNumberOfEntries();
+		if (total == 0)
+			return Collections.emptyList();
 
 		if (total <= expect) {
-			Set<NodeInfo> result = new HashSet<>();
-			bucketsCopy.forEach(result::addAll);
+			// Avoid unnecessary stream for small cases
+			List<KBucketEntry> result = new ArrayList<>(total);
+			buckets.forEach(bucket -> result.addAll(bucket.entries()));
 			return result;
 		}
 
-		AtomicInteger bucketIndex = new AtomicInteger(0);
-		AtomicInteger flatIndex = new AtomicInteger(0);
-		final int totalEntries = total;
-
-		ThreadLocalRandom rnd = Random.random();
-		return IntStream.generate(() -> rnd.nextInt(totalEntries))
+		return Random.random().ints(0, total)
 				.distinct()
 				.limit(expect)
 				.sorted()
-				.mapToObj((i) -> {
-					while (bucketIndex.get() < bucketsCopy.size()) {
-						int pos = i - flatIndex.get();
-						List<KBucketEntry> b = bucketsCopy.get(bucketIndex.get());
-						int s = b.size();
-						if (pos < s) {
-							return b.get(pos);
-						} else {
-							bucketIndex.incrementAndGet();
-							flatIndex.addAndGet(s);
-						}
+				.mapToObj(i -> {
+					int flatIndex = 0;
+					for (KBucket bucket : buckets) {
+						int size = bucket.size();
+						if (i < flatIndex + size)
+							return bucket.get(i - flatIndex);
+
+						flatIndex += size;
 					}
 
+					// Should not happen with valid indices
 					return null;
-				}).filter(e -> e != null)
-				.collect(Collectors.toSet());
+				}).filter(Objects::nonNull)
+				.collect(Collectors.toList());
 	}
+	*/
 
-	private boolean isHomeBucket(Prefix p) {
-		return p.isPrefixOf(getDHT().getNode().getId());
-	}
-
-	// TODO: CHECKME!!!
-	void _refreshOnly(KBucketEntry toRefresh) {
-		bucketOf(toRefresh.getId())._update(toRefresh);
-	}
-
+	/**
+	 * Inserts or updates a node entry in the routing table.
+	 * The routing table may split buckets as necessary to accommodate the new entry.
+	 *
+	 * @param entry the node entry to add or update
+	 */
 	public void put(KBucketEntry entry) {
-		pipeline.add(Operation.put(entry));
-		processPipeline();
-	}
+		log.trace("Putting entry: {}...", entry);
 
-	public void remove(Id id) {
-		pipeline.add(Operation.remove(id));
-		processPipeline();
-	}
-
-	public void onSend(Id id) {
-		pipeline.add(Operation.onSend(id));
-		processPipeline();
-	}
-
-	public void onTimeout(Id id) {
-		pipeline.add(Operation.onTimeout(id));
-		processPipeline();
-	}
-
-	public void maintenance() {
-		pipeline.add(Operation.maintenance());
-		processPipeline();
-	}
-
-	private void processPipeline() {
-		if(!writeLock.compareAndSet(0, 1))
-			return;
-
-		// we are now the exclusive writer for the routing table
-		while(true) {
-			Operation op = pipeline.poll();
-			if(op == null)
-				break;
-
-			switch (op.code) {
-			case Operation.PUT:
-				_put(op.entry);
-				break;
-
-			case Operation.REMOVE:
-				_remove(op.id);
-				break;
-
-			case Operation.ON_SEND:
-				_onSend(op.id);
-				break;
-
-			case Operation.ON_TIMEOUT:
-				_onTimeout(op.id);
-				break;
-
-			case Operation.MAINTENANCE:
-				_maintenance();
-				break;
-			}
-		}
-
-		writeLock.set(0);
-
-		// check if we might have to pick it up again due to races
-		// schedule async to avoid infinite stacks
-		if(pipeline.peek() != null)
-			getDHT().getNode().getScheduler().execute(this::processPipeline);
-	}
-
-	private void _put(KBucketEntry entry) {
 		Id nodeId = entry.getId();
 		KBucket bucket = bucketOf(nodeId);
 
-		while (_needsSplit(bucket, entry)) {
-			_split(bucket);
+		// Split buckets if required before inserting the new entry
+		while (needsSplit(bucket, entry)) {
+			log.trace("Splitting bucket {} before put {}...", bucket.prefix(), entry.getId());
+			split(bucket);
 			bucket = bucketOf(nodeId);
 		}
 
-		bucket._put(entry);
+		bucket.put(entry);
+		log.trace("New entry {} putted into bucket {}", entry.getId(), bucket.prefix());
 	}
 
-	private KBucketEntry _remove(Id id) {
+	/**
+	 * Removes the entry with the specified node ID from the routing table.
+	 *
+	 * @param id the ID of the node to remove
+	 * @return true if the entry was removed, false otherwise
+	 */
+	public boolean remove(Id id) {
+		return  bucketOf(id).remove(id);
+	}
+
+	/**
+	 * Removes the entry with the specified node ID if it is considered bad or if forced.
+	 *
+	 * @param id the ID of the node to remove
+	 * @param force if true, removal is forced regardless of entry state
+	 * @return the removed entry if any, null otherwise
+	 */
+	public KBucketEntry removeIfBad(Id id, boolean force) {
 		KBucket bucket = bucketOf(id);
-		KBucketEntry toRemove = bucket.get(id, false);
-		if (toRemove != null)
-			bucket._removeIfBad(toRemove, true);
-
-		return toRemove;
+		return bucket.removeIfBad(id, force);
 	}
 
-	void _onTimeout(Id id) {
+	/**
+	 * Notifies the routing table that a request has been sent to the node with the given ID.
+	 * This may be used to update internal timestamps or state.
+	 *
+	 * @param id the ID of the node to which the request was sent
+	 */
+	public void onRequestSent(Id id) {
 		KBucket bucket = bucketOf(id);
-		bucket._onTimeout(id);
+		bucket.onRequestSent(id);
 	}
 
-	void _onSend(Id id) {
+	/**
+	 * Notifies the routing table that a response has been received from the node with the given ID,
+	 * along with the round-trip time (RTT) in milliseconds.
+	 *
+	 * @param id the ID of the node that responded
+	 * @param rtt the measured round-trip time in milliseconds
+	 */
+	public void onResponded(Id id, int rtt) {
 		KBucket bucket = bucketOf(id);
-		bucket._onSend(id);
+		bucket.onResponded(id, rtt);
 	}
 
-	private boolean _needsSplit(KBucket bucket, KBucketEntry newEntry) {
+	/**
+	 * Notifies the routing table that a request to the node with the given ID has timed out.
+	 *
+	 * @param id the ID of the node that timed out
+	 * @return true if the timeout resulted in any state changes, false otherwise
+	 */
+	public boolean onTimeout(Id id) {
+		KBucket bucket = bucketOf(id);
+		return bucket.onTimeout(id);
+	}
+
+	/**
+	 * Determines whether the given bucket needs to be split to accommodate a new entry.
+	 * <p>
+	 * Buckets are split only if they are splittable, full, and the new entry falls into the higher branch.
+	 * Also considers reachability and replacement policies.
+	 *
+	 * @param bucket the bucket to check
+	 * @param newEntry the new entry to insert
+	 * @return true if the bucket should be split, false otherwise
+	 */
+	private boolean needsSplit(KBucket bucket, KBucketEntry newEntry) {
+		// Avoid splitting if bucket is not splittable, not full, or entry is unreachable or already exists
 		if (!bucket.prefix().isSplittable() || !bucket.isFull() ||
-				!newEntry.isReachable() || bucket.exists(newEntry.getId()) ||
+				!newEntry.isReachable() || bucket.contains(newEntry.getId(), false) ||
 				bucket.needsReplacement())
 			return false;
 
+		// TODO: should we check branch of the existing entries?
+
+		// Determine if the new entry belongs to the higher branch after split
 		Prefix highBranch = bucket.prefix().splitBranch(true);
 		return highBranch.isPrefixOf(newEntry.getId());
 	}
 
-	private void _modify(Collection<KBucket> toRemove, Collection<KBucket> toAdd) {
-		List<KBucket> newBuckets = new ArrayList<>(getBuckets());
+	/**
+	 * Modifies the routing table by removing and adding specified buckets atomically.
+	 *
+	 * @param toRemove the collection of buckets to remove
+	 * @param toAdd the collection of buckets to add
+	 */
+	private void modify(Collection<KBucket> toRemove, Collection<KBucket> toAdd) {
 		if (toRemove != null && !toRemove.isEmpty())
-			newBuckets.removeAll(toRemove);
+			buckets.removeAll(toRemove);
 		if (toAdd != null && !toAdd.isEmpty())
-			newBuckets.addAll(toAdd);
-		Collections.sort(newBuckets);
-		setBuckets(newBuckets);
+			buckets.addAll(toAdd);
+		buckets.sort(null);
 	}
 
-	private void _split(KBucket bucket) {
+	/**
+	 * Splits the specified bucket into two new buckets based on its prefix.
+	 * Entries and replacements are redistributed accordingly.
+	 *
+	 * @param bucket the bucket to split
+	 */
+	private void split(KBucket bucket) {
 		KBucket a = new KBucket(bucket.prefix().splitBranch(false), this::isHomeBucket);
 		KBucket b = new KBucket(bucket.prefix().splitBranch(true), this::isHomeBucket);
 
-		for (KBucketEntry e : bucket.entries()) {
-			if (a.prefix().isPrefixOf(e.getId()))
-				a._put(e);
+		// Distribute entries into the appropriate new buckets
+		for (KBucketEntry entry : bucket.entries()) {
+			if (a.prefix().isPrefixOf(entry.getId()))
+				a.put(entry);
 			else
-				b._put(e);
+				b.put(entry);
 		}
 
-		for (KBucketEntry e : bucket.cacheEntries()) {
+		// Distribute replacement entries similarly
+		for (KBucketEntry e : bucket.replacements()) {
 			if (a.prefix().isPrefixOf(e.getId()))
-				a._put(e);
+				a.put(e);
 			else
-				b._put(e);
+				b.put(e);
 		}
 
-		_modify(List.of(bucket), List.of(a, b));
+		modify(List.of(bucket), List.of(a, b));
 	}
 
-	private void _mergeBuckets() {
+	/**
+	 * Attempts to merge adjacent sibling buckets when their combined size does not exceed the maximum allowed.
+	 * This helps reduce fragmentation and maintain efficient bucket structure.
+	 */
+	private void mergeBuckets() {
+		log.debug("Trying to merge buckets({})... ", buckets.size());
+
+		// Perform bucket merge operations where possible
 		int i = 0;
-
-		// perform bucket merge operations where possible
 		while (true) {
-			i++;
-
+			++i;
 			if (i < 1)
 				continue;
 
-			List<KBucket> bucketsRef = getBuckets();
-			if (i >= bucketsRef.size())
+			if (i >= buckets.size())
 				break;
 
-			KBucket b1 = bucketsRef.get(i - 1);
-			KBucket b2 = bucketsRef.get(i);
+			KBucket b1 = buckets.get(i - 1);
+			KBucket b2 = buckets.get(i);
 
+			// Only merge if buckets are siblings (i.e., share the same parent prefix)
 			if (b1.prefix().isSiblingOf(b2.prefix())) {
+				// Calculate effective size including entries that cannot be removed without replacement
 				int effectiveSize1 = (int) (b1.stream().filter(e -> !e.removableWithoutReplacement()).count()
-						+ b1.cacheStream().filter(KBucketEntry::isEligibleForNodesList).count());
+						+ b1.replacementStream().filter(KBucketEntry::eligibleForNodesList).count());
 				int effectiveSize2 = (int) (b2.stream().filter(e -> !e.removableWithoutReplacement()).count()
-						+ b2.cacheStream().filter(KBucketEntry::isEligibleForNodesList).count());
+						+ b2.replacementStream().filter(KBucketEntry::eligibleForNodesList).count());
 
-				// check if the buckets can be merged without losing any effective entries
-				if (effectiveSize1 + effectiveSize2 <= Constants.MAX_ENTRIES_PER_BUCKET) {
-					// Insert into a new bucket directly, no splitting to avoid
-					// fibrillation between merge and split operations
+				// Merge only if combined effective size fits within bucket capacity
+				if (effectiveSize1 + effectiveSize2 <= KBucket.MAX_ENTRIES) {
+					log.debug("Merging buckets {} and {}...", b1.prefix(), b2.prefix());
+					// Create a new bucket with the parent prefix to hold merged entries
 					KBucket newBucket = new KBucket(b1.prefix().getParent(), this::isHomeBucket);
 
-					b1.stream().forEach(newBucket::_put);
-					b2.stream().forEach(newBucket::_put);
-					b1.cacheStream().forEach(newBucket::_put);
-					b2.cacheStream().forEach(newBucket::_put);
+					// Move all entries and replacements into the new bucket
+					b1.stream().forEach(newBucket::put);
+					b2.stream().forEach(newBucket::put);
+					b1.replacementStream().forEach(newBucket::put);
+					b2.replacementStream().forEach(newBucket::put);
 
-					_modify(List.of(b1, b2), List.of(newBucket));
+					modify(List.of(b1, b2), List.of(newBucket));
 
-					i -= 2;
+					i -= 2; // Adjust index to re-check after merge
 				}
 			}
 		}
+
+		log.debug("Finished merge buckets({})... ", buckets.size());
 	}
 
 	/**
-	 * Check if a buckets needs to be refreshed, and refresh if necessary.
+	 * Applies the given consumer function to each bucket in the routing table.
+	 *
+	 * @param consumer the function to apply to each bucket
 	 */
-	private void _maintenance() {
-		long now = System.currentTimeMillis();
+	public void forEachBucket(Consumer<KBucket> consumer) {
+		for (KBucket bucket : buckets)
+			consumer.accept(bucket);
+	}
 
-		// don't spam the checks if we're not receiving anything.
-		// we don't want to cause too many stray packets somewhere in a network
-		// if (!isRunning() && now - timeOfLastPingCheck < Constants.BOOTSTRAP_MIN_INTERVAL)
-		if (now - timeOfLastPingCheck < Constants.ROUTING_TABLE_MAINTENANCE_INTERVAL)
-			return;
+	/**
+	 * Performs maintenance operations on the routing table.
+	 * This includes merging buckets, cleaning up entries, refreshing buckets,
+	 * and promoting verified replacements as needed.
+	 *
+	 * @param bootstrapIds         a collection of bootstrap node IDs used during cleanup
+	 * @param bucketRefreshHandler a consumer invoked to handle bucket refresh operations.
+	 *                             The handler implementation should initialize a PingRefreshTask
+	 *                             with probe replacements option enabled.
+	 */
+	public void maintenance(Collection<Id> bootstrapIds, Consumer<KBucket> bucketRefreshHandler) {
+		// Merges incrementally to avoid event loop blocking;
+		// full coalescence occurs over multiple maintenance cycles.
+		mergeBuckets();
 
-		timeOfLastPingCheck = now;
-
-		_mergeBuckets();
-
-		Id localId = getDHT().getNode().getId();
-		Collection<Id> bootstrapIds = getDHT().getBootstrapIds();
-
-		List<KBucket> bucketsRef = getBuckets();
-		for (KBucket bucket : bucketsRef) {
+		for (KBucket bucket : buckets) {
 			boolean isHome = bucket.isHomeBucket();
-
-			List<KBucketEntry> entries = bucket.entries();
-			boolean wasFull = entries.size() >= Constants.MAX_ENTRIES_PER_BUCKET;
-			for (KBucketEntry entry : entries) {
-				// remove really old entries, ourselves and bootstrap nodes if the bucket is full
-				if (entry.getId().equals(localId) || (wasFull && bootstrapIds.contains(entry.getId()))) {
-					bucket._removeIfBad(entry, true);
-					continue;
-				}
-
-				// Fix the wrong entries
-				if (!bucket.prefix().isPrefixOf(entry.getId())) {
-					bucket._removeIfBad(entry, true);
-					put(entry);
-				}
-			}
+			bucket.cleanup(localId,  bootstrapIds, this::put);
 
 			boolean refreshNeeded = bucket.needsToBeRefreshed();
-			boolean replacementNeeded = bucket.needsCachePing() || (isHome && bucket.findPingableCacheEntry() != null);
-			if (refreshNeeded || replacementNeeded)
-				tryPingMaintenance(bucket, EnumSet.of(PingRefreshTask.Options.probeCache), "Refreshing Bucket - " + bucket.prefix());
-
-			// only replace 1 bad entry with a replacement bucket entry at a time (per bucket)
-			bucket._promoteVerifiedCacheEntry();
-		}
-	}
-
-	public void tryPingMaintenance(KBucket bucket, EnumSet<PingRefreshTask.Options> options, String name) {
-		if (maintenanceTasks.containsKey(bucket))
-			return;
-
-		PingRefreshTask task = new PingRefreshTask(getDHT(), bucket, options);
-		task.setName(name);
-		if (maintenanceTasks.putIfAbsent(bucket, task) == null) {
-			task.addListener(t -> maintenanceTasks.remove(bucket, task));
-			getDHT().getTaskManager().add(task);
-		}
-	}
-
-	public CompletableFuture<Void> pingBuckets() {
-		List<KBucket> bucketsRef = getBuckets();
-		if (bucketsRef.isEmpty())
-			return CompletableFuture.completedFuture(null);
-
-		List<CompletableFuture<Void>> futures = new ArrayList<>(bucketsRef.size());
-		for (KBucket bucket : bucketsRef) {
-			if (bucket.size() == 0)
-				continue;
-
-			CompletableFuture<Void> future = new CompletableFuture<>();
-			Task task = new PingRefreshTask(getDHT(), bucket, EnumSet.of(PingRefreshTask.Options.removeOnTimeout));
-			task.addListener((v) -> future.complete(null));
-			task.setName("Bootstrap cached table ping for " + bucket.prefix());
-			getDHT().getTaskManager().add(task);
-			futures.add(future);
-		}
-
-		return futures.isEmpty() ? CompletableFuture.completedFuture(null) :
-			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-	}
-
-	public CompletableFuture<Void> fillBuckets() {
-		List<KBucket> bucketsRef = getBuckets();
-		if (bucketsRef.isEmpty())
-			return CompletableFuture.completedFuture(null);
-
-		List<CompletableFuture<Void>> futures = new ArrayList<>(bucketsRef.size());
-		for (KBucket bucket : bucketsRef) {
-			int num = bucket.size();
-
-			// just try to fill partially populated buckets
-			// not empty ones, they may arise as artifacts from deep splitting
-			if (num < Constants.MAX_ENTRIES_PER_BUCKET) {
-				CompletableFuture<Void> future = new CompletableFuture<>();
-
-				bucket.updateRefreshTimer();
-				Task task = getDHT().findNode(bucket.prefix().createRandomId(), (v) -> {
-					future.complete(null);
-				});
-				task.setName("Filling Bucket - " + bucket.prefix());
-				futures.add(future);
+			boolean replacementNeeded = bucket.needsReplacementPing() || (isHome && bucket.findPingableReplacement() != null);
+			if (refreshNeeded || replacementNeeded) {
+				log.debug("Refreshing bucket {}...", bucket.prefix());
+				bucketRefreshHandler.accept(bucket);
 			}
-		}
 
-		return futures.isEmpty() ? CompletableFuture.completedFuture(null) :
-			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+			// Promotes one per bucket per maintenance cycle to avoid blocking; full recovery over iterations.
+			bucket.promoteVerifiedReplacement();
+		}
 	}
 
 	/**
-	 * Loads the routing table from a file
+	 * Loads the routing table's state from the specified file.
+	 * The file is expected to be in CBOR format containing entries and replacements.
+	 * Existing routing table state will be updated accordingly.
 	 *
-	 * @param file the file that load from
+	 * @param file the path to the file to load from
 	 */
 	public void load(Path file) {
 		if (Files.notExists(file) || !Files.isRegularFile(file))
 			return;
 
+		final long MAX_AGE = 24 * 60 * 60 * 1000;
 		int totalEntries = 0;
+		int totalReplacements = 0;
 
 		try (InputStream in = Files.newInputStream(file)) {
 			CBORMapper mapper = new CBORMapper();
 			JsonNode root = mapper.readTree(in);
+			if (root.isEmpty())
+				return;
+
+			Id nodeId = null;
+			try {
+				byte[] idBytes = root.get("nodeId").binaryValue();
+				nodeId = Id.of(idBytes);
+			} catch (IllegalArgumentException e) {
+				throw new IOException("Invalid nodeId", e);
+			}
+
+			boolean idMatched = nodeId.equals(localId);
 			long timestamp = root.get("timestamp").asLong();
+			long age = System.currentTimeMillis() - timestamp;
+			boolean staled = age > MAX_AGE;
 
 			JsonNode nodes = root.get("entries");
 			if (!nodes.isArray())
 				throw new IOException("Invalid node entries");
 
+			// Load and insert entries into the routing table
 			for (JsonNode node : nodes) {
-				Map<String, Object> map = mapper.convertValue(node, new TypeReference<Map<String, Object>>(){});
+				Map<String, Object> map = mapper.convertValue(node, Json.mapType());
 				KBucketEntry entry = KBucketEntry.fromMap(map);
 				if (entry != null) {
-					_put(entry);
+					if (idMatched && !staled) {
+						KBucket bucket = bucketOf(entry.getId());
+						while (bucket.isFull()) {
+							split(bucket);
+							bucket = bucketOf(entry.getId());
+						}
+						bucket.put(entry);
+					} else {
+						// TODO: need to improve
+						put(entry);
+					}
+
 					totalEntries++;
+				} else {
+					log.warn("Invalid entry: {}", node);
 				}
 			}
 
-			nodes = root.get("cache");
+			nodes = root.get("replacements");
 			if (nodes != null) {
 				if (!nodes.isArray())
 					throw new IOException("Invalid node entries");
 
 				for (JsonNode node : nodes) {
-					Map<String, Object> map = mapper.convertValue(node, new TypeReference<Map<String, Object>>(){});
+					Map<String, Object> map = mapper.convertValue(node, Json.mapType());
 					KBucketEntry entry = KBucketEntry.fromMap(map);
 					if (entry != null) {
-						bucketOf(entry.getId())._insertIntoCache(entry);
-						totalEntries++;
+						KBucket bucket = bucketOf(entry.getId());
+						if (bucket.find(entry.getId(), entry.getAddress()) == null)
+							bucket.putAsReplacement(entry);
+
+						totalReplacements++;
+					} else {
+						log.warn("Invalid replacement entry: {}", node);
 					}
 				}
 			}
 
-			log.info("Loaded {} entries from persistent file. it was {} min old.", totalEntries,
-					((System.currentTimeMillis() - timestamp) / (60 * 1000)));
+			log.info("Loaded {} entries {} replacements from persistent file. it was {} old.",
+					totalEntries, totalReplacements, Duration.ofMillis(System.currentTimeMillis() - timestamp));
 		} catch (IOException e) {
 			log.error("Can not load the routing table.", e);
 		}
 	}
 
 	/**
-	 * Saves the routing table to a file.
+	 * Saves the current state of the routing table to the specified file in CBOR format.
+	 * The method writes to a temporary file first and then atomically moves it to the target location to ensure data integrity.
+	 * If the routing table is empty or the target file is not a regular file, the save operation is skipped.
 	 *
-	 * @param file to save to.
-	 * @throws IOException is an I/O error occurred.
+	 * @param file the path to the file where the routing table should be saved
+	 * @throws IOException if an I/O error occurs during saving
 	 */
 	public void save(Path file) throws IOException {
-		if (!Files.isRegularFile(file))
-			return;
-
-		if (this.getNumBucketEntries() == 0) {
+		if (this.getNumberOfEntries() == 0) {
 			log.trace("Skip to save the empty routing table.");
 			return;
 		}
 
-		Path tempFile = Files.createTempFile(file.getParent(), file.getFileName().toString(), "-" + String.valueOf(System.currentTimeMillis()));
+		if (Files.exists(file)) {
+			if (!Files.isRegularFile(file))
+				return;
+		} else {
+			Files.createDirectories(file.getParent());
+		}
+
+		long now = System.currentTimeMillis();
+		Path tempFile = Files.createTempFile(file.getParent(), file.getFileName().toString(), "-" + now);
 		try (OutputStream out = Files.newOutputStream(tempFile)) {
 			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			gen.writeStartObject();
-
-			gen.writeFieldName("timestamp");
-			gen.writeNumber(System.currentTimeMillis());
+			gen.writeBinaryField("nodeId", localId.bytes());
+			gen.writeNumberField("timestamp", now);
 
 			gen.writeFieldName("entries");
 			gen.writeStartArray();
-			for (KBucket bucket : getBuckets()) {
+			for (KBucket bucket : buckets) {
 				for (KBucketEntry entry : bucket.entries()) {
+					if (entry.needsReplacement())
+						continue;
+
 					gen.writeStartObject();
 
 					Map<String, Object> map = entry.toMap();
@@ -656,10 +585,10 @@ public final class RoutingTable {
 			}
 			gen.writeEndArray();
 
-			gen.writeFieldName("cache");
+			gen.writeFieldName("replacements");
 			gen.writeStartArray();
-			for (KBucket bucket : getBuckets()) {
-				for (KBucketEntry entry : bucket.cacheEntries()) {
+			for (KBucket bucket : buckets) {
+				for (KBucketEntry entry : bucket.replacements()) {
 					gen.writeStartObject();
 
 					Map<String, Object> map = entry.toMap();
@@ -685,15 +614,27 @@ public final class RoutingTable {
 
 	@Override
 	public String toString() {
-		StringBuilder repr = new StringBuilder(10240);
-		List<KBucket> buckets = getBuckets();
-		repr.append("buckets: ").append(buckets.size()).append(" / entries: ").append(getNumBucketEntries());
-		repr.append('\n');
+		StringBuilder repr = new StringBuilder(2048);
+
+		repr.append("buckets: ").append(buckets.size())
+			.append(" , entries: ").append(getNumberOfEntries())
+			.append(" , replacements: ").append(getNumberOfReplacements()).append('\n');
+
 		for (KBucket bucket : buckets) {
-			repr.append(bucket);
+			bucket.toString(repr);
 			repr.append('\n');
 		}
 
 		return repr.toString();
+	}
+
+	public void dump(PrintStream out) {
+		out.printf("buckets: %d, entries: %d, replacements: %d\n",
+				buckets.size(), getNumberOfEntries(), getNumberOfReplacements());
+
+		for (KBucket bucket : buckets) {
+			bucket.dump(out);
+			out.println();
+		}
 	}
 }

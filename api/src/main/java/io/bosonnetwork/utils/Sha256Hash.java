@@ -31,20 +31,17 @@ import java.util.Arrays;
 public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	private static final long serialVersionUID = 538197488884042091L;
 
-	/**
-	 * The number of bytes used to represent a SHA-256 hash code.
-	 */
-	public static final int LENGTH = 32;
+	/** The number of bytes used to represent a SHA-256 hash code. */
+	public static final int BYTES = 32;
 
-	/**
-	 * Zero hash code.
-	 */
-	public static final Sha256Hash ZERO_HASH = wrap(new byte[LENGTH]);
+	/** Zero hash code. */
+	public static final Sha256Hash ZERO_HASH = wrap(new byte[BYTES]);
 
+	/** The raw bytes of the hash code. */
 	private final byte[] bytes;
 
 	private Sha256Hash(byte[] rawHashBytes) {
-		if (rawHashBytes.length == LENGTH)
+		if (rawHashBytes.length == BYTES)
 			throw new IllegalArgumentException("Invalid rawHashBytes length");
 
 		this.bytes = rawHashBytes;
@@ -233,8 +230,8 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 	@Override
 	public int hashCode() {
 		// Use the last 4 bytes, not the first 4 which are often zeros in Bitcoin.
-		return bytes[LENGTH - 4] << 24 | (bytes[LENGTH - 3] & 0xFF) << 16 |
-				(bytes[LENGTH - 2] & 0xFF) << 8 | (bytes[LENGTH - 1] & 0xFF);
+		return bytes[BYTES - 4] << 24 | (bytes[BYTES - 3] & 0xFF) << 16 |
+				(bytes[BYTES - 2] & 0xFF) << 8 | (bytes[BYTES - 1] & 0xFF);
 	}
 
 	@Override
@@ -286,7 +283,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
 	@Override
 	public int compareTo(final Sha256Hash other) {
-		for (int i = LENGTH - 1; i >= 0; i--) {
+		for (int i = BYTES - 1; i >= 0; i--) {
 			final int thisByte = this.bytes[i] & 0xff;
 			final int otherByte = other.bytes[i] & 0xff;
 			if (thisByte > otherByte)

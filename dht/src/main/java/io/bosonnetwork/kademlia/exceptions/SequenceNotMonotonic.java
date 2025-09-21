@@ -23,7 +23,7 @@
 
 package io.bosonnetwork.kademlia.exceptions;
 
-import io.bosonnetwork.kademlia.ErrorCode;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
  * Signals that the value's sequence number is less than the required.

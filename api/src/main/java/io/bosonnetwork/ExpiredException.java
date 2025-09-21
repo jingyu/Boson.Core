@@ -22,61 +22,56 @@
 
 package io.bosonnetwork;
 
+/**
+ * Signals that an operation has failed due to an expired resource, token, or entity within the Boson network.
+ * This exception is thrown when an action cannot be completed because the relevant item has passed its valid lifetime.
+ *
+ * <p>Examples of scenarios where this exception might be thrown include:
+ * <ul>
+ *   <li>An expired cryptographic key or certificate.</li>
+ *   <li>A resource whose access period has ended.</li>
+ * </ul>
+ *
+ * <p>This class extends {@link BosonException} and is part of the Boson API exception hierarchy,
+ * providing a specific type to indicate expiration-related failures within the Boson network.
+ */
 public class ExpiredException extends BosonException {
 	private static final long serialVersionUID = 1502154611092829891L;
 
 	/**
-	 * Constructs a new Boson exception with {@code null} as its detail message.
-	 * The cause is not initialized, and may subsequently be initialized by a
-	 * call to {@link #initCause}.
+	 * Creates a new {@code ExpiredException} with {@code null} as its detail message.
+	 * The cause is not initialized and may be set later by a call to {@link #initCause}.
 	 */
 	public ExpiredException() {
 		super();
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message.  The
-	 * cause is not initialized, and may subsequently be initialized by
-	 * a call to {@link #initCause}.
+	 * Creates a new {@code ExpiredException} with the specified detail message.
+	 * The cause is not initialized and may be set later by a call to {@link #initCause}.
 	 *
-	 * @param   message   the detail message. The detail message is saved for
-	 *		  later retrieval by the {@link #getMessage()} method.
+	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
 	 */
 	public ExpiredException(String message) {
 		super(message);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified detail message and
-	 * cause.  <p>Note that the detail message associated with
-	 * {@code cause} is <i>not</i> automatically incorporated in
-	 * this exception's detail message.
+	 * Creates a new {@code ExpiredException} with the specified detail message and cause.
+	 * The detail message associated with {@code cause} is not automatically incorporated.
 	 *
-	 * @param  message the detail message (which is saved for later retrieval
-	 *		 by the {@link #getMessage()} method).
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
+	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
 	public ExpiredException(String message, Throwable cause) {
 		super(message, cause);
 	}
 
 	/**
-	 * Constructs a new Boson exception with the specified cause and a detail
-	 * message of {@code (cause==null ? null : cause.toString())} (which
-	 * typically contains the class and detail message of {@code cause}).
-	 * This constructor is useful for exceptions that are little more than
-	 * wrappers for other throwables (for example, {@link
-	 * java.security.PrivilegedActionException}).
+	 * Creates a new {@code ExpiredException} with the specified cause and a detail message
+	 * of {@code (cause==null ? null : cause.toString())}, which typically contains the class and detail message of {@code cause}.
 	 *
-	 * @param  cause the cause (which is saved for later retrieval by the
-	 *		 {@link #getCause()} method).  (A {@code null} value is
-	 *		 permitted, and indicates that the cause is nonexistent or
-	 *		 unknown.)
-	 * @since  1.4
+	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
 	public ExpiredException(Throwable cause) {
 		super(cause);

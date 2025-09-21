@@ -24,15 +24,13 @@
 package io.bosonnetwork.shell;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-
-import io.bosonnetwork.Id;
-import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.Value;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+
+import io.bosonnetwork.Id;
+import io.bosonnetwork.LookupOption;
 
 /**
  * @hidden
@@ -64,14 +62,13 @@ public Integer call() throws Exception {
 		return -1;
 	}
 
-	CompletableFuture<Value> f = Main.getBosonNode().findValue(id, option);
-	Value v = f.get();
-	if (v != null)
-		System.out.println(v);
-	else
-		System.out.println("Not found.");
+	Main.getBosonNode().findValue(id, option).thenAccept(v -> {
+		if (v != null)
+			System.out.println(v);
+		else
+			System.out.println("Not found.");
+	}).get();
 
 	return 0;
 }
 }
-

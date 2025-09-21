@@ -48,6 +48,8 @@ import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 public abstract class DatabaseStorage implements DataStorage {
 	protected static final int SCHEMA_VERSION = 5;
 
+	protected final String connectionUri;
+
 	protected long valueExpiration;
 	protected long peerInfoExpiration;
 
@@ -56,6 +58,10 @@ public abstract class DatabaseStorage implements DataStorage {
 	protected SqlClient client;
 
 	private static final Logger log = LoggerFactory.getLogger(DatabaseStorage.class);
+
+	protected DatabaseStorage(String connectionUri) {
+		this.connectionUri = connectionUri;
+	}
 
 	protected Future<Void> executeSequentially(SqlConnection connection, List<String> statements, int index) {
 		if (index >= statements.size())
@@ -162,7 +168,7 @@ public abstract class DatabaseStorage implements DataStorage {
 	}
 
 	@Override
-	public Future<Integer> initialize(Vertx vertx, String connectionUri, long valueExpiration, long peerInfoExpiration) {
+	public Future<Integer> initialize(Vertx vertx, long valueExpiration, long peerInfoExpiration) {
 		if (client != null)
 			return Future.failedFuture(new DataStorageException("Storage already initialized"));
 
@@ -231,12 +237,12 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<Value> putValue(Value value) {
-		return putValue(value, false, 0);
+		return putValue(value, false, -1);
 	}
 
 	@Override
 	public Future<Value> putValue(Value value, boolean persistent) {
-		return putValue(value, persistent, 0);
+		return putValue(value, persistent, -1);
 	}
 
 	@Override
@@ -257,7 +263,7 @@ public abstract class DatabaseStorage implements DataStorage {
 					return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
 				}
 
-				if (expectedSequenceNumber > 0 && existing.getSequenceNumber() != expectedSequenceNumber) {
+				if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 					log.warn("Rejecting value {}: sequence number not expected", value.getId());
 					return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
 				}

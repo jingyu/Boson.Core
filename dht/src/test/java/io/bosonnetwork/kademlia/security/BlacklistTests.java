@@ -37,7 +37,7 @@ public class BlacklistTests {
 
 	@Test
 	void testSaveAndLoad() throws IOException {
-		var blacklist = Blacklist.empty();
+		var blacklist = (FileBlacklist) Blacklist.create();
 
 		for (var i = 0; i < 10; i++)
 			blacklist.ban(Id.random());
@@ -62,7 +62,7 @@ public class BlacklistTests {
 
 	@Test
 	void testBanUnbanAndCheck() {
-		var blacklist = Blacklist.empty();
+		var blacklist = Blacklist.create();
 
 		var bannedHosts = IntStream.range(0, 8)
 				.mapToObj(i -> faker.bool().bool() ? faker.internet().ipV4Address() : faker.internet().ipV6Address())

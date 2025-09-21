@@ -25,15 +25,14 @@ package io.bosonnetwork.shell;
 
 import java.util.concurrent.Callable;
 
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.Result;
-
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
 
 /**
  * @hidden
@@ -65,18 +64,19 @@ public class FindNodeCommand implements Callable<Integer> {
 			return -1;
 		}
 
-		Result<NodeInfo> result =  Main.getBosonNode().findNode(id, option).get();
-		if (result.hasValue()) {
-			NodeInfo ni = result.getV4();
-			if (ni != null)
-				System.out.println(Network.IPv4 + ": " + ni);
+		Main.getBosonNode().findNode(id, option).thenAccept(result -> {
+			if (result.hasValue()) {
+				NodeInfo ni = result.getV4();
+				if (ni != null)
+					System.out.println(Network.IPv4 + ": " + ni);
 
-			ni = result.getV6();
-			if (ni != null)
-				System.out.println(Network.IPv6 + ": " + ni);
-		} else {
-			System.out.println("Not found.");
-		}
+				ni = result.getV6();
+				if (ni != null)
+					System.out.println(Network.IPv6 + ": " + ni);
+			} else {
+				System.out.println("Not found.");
+			}
+		}).get();
 
 		return 0;
 	}

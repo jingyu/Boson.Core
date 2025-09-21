@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.utils.jdbi.async;
 
 import org.jdbi.v3.core.HandleCallback;
@@ -10,10 +32,21 @@ import org.jdbi.v3.core.transaction.TransactionIsolationLevel;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 
+/**
+ * Implementation of the JdbiExecutor interface that integrates JDBI with the Vert.x framework.
+ * This class provides methods for executing database operations asynchronously using Vert.x's
+ * execution strategies, such as transactions, handle operations, and extension-based methods.
+ */
 class JdbiExecutorImpl implements JdbiExecutor {
 	private final Jdbi jdbi;
 	private final Vertx vertx;
 
+	/**
+	 * Constructs a JdbiExecutorImpl instance with the given Jdbi object and Vertx instance.
+	 *
+	 * @param jdbi the Jdbi instance used for database operations
+	 * @param vertx the Vertx instance used for event-driven, asynchronous operations
+	 */
 	JdbiExecutorImpl(Jdbi jdbi, Vertx vertx) {
 		this.jdbi = jdbi;
 		this.vertx = vertx;

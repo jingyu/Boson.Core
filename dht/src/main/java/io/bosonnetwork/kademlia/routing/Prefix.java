@@ -73,15 +73,16 @@ public class Prefix extends Id {
 		this.depth = -1;
 	}
 
-	/**
+	/*/
 	 * Constructs a copy of an existing Prefix.
 	 *
 	 * @param p The Prefix to copy.
-	 */
+	 *
 	public Prefix(Prefix p) {
 		super(p);
 		this.depth = p.depth;
 	}
+	*/
 
 	/**
 	 * Constructs a Prefix from an Id with a specified depth.

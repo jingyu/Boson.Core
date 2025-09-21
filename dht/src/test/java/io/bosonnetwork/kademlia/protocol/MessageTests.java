@@ -25,24 +25,14 @@ package io.bosonnetwork.kademlia.protocol;
 
 import java.io.IOException;
 
-import io.bosonnetwork.kademlia.protocol.deprecated.OldMessage;
+import org.junit.jupiter.api.BeforeAll;
+
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.utils.Json;
 
 public abstract class MessageTests {
-	public static int VERSION = 0x68690001;
-	public static String VERSION_STR = "hi/1";
-
 	protected static int TIMING_ITERATIONS = 1_000_000;
 	protected static String DEFAULT_VERSION_STR = "Orca/1";
-
-	protected void printMessage(OldMessage msg, byte[] bin) throws IOException {
-		System.out.println("======== " + msg.getType().name() + ":" + msg.getMethod().name());
-		System.out.println("String: " +  msg.toString());
-		System.out.println("   Hex: " + bin.length + "/" + msg.estimateSize() + " : " + Hex.encode(bin));
-		System.out.println("  JSON: " + Json.objectMapper().writeValueAsString(Json.cborMapper().readTree(bin)));
-		System.out.println();
-	}
 
 	protected void printMessage(Message<?> msg) throws IOException {
 		var cbor = msg.toBytes();
@@ -54,5 +44,10 @@ public abstract class MessageTests {
 		System.out.println("*JSON*: " + Json.objectMapper().writeValueAsString(Json.cborMapper().readTree(cbor)));
 		System.out.println("  JSON: " + json);
 		System.out.println();
+	}
+
+	@BeforeAll
+	protected static void setup() {
+		Message.setTxidBase(0x78901111);
 	}
 }

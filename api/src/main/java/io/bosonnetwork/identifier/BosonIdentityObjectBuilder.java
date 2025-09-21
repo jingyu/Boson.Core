@@ -35,14 +35,41 @@ import java.util.TimeZone;
 
 import io.bosonnetwork.Identity;
 
+/**
+ * Base class for all Boson identity object builders.
+ * <p>
+ * Provides common utilities for building Boson objects such as Credentials,
+ * Verifiable Presentations (Vouches), and DID Documents. Key features include:
+ * <ul>
+ *   <li>Storing the {@link Identity} of the builder's subject.</li>
+ *   <li>Trimming milliseconds from {@link Date} values in UTC for consistency.</li>
+ *   <li>Normalizing strings and nested structures (maps, lists, arrays) using NFC.</li>
+ * </ul>
+ *
+ * @param <T> The type of object being built by the subclass.
+ */
 public abstract class BosonIdentityObjectBuilder<T> {
 	private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+	/** The identity of the object subject, used for signing and identification. */
 	protected final Identity identity;
 
+	/**
+	 * Constructs a new BosonIdentityObjectBuilder for the given subject identity.
+	 *
+	 * @param identity the subject identity
+	 */
 	protected BosonIdentityObjectBuilder(Identity identity) {
 		this.identity = identity;
 	}
 
+	/**
+	 * Returns a new {@link Date} with milliseconds set to zero in UTC.
+	 * <p>
+	 * Useful for normalizing timestamps to second precision.
+	 *
+	 * @param date the original Date
+	 * @return a new Date with milliseconds trimmed
+	 */
 	protected Date trimMillis(Date date) {
 		Calendar cal = Calendar.getInstance(UTC);
 		cal.setTime(date);
@@ -50,12 +77,26 @@ public abstract class BosonIdentityObjectBuilder<T> {
 		return cal.getTime();
 	}
 
+	/**
+	 * Returns the current UTC time with milliseconds trimmed.
+	 *
+	 * @return the current UTC Date with zeroed milliseconds
+	 */
 	protected Date now() {
 		Calendar cal = Calendar.getInstance(UTC);
 		cal.set(Calendar.MILLISECOND, 0);
 		return cal.getTime();
 	}
 
+	/**
+	 * Recursively normalizes strings and nested structures using NFC form.
+	 * <p>
+	 * Supports {@link String}, {@link Map}, {@link List}, and arrays of objects.
+	 *
+	 * @param value the value to normalize
+	 * @param <R> the type of the value
+	 * @return the normalized value
+	 */
 	@SuppressWarnings("unchecked")
 	protected <R> R normalize(R value) {
 		if (value instanceof String s)
@@ -88,5 +129,10 @@ public abstract class BosonIdentityObjectBuilder<T> {
 		return value;
 	}
 
+	/**
+	 * Constructs the final object.
+	 *
+	 * @return the built object of type {@code T}
+	 */
 	public abstract T build();
 }
