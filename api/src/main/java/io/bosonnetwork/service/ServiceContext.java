@@ -26,6 +26,8 @@ package io.bosonnetwork.service;
 import java.nio.file.Path;
 import java.util.Map;
 
+import io.vertx.core.Vertx;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.access.AccessManager;
@@ -35,6 +37,12 @@ import io.bosonnetwork.access.AccessManager;
  * host Boson node and the service configurations.
  */
 public interface ServiceContext {
+	/**
+	 * Get the Vert.x instance to be used by the current DHT node.
+	 *
+	 * @return the {@link Vertx} instance.
+	 */
+	Vertx getVertx();
 	/**
 	 * Gets the host Boson node object.
 	 *

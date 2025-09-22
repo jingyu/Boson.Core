@@ -37,6 +37,8 @@ import java.util.stream.Stream;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
 
 import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.Id;
@@ -58,6 +60,7 @@ public class Main {
 	private static NodeConfiguration config;
 	private static final Object shutdown = new Object();
 
+	private static Vertx vertx;
 	private static KadNode node;
 	private static AccessManager accessManager;
 	private static final List<BosonService> services = new ArrayList<>();
@@ -129,7 +132,7 @@ public class Main {
 			}
 
 			Path dataPath = config.dataPath() == null ? null : config.dataPath().resolve(svc.getId()).toAbsolutePath();
-			ServiceContext ctx = new DefaultServiceContext(node, accessManager, serviceConfig.configuration, dataPath);
+			ServiceContext ctx = new DefaultServiceContext(vertx, node, accessManager, serviceConfig.configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), serviceConfig.className);
 
@@ -252,6 +255,13 @@ public class Main {
 
 			i++;
 		}
+
+		Vertx vertx = Vertx.vertx(new VertxOptions()
+				.setEventLoopPoolSize(8)
+				.setWorkerPoolSize(8)
+				.setPreferNativeTransport(true));
+
+		builder.vertx(vertx);
 
 		config = builder.build();
 	}

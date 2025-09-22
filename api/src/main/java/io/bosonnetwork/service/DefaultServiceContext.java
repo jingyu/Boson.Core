@@ -4,6 +4,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.vertx.core.Vertx;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.access.AccessManager;
@@ -12,6 +14,7 @@ import io.bosonnetwork.access.AccessManager;
  * Default {@link ServiceContext} implementation.
  */
 public class DefaultServiceContext implements ServiceContext {
+	private final Vertx vertx;
 	private final Node node;
 	private final AccessManager accessManager;
 	private final Map<String, Object> configuration;
@@ -27,12 +30,19 @@ public class DefaultServiceContext implements ServiceContext {
 	 * @param configuration the configuration data of the service.
 	 * @param dataPath the persistence data path, or null if not available.
 	 */
-	public DefaultServiceContext(Node node, AccessManager accessManager, Map<String, Object> configuration, Path dataPath) {
+	public DefaultServiceContext(Vertx vertx, Node node, AccessManager accessManager,
+								 Map<String, Object> configuration, Path dataPath) {
+		this.vertx = vertx;
 		this.node = node;
 		this.accessManager = accessManager != null ? accessManager : AccessManager.getDefault();
 		this.configuration = configuration;
 		this.dataPath = dataPath;
 		this.properties = new HashMap<>();
+	}
+
+	@Override
+	public Vertx getVertx() {
+		return vertx;
 	}
 
 	@Override
