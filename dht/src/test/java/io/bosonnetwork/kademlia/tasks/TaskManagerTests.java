@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,6 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
 class TaskManagerTests {
 	private KadContext kadContext;
 	private TaskManager manager;
-	private Vertx vertx;
 
 	static class TestTask extends Task<TestTask> {
 		private static final Logger log = LoggerFactory.getLogger(TestTask.class);
@@ -93,7 +93,7 @@ class TaskManagerTests {
 	}
 
 	@Test
-	void testTaskLifeCycle(Vertx vertx, VertxTestContext testContext) {
+	void testTaskLifeCycle(VertxTestContext context) {
 		CountDownLatch startedSignal = new CountDownLatch(1);
 		CountDownLatch completeSignal = new CountDownLatch(1);
 
@@ -110,14 +110,24 @@ class TaskManagerTests {
 						completeSignal.countDown();
 					}
 				});
-		manager.add(task);
-		assertEquals(1, manager.getQueuedTasks());
+
+		Promise<Void> promise = Promise.promise();
+		kadContext.runOnContext(() -> {
+			manager.add(task);
+			promise.complete();
+		});
+
+		promise.future().onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertTrue(manager.getQueuedTasks() == 1 || manager.getRunningTasks() == 1);
+			});
+		}));
 
 		try {
 			if (!startedSignal.await(5, TimeUnit.SECONDS))
-				testContext.failNow("Timeout");
+				context.failNow("Timeout");
 		} catch (InterruptedException e) {
-			testContext.failNow(e);
+			context.failNow(e);
 		}
 
 		assertEquals(1, manager.getRunningTasks());
@@ -127,73 +137,93 @@ class TaskManagerTests {
 
 		try {
 			if (!completeSignal.await(5, TimeUnit.SECONDS))
-				testContext.failNow("Timeout");
+				context.failNow("Timeout");
 		} catch (InterruptedException e) {
-			testContext.failNow(e);
+			context.failNow(e);
 		}
 
 		assertEquals(0, manager.getRunningTasks());
 		assertEquals(0, manager.getQueuedTasks());
 
-		testContext.completeNow();
+		context.completeNow();
 	}
 
 	@Test
-	void testCancelAll(Vertx vertx, VertxTestContext context) {
+	void testCancelAll(VertxTestContext context) {
 		TestTask task1 = new TestTask(kadContext).setName("Panda").addListener(new TestTaskListener());
-		manager.add(task1);
 		TestTask task2 = new TestTask(kadContext).setName("Dragon").addListener(new TestTaskListener());
-		manager.add(task2);
 		TestTask task3 = new TestTask(kadContext).setName("Tiger").addListener(new TestTaskListener());
-		manager.add(task3);
+
+		kadContext.runOnContext(() -> {
+			manager.add(task1);
+			manager.add(task2);
+			manager.add(task3);
+		});
 
 		try {
-			Thread.sleep(1000);
+			while (!task3.isRunning())
+				//noinspection BusyWait
+				Thread.sleep(500);
 		} catch (InterruptedException e) {
 			context.failNow(e);
 		}
 
 		assertEquals(3, manager.getRunningTasks());
 		assertEquals(0, manager.getQueuedTasks());
-		manager.cancelAll();
 
-		assertTrue(task1.isCanceled());
-		assertTrue(task2.isCanceled());
-		assertTrue(task3.isCanceled());
-		assertEquals(0, manager.getRunningTasks());
-		assertEquals(0, manager.getQueuedTasks());
+		Promise<Void> promise = Promise.promise();
+		kadContext.runOnContext(() -> {
+			manager.cancelAll();
+			promise.complete();
+		});
 
-		context.completeNow();
+		promise.future().onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertTrue(task1.isCanceled());
+				assertTrue(task2.isCanceled());
+				assertTrue(task3.isCanceled());
+				assertEquals(0, manager.getRunningTasks());
+				assertEquals(0, manager.getQueuedTasks());
+			});
+			context.completeNow();
+		}));
 	}
 
 	@Test
-	void testMaxActiveTasks(Vertx vertx, VertxTestContext context) {
+	void testMaxActiveTasks(VertxTestContext context) {
 		int max = TaskManager.MAX_ACTIVE_TASKS;
+		TestTask task = null;
 		for (int i = 0; i < max; i++) {
-			TestTask task = new TestTask(kadContext).setName("TestTask" + i).addListener(new TestTaskListener());
-			manager.add(task);
+			task = new TestTask(kadContext).setName("TestTask" + i).addListener(new TestTaskListener());
+			TestTask t = task;
+			kadContext.runOnContext(() -> manager.add(t));
 		}
 
 		try {
-			Thread.sleep(1000);
+			// check the last task is started
+			while (task.isUnstarted())
+				//noinspection BusyWait
+				Thread.sleep(500);
 		} catch (InterruptedException e) {
 			context.failNow(e);
 		}
 
 		assertEquals(max, manager.getRunningTasks());
 		assertEquals(0, manager.getQueuedTasks());
+
 		TestTask extraTask = new TestTask(kadContext).setName("ExtraTestTask").addListener(new TestTaskListener());
-		manager.add(extraTask);
+		Promise<Void> promise = Promise.promise();
+		kadContext.runOnContext(() -> {
+			manager.add(extraTask);
+			promise.complete();
+		});
 
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e) {
-			context.failNow(e);
-		}
-
-		assertEquals(max, manager.getRunningTasks());
-		assertEquals(1, manager.getQueuedTasks());
-
-		context.completeNow();
+		promise.future().onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertEquals(max, manager.getRunningTasks());
+				assertEquals(1, manager.getQueuedTasks());
+			});
+			context.completeNow();
+		}));
 	}
 }

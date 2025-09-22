@@ -27,7 +27,6 @@ import io.vertx.core.VertxOptions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
@@ -48,7 +47,6 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.utils.vertx.VertxFuture;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 @ExtendWith(VertxExtension.class)
 public class NodeAsyncTests {
 	private static Vertx vertx;

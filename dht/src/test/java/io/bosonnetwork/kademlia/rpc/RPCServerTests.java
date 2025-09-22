@@ -45,7 +45,6 @@ import net.datafaker.Faker;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
@@ -68,7 +67,6 @@ import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.utils.AddressUtils;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 @ExtendWith(VertxExtension.class)
 public class RPCServerTests {
 	private static final int TEST_MESSAGES = 1000;

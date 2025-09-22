@@ -25,7 +25,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
@@ -40,7 +39,6 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.utils.vertx.VertxFuture;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class NodeSyncTests {
 	private static Vertx vertx;
 	private static final int TEST_NODES = 32;

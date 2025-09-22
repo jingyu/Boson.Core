@@ -40,7 +40,6 @@ import io.vertx.core.VertxOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
@@ -56,7 +55,6 @@ import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.utils.vertx.VertxFuture;
 
-@EnabledIfSystemProperty(named = "io.bosonnetwork.environment", matches = "development")
 public class SybilTests {
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "SybilTests");
 

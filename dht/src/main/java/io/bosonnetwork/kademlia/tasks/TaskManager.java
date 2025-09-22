@@ -68,9 +68,13 @@ public class TaskManager {
 
 	/**
 	 * Adds a task to the manager, queuing it if not running and starting it when ready.
+	 * <p>
+	 * This method must be invoked from the Vert.x event loop associated with {@link KadContext#getVertxContext()}.
+	 * </p>
 	 *
 	 * @param task  the task to add
 	 * @param prior true to add to the front of the queue (priority), false to the end
+	 * @throws IllegalStateException if the manager is currently canceling tasks
 	 */
 	public void add(Task<?> task, boolean prior) {
 		assert (task != null) : "Invalid task";
@@ -107,9 +111,13 @@ public class TaskManager {
 	}
 
 	/**
-	 * Adds a task to the manager without priority.
+	 * Adds a task to the manager without a priority.
+	 * <p>
+	 * This method must be invoked from the Vert.x event loop associated with {@link KadContext#getVertxContext()}.
+	 * </p>
 	 *
 	 * @param task the task to add
+	 * @throws IllegalStateException if the manager is currently canceling tasks
 	 */
 	public void add(Task<?> task) {
 		add(task, false);
@@ -117,6 +125,9 @@ public class TaskManager {
 
 	/**
 	 * Removes a task from the manager.
+	 * <p>
+	 * This method must be invoked from the Vert.x event loop associated with {@link KadContext#getVertxContext()}.
+	 * </p>
 	 *
 	 * @param task the task to remove
 	 * @return true if removed, false otherwise
@@ -184,6 +195,9 @@ public class TaskManager {
 
 	/**
 	 * Cancels all tasks and clears the manager.
+	 * <p>
+	 * This method must be invoked from the Vert.x event loop associated with {@link KadContext#getVertxContext()}.
+	 * </p>
 	 */
 	public void cancelAll() {
 		canceling = true;
