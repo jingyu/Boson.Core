@@ -124,6 +124,9 @@ public class CryptoIdentity implements Identity {
 	 */
 	@Override
 	public byte[] decrypt(Id sender, byte[] data) throws CryptoException {
+		Objects.requireNonNull(sender, "sender");
+		Objects.requireNonNull(data, "data");
+
 		if (data.length <= CryptoBox.Nonce.BYTES + CryptoBox.MAC_BYTES)
 			throw new CryptoException("Invalid cipher size");
 
@@ -154,6 +157,8 @@ public class CryptoIdentity implements Identity {
 	 */
 	@Override
 	public CryptoContext createCryptoContext(Id id) throws CryptoException {
+		Objects.requireNonNull(id, "id");
+
 		try {
 			CryptoBox.PublicKey pk = id.toEncryptionKey();
 			CryptoBox box = CryptoBox.fromKeys(pk, encryptionKeyPair.privateKey());
@@ -181,13 +186,11 @@ public class CryptoIdentity implements Identity {
 		return encryptionKeyPair;
 	}
 
-	/**
-	 * Compares this identity to another object for equality.
-	 * Two {@code CryptoIdentity} instances are equal if their {@link Id} values are equal.
-	 *
-	 * @param o the object to compare with
-	 * @return {@code true} if the given object is a {@code CryptoIdentity} with the same {@code Id}, {@code false} otherwise
-	 */
+	@Override
+	public int hashCode() {
+		return Objects.hash(id);
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (this == o)

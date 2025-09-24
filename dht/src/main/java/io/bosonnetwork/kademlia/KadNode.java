@@ -13,8 +13,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalCause;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -37,8 +36,8 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.crypto.CachedCryptoIdentity;
 import io.bosonnetwork.crypto.CryptoException;
-import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.SimpleNodeConfiguration;
@@ -64,14 +63,13 @@ public class KadNode extends VerticleBase implements Node {
 
 	private final SimpleNodeConfiguration config;
 
-	private final CryptoIdentity identity;
+	private final CachedCryptoIdentity identity;
 
 	private DHT dht4;
 	private DHT dht6;
 
 	private LookupOption defaultLookupOption;
 
-	private LoadingCache<Id, CryptoContext> cryptoContexts;
 	private Blacklist blacklist;
 
 	private TokenManager tokenManager;
@@ -95,7 +93,7 @@ public class KadNode extends VerticleBase implements Node {
 
 		try {
 			Signature.KeyPair keyPair = Signature.KeyPair.fromPrivateKey(Base58.decode(config.privateKey()));
-			this.identity = new CryptoIdentity(keyPair);
+			this.identity = new CachedCryptoIdentity(keyPair, null);
 		} catch (Exception e) {
 			log.error("Invalid configuration: private key is invalid");
 			throw new IllegalArgumentException("Invalid configuration: private key is invalid", e);
@@ -232,10 +230,9 @@ public class KadNode extends VerticleBase implements Node {
 	public void init(Vertx vertx, Context context) {
 		super.init(vertx, context);
 
-		cryptoContexts = VertxCaffeine.newBuilder(vertx)
-				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS)
-				.removalListener((Id id, CryptoContext ctx, RemovalCause cause) -> ctx.close())
-				.build(identity::createCryptoContext);
+		Caffeine<Object, Object> caffeine = VertxCaffeine.newBuilder(vertx)
+				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS);
+		identity.initCache(caffeine);
 	}
 
 	@Override
@@ -368,7 +365,7 @@ public class KadNode extends VerticleBase implements Node {
 					storage.close().andThen(ar -> storage = null).otherwiseEmpty()
 		).andThen(ar -> {
 			tokenManager = null;
-			cryptoContexts.invalidateAll();
+			identity.clearCache();
 		});
 	}
 
@@ -780,27 +777,17 @@ public class KadNode extends VerticleBase implements Node {
 
 	@Override
 	public byte[] encrypt(Id recipient, byte[] data) throws CryptoException {
-		Objects.requireNonNull(recipient, "recipient");
-		Objects.requireNonNull(data, "data");
-		checkRunning();
-		CryptoContext ctx = cryptoContexts.get(recipient);
-		return ctx.encrypt(data);
+		return identity.encrypt(recipient, data);
 	}
 
 	@Override
 	public byte[] decrypt(Id sender, byte[] data) throws CryptoException {
-		Objects.requireNonNull(sender, "sender");
-		Objects.requireNonNull(data, "data");
-		checkRunning();
-		CryptoContext ctx = cryptoContexts.get(sender);
-		return ctx.decrypt(data);
+		return identity.decrypt(sender, data);
 	}
 
 	@Override
-	public CryptoContext createCryptoContext(Id id) {
-		Objects.requireNonNull(id);
-		checkRunning();
-		return cryptoContexts.get(id);
+	public CryptoContext createCryptoContext(Id id) throws CryptoException {
+		return identity.createCryptoContext(id);
 	}
 
 	@Override
