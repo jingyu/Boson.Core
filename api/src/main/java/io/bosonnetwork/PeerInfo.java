@@ -51,9 +51,9 @@ public class PeerInfo {
 	private final Id publicKey;			// Peer ID
 	private final byte[] privateKey;		// Private key to sign the peer info
 	private final Id nodeId;				// The node that provide the service peer
-	private final Id origin;				// The node that announce the peer
+	private final Id origin;				// The node that announces the peer
 	private final int port;
-	private final String alternativeURL;
+	private final String alternativeURI;
 	private final byte[] signature;
 
 	/**
@@ -63,14 +63,14 @@ public class PeerInfo {
 	 * @param privateKey the private key associated with the peer; should be of length {@link Signature.PrivateKey#BYTES}, or null if not provided
 	 * @param nodeId the node identifier of the peer; must not be null
 	 * @param origin the origin identifier of the peer; can be null or the same as nodeId
-	 * @param port the port number associated with the peer; must be greater than 0 and less than or equal to 65535
-	 * @param alternativeURL an optional alternative URL associated with the peer; may be null or an empty string
+	 * @param port the port number associated with the peer; must be greater than 0 and less than or equal to 65,535
+	 * @param alternativeURI an optional alternative URL associated with the peer; may be null or an empty string
 	 * @param signature the signature associated with the peer; must not be null and should be of length {@link Signature#BYTES}
 	 * @throws IllegalArgumentException if peerId is null, the privateKey length is invalid, nodeId is null,
 	 *                                  the port is out of the valid range, or the signature is invalid
 	 */
 	private PeerInfo(Id peerId, byte[] privateKey, Id nodeId, Id origin, int port,
-			String alternativeURL, byte[] signature) {
+					 String alternativeURI, byte[] signature) {
 		if (peerId == null)
 			throw new IllegalArgumentException("Invalid peer id");
 
@@ -91,10 +91,10 @@ public class PeerInfo {
 		this.nodeId = nodeId;
 		this.origin = origin == null || origin.equals(nodeId) ? null : origin;
 		this.port = port;
-		if (alternativeURL != null && !alternativeURL.isEmpty())
-			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
+		if (alternativeURI != null && !alternativeURI.isEmpty())
+			this.alternativeURI = Normalizer.normalize(alternativeURI, Normalizer.Form.NFC);
 		else
-			this.alternativeURL = null;
+			this.alternativeURI = null;
 		this.signature = signature;
 	}
 
@@ -105,11 +105,11 @@ public class PeerInfo {
 	 * @param nodeId         The unique identifier for the node.
 	 * @param origin         The origin identifier associated with the peer.
 	 * @param port           The port number used by the peer.
-	 * @param alternativeURL An alternative URL for accessing the peer.
+	 * @param alternativeURI An alternative URI for accessing the peer.
 	 * @param signature      A byte array representing the signature for security validation.
 	 */
-	protected PeerInfo(Id peerId, Id nodeId, Id origin, int port, String alternativeURL, byte[] signature) {
-		this(peerId, null, nodeId, origin, port, alternativeURL, signature);
+	protected PeerInfo(Id peerId, Id nodeId, Id origin, int port, String alternativeURI, byte[] signature) {
+		this(peerId, null, nodeId, origin, port, alternativeURI, signature);
 	}
 
 	/**
@@ -119,10 +119,10 @@ public class PeerInfo {
 	 * @param nodeId the unique identifier of the node; must not be null
 	 * @param origin the origin node's identifier; can be null or equal to nodeId
 	 * @param port the port number for the peer; must be between 1 and 65535
-	 * @param alternativeURL an optional alternative URL for the peer; can be null or empty
+	 * @param alternativeURI an optional alternative URI for the peer; can be null or empty
 	 * @throws IllegalArgumentException if the keypair is null, nodeId is null, or port is invalid
 	 */
-	private PeerInfo(Signature.KeyPair keypair, Id nodeId, Id origin, int port, String alternativeURL) {
+	private PeerInfo(Signature.KeyPair keypair, Id nodeId, Id origin, int port, String alternativeURI) {
 		if (keypair == null)
 			throw new IllegalArgumentException("Invalid keypair");
 
@@ -137,10 +137,10 @@ public class PeerInfo {
 		this.nodeId = nodeId;
 		this.origin = origin == null || origin.equals(nodeId) ? null : origin;
 		this.port = port;
-		if (alternativeURL != null && !alternativeURL.isEmpty())
-			this.alternativeURL = Normalizer.normalize(alternativeURL, Normalizer.Form.NFC);
+		if (alternativeURI != null && !alternativeURI.isEmpty())
+			this.alternativeURI = Normalizer.normalize(alternativeURI, Normalizer.Form.NFC);
 		else
-			this.alternativeURL = null;
+			this.alternativeURI = null;
 		this.signature = Signature.sign(getSignData(), keypair.privateKey());
 	}
 
@@ -177,12 +177,12 @@ public class PeerInfo {
 	 * @param peerId the peer ID.
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @param signature the signature of the peer info.
 	 * @return a created PeerInfo object.
 	 */
-	public static PeerInfo of(Id peerId, Id nodeId, int port, String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, null, nodeId, null, port, alternativeURL, signature);
+	public static PeerInfo of(Id peerId, Id nodeId, int port, String alternativeURI, byte[] signature) {
+		return new PeerInfo(peerId, null, nodeId, null, port, alternativeURI, signature);
 	}
 
 	/**
@@ -192,13 +192,13 @@ public class PeerInfo {
 	 * @param privateKey the private key associated with the peer.
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @param signature the signature of the peer info.
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, int port,
-			String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, privateKey, nodeId, null, port, alternativeURL, signature);
+			String alternativeURI, byte[] signature) {
+		return new PeerInfo(peerId, privateKey, nodeId, null, port, alternativeURI, signature);
 	}
 
 	/**
@@ -237,12 +237,12 @@ public class PeerInfo {
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param origin the node that announces the peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @param signature the signature of the peer info.
 	 * @return a created PeerInfo object.
 	 */
-	public static PeerInfo of(Id peerId, Id nodeId, Id origin, int port, String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, null, nodeId, origin, port, alternativeURL, signature);
+	public static PeerInfo of(Id peerId, Id nodeId, Id origin, int port, String alternativeURI, byte[] signature) {
+		return new PeerInfo(peerId, null, nodeId, origin, port, alternativeURI, signature);
 	}
 
 	/**
@@ -253,18 +253,18 @@ public class PeerInfo {
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param origin the node that announces the peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @param signature the signature of the peer info.
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, Id nodeId, Id origin, int port,
-			String alternativeURL, byte[] signature) {
-		return new PeerInfo(peerId, privateKey, nodeId, origin, port, alternativeURL, signature);
+			String alternativeURI, byte[] signature) {
+		return new PeerInfo(peerId, privateKey, nodeId, origin, port, alternativeURI, signature);
 	}
 
 	/**
-	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
-	 * be signed by a new generated random key pair.
+	 * Creates a <code>PeerInfo</code> object with specified information, newly created
+	 * <code>PeerInfo</code> will be signed by a new generated random key pair.
 	 *
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param port the port on which the peer is available.
@@ -287,8 +287,8 @@ public class PeerInfo {
 	}
 
 	/**
-	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
-	 * be signed by a new generated random key pair.
+	 * Creates a <code>PeerInfo</code> object with specified information, newly created
+	 * <code>PeerInfo</code> will be signed by a new generated random key pair.
 	 *
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param origin the node that announces the peer.
@@ -313,16 +313,16 @@ public class PeerInfo {
 	}
 
 	/**
-	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
-	 * be signed by a new generated random key pair.
+	 * Creates a <code>PeerInfo</code> object with specified information, newly created
+	 * <code>PeerInfo</code> will be signed by a new generated random key pair.
 	 *
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @return a created PeerInfo object.
 	 */
-	public static PeerInfo create(Id nodeId, int port, String alternativeURL) {
-		return create(null, nodeId, null, port, alternativeURL);
+	public static PeerInfo create(Id nodeId, int port, String alternativeURI) {
+		return create(null, nodeId, null, port, alternativeURI);
 	}
 
 	/**
@@ -331,25 +331,25 @@ public class PeerInfo {
 	 * @param keypair the key pair key to sign the peer information.
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @return a created PeerInfo object.
 	 */
-	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port, String alternativeURL) {
-		return create(keypair, nodeId, null, port, alternativeURL);
+	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, int port, String alternativeURI) {
+		return create(keypair, nodeId, null, port, alternativeURI);
 	}
 
 	/**
-	 * Creates a PeerInfo object with specified information. the new created PeerInfo will
+	 * Creates a PeerInfo object with specified information, newly created PeerInfo will
 	 * be signed by a new generated random key pair.
 	 *
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param origin the node that announces the peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @return a created PeerInfo object.
 	 */
-	public static PeerInfo create(Id nodeId, Id origin, int port, String alternativeURL) {
-		return create(null, nodeId, origin, port, alternativeURL);
+	public static PeerInfo create(Id nodeId, Id origin, int port, String alternativeURI) {
+		return create(null, nodeId, origin, port, alternativeURI);
 	}
 
 	/**
@@ -359,15 +359,15 @@ public class PeerInfo {
 	 * @param nodeId the ID of the node providing the service peer.
 	 * @param origin the node that announces the peer.
 	 * @param port the port on which the peer is available.
-	 * @param alternativeURL an alternative URL for the peer.
+	 * @param alternativeURI an alternative URI for the peer.
 	 * @return a created PeerInfo object.
 	 */
 	public static PeerInfo create(Signature.KeyPair keypair, Id nodeId, Id origin,
-			int port, String alternativeURL) {
+			int port, String alternativeURI) {
 		if (keypair == null)
 			keypair = Signature.KeyPair.random();
 
-		return new PeerInfo(keypair, nodeId, origin, port, alternativeURL);
+		return new PeerInfo(keypair, nodeId, origin, port, alternativeURI);
 	}
 
 	/**
@@ -434,21 +434,21 @@ public class PeerInfo {
 	}
 
 	/**
-	 * Gets the alternative URL for the peer.
+	 * Gets the alternative URI for the peer.
 	 *
-	 * @return The alternative URL.
+	 * @return The alternative URI.
 	 */
-	public String getAlternativeURL() {
-		return alternativeURL;
+	public String getAlternativeURI() {
+		return alternativeURI;
 	}
 
 	/**
-	 * Checks if the peer has an alternative URL.
+	 * Checks if the peer has an alternative URI.
 	 *
-	 * @return {@code true} if the peer has an alternative URL, {@code false} otherwise.
+	 * @return {@code true} if the peer has an alternative URI, {@code false} otherwise.
 	 */
-	public boolean hasAlternativeURL() {
-		return alternativeURL != null && !alternativeURL.isEmpty();
+	public boolean hasAlternativeURI() {
+		return alternativeURI != null && !alternativeURI.isEmpty();
 	}
 
 	/**
@@ -462,9 +462,9 @@ public class PeerInfo {
 
 	private byte[] getSignData() {
 		// TODO: optimize with incremental digest, and return sha256 hash as sign input
-		/*
-		byte[] alt = alternativeURL == null || alternativeURL.isEmpty() ?
-				null : alternativeURL.getBytes(UTF_8);
+		/*/
+		byte[] alt = alternativeURI == null || alternativeURI.isEmpty() ?
+				null : alternativeURI.getBytes(UTF_8);
 
 		byte[] toSign = new byte[Id.BYTES * 2 + Short.BYTES + (alt == null ? 0 : alt.length)];
 		ByteBuffer buf = ByteBuffer.wrap(toSign);
@@ -483,8 +483,8 @@ public class PeerInfo {
 		if (origin != null)
 			sha.update(origin.bytes());
 		sha.update(ByteBuffer.allocate(Short.BYTES).putShort((short)port).array());
-		if (alternativeURL != null)
-			sha.update(alternativeURL.getBytes(UTF_8));
+		if (alternativeURI != null)
+			sha.update(alternativeURI.getBytes(UTF_8));
 
 		return sha.digest();
 	}
@@ -515,12 +515,12 @@ public class PeerInfo {
 		if (privateKey == null)
 			return this;
 
-		return new PeerInfo(publicKey, null, nodeId, origin, port, alternativeURL, signature);
+		return new PeerInfo(publicKey, null, nodeId, origin, port, alternativeURI, signature);
 	}
 
 	@Override
 	public int hashCode() {
-		return 0x6030A + Objects.hash(publicKey, nodeId, origin, port, alternativeURL, Arrays.hashCode(signature));
+		return 0x6030A + Objects.hash(publicKey, nodeId, origin, port, alternativeURI, Arrays.hashCode(signature));
 	}
 
 	@Override
@@ -533,7 +533,7 @@ public class PeerInfo {
 					Objects.equals(this.nodeId, that.nodeId) &&
 					Objects.equals(this.origin, that.origin) &&
 					this.port == that.port &&
-					Objects.equals(this.alternativeURL, that.alternativeURL) &&
+					Objects.equals(this.alternativeURI, that.alternativeURI) &&
 					Arrays.equals(this.signature, that.signature);
 		}
 
@@ -549,8 +549,8 @@ public class PeerInfo {
 		if (isDelegated())
 			sb.append(getOrigin().toString()).append(',');
 		sb.append(port);
-		if (hasAlternativeURL())
-			sb.append(",").append(alternativeURL);
+		if (hasAlternativeURI())
+			sb.append(",").append(alternativeURI);
 		sb.append(">");
 		return sb.toString();
 	}

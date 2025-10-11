@@ -426,7 +426,7 @@ public class Json {
 	/**
 	 * Serializer for {@link PeerInfo} objects.
 	 * <p>
-	 * Encodes PeerInfo as a 6-element array: [peerId, nodeId, originNodeId, port, alternativeURL, signature].
+	 * Encodes PeerInfo as a 6-element array: [peerId, nodeId, originNodeId, port, alternativeURI, signature].
 	 * In binary formats, ids and signature are written as Base64-encoded binary; in text formats, ids are Base58 strings.
 	 * Special behavior: the peerId can be omitted if the context attribute
 	 * {@link io.bosonnetwork.PeerInfo#ATTRIBUTE_OMIT_PEER_ID} is set.
@@ -447,9 +447,9 @@ public class Json {
 			final boolean binaryFormat = isBinaryFormat(gen);
 
 			// Format: 6-tuple
-			//   [peerId, nodeId, originNodeId, port, alternativeURL, signature]
+			//   [peerId, nodeId, originNodeId, port, alternativeURI, signature]
 			// If omit the peer id, format:
-			//   [null, nodeId, originNodeId, port, alternativeURL, signature]
+			//   [null, nodeId, originNodeId, port, alternativeURI, signature]
 
 			gen.writeStartArray();
 
@@ -486,8 +486,8 @@ public class Json {
 			gen.writeNumber(value.getPort());
 
 			// alternative url
-			if (value.hasAlternativeURL())
-				gen.writeString(value.getAlternativeURL());
+			if (value.hasAlternativeURI())
+				gen.writeString(value.getAlternativeURI());
 			else
 				gen.writeNull();
 
@@ -502,7 +502,7 @@ public class Json {
 	/**
 	 * Deserializer for {@link PeerInfo} objects.
 	 * <p>
-	 * Expects a 6-element array: [peerId, nodeId, originNodeId, port, alternativeURL, signature].
+	 * Expects a 6-element array: [peerId, nodeId, originNodeId, port, alternativeURI, signature].
 	 * In binary formats, ids and signature are decoded from Base64-encoded binary; in text formats, ids are Base58 strings.
 	 * Special behavior: if peerId is omitted (null), it is taken from the context attribute
 	 * {@link io.bosonnetwork.PeerInfo#ATTRIBUTE_PEER_ID}.
@@ -529,7 +529,7 @@ public class Json {
 			Id nodeId = null;
 			Id origin = null;
 			int port = 0;
-			String alternativeURL = null;
+			String alternativeURI = null;
 			byte[] signature = null;
 
 			// peer id
@@ -556,7 +556,7 @@ public class Json {
 
 			// alternative url
 			if (p.nextToken() != JsonToken.VALUE_NULL)
-				alternativeURL = p.getText();
+				alternativeURI = p.getText();
 
 			// signature
 			if (p.nextToken() != JsonToken.VALUE_NULL)
@@ -565,7 +565,7 @@ public class Json {
 			if (p.nextToken() != JsonToken.END_ARRAY)
 				throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo: too many elements in array");
 
-			return PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature);
+			return PeerInfo.of(peerId, nodeId, origin, port, alternativeURI, signature);
 		}
 	}
 

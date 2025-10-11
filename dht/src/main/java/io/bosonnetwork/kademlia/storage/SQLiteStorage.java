@@ -71,7 +71,7 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 						privateKey BLOB,
 						origin BLOB,
 						port INTEGER NOT NULL,
-						alternativeURL TEXT,
+						alternativeURI TEXT,
 						signature BLOB NOT NULL,
 						created INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
 						updated INTEGER NOT NULL DEFAULT (CAST(unixepoch('subsec') * 1000 AS INTEGER)),
@@ -218,14 +218,14 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 		return """
 				INSERT INTO peers (
 					id, nodeId, persistent, privateKey, origin, port,
-					alternativeURL, signature, created, updated
+					alternativeURI, signature, created, updated
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(id, nodeId) DO UPDATE SET
 					persistent = excluded.persistent,
 					privateKey = excluded.privateKey,
 					origin = excluded.origin,
 					port = excluded.port,
-					alternativeURL = excluded.alternativeURL,
+					alternativeURI = excluded.alternativeURI,
 					signature = excluded.signature,
 					updated = excluded.updated
 				""";

@@ -432,7 +432,7 @@ public abstract class DatabaseStorage implements DataStorage {
 							peerInfo.getPrivateKey(),
 							peerInfo.getOrigin() != null ? peerInfo.getOrigin().bytes() : null,
 							peerInfo.getPort(),
-							peerInfo.getAlternativeURL(),
+							peerInfo.getAlternativeURI(),
 							peerInfo.getSignature(),
 							now,
 							now))
@@ -481,7 +481,7 @@ public abstract class DatabaseStorage implements DataStorage {
 				peerInfo.getPrivateKey(),
 				peerInfo.getOrigin() != null ? peerInfo.getOrigin().bytes() : null,
 				peerInfo.getPort(),
-				peerInfo.getAlternativeURL(),
+				peerInfo.getAlternativeURI(),
 				peerInfo.getSignature(),
 				now,
 				now
@@ -705,7 +705,7 @@ public abstract class DatabaseStorage implements DataStorage {
 		// 3: privateKey (BLOB, nullable)
 		// 4: origin (BLOB, nullable)
 		// 5: port (INTEGER, NOT NULL)
-		// 6: alternativeURL (TEXT, nullable)
+		// 6: alternativeURI (TEXT, nullable)
 		// 7: signature (BLOB, nullable)
 		// 8: created (BIGINT, NOT NULL)
 		// 9: updated (BIGINT, NOT NULL)
@@ -717,10 +717,10 @@ public abstract class DatabaseStorage implements DataStorage {
 		buffer = row.getBuffer(4);
 		Id origin = buffer == null ? null : Id.of(buffer.getBytes());
 		int port = row.getInteger(5); // NOT NULL
-		String alternativeURL = row.getString(6); // Nullable
+		String alternativeURI = row.getString(6); // Nullable
 		buffer = row.getBuffer(7);
 		byte[] signature = buffer == null ? null : buffer.getBytes();
 
-		return PeerInfo.of(id, privateKey, nodeId, origin, port, alternativeURL, signature);
+		return PeerInfo.of(id, privateKey, nodeId, origin, port, alternativeURI, signature);
 	}
 }

@@ -112,8 +112,8 @@ public class AnnouncePeerRequest implements Request {
 
 			gen.writeNumberField("p", value.peer.getPort());
 
-			if (value.peer.getAlternativeURL() != null)
-				gen.writeStringField("alt", value.peer.getAlternativeURL());
+			if (value.peer.getAlternativeURI() != null)
+				gen.writeStringField("alt", value.peer.getAlternativeURI());
 
 			byte[] sig = value.peer.getSignature();
 			gen.writeFieldName("sig");
@@ -146,7 +146,7 @@ public class AnnouncePeerRequest implements Request {
 			Id peerId = null;
 			Id origin = null;
 			int port = 0;
-			String alternativeURL = null;
+			String alternativeURI = null;
 			byte[] signature = null;
 
 			Id nodeId = (Id) ctxt.getAttribute(Message.ATTR_NODE_ID);
@@ -172,7 +172,7 @@ public class AnnouncePeerRequest implements Request {
 					break;
 				case "alt":
 					if (token != JsonToken.VALUE_NULL)
-						alternativeURL = p.getText();
+						alternativeURI = p.getText();
 					break;
 				case "sig":
 					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
@@ -182,7 +182,7 @@ public class AnnouncePeerRequest implements Request {
 				}
 			}
 
-			return new AnnouncePeerRequest(PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature), tok);
+			return new AnnouncePeerRequest(PeerInfo.of(peerId, nodeId, origin, port, alternativeURI, signature), tok);
 		}
 	}
 }

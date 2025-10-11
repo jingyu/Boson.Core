@@ -459,9 +459,9 @@ public class JsonPerfTests {
 		boolean binaryFormat = isBinaryFormat(gen);
 
 		// Format: 6-tuple
-		//   [peerId, nodeId, originNodeId, port, alternativeURL, signature]
+		//   [peerId, nodeId, originNodeId, port, alternativeURI, signature]
 		// If omit the peer id, format:
-		//   [null, nodeId, originNodeId, port, alternativeURL, signature]
+		//   [null, nodeId, originNodeId, port, alternativeURI, signature]
 
 		gen.writeStartArray();
 
@@ -497,8 +497,8 @@ public class JsonPerfTests {
 		gen.writeNumber(value.getPort());
 
 		// alternative url
-		if (value.hasAlternativeURL())
-			gen.writeString(value.getAlternativeURL());
+		if (value.hasAlternativeURI())
+			gen.writeString(value.getAlternativeURI());
 		else
 			gen.writeNull();
 
@@ -519,7 +519,7 @@ public class JsonPerfTests {
 		Id nodeId;
 		Id origin = null;
 		int port;
-		String alternativeURL;
+		String alternativeURI;
 		byte[] signature;
 
 		// peer id
@@ -553,7 +553,7 @@ public class JsonPerfTests {
 
 		// alternative url
 		p.nextToken();
-		alternativeURL = p.currentToken() == JsonToken.VALUE_NULL ? null : p.getText();
+		alternativeURI = p.currentToken() == JsonToken.VALUE_NULL ? null : p.getText();
 
 		// signature
 		p.nextToken();
@@ -565,7 +565,7 @@ public class JsonPerfTests {
 		if (p.nextToken() != JsonToken.END_ARRAY)
 			throw MismatchedInputException.from(p, PeerInfo.class, "Invalid PeerInfo: too many elements in array");
 
-		return PeerInfo.of(peerId, nodeId, origin, port, alternativeURL, signature);
+		return PeerInfo.of(peerId, nodeId, origin, port, alternativeURI, signature);
 	}
 
 	static String toString(PeerInfo value, JsonContext context) throws IOException {
@@ -630,7 +630,7 @@ public class JsonPerfTests {
 							 @JsonProperty(value = "n", required = true) Id nodeId,
 							 @JsonProperty(value = "o") Id origin,
 							 @JsonProperty(value = "p", required = true) int port,
-							 @JsonProperty(value = "alt") String alternativeURL,
+							 @JsonProperty(value = "alt") String alternativeURI,
 							 @JsonProperty(value = "sig", required = true) byte[] signature) { }
 
 		@JsonProperty("id")
@@ -646,7 +646,7 @@ public class JsonPerfTests {
 		public abstract int getPort();
 
 		@JsonProperty("alt")
-		public abstract String getAlternativeURL();
+		public abstract String getAlternativeURI();
 
 		@JsonProperty("sig")
 		public abstract byte[] getSignature();

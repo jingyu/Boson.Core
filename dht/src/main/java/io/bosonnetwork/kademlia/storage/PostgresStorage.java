@@ -69,7 +69,7 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 				privateKey BYTEA,
 				origin BYTEA,
 				port INTEGER NOT NULL,
-				alternativeURL VARCHAR(512),
+				alternativeURI VARCHAR(512),
 				signature BYTEA NOT NULL,
 				created BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000,
 				updated BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()) * 1000,
@@ -220,14 +220,14 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 		return """
 				INSERT INTO peers (
 					id, nodeId, persistent, privateKey, origin, port,
-					alternativeURL, signature, created, updated
+					alternativeURI, signature, created, updated
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 				ON CONFLICT(id, nodeId) DO UPDATE SET
 					persistent = excluded.persistent,
 					privateKey = excluded.privateKey,
 					origin = excluded.origin,
 					port = excluded.port,
-					alternativeURL = excluded.alternativeURL,
+					alternativeURI = excluded.alternativeURI,
 					signature = excluded.signature,
 					updated = excluded.updated
 				""";

@@ -13,7 +13,6 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import com.github.benmanes.caffeine.cache.Caffeine;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -229,10 +228,8 @@ public class KadNode extends VerticleBase implements Node {
 	@Override
 	public void init(Vertx vertx, Context context) {
 		super.init(vertx, context);
-
-		Caffeine<Object, Object> caffeine = VertxCaffeine.newBuilder(vertx)
-				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS);
-		identity.initCache(caffeine);
+		identity.initCache(VertxCaffeine.newBuilder(vertx)
+				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS));
 	}
 
 	@Override
