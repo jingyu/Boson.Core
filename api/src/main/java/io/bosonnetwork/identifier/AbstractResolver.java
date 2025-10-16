@@ -33,8 +33,8 @@ import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.vertx.VertxCaffeine;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxCaffeine;
+import io.bosonnetwork.vertx.VertxFuture;
 
 /**
  * Abstract base class for Boson {@link Resolver} implementations.

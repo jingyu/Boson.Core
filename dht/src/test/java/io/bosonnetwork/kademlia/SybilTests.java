@@ -53,7 +53,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCallListener;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 public class SybilTests {
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "SybilTests");
@@ -88,14 +88,14 @@ public class SybilTests {
 				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build());
-		target.run().get();
+		target.start().get();
 
 		targetInfo = target.getNodeInfo().getV4();
 	}
 
 	@AfterEach
 	void tearDown() throws Exception {
-		target.shutdown().get();
+		target.stop().get();
 
 		VertxFuture.of(vertx.close()).get();
 
@@ -121,7 +121,7 @@ public class SybilTests {
 					.build();
 
 			sybil = new KadNode(sybilConfig);
-			sybil.run().get();
+			sybil.start().get();
 
 			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
 			RpcCall call = new RpcCall(targetInfo, request);
@@ -159,7 +159,7 @@ public class SybilTests {
 			else
 				assertFalse(result.get());
 
-			sybil.shutdown().get();
+			sybil.stop().get();
 
 			TimeUnit.SECONDS.sleep(2);
 		}
@@ -184,7 +184,7 @@ public class SybilTests {
 					.build();
 
 			sybil = new KadNode(sybilConfig);
-			sybil.run().get();
+			sybil.start().get();
 
 			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
 			RpcCall call = new RpcCall(targetInfo, request);
@@ -221,7 +221,7 @@ public class SybilTests {
 			else
 				assertFalse(result.get());
 
-			sybil.shutdown().get();
+			sybil.stop().get();
 
 			TimeUnit.SECONDS.sleep(2);
 		}

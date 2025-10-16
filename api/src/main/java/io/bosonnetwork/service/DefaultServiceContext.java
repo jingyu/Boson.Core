@@ -24,6 +24,7 @@ public class DefaultServiceContext implements ServiceContext {
 	/**
 	 * Creates a new {@link ServiceContext} instance.
 	 *
+	 * @param vertx the Vert.x instance.
 	 * @param node the host Boson node.
 	 * @param accessManager the {@link io.bosonnetwork.access.AccessManager} instance that
 	 *        provided by the host node.

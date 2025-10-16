@@ -42,6 +42,8 @@ import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
 public class InMemoryStorage implements DataStorage {
+	public static final String STORAGE_URL = "inmemory";
+
 	private static final int SCHEMA_VERSION = 5;
 
 	private static final int DEFAULT_MAP_CAPACITY = 32;

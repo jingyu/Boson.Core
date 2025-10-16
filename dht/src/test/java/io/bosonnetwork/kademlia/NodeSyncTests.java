@@ -37,7 +37,7 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 public class NodeSyncTests {
 	private static Vertx vertx;
@@ -64,12 +64,12 @@ public class NodeSyncTests {
 				.build();
 
 		bootstrap = new KadNode(config);
-		bootstrap.run().get();
+		bootstrap.start().get();
 	}
 
 	private static void stopBootstrap() throws Exception {
 		System.out.println("\n\n\007🟢 Stopping the bootstrap node ...\n");
-		bootstrap.shutdown().get();
+		bootstrap.stop().get();
 	}
 
 	private static void startTestNodes() throws Exception {
@@ -94,7 +94,7 @@ public class NodeSyncTests {
 					future.complete(null);
 				}
 			});
-			node.run().get();
+			node.start().get();
 			testNodes.add(node);
 
 			System.out.printf("\n\n\007⌛ Wainting for the test node %d - %s ready ...\n", i, node.getId());
@@ -110,7 +110,7 @@ public class NodeSyncTests {
 		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
 
 		for (var node : testNodes)
-			node.shutdown().get();
+			node.stop().get();
 	}
 
 	private static void dumpRoutingTables() throws Exception {
@@ -172,7 +172,7 @@ public class NodeSyncTests {
 
 		VertxFuture.of(vertx.close()).get();
 
-		//FileUtils.deleteFile(testDir);
+		FileUtils.deleteFile(testDir);
 	}
 
 	@Test
@@ -189,11 +189,11 @@ public class NodeSyncTests {
 				.build();
 
 		var node = new KadNode(config);
-		node.run().get();
+		node.start().get();
 
 		assertEquals(nodeId, node.getId());
 
-		node.shutdown().get();
+		node.stop().get();
 	}
 
 	@Test

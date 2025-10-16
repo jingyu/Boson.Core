@@ -39,7 +39,6 @@ import java.util.function.BiConsumer;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.VerticleBase;
 import io.vertx.core.Vertx;
 import net.datafaker.Faker;
 
@@ -66,6 +65,7 @@ import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.vertx.BosonVerticle;
 
 @ExtendWith(VertxExtension.class)
 public class RPCServerTests {
@@ -84,7 +84,7 @@ public class RPCServerTests {
 	private final static Map<Id, Value> values = new HashMap<>();
 	private final static Map<Id, List<PeerInfo>> peers = new HashMap<>();
 
-	static class TestNode extends VerticleBase {
+	static class TestNode extends BosonVerticle {
 		final Identity identity;
 		final String host;
 		final int port;
@@ -129,8 +129,8 @@ public class RPCServerTests {
 		}
 
 		@Override
-		public void init(Vertx vertx, Context context) {
-			super.init(vertx, context);
+		public void prepare(Vertx vertx, Context context) {
+			super.prepare(vertx, context);
 
 			kadContext = new KadContext(vertx, context, identity, getNetwork(), null);
 			rpcServer = new RpcServer(kadContext, host, port, Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
@@ -139,12 +139,12 @@ public class RPCServerTests {
 		}
 
 		@Override
-		public Future<Void> start() {
+		public Future<Void> deploy() {
 			return rpcServer.start();
 		}
 
 		@Override
-		public Future<Void> stop() {
+		public Future<Void> undeploy() {
 			if (rpcServer != null)
 				return rpcServer.stop().andThen(ar -> rpcServer = null);
 			else
@@ -161,7 +161,7 @@ public class RPCServerTests {
 
 		protected void sendCall(RpcCall call) {
 			//noinspection CodeBlock2Expr
-			context.runOnContext(v -> {
+			runOnContext(v -> {
 				rpcServer.sendCall(call).andThen(ar -> {
 					if (ar.succeeded()) {
 						sentMessages++;
@@ -177,7 +177,7 @@ public class RPCServerTests {
 
 		protected void sendMessage(Message<?> message) {
 			//noinspection CodeBlock2Expr
-			context.runOnContext(v -> {
+			runOnContext(v -> {
 				rpcServer.sendMessage(message).andThen(ar -> {
 					if (ar.succeeded()) {
 						sentMessages++;

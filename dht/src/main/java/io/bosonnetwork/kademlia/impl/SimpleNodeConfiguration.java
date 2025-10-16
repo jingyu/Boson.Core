@@ -13,7 +13,7 @@ import io.vertx.micrometer.VertxPrometheusOptions;
 
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.storage.SQLiteStorage;
+import io.bosonnetwork.kademlia.storage.InMemoryStorage;
 
 public class SimpleNodeConfiguration implements NodeConfiguration {
 	private final Vertx vertx;
@@ -35,7 +35,7 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 		this.port = config.port();
 		this.privateKey = config.privateKey();
 		this.dataPath = config.dataPath();
-		this.storageURL = config.storageURL() != null ? config.storageURL() : SQLiteStorage.IN_MEMORY_STORAGE_URL;
+		this.storageURL = config.storageURL() != null ? config.storageURL() : InMemoryStorage.STORAGE_URL;
 		this.bootstrapNodes = new ArrayList<>(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 		this.enableSpamThrottling = config.enableSpamThrottling();
 		this.enableSuspiciousNodeDetector = config.enableSuspiciousNodeDetector();

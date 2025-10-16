@@ -97,14 +97,14 @@ public interface Node extends Identity {
 	 *
 	 * @return a {@link CompletableFuture} that completes when the node is running
 	 */
-	CompletableFuture<Void> run();
+	CompletableFuture<Void> start();
 
 	/**
 	 * Shutdown the node asynchronously.
 	 *
 	 * @return a {@link CompletableFuture} that completes when the node has shut down
 	 */
-	CompletableFuture<Void> shutdown();
+	CompletableFuture<Void> stop();
 
 	/**
 	 * Checks whether the node is currently running.

@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.utils.vertx;
+package io.bosonnetwork.vertx;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -71,7 +71,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	protected VertxFuture(Future<T> future) {
 		this.future = future;
 
-		future.onComplete(ar -> {
+		future.andThen(ar -> {
 			// update the internal state of CompletableFuture
 			if (ar.succeeded())
 				super.complete(ar.result());
@@ -687,10 +687,11 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
 			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
-		final CountDownLatch latch = new CountDownLatch(1);
-		future.onComplete(ar -> latch.countDown());
-
-		latch.await();
+		if (!future.isComplete()) {
+			final CountDownLatch latch = new CountDownLatch(1);
+			future.andThen(ar -> latch.countDown());
+			latch.await();
+		}
 
 		if (future.succeeded())
 			return future.result();
@@ -718,11 +719,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
 			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
-		final CountDownLatch latch = new CountDownLatch(1);
-		future.onComplete(ar -> latch.countDown());
-
-		if (!latch.await(timeout, unit))
-			throw new TimeoutException();
+		if (!future.isComplete()) {
+			final CountDownLatch latch = new CountDownLatch(1);
+			future.andThen(ar -> latch.countDown());
+			if (!latch.await(timeout, unit))
+				throw new TimeoutException();
+		}
 
 		if (future.succeeded())
 			return future.result();
@@ -831,7 +833,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	@Override
 	public VertxFuture<T> copy() {
 		Promise<T> promise = Promise.promise();
-		future.onComplete(promise);
+		future.andThen(promise);
 		return of(promise.future());
 	}
 
@@ -940,7 +942,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		@Override
 		public CompletableFuture<T> toCompletableFuture() {
 			Promise<T> promise = Promise.promise();
-			future.onComplete(promise);
+			future.andThen(promise);
 			return of(promise.future());
 		}
 	}

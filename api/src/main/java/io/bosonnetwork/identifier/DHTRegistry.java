@@ -34,7 +34,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 /**
  * Singleton implementation of {@link Registry} that uses a distributed hash table (DHT) to store and resolve Cards.

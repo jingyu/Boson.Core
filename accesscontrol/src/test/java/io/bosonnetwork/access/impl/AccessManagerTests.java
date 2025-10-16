@@ -239,12 +239,12 @@ public class AccessManagerTests {
 		node = Node.kadNode(getNodeConfiguration());
 		am.init(node);
 
-		node.run();
+		node.start();
 	}
 
 	@AfterAll
 	static void teardown() throws Exception {
-		node.shutdown();
+		node.stop();
 		FileUtils.deleteFile(testDir);
 	}
 

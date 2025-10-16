@@ -35,7 +35,7 @@ import picocli.CommandLine.Command;
 public class StopCommand implements Callable<Integer> {
 	@Override
 	public Integer call() throws Exception {
-		Main.getBosonNode().shutdown().thenRun(() -> System.out.println("Boson node stopped.")).get();
+		Main.getBosonNode().stop().thenRun(() -> System.out.println("Boson node stopped.")).get();
 		return 0;
 	}
 }

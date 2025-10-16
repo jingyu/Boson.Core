@@ -147,7 +147,7 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 			CandidateNode cn = getNextCandidate();
 			if (cn == null) {
 				// no eligible candidates right now, check in the next iteration
-				log.warn("{}#{} no eligible candidates in non-empty queue", getName(), getId());
+				log.debug("{}#{} no eligible candidates in non-empty queue", getName(), getId());
 				break;
 			}
 

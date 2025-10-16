@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.utils.vertx;
+package io.bosonnetwork.vertx;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;

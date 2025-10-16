@@ -29,7 +29,7 @@ import picocli.CommandLine.Command;
 
 import io.bosonnetwork.Network;
 import io.bosonnetwork.kademlia.impl.DHT;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 /**
  * @hidden

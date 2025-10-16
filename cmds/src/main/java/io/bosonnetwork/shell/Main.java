@@ -290,7 +290,7 @@ public class Main implements Callable<Integer> {
 			}
 		});
 
-		bosonNode.run().thenRun(() -> System.out.println("Boson node started.")).get();
+		bosonNode.start().thenRun(() -> System.out.println("Boson node started.")).get();
 	}
 
 	static KadNode getBosonNode() {

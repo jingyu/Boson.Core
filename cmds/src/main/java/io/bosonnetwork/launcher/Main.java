@@ -72,7 +72,7 @@ public class Main {
 			// TODO: initialize the user defined access manager
 			accessManager = AccessManager.getDefault();
 
-			node.run().thenRun(() -> System.out.format("Boson node %s is running.\n", node.getId())).get();
+			node.start().thenRun(() -> System.out.format("Boson node %s is running.\n", node.getId())).get();
 		} catch (Exception e) {
 			System.out.println("Start boson super node failed, error: " + e.getMessage());
 			e.printStackTrace(System.err);
@@ -283,7 +283,7 @@ public class Main {
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			if (node != null) {
 				unloadServices();
-				node.shutdown().whenComplete((v, t) -> {
+				node.stop().whenComplete((v, t) -> {
 					synchronized(shutdown) {
 						shutdown.notifyAll();
 					}

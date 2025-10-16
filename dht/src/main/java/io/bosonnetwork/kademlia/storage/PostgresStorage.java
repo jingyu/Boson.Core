@@ -30,6 +30,8 @@ import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.sqlclient.PoolOptions;
 
 public class PostgresStorage extends DatabaseStorage implements DataStorage {
+	protected static final String STORAGE_URL_PREFIX = "postgresql://";
+
 	private static final List<String> SCHEMA = List.of(
 			// Schema version
 			"""

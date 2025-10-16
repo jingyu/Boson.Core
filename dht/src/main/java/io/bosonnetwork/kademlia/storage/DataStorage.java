@@ -268,17 +268,18 @@ public interface DataStorage {
 
 	static boolean supports(String url) {
 		// now only support inmemory, sqlite and postgres
-		return url.equals("inmemory") || url.startsWith("jdbc:sqlite:") || url.startsWith("postgresql://");
+		return url.equals(InMemoryStorage.STORAGE_URL) || url.startsWith(SQLiteStorage.STORAGE_URL_PREFIX) ||
+				url.startsWith(PostgresStorage.STORAGE_URL_PREFIX);
 	}
 
 	static DataStorage create(String url) {
 		Objects.requireNonNull(url, "url");
 
-		if (url.equals("inmemory"))
+		if (url.equals(InMemoryStorage.STORAGE_URL))
 			return new InMemoryStorage();
-		if (url.startsWith("jdbc:sqlite:"))
+		if (url.startsWith(SQLiteStorage.STORAGE_URL_PREFIX))
 			return new SQLiteStorage(url);
-		if (url.startsWith("postgresql://"))
+		if (url.startsWith(PostgresStorage.STORAGE_URL_PREFIX))
 			return new PostgresStorage(url);
 
 		throw new IllegalArgumentException("Unsupported storage: " + url);

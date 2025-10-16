@@ -34,7 +34,7 @@ import io.bosonnetwork.shell.StorageCommand.ListPeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ListValueCommand;
 import io.bosonnetwork.shell.StorageCommand.PeerCommand;
 import io.bosonnetwork.shell.StorageCommand.ValueCommand;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 /**
  * @hidden

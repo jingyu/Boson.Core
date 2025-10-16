@@ -17,7 +17,6 @@ import java.util.Map;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.VerticleBase;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,8 +66,9 @@ import io.bosonnetwork.kademlia.tasks.TaskManager;
 import io.bosonnetwork.kademlia.tasks.ValueAnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ValueLookupTask;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.vertx.BosonVerticle;
 
-public class DHT extends VerticleBase {
+public class DHT extends BosonVerticle {
 	public static final	int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;				// 4 minutes
 	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000; 				// 30 minutes
 	public static final int ROUTING_TABLE_PERSIST_INTERVAL =  10 * 60 * 1000; 	// 10 minutes
@@ -202,13 +202,13 @@ public class DHT extends VerticleBase {
 	}
 
 	@Override
-	public void init(Vertx vertx, Context context) {
-		super.init(vertx, context);
+	public void prepare(Vertx vertx, Context context) {
+		super.prepare(vertx, context);
 		this.kadContext = new KadContext(vertx, context, identity, network, this, enableDeveloperMode);
 	}
 
 	@Override
-	public Future<Void> start() {
+	public Future<Void> deploy() {
 		if (running)
 			return Future.succeededFuture();
 
@@ -280,7 +280,7 @@ public class DHT extends VerticleBase {
 	}
 
 	@Override
-	public Future<Void> stop() {
+	public Future<Void> undeploy() {
 		if (!running)
 			return Future.succeededFuture();
 
@@ -419,7 +419,7 @@ public class DHT extends VerticleBase {
 
 		Promise<Void> promise = Promise.promise();
 
-		kadContext.runOnContext(v -> {
+		runOnContext(v -> {
 			addBootstrapNodes(nodes);
 			if (bootstrapping) {
 				promise.fail(new IllegalStateException("DHT is bootstrapping"));
@@ -442,7 +442,7 @@ public class DHT extends VerticleBase {
 
 		Promise<Void> promise = Promise.promise();
 
-		kadContext.runOnContext(v -> {
+		runOnContext(v -> {
 			if (bootstrapping) {
 				promise.fail(new IllegalStateException("DHT is bootstrapping"));
 				return;
@@ -991,7 +991,7 @@ public class DHT extends VerticleBase {
 	public Future<NodeInfo> findNode(Id id, LookupOption option) {
 		Promise<NodeInfo> promise = Promise.promise();
 
-		kadContext.runOnContext(() -> {
+		runOnContext(v -> {
 			NodeInfo node = routingTable.getEntry(id, true);
 			if (option == LookupOption.LOCAL)
 				promise.complete(node);
@@ -1021,7 +1021,7 @@ public class DHT extends VerticleBase {
 	public Future<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
 		Promise<Value> promise = Promise.promise();
 
-		kadContext.runOnContext(() -> {
+		runOnContext(v -> {
 			ValueLookupTask task = new ValueLookupTask(kadContext, id, expectedSequenceNumber)
 					.setName("Lookup value: " + id)
 					.setResultFilter((previous, next) -> {
@@ -1052,7 +1052,7 @@ public class DHT extends VerticleBase {
 	public Future<Void> storeValue(Value value, int expectedSequenceNumber) {
 		Promise<Void> promise = Promise.promise();
 
-		kadContext.runOnContext(() -> {
+		runOnContext(v -> {
 			ValueAnnounceTask announceTask = new ValueAnnounceTask(kadContext, value, expectedSequenceNumber)
 					.setName("Store value: " + value.getId())
 					.addListener(t -> promise.complete());
@@ -1087,7 +1087,7 @@ public class DHT extends VerticleBase {
 	public Future<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option) {
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
-		kadContext.runOnContext(() -> {
+		runOnContext(v -> {
 			PeerLookupTask task = new PeerLookupTask(kadContext, id)
 					.setName("Lookup peer: " + id)
 					.setResultFilter((previous, next) -> {
@@ -1108,7 +1108,7 @@ public class DHT extends VerticleBase {
 	public Future<Void> announcePeer(PeerInfo peer) {
 		Promise<Void> promise = Promise.promise();
 
-		kadContext.runOnContext(() -> {
+		runOnContext(v -> {
 			PeerAnnounceTask announceTask = new PeerAnnounceTask(kadContext, peer)
 					.setName("Announce peer: " + peer.getId())
 					.addListener(t -> promise.complete());
@@ -1141,7 +1141,7 @@ public class DHT extends VerticleBase {
 
 	public Future<Void> dumpRoutingTable(PrintStream out) {
 		Promise<Void> promise = Promise.promise();
-		kadContext.runOnContext(v -> {
+		runOnContext(v -> {
 			routingTable.dump(out);
 			promise.complete();
 		});

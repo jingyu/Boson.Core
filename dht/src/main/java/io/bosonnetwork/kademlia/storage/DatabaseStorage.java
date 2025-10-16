@@ -69,7 +69,7 @@ public abstract class DatabaseStorage implements DataStorage {
 
 		// Execute current statement and recurse to next
 		String sql = statements.get(index);
-		log.debug("Executing schema statement: {}", sql);
+		log.trace("Executing schema statement: {}", sql);
 		return connection.preparedQuery(sql)
 				.execute()
 				.compose(result -> executeSequentially(connection, statements, index + 1)) // Move to next statement

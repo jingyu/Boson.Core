@@ -91,7 +91,7 @@ public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 			CandidateNode cn = getNextCandidate();
 			if (cn == null) {
 				// no eligible candidates right now, check in the next iteration
-				log.warn("{}#{} no eligible candidates in non-empty queue", getName(), getId());
+				log.debug("{}#{} no eligible candidates in non-empty queue", getName(), getId());
 				break;
 			}
 

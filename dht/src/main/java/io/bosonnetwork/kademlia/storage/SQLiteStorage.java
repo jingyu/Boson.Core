@@ -25,12 +25,11 @@ package io.bosonnetwork.kademlia.storage;
 import java.util.List;
 
 import io.vertx.core.Vertx;
-import io.vertx.jdbcclient.JDBCConnectOptions;
 import io.vertx.jdbcclient.JDBCPool;
-import io.vertx.sqlclient.PoolOptions;
+import org.sqlite.SQLiteDataSource;
 
 public class SQLiteStorage extends DatabaseStorage implements DataStorage {
-	public static final String IN_MEMORY_STORAGE_URL = "jdbc:sqlite:file:node?mode=memory";
+	protected static final String STORAGE_URL_PREFIX = "jdbc:sqlite:";
 
 	private static final List<String> SCHEMA = List.of(
 			// Schema version
@@ -94,11 +93,19 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 
 	@Override
 	protected void setupSqlClient(Vertx vertx, String connectionUri) {
+		/*/
+		// Vert.x 5.x style
 		JDBCConnectOptions connectOptions = new JDBCConnectOptions()
 				.setJdbcUrl(connectionUri);
 		// Single connection recommended for SQLite
 		PoolOptions poolOptions = new PoolOptions().setMaxSize(1);
 		client = JDBCPool.pool(vertx, connectOptions, poolOptions);
+		 */
+
+		// Vert.x 4.x style
+		SQLiteDataSource ds = new SQLiteDataSource();
+		ds.setUrl(connectionUri);
+		client = JDBCPool.pool(vertx, ds);
 	}
 
 	@Override

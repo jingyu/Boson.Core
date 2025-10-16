@@ -95,8 +95,8 @@ public class DataStorageTests {
 		}));
 		futures.add(future1);
 
-		var connectionURL = "jdbc:sqlite:" + testDir.resolve("storage.db");
-		sqliteStorage = new SQLiteStorage(connectionURL);
+		var sqliteURL = "jdbc:sqlite:" + testDir.resolve("storage.db");
+		sqliteStorage = new SQLiteStorage(sqliteURL);
 		var future2 = sqliteStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("SQLiteStorage", sqliteStorage));
@@ -104,8 +104,8 @@ public class DataStorageTests {
 		futures.add(future2);
 
 		/*
-		connectionURL = "postgresql://jingyu@localhost:5432/test";
-		postgresStorage = new PostgresStorage(connectionURL);
+		var postgresqlURL = "postgresql://jingyu@localhost:5432/test";
+		postgresStorage = new PostgresStorage(postgresqlURL);
 		var future3 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));

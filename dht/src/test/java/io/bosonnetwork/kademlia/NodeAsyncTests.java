@@ -45,18 +45,19 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.VertxFuture;
 
 @ExtendWith(VertxExtension.class)
+@Timeout(value = NodeAsyncTests.TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 public class NodeAsyncTests {
-	private static Vertx vertx;
-	private static final int TEST_NODES = 32;
+	static final int TEST_NODES = 32;
 	private static final int TEST_NODES_PORT_START = 39001;
 
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "NodeAsyncTests");
 
 	private static InetAddress localAddr;
 
+	private static Vertx vertx;
 	private static KadNode bootstrap;
 	private static final List<KadNode> testNodes = new ArrayList<>(TEST_NODES);
 
@@ -73,12 +74,12 @@ public class NodeAsyncTests {
 				.build();
 
 		bootstrap = new KadNode(config);
-		return bootstrap.run();
+		return bootstrap.start();
 	}
 
 	private static VertxFuture<Void> stopBootstrap() {
 		System.out.println("\n\n\007🟢 Stopping the bootstrap nodes ...\n");
-		return bootstrap.shutdown();
+		return bootstrap.stop();
 	}
 
 	private static <T> VertxFuture<Void> executeSequentially(int max, int index, Function<Integer, VertxFuture<T>> action) {
@@ -128,7 +129,7 @@ public class NodeAsyncTests {
 			}
 		});
 
-		node.run();
+		node.start();
 		return VertxFuture.of(promise.future());
 	}
 
@@ -145,7 +146,7 @@ public class NodeAsyncTests {
 	private static VertxFuture<Void> stopTestNodes() {
 		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
 		// cannot stop all the nodes in parallel, it will cause vertx internal error.
-		return executeSequentially(testNodes, 0, KadNode::shutdown);
+		return executeSequentially(testNodes, 0, KadNode::stop);
 	}
 
 	private static VertxFuture<Void> dumpRoutingTable(String name, KadNode node) {
@@ -180,6 +181,9 @@ public class NodeAsyncTests {
 		return VertxFuture.of(Future.all(futures).mapEmpty());
 	}
 
+	// in Vert.x 4.5.x, not support asynchronous lifecycle on static @BeforeAll and @AfterAll methods.
+	// So we use synchronous method to setup and teardown to make it compatible with Vert.x 4.5.x and 5.0.x
+
 	@BeforeAll
 	@Timeout(value = TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 	static void setup(VertxTestContext context) throws Exception {
@@ -206,12 +210,11 @@ public class NodeAsyncTests {
 				.setBlockedThreadCheckIntervalUnit(TimeUnit.SECONDS)
 				.setBlockedThreadCheckInterval(120));
 
-		var future = startBootstrap().thenCompose(v -> startTestNodes());
-
-		future.toVertxFuture().onComplete(context.succeeding(v -> {
-			System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
-			context.completeNow();
-		}));
+		startBootstrap().thenCompose(v -> startTestNodes()).toVertxFuture()
+				.onComplete(context.succeeding(v -> {
+					System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
+					context.completeNow();
+				}));
 	}
 
 	@AfterAll
@@ -221,13 +224,12 @@ public class NodeAsyncTests {
 		}).thenCompose(v -> {
 			return stopBootstrap();
 		}).thenRun(() -> {
-			/*/
 			try {
 				FileUtils.deleteFile(testDir);
 			} catch (Exception e) {
-				context.failNow(e);
+				fail(e);
 			}
-			*/
+
 			System.out.format("\n\n\007🟢 Test cases finished\n");
 		}).toVertxFuture().onComplete(context.succeedingThenComplete());
 	}
@@ -246,9 +248,9 @@ public class NodeAsyncTests {
 				.build();
 
 		var node = new KadNode(config);
-		node.run()
+		node.start()
 				.thenRun(() -> context.verify(() -> assertEquals(nodeId, node.getId())))
-				.thenCompose(v -> node.shutdown())
+				.thenCompose(v -> node.stop())
 				.toVertxFuture().onComplete(context.succeedingThenComplete());
 	}
 

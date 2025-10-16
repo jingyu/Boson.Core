@@ -84,12 +84,12 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Void> run() {
+			public CompletableFuture<Void> start() {
 				return CompletableFuture.completedFuture(null);
 			}
 
 			@Override
-			public CompletableFuture<Void> shutdown() {
+			public CompletableFuture<Void> stop() {
 				return CompletableFuture.completedFuture(null);
 			}
 
@@ -191,7 +191,7 @@ public class DHTRegistryTest {
 
 	@AfterAll
 	public static void cleanup() throws Exception {
-		node.shutdown();
+		node.stop();
 	}
 
 	private static Identity alice;

@@ -17,7 +17,6 @@ import io.vertx.core.CompositeFuture;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.VerticleBase;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,10 +45,11 @@ import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Variable;
-import io.bosonnetwork.utils.vertx.VertxCaffeine;
-import io.bosonnetwork.utils.vertx.VertxFuture;
+import io.bosonnetwork.vertx.BosonVerticle;
+import io.bosonnetwork.vertx.VertxCaffeine;
+import io.bosonnetwork.vertx.VertxFuture;
 
-public class KadNode extends VerticleBase implements Node {
+public class KadNode extends BosonVerticle implements Node {
 	public static final String NAME = "Orca";
 	public static final String SHORT_NAME = "OR";
 	public static final int VERSION_NUMBER = 1;
@@ -200,7 +200,7 @@ public class KadNode extends VerticleBase implements Node {
 	}
 
 	@Override
-	public synchronized VertxFuture<Void> run() {
+	public synchronized VertxFuture<Void> start() {
 		if (this.vertx != null)
 			throw new IllegalStateException("Already started");
 
@@ -209,13 +209,13 @@ public class KadNode extends VerticleBase implements Node {
 	}
 
 	@Override
-	public VertxFuture<Void> shutdown() {
+	public VertxFuture<Void> stop() {
 		if (!isRunning())
 			throw new IllegalStateException("Not started");
 
 		Promise<Void> promise = Promise.promise();
-		context.runOnContext(v -> {
-			String deploymentId = context != null ? context.deploymentID() : null;
+		runOnContext(v -> {
+			String deploymentId = vertxContext != null ? vertxContext.deploymentID() : null;
 			if (deploymentId == null)
 				promise.fail(new IllegalStateException("Not started"));
 
@@ -226,14 +226,14 @@ public class KadNode extends VerticleBase implements Node {
 	}
 
 	@Override
-	public void init(Vertx vertx, Context context) {
-		super.init(vertx, context);
+	public void prepare(Vertx vertx, Context context) {
+		super.prepare(vertx, context);
 		identity.initCache(VertxCaffeine.newBuilder(vertx)
 				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS));
 	}
 
 	@Override
-	public Future<Void> start() {
+	public Future<Void> deploy() {
 		tokenManager = new TokenManager();
 		storage = DataStorage.create(config.storageURL());
 
@@ -244,25 +244,25 @@ public class KadNode extends VerticleBase implements Node {
 			@Override
 			public void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
 				if (connectionStatusListener != null)
-					context.runOnContext(unused -> connectionStatusListener.statusChanged(network, newStatus, oldStatus));
+					runOnContext(unused -> connectionStatusListener.statusChanged(network, newStatus, oldStatus));
 			}
 
 			@Override
 			public void connecting(Network network) {
 				if (connectionStatusListener != null)
-					context.runOnContext(unused -> connectionStatusListener.connecting(network));
+					runOnContext(unused -> connectionStatusListener.connecting(network));
 			}
 
 			@Override
 			public void connected(Network network) {
 				if (connectionStatusListener != null)
-					context.runOnContext(unused -> connectionStatusListener.connected(network));
+					runOnContext(unused -> connectionStatusListener.connected(network));
 			}
 
 			@Override
 			public void disconnected(Network network) {
 				if (connectionStatusListener != null)
-					context.runOnContext(unused -> connectionStatusListener.disconnected(network));
+					runOnContext(unused -> connectionStatusListener.disconnected(network));
 			}
 		};
 
@@ -320,14 +320,14 @@ public class KadNode extends VerticleBase implements Node {
 				running = true;
 				log.info("Kademlia node started.");
 			} else {
-				stop();
+				undeploy();
 				log.error("Failed to start Kademlia node.", ar.cause());
 			}
 		}).mapEmpty();
 	}
 
 	@Override
-	public Future<Void> stop() {
+	public Future<Void> undeploy() {
 		running = false;
 
 		return Future.succeededFuture().andThen(ar -> {
@@ -383,7 +383,7 @@ public class KadNode extends VerticleBase implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		context.runOnContext(v -> {
+		runOnContext(v -> {
 			if (dht4 == null || dht6 == null) {
 				DHT dht = dht4 != null ? dht4 : dht6;
 				dht.bootstrap(bootstrapNodes).onComplete(promise);
@@ -411,7 +411,7 @@ public class KadNode extends VerticleBase implements Node {
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 
 		Promise<Result<NodeInfo>> promise = Promise.promise();
-		context.runOnContext(v -> doFindNode(id, lookupOption).onComplete(promise));
+		runOnContext(v -> doFindNode(id, lookupOption).onComplete(promise));
 		return VertxFuture.of(promise.future());
 	}
 
@@ -449,7 +449,7 @@ public class KadNode extends VerticleBase implements Node {
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 		Promise<Value> promise = Promise.promise();
 
-		context.runOnContext(v -> {
+		runOnContext(v -> {
 			Variable<Value> localValue = Variable.empty();
 
 			storage.getValue(id).map(local -> {
@@ -534,7 +534,7 @@ public class KadNode extends VerticleBase implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		context.runOnContext(na ->
+		runOnContext(na ->
 				storage.putValue(value, persistent, expectedSequenceNumber).compose(v ->
 						doStoreValue(value, expectedSequenceNumber)
 				).compose(v ->
@@ -565,7 +565,7 @@ public class KadNode extends VerticleBase implements Node {
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
-		context.runOnContext(v -> {
+		runOnContext(v -> {
 			Variable<List<PeerInfo>> localPeers = Variable.empty();
 
 			storage.getPeers(id).compose(local -> {
@@ -645,7 +645,7 @@ public class KadNode extends VerticleBase implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		context.runOnContext(na ->
+		runOnContext(na ->
 				storage.putPeer(peer, persistent).compose(v ->
 						doAnnouncePeer(peer)
 				).compose(v ->
@@ -677,7 +677,7 @@ public class KadNode extends VerticleBase implements Node {
 		checkRunning();
 
 		Promise<T> promise = Promise.promise();
-		context.runOnContext(v -> {
+		runOnContext(v -> {
 			try {
 				T result = action.call();
 				promise.complete(result);
