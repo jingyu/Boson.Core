@@ -1,15 +1,37 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.vertx;
 
 import java.util.List;
 import java.util.concurrent.Callable;
 
 import io.vertx.core.Context;
+import io.vertx.core.Deployable;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Promise;
-import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
-import io.vertx.core.impl.ContextInternal;
+import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
 
 /**
@@ -36,7 +58,7 @@ import io.vertx.core.json.JsonObject;
  * {@link #undeploy()}. This ensures forward compatibility with Vert.x 5’s {@code VerticleBase}.
  * </p>
  */
-public abstract class BosonVerticle implements Verticle /*, Deployable */ {
+public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	/**
 	 * Reference to the Vert.x instance that deployed this verticle
 	 */
@@ -105,7 +127,6 @@ public abstract class BosonVerticle implements Verticle /*, Deployable */ {
 	 * @param vertx   the Vert.x instance
 	 * @param context the context associated with this Verticle
 	 */
-	@Override
 	public final void init(Vertx vertx, Context context) {
 		prepare(vertx, context);
 	}
@@ -135,7 +156,6 @@ public abstract class BosonVerticle implements Verticle /*, Deployable */ {
 	 * @param startPromise a promise that should be completed when startup is done
 	 * @throws Exception if startup fails
 	 */
-	@Override
 	public final void start(Promise<Void> startPromise) throws Exception {
 		deploy().onComplete(startPromise);
 	}
@@ -150,7 +170,6 @@ public abstract class BosonVerticle implements Verticle /*, Deployable */ {
 	 * @param stopPromise a promise that should be completed when shutdown is done
 	 * @throws Exception if shutdown fails
 	 */
-	@Override
 	public final void stop(Promise<Void> stopPromise) throws Exception {
 		undeploy().onComplete(stopPromise);
 	}

@@ -22,12 +22,11 @@
 
 package io.bosonnetwork.vertx;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
-
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
 /**
@@ -63,12 +62,12 @@ public class VertxCaffeine {
 		 * Custom Caffeine Scheduler that schedules tasks using Vert.x timers.
 		 * <p>
 		 * The scheduled task is executed on the provided executor after the specified delay.
-		 * Completion is signaled via a {@link CompletableFuture}, which is completed when the task finishes
+		 * Completion is signaled via a {@link VertxFuture}, which is completed when the task finishes
 		 * or completed exceptionally if an error occurs.
 		 * </p>
 		 */
 		Scheduler vertxScheduler = (executor, runnable, delay, unit) -> {
-			CompletableFuture<?> future = new CompletableFuture<>();
+			Promise<?> promise = Promise.promise();
 
 			vertx.setTimer(unit.toMillis(delay), (tid) -> {
 				// When the timer fires, execute the scheduled task on the provided executor.
@@ -76,14 +75,14 @@ public class VertxCaffeine {
 				executor.execute(() -> {
 					try {
 						runnable.run();
-						future.complete(null);
+						promise.complete(null);
 					} catch (Exception e) {
-						future.completeExceptionally(e);
+						promise.fail(e);
 					}
 				});
 			});
 
-			return future;
+			return VertxFuture.of(promise.future());
 		};
 
 		return Caffeine.newBuilder()
