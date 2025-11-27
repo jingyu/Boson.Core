@@ -113,7 +113,7 @@ public class Json {
 	 * @return {@code true} if the parser is handling a binary format (CBOR), {@code false} otherwise
 	 */
 	public static boolean isBinaryFormat(JsonParser p) {
-		// Now we only sport JSON, CBOR and TOML formats, CBOR is the only binary format
+		// Now we only sport JSON, CBOR and TOML formats; CBOR is the only binary format
 		return p instanceof CBORParser;
 	}
 
@@ -124,7 +124,7 @@ public class Json {
 	 * @return {@code true} if the generator is handling a binary format (CBOR), {@code false} otherwise
 	 */
 	public static boolean isBinaryFormat(JsonGenerator gen) {
-		// Now we only sport JSON, CBOR and TOML formats, CBOR is the only binary format
+		// Now we only sport JSON, CBOR and TOML formats; CBOR is the only binary format
 		return gen instanceof CBORGenerator;
 	}
 
@@ -302,6 +302,7 @@ public class Json {
 			}
 		}
 	}
+
 
 	/**
 	 * Returns the default date and time format for serializing and deserializing {@link java.util.Date} objects.
@@ -737,7 +738,7 @@ public class Json {
 	}
 
 	/**
-	 * Creates the Jackson JSON factory, without auto-close the source and target.
+	 * Creates the Jackson JSON factory without auto-close the source and target.
 	 *
 	 * @return the {@code JsonFactory} object.
 	 */
@@ -753,7 +754,7 @@ public class Json {
 	}
 
 	/**
-	 * Creates the Jackson CBOR factory, without auto-close the source and target.
+	 * Creates the Jackson CBOR factory without auto-close the source and target.
 	 *
 	 * @return the {@code CBORFactory} object.
 	 */
@@ -776,6 +777,7 @@ public class Json {
 	public static ObjectMapper objectMapper() {
 		if (_objectMapper == null) {
 			_objectMapper = JsonMapper.builder(jsonFactory())
+					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
 					.disable(MapperFeature.AUTO_DETECT_CREATORS)
 					.disable(MapperFeature.AUTO_DETECT_FIELDS)
 					.disable(MapperFeature.AUTO_DETECT_GETTERS)
@@ -802,6 +804,7 @@ public class Json {
 	public static CBORMapper cborMapper() {
 		if (_cborMapper == null) {
 			_cborMapper = CBORMapper.builder(cborFactory())
+					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
 					.disable(MapperFeature.AUTO_DETECT_CREATORS)
 					.disable(MapperFeature.AUTO_DETECT_FIELDS)
 					.disable(MapperFeature.AUTO_DETECT_GETTERS)
@@ -832,6 +835,7 @@ public class Json {
 			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
 
 			_yamlMapper = YAMLMapper.builder(factory)
+					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
 					.disable(MapperFeature.AUTO_DETECT_CREATORS)
 					.disable(MapperFeature.AUTO_DETECT_FIELDS)
 					.disable(MapperFeature.AUTO_DETECT_GETTERS)
@@ -1150,6 +1154,7 @@ public class Json {
 			return; // already registered
 
 		DatabindCodec.mapper().registerModule(bosonJsonModule());
+		DatabindCodec.mapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
 	}
 
 	/**
@@ -1341,7 +1346,7 @@ public class Json {
 		/**
 		 * Returns a new {@code JsonContext} with the specified shared attributes, replacing all previous shared attributes.
 		 *
-		 * @param attributes the shared attributes to set (may be {@code null} or empty)
+		 * @param attributes the shared attributes to set (maybe {@code null} or empty)
 		 * @return a new context with the specified shared attributes
 		 */
 		@Override
@@ -1378,7 +1383,7 @@ public class Json {
 		 * the context is returned unchanged.
 		 *
 		 * @param key   the per-call attribute key
-		 * @param value the per-call attribute value (may be {@code null}, see behavior above)
+		 * @param value the per-call attribute value (maybe {@code null}, see behavior above)
 		 * @return a new context with the updated per-call attribute
 		 */
 		@Override
@@ -1389,7 +1394,7 @@ public class Json {
 				if (_shared.containsKey(key)) {
 					value = NULL_SURROGATE;
 				} else if ((_nonShared == null) || !_nonShared.containsKey(key)) {
-					// except if non-mutable shared list has no entry, we don't care
+					// except if an immutable shared list has no entry, we don't care
 					return this;
 				} else {
 					//noinspection RedundantCollectionOperation

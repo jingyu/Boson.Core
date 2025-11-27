@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.vertx;
+package io.bosonnetwork.database;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
  * </p>
  */
 public class VersionedSchema implements VertxDatabase {
+	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "", "", 0, 0, true);
 	private final SqlClient client;
 	private final Path schemaPath;
 	private String databaseProductName;
@@ -111,6 +112,7 @@ public class VersionedSchema implements VertxDatabase {
 	private VersionedSchema(SqlClient client, Path schemaPath) {
 		this.client = client;
 		this.schemaPath = schemaPath;
+		this.currentVersion = EMPTY_VERSION;
 	}
 
 	/**
@@ -203,6 +205,13 @@ public class VersionedSchema implements VertxDatabase {
 				.map(VersionedSchema::mapToSchemaVersion);
 	}
 
+	private static boolean getBoolean(Row row, String columnName) {
+		Object value = row.getValue(columnName);
+		return value instanceof Boolean b ? b :
+				(value instanceof Number n ? n.intValue() != 0 :
+						(value instanceof String s && Boolean.parseBoolean(s)));
+	}
+
 	private static SchemaVersion mapToSchemaVersion(RowSet<Row> rowSet) {
 		if (rowSet.size() == 0)
 			return null;
@@ -214,7 +223,7 @@ public class VersionedSchema implements VertxDatabase {
 		String appliedBy = row.getString("applied_by");
 		long appliedAt = row.getLong("applied_at");
 		long consumedTime = row.getLong("consumed_time");
-		boolean success = row.getBoolean("success");
+		boolean success = getBoolean(row, "success");
 
 		return new SchemaVersion(version, description, appliedBy, appliedAt, consumedTime, success);
 	}
@@ -492,8 +501,15 @@ public class VersionedSchema implements VertxDatabase {
 				String statement;
 				while ((statement = nextStatement(reader)) != null) {
 					final String sql = statement;
-					log.trace("Migration: executing statement {}", sql);
-					chain = chain.compose(v -> connection.query(sql).execute().mapEmpty());
+
+					chain = chain.compose(v -> {
+						log.trace("Migration: executing statement {}", sql);
+						return connection.query(sql).execute()
+								.andThen(ar -> {
+									if (ar.failed())
+										log.error("Failed to execute SQL statement: {}", sql, ar.cause());
+								}).mapEmpty();
+					});
 				}
 			} catch (IOException e) {
 				return Future.failedFuture(new IllegalStateException("Failed to read migration file", e));
@@ -505,19 +521,20 @@ public class VersionedSchema implements VertxDatabase {
 				log.debug("Migration: updating schema version...");
 				SchemaVersion newVersion = new SchemaVersion(migration.version, migration.description,
 						"", begin, duration, true);
-				return connection.preparedQuery(insertSchemaVersion()).execute(
-						Tuple.of(newVersion.version,
-								newVersion.description,
-								newVersion.appliedBy,
-								newVersion.appliedAt,
-								newVersion.consumedTime,
-								newVersion.success)
-				).andThen(ar -> {
-					if (ar.succeeded())
-						log.debug("Migration: schema version updated to version {}", migration.version);
-					else
-						log.error("Migration: failed to update schema version", ar.cause());
-				}).map(newVersion);
+				return connection.preparedQuery(insertSchemaVersion())
+						.execute(
+								Tuple.of(newVersion.version,
+										newVersion.description,
+										newVersion.appliedBy,
+										newVersion.appliedAt,
+										newVersion.consumedTime,
+										newVersion.success))
+						.map(newVersion);
+			}).andThen(ar -> {
+				if (ar.succeeded())
+					log.debug("Migration: schema version updated to version {}", migration.version);
+				else
+					log.error("Migration: failed to update schema version.", ar.cause());
 			}).onComplete(promise);
 
 			return promise.future();

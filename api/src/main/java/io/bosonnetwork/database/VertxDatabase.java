@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.vertx;
+package io.bosonnetwork.database;
 
 import java.util.List;
 import java.util.function.Function;
@@ -33,6 +33,7 @@ import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
 import io.vertx.sqlclient.SqlConnection;
+import io.vertx.sqlclient.SqlResult;
 import io.vertx.sqlclient.TransactionRollbackException;
 
 /**
@@ -103,10 +104,10 @@ public interface VertxDatabase {
 	 * @return a future completing with the function result after commit, or failing after rollback
 	 */
 	default <T> Future<T> withTransaction(Function<SqlConnection, Future<T>> function) {
-		if (getClient() instanceof SqlConnection c) {
-			return withTransaction(c, function);
-		} else if (getClient() instanceof Pool p) {
+		if (getClient() instanceof Pool p) {
 			return p.withTransaction(function);
+		} else if (getClient() instanceof SqlConnection c) {
+			return withTransaction(c, function);
 		} else {
 			return Future.failedFuture(new IllegalStateException("Client must be an instance of SqlConnection or Pool"));
 		}
@@ -150,6 +151,13 @@ public interface VertxDatabase {
 		}
 	}
 
+	private boolean getBoolean(Row row, int column) {
+		Object value = row.getValue(column);
+		return value instanceof Boolean b ? b :
+				(value instanceof Number n ? n.intValue() != 0 :
+						(value instanceof String s && Boolean.parseBoolean(s)));
+	}
+
 	/**
 	 * Extracts the first boolean value from the first row or returns a default when empty.
 	 *
@@ -157,8 +165,8 @@ public interface VertxDatabase {
 	 * @param defaultValue value to return when the set is empty
 	 * @return the found boolean or the default
 	 */
-	static boolean findBoolean(RowSet<Row> rowSet, boolean defaultValue) {
-		return rowSet.size() != 0 ? rowSet.iterator().next().getBoolean(0) : defaultValue;
+	default boolean findBoolean(RowSet<Row> rowSet, boolean defaultValue) {
+		return rowSet.size() != 0 ? getBoolean(rowSet.iterator().next(),0) : defaultValue;
 	}
 
 	/**
@@ -167,7 +175,7 @@ public interface VertxDatabase {
 	 * @param rowSet result set
 	 * @return the found boolean or {@code false}
 	 */
-	static boolean findBoolean(RowSet<Row> rowSet) {
+	default boolean findBoolean(RowSet<Row> rowSet) {
 		return findBoolean(rowSet, false);
 	}
 
@@ -178,7 +186,7 @@ public interface VertxDatabase {
 	 * @param defaultValue value to return when the set is empty
 	 * @return the found integer or the default
 	 */
-	static int findInteger(RowSet<Row> rowSet, int defaultValue) {
+	default int findInteger(RowSet<Row> rowSet, int defaultValue) {
 		return rowSet.size() != 0 ? rowSet.iterator().next().getInteger(0) : defaultValue;
 	}
 
@@ -188,7 +196,7 @@ public interface VertxDatabase {
 	 * @param rowSet result set
 	 * @return the found integer or {@code 0}
 	 */
-	static int findInteger(RowSet<Row> rowSet) {
+	default int findInteger(RowSet<Row> rowSet) {
 		return findInteger(rowSet, 0);
 	}
 
@@ -199,7 +207,7 @@ public interface VertxDatabase {
 	 * @param defaultValue value to return when the set is empty
 	 * @return the found long or the default
 	 */
-	static long findLong(RowSet<Row> rowSet, long defaultValue) {
+	default long findLong(RowSet<Row> rowSet, long defaultValue) {
 		return rowSet.size() != 0 ? rowSet.iterator().next().getLong(0) : defaultValue;
 	}
 
@@ -209,7 +217,7 @@ public interface VertxDatabase {
 	 * @param rowSet result set
 	 * @return the found long or {@code 0L}
 	 */
-	static long findLong(RowSet<Row> rowSet) {
+	default long findLong(RowSet<Row> rowSet) {
 		return findLong(rowSet, 0);
 	}
 
@@ -222,7 +230,7 @@ public interface VertxDatabase {
 	 * @param <T>          mapped type
 	 * @return mapped value or the default
 	 */
-	static <T> T findUniqueOrDefault(RowSet<Row> rowSet, Function<Row, T> mapper, T defaultValue) {
+	default <T> T findUniqueOrDefault(RowSet<Row> rowSet, Function<Row, T> mapper, T defaultValue) {
 		return rowSet.size() != 0 ? mapper.apply(rowSet.iterator().next()) : defaultValue;
 	}
 
@@ -234,7 +242,7 @@ public interface VertxDatabase {
 	 * @param <T>    mapped type
 	 * @return mapped value or {@code null}
 	 */
-	static <T> T findUnique(RowSet<Row> rowSet, Function<Row, T> mapper) {
+	default <T> T findUnique(RowSet<Row> rowSet, Function<Row, T> mapper) {
 		return findUniqueOrDefault(rowSet, mapper, null);
 	}
 
@@ -246,7 +254,26 @@ public interface VertxDatabase {
 	 * @param <T>    element type
 	 * @return list of mapped values (possibly empty)
 	 */
-	static <T> List<T> findMany(RowSet<Row> rowSet, Function<Row, T> mapper) {
+	default <T> List<T> findMany(RowSet<Row> rowSet, Function<Row, T> mapper) {
 		return rowSet.stream().map(mapper).toList();
+	}
+
+	/**
+	 * Checks if the given SQL result affected any rows.
+	 *
+	 * @param result the SQL result to check
+	 * @return true if at least one row was affected, false otherwise
+	 */
+	default boolean hasEffectedRows(SqlResult<?> result) {
+		return result.rowCount() > 0;
+	}
+
+	/**
+	 * Closes the database.
+	 *
+	 * @return a future completing when the connection is closed
+	 */
+	default Future<Void> close() {
+		return getClient().close();
 	}
 }

@@ -103,15 +103,13 @@ public class DataStorageTests {
 		}));
 		futures.add(future2);
 
-		/*
-		var postgresqlURL = "postgresql://jingyu@localhost:5432/test";
+		var postgresqlURL = "postgresql://jingyu:secret@localhost:5432/test";
 		postgresStorage = new PostgresStorage(postgresqlURL);
 		var future3 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
 		}));
-		futures.add(future3);
-		*/
+		// futures.add(future3);
 
 		Future.all(futures).onSuccess(unused -> {
 			try {

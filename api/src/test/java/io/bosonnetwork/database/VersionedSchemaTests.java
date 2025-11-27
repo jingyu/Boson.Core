@@ -1,4 +1,4 @@
-package io.bosonnetwork.vertx;
+package io.bosonnetwork.database;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
