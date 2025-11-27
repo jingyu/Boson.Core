@@ -684,6 +684,15 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	 */
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
+		if (future.isComplete()) {
+			if (future.succeeded())
+				return future.result();
+			else if (future.failed())
+				throw new ExecutionException(future.cause());
+			else
+				throw new InterruptedException("Context closed");
+		}
+
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
 			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
@@ -716,6 +725,15 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	 */
 	@Override
 	public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+		if (future.isComplete()) {
+			if (future.succeeded())
+				return future.result();
+			else if (future.failed())
+				throw new ExecutionException(future.cause());
+			else
+				throw new InterruptedException("Context closed");
+		}
+
 		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
 			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
 
