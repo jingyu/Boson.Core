@@ -22,190 +22,61 @@
 
 package io.bosonnetwork.kademlia.storage;
 
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
-import java.util.function.Function;
+import java.util.Map;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.Row;
-import io.vertx.sqlclient.RowSet;
-import io.vertx.sqlclient.SqlClient;
-import io.vertx.sqlclient.SqlConnection;
-import io.vertx.sqlclient.Tuple;
+import io.vertx.sqlclient.templates.SqlTemplate;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import io.bosonnetwork.BosonException;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.database.VersionedSchema;
+import io.bosonnetwork.database.VertxDatabase;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
-public abstract class DatabaseStorage implements DataStorage {
-	protected static final int SCHEMA_VERSION = 5;
-
-	protected final String connectionUri;
-
+public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	protected long valueExpiration;
 	protected long peerInfoExpiration;
 
 	protected int schemaVersion;
 
-	protected SqlClient client;
+	protected abstract Logger getLogger();
 
-	private static final Logger log = LoggerFactory.getLogger(DatabaseStorage.class);
+	protected abstract void init(Vertx vertx);
 
-	protected DatabaseStorage(String connectionUri) {
-		this.connectionUri = connectionUri;
-	}
+	protected abstract Path getSchemaPath();
 
-	protected Future<Void> executeSequentially(SqlConnection connection, List<String> statements, int index) {
-		if (index >= statements.size())
-			return Future.succeededFuture();
-
-		// Execute current statement and recurse to next
-		String sql = statements.get(index);
-		log.trace("Executing schema statement: {}", sql);
-		return connection.preparedQuery(sql)
-				.execute()
-				.compose(result -> executeSequentially(connection, statements, index + 1)) // Move to next statement
-				.recover(e -> {
-					log.error("Schema statement failed: {}", sql, e);
-					BosonException error = new DataStorageException("Create database schema failed: " + sql, e);
-					return Future.failedFuture(error);
-				});
-	}
-
-	protected Future<Void> createSchema(List<String> statements) {
-		return pool().withTransaction(connection -> executeSequentially(connection, statements, 0));
-	}
-
-	protected Pool pool() {
-		Pool pool = client instanceof Pool p ? p : null;
-		if (pool == null) // This should never happen
-			throw new IllegalStateException("SqlClient is not a Pool instance");
-
-		return pool;
-	}
-
-	// Returns the first row mapped via the given function, or null if the row set is empty.
-	protected static <T> T findUniqueOrNull(RowSet<Row> rows, Function<Row, T> mapper) {
-		return mapper.apply(rows.size() == 0 ? null : rows.iterator().next());
-	}
-
-	protected static <T> List<T> findMany(RowSet<Row> rows, Function<Row, T> mapper) {
-		return rows.stream().map(mapper).toList();
-	}
-
-	protected abstract void setupSqlClient(Vertx vertx, String connectionUri);
-
-	protected abstract List<String> createSchemaStatements();
-
-	protected abstract String selectSchemaVersion();
-
-	protected abstract String insertSchemaVersion();
-
-	protected abstract String selectValueById();
-
-	protected abstract String selectValuesByPersistentAndAnnouncedBefore();
-
-	protected abstract String selectValuesByPersistentAndAnnouncedBeforePaginated();
-
-	protected abstract String selectAllValues();
-
-	protected abstract String selectAllValuesPaginated();
-
-	protected abstract String upsertValue();
-
-	protected abstract String updateValueAnnouncedById();
-
-	protected abstract String deleteValueById();
-
-	protected abstract String deleteNonPersistentValuesAnnouncedBefore();
-
-	protected abstract String selectPeerByIdAndNodeId();
-
-	protected abstract String selectPeersById();
-
-	protected abstract String selectPeersByPersistentAndAnnouncedBefore();
-
-	protected abstract String selectPeersByPersistentAndAnnouncedBeforePaginated();
-
-	protected abstract String selectAllPeers();
-
-	protected abstract String selectAllPeersPaginated();
-
-	protected abstract String upsertPeer();
-
-	protected abstract String updatePeerAnnouncedByIdAndNodeId();
-
-	protected abstract String deletePeerByIdAndNodeId();
-
-	protected abstract String deletePeersById();
-
-	protected abstract String deleteNonPersistentPeersAnnouncedBefore();
-
-	protected Future<Integer> getOrInitSchemaVersion() {
-		log.debug("Checking schema version...");
-		return client.preparedQuery(selectSchemaVersion())
-				.execute()
-				.compose(rows -> {
-					if (rows.size() > 0) {
-						int version = findUniqueOrNull(rows, DatabaseStorage::rowToInteger);
-						log.info("Detected existing schema version: {}", version);
-						return Future.succeededFuture(version);
-					} else {
-						log.info("No schema version found, setting version {}", SCHEMA_VERSION);
-						return client.preparedQuery(insertSchemaVersion())
-								.execute(Tuple.of(SCHEMA_VERSION))
-								.map(v -> SCHEMA_VERSION);
-					}
-				});
-	}
+	protected abstract SqlDialect getDialect();
 
 	@Override
 	public Future<Integer> initialize(Vertx vertx, long valueExpiration, long peerInfoExpiration) {
-		if (client != null)
-			return Future.failedFuture(new DataStorageException("Storage already initialized"));
-
-		log.info("Initializing storage with connection URI: {}", connectionUri);
+		init(vertx);
 
 		this.valueExpiration = valueExpiration;
 		this.peerInfoExpiration = peerInfoExpiration;
 
-		setupSqlClient(vertx, connectionUri);
-
-		log.info("Creating database schema...");
-		return createSchema(createSchemaStatements())
-				.compose(unused -> getOrInitSchemaVersion())
-				.andThen(ar -> {
+		VersionedSchema schema = VersionedSchema.init(getClient(), getSchemaPath());
+		return schema.migrate().andThen(ar -> {
 					if (ar.succeeded()) {
-						schemaVersion = ar.result();
-						log.info("Database schema created successfully, version: {}", schemaVersion);
+						schemaVersion = schema.getCurrentVersion().version();
+						getLogger().info("Database is ready, current schema version: {}", schemaVersion);
 					} else {
-						log.error("Database schema creation failed", ar.cause());
+						getLogger().error("Schema migration failed, current schema version: {}",
+								schema.getCurrentVersion().version(), ar.cause());
 					}
-				}).recover(cause ->
-					Future.failedFuture(new DataStorageException("Database operation failed", cause))
+				}).map(v -> schema.getCurrentVersion().version())
+				.recover(cause ->
+						Future.failedFuture(new DataStorageException("Database operation failed", cause))
 				);
-	}
-
-	@Override
-	public Future<Void> close() {
-		if (client == null) {
-			log.info("Storage already closed");
-			return Future.succeededFuture();
-		}
-		log.info("Closing storage...");
-		Future<Void> future = client.close();
-		client = null;
-		return future.recover(cause ->
-				Future.failedFuture(new DataStorageException("Database operation failed", cause))
-		);
 	}
 
 	@Override
@@ -217,19 +88,20 @@ public abstract class DatabaseStorage implements DataStorage {
 	public Future<Void> purge() {
 		long now = System.currentTimeMillis();
 
-		log.info("Purging expired values and peers...");
-		return pool().withTransaction(connection ->
-				connection.preparedQuery(deleteNonPersistentValuesAnnouncedBefore())
-						.execute(Tuple.of(now - valueExpiration))
-						.compose(unused ->
-								connection.preparedQuery(deleteNonPersistentPeersAnnouncedBefore())
-										.execute(Tuple.of(now - peerInfoExpiration))
+		getLogger().info("Purging expired values and peers...");
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().deleteNonPersistentValuesAnnouncedBefore())
+						.execute(Map.of("updatedBefore", now - valueExpiration))
+						.compose(r ->
+								SqlTemplate.forUpdate(c, getDialect().deleteNonPersistentPeersAnnouncedBefore())
+										.execute(Map.of("updatedBefore", now - peerInfoExpiration))
+										.map((Void) null)
 						)
 		).andThen(ar -> {
 			if (ar.succeeded())
-				log.info("Purge completed successfully");
+				getLogger().info("Purge completed successfully");
 			else
-				log.error("Failed to purge expired values and peers", ar.cause());
+				getLogger().error("Failed to purge expired values and peers", ar.cause());
 		}).recover(cause ->
 				Future.failedFuture(new DataStorageException("Database operation failed", cause))
 		).mapEmpty();
@@ -247,54 +119,44 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<Value> putValue(Value value, boolean persistent, int expectedSequenceNumber) {
-		log.debug("Putting value with id: {}, persistent: {}, expectedSequenceNumber: {}",
+		getLogger().debug("Putting value with id: {}, persistent: {}, expectedSequenceNumber: {}",
 				value.getId(), persistent, expectedSequenceNumber);
-		log.debug("Trying to check the existing value with id: {}", value.getId());
+		getLogger().debug("Trying to check the existing value with id: {}", value.getId());
 		return getValue(value.getId()).compose(existing -> {
 			if (existing != null) {
 				// Immutable check
 				if (existing.isMutable() != value.isMutable()) {
-					log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
+					getLogger().warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
 					return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
 				}
 
 				if (value.getSequenceNumber() < existing.getSequenceNumber()) {
-					log.warn("Rejecting value {}: sequence number not monotonic", value.getId());
+					getLogger().warn("Rejecting value {}: sequence number not monotonic", value.getId());
 					return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
 				}
 
 				if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
-					log.warn("Rejecting value {}: sequence number not expected", value.getId());
+					getLogger().warn("Rejecting value {}: sequence number not expected", value.getId());
 					return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
 				}
 
 				if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
 					// Skip update if the existing value is owned by this node and the new value is not.
-					// Should not throw NotOwnerException, just silently ignores to avoid disrupting valid operations.
-					log.info("Skipping to update value for id {}: owned by this node", value.getId());
+					// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
+					getLogger().info("Skipping to update value for id {}: owned by this node", value.getId());
 					return Future.succeededFuture(existing);
 				}
 			}
 
-			long now = System.currentTimeMillis();
-			return client.preparedQuery(upsertValue())
-					.execute(Tuple.of(value.getId().bytes(),
-							persistent,
-							value.getPublicKey() != null ? value.getPublicKey().bytes() : null,
-							value.getPrivateKey(),
-							value.getRecipient() != null ? value.getRecipient().bytes() : null,
-							value.getNonce(),
-							value.getSignature(),
-							value.getSequenceNumber(),
-							value.getData(),
-							now,
-							now))
-					.map(v -> value);
+			return withTransaction(c ->
+					SqlTemplate.forUpdate(c, getDialect().upsertValue())
+							.execute(valueToMap(value, persistent))
+							.map(v -> value));
 		}).andThen(ar -> {
 			if (ar.succeeded())
-				log.debug("Put value with id: {} successfully", value.getId());
+				getLogger().debug("Put value with id: {} successfully", value.getId());
 			else
-				log.error("Failed to put value with id: {}", value.getId(), ar.cause());
+				getLogger().error("Failed to put value with id: {}", value.getId(), ar.cause());
 		}).recover(cause ->
 				Future.failedFuture(new DataStorageException("Database operation failed", cause))
 		);
@@ -302,19 +164,19 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<Value> getValue(Id id) {
-		log.debug("Getting value with id: {}", id);
-		return client.preparedQuery(selectValueById())
-				.execute(Tuple.of(id.bytes()))
-				.map(rows -> findUniqueOrNull(rows, DatabaseStorage::rowToValue))
+		getLogger().debug("Getting value with id: {}", id);
+		return SqlTemplate.forQuery(getClient(), getDialect().selectValueById())
+				.execute(Map.of("id", id.bytes()))
+				.map(rows -> findUnique(rows, DatabaseStorage::rowToValue))
 				.andThen(ar -> {
 					if (ar.succeeded()) {
 						if (ar.result() != null)
-							log.debug("Got value with id: {}", id);
+							getLogger().debug("Got value with id: {}", id);
 						else
 							//noinspection LoggingSimilarMessage
-							log.debug("No value found with id: {}", id);
+							getLogger().debug("No value found with id: {}", id);
 					} else {
-						log.error("Failed to get value with id: {}", id, ar.cause());
+						getLogger().error("Failed to get value with id: {}", id, ar.cause());
 					}
 				}).recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -323,7 +185,7 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<Value>> getValues() {
-		return client.preparedQuery(selectAllValues())
+		return query(getDialect().selectAllValues())
 				.execute()
 				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
 				.recover(cause ->
@@ -333,8 +195,8 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<Value>> getValues(int offset, int limit) {
-		return client.preparedQuery(selectAllValuesPaginated())
-				.execute(Tuple.of(limit, offset))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectAllValuesPaginated())
+				.execute(Map.of("limit", limit, "offset", offset))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -343,8 +205,8 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<Value>> getValues(boolean persistent, long announcedBefore) {
-		return client.preparedQuery(selectValuesByPersistentAndAnnouncedBefore())
-				.execute(Tuple.of(persistent, announcedBefore))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectValuesByPersistentAndAnnouncedBefore())
+				.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -353,8 +215,12 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<Value>> getValues(boolean persistent, long announcedBefore, int offset, int limit) {
-		return client.preparedQuery(selectValuesByPersistentAndAnnouncedBeforePaginated())
-				.execute(Tuple.of(persistent, announcedBefore, limit, offset))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectValuesByPersistentAndAnnouncedBeforePaginated())
+				.execute(Map.of(
+						"persistent", persistent,
+						"updatedBefore", announcedBefore,
+						"limit", limit,
+						"offset", offset))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -363,44 +229,46 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<Long> updateValueAnnouncedTime(Id id) {
-		log.debug("Updating value announced time with id: {}", id);
+		getLogger().debug("Updating value announced time with id: {}", id);
 		long now = System.currentTimeMillis();
-		return client.preparedQuery(updateValueAnnouncedById())
-				.execute(Tuple.of(now, id.bytes()))
-				.map(v -> v.rowCount() > 0 ? now : 0L)
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result() != 0)
-							log.debug("Updated value announced time with id: {}", id);
-						else
-							//noinspection LoggingSimilarMessage
-							log.debug("No value found with id: {}", id);
-					} else {
-						log.error("Failed to update value announced time with id: {}", id, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().updateValueAnnouncedById())
+						.execute(Map.of("id", id.bytes(), "updated", now))
+						.map(r -> r.rowCount() > 0 ? now : 0L)
+		).andThen(ar -> {
+			if (ar.succeeded()) {
+				if (ar.result() != 0)
+					getLogger().debug("Updated value announced time with id: {}", id);
+				else
+					//noinspection LoggingSimilarMessage
+					getLogger().debug("No value found with id: {}", id);
+			} else {
+				getLogger().error("Failed to update value announced time with id: {}", id, ar.cause());
+			}
+		}).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<Boolean> removeValue(Id id) {
-		log.debug("Removing value with id: {}", id);
-		return client.preparedQuery(deleteValueById())
-				.execute(Tuple.of(id.bytes()))
-				.map(rowSet -> rowSet.rowCount() >= 1)
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result())
-							log.debug("Removed value with id: {}", id);
-						else
-							log.debug("No value found with id: {}", id);
-					} else {
-						log.error("Failed to remove value with id: {}", id, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		getLogger().debug("Removing value with id: {}", id);
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().deleteValueById())
+						.execute(Map.of("id", id.bytes()))
+						.map(this::hasEffectedRows)
+		).andThen(ar -> {
+			if (ar.succeeded()) {
+				if (ar.result())
+					getLogger().debug("Removed value with id: {}", id);
+				else
+					getLogger().debug("No value found with id: {}", id);
+			} else {
+				getLogger().error("Failed to remove value with id: {}", id, ar.cause());
+			}
+		}).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
@@ -410,92 +278,46 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<PeerInfo> putPeer(PeerInfo peerInfo, boolean persistent) {
-		return putPeer(client, peerInfo, persistent);
-	}
-
-	protected Future<PeerInfo> putPeer(SqlClient sqlClient, PeerInfo peerInfo, boolean persistent) {
-		log.debug("Putting peer with id: {} @ {}, persistent: {}", peerInfo.getId(), peerInfo.getNodeId(), persistent);
-		log.debug("Trying to check the existing peer with id: {} @ {}", peerInfo.getId(), peerInfo.getNodeId());
-		return getPeer(sqlClient, peerInfo.getId(), peerInfo.getNodeId()).compose(existing -> {
+		getLogger().debug("Putting peer with id: {} @ {}, persistent: {}", peerInfo.getId(), peerInfo.getNodeId(), persistent);
+		getLogger().debug("Trying to check the existing peer with id: {} @ {}", peerInfo.getId(), peerInfo.getNodeId());
+		return getPeer(peerInfo.getId(), peerInfo.getNodeId()).compose(existing -> {
 			if (existing != null && existing.hasPrivateKey() && !peerInfo.hasPrivateKey()) {
 				// Skip update if the existing peer info is owned by this node and the new peer info is not.
-				// Should not throw NotOwnerException, just silently ignores to avoid disrupting valid operations.
-				log.info("Skipping to update peer for id {} @ {}: owned by this node", peerInfo.getId(), peerInfo.getNodeId());
+				// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
+				getLogger().info("Skipping to update peer for id {} @ {}: owned by this node", peerInfo.getId(), peerInfo.getNodeId());
 				return Future.succeededFuture(peerInfo);
 			}
 
-			long now = System.currentTimeMillis();
-			return sqlClient.preparedQuery(upsertPeer())
-					.execute(Tuple.of(peerInfo.getId().bytes(),
-							peerInfo.getNodeId().bytes(),
-							persistent,
-							peerInfo.getPrivateKey(),
-							peerInfo.getOrigin() != null ? peerInfo.getOrigin().bytes() : null,
-							peerInfo.getPort(),
-							peerInfo.getAlternativeURI(),
-							peerInfo.getSignature(),
-							now,
-							now))
-					.map(v -> peerInfo);
+			return withTransaction(c ->
+					SqlTemplate.forUpdate(c, getDialect().upsertPeer())
+							.execute(peerToMap(peerInfo, persistent))
+							.map(v -> peerInfo));
 		}).andThen(ar -> {
 			if (ar.succeeded())
-				log.debug("Put peer with id: {} @ {} successfully", peerInfo.getId(), peerInfo.getNodeId());
+				getLogger().debug("Put peer with id: {} @ {} successfully", peerInfo.getId(), peerInfo.getNodeId());
 			else
-				log.error("Failed to put peer with id: {} @ {}", peerInfo.getId(), peerInfo.getNodeId(), ar.cause());
+				getLogger().error("Failed to put peer with id: {} @ {}", peerInfo.getId(), peerInfo.getNodeId(), ar.cause());
 		}).recover(cause ->
 				Future.failedFuture(new DataStorageException("Database operation failed", cause))
 		);
 	}
 
-	/* noinspection
-	protected Future<Void> putPeersSequentially(SqlClient sqlClient, List<PeerInfo> peerInfos, int index) {
-		return index >= peerInfos.size() ?
-				Future.succeededFuture() :
-				putPeer(sqlClient, peerInfos.get(index), false).compose(r ->
-						putPeersSequentially(sqlClient, peerInfos, index + 1)
-				);
-	}
-
 	@Override
 	public Future<List<PeerInfo>> putPeers(List<PeerInfo> peerInfos) {
 		if (peerInfos.isEmpty())
 			return Future.succeededFuture(peerInfos);
 
-		return pool().withTransaction(connection ->
-				putPeersSequentially(connection, peerInfos, 0)
-						.map(v -> peerInfos)
-		);
-	}
-	*/
+		List<Map<String, Object>> params = peerInfos.stream().map(p -> peerToMap(p, false)).toList();
 
-	@Override
-	public Future<List<PeerInfo>> putPeers(List<PeerInfo> peerInfos) {
-		if (peerInfos.isEmpty())
-			return Future.succeededFuture(peerInfos);
-
-		long now = System.currentTimeMillis();
-		List<Tuple> tuples = peerInfos.stream().map(peerInfo -> Tuple.of(
-				peerInfo.getId().bytes(),
-				peerInfo.getNodeId().bytes(),
-				false,
-				peerInfo.getPrivateKey(),
-				peerInfo.getOrigin() != null ? peerInfo.getOrigin().bytes() : null,
-				peerInfo.getPort(),
-				peerInfo.getAlternativeURI(),
-				peerInfo.getSignature(),
-				now,
-				now
-		)).toList();
-
-		return pool().withTransaction(connection ->
-				connection.preparedQuery(upsertPeer())
-						.executeBatch(tuples)
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().upsertPeer())
+						.executeBatch(params)
 						.map(v -> peerInfos)
 		).andThen(ar -> {
 			if (ar.succeeded())
-				log.debug("Put {} peers successfully", peerInfos.size());
+				getLogger().debug("Put {} peers successfully", peerInfos.size());
 			else
-				log.error("Failed to put peers", ar.cause());
+				getLogger().error("Failed to put peers", ar.cause());
 		}).recover(cause ->
 				Future.failedFuture(new DataStorageException("Database operation failed", cause))
 		);
@@ -503,23 +325,19 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<PeerInfo> getPeer(Id id, Id nodeId) {
-		return getPeer(client, id, nodeId);
-	}
-
-	protected Future<PeerInfo> getPeer(SqlClient sqlClient, Id id, Id nodeId) {
-		log.debug("Getting peer with id: {} @ {}", id, nodeId);
-		return sqlClient.preparedQuery(selectPeerByIdAndNodeId())
-				.execute(Tuple.of(id.bytes(), nodeId.bytes()))
-				.map(rows -> findUniqueOrNull(rows, DatabaseStorage::rowToPeer))
+		getLogger().debug("Getting peer with id: {} @ {}", id, nodeId);
+		return SqlTemplate.forQuery(getClient(), getDialect().selectPeerByIdAndNodeId())
+				.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
+				.map(rows -> findUnique(rows, DatabaseStorage::rowToPeer))
 				.andThen(ar -> {
 					if (ar.succeeded()) {
 						if (ar.result() != null)
-							log.debug("Got peer with id: {} @ {}", id, nodeId);
+							getLogger().debug("Got peer with id: {} @ {}", id, nodeId);
 						else
 							//noinspection LoggingSimilarMessage
-							log.debug("No peer found with id: {} @ {}", id, nodeId);
+							getLogger().debug("No peer found with id: {} @ {}", id, nodeId);
 					} else {
-						log.error("Failed to get peer with id: {} @ {}", id, nodeId, ar.cause());
+						getLogger().error("Failed to get peer with id: {} @ {}", id, nodeId, ar.cause());
 					}
 				}).recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -528,19 +346,19 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(Id id) {
-		log.debug("Getting peers with id: {}", id);
-		return client.preparedQuery(selectPeersById())
-				.execute(Tuple.of(id.bytes()))
+		getLogger().debug("Getting peers with id: {}", id);
+		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersById())
+				.execute(Map.of("id", id.bytes()))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 				.andThen(ar -> {
 					if (ar.succeeded()) {
 						if (!ar.result().isEmpty())
-							log.debug("Got peers with id: {}", id);
+							getLogger().debug("Got peers with id: {}", id);
 						else
 							//noinspection LoggingSimilarMessage
-							log.debug("No peers found with id: {}", id);
+							getLogger().debug("No peers found with id: {}", id);
 					} else {
-						log.error("Failed to get peers with id: {}", id, ar.cause());
+						getLogger().error("Failed to get peers with id: {}", id, ar.cause());
 					}
 				}).recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -549,7 +367,7 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<PeerInfo>> getPeers() {
-		return client.preparedQuery(selectAllPeers())
+		return query(getDialect().selectAllPeers())
 				.execute()
 				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 				.recover(cause ->
@@ -559,8 +377,8 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(int offset, int limit) {
-		return client.preparedQuery(selectAllPeersPaginated())
-				.execute(Tuple.of(limit, offset))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectAllPeersPaginated())
+				.execute(Map.of("limit", limit, "offset", offset))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -569,8 +387,8 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(boolean persistent, long announcedBefore) {
-		return client.preparedQuery(selectPeersByPersistentAndAnnouncedBefore())
-				.execute(Tuple.of(persistent, announcedBefore))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersByPersistentAndAnnouncedBefore())
+				.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -579,8 +397,12 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(boolean persistent, long announcedBefore, int offset, int limit) {
-		return client.preparedQuery(selectPeersByPersistentAndAnnouncedBeforePaginated())
-				.execute(Tuple.of(persistent, announcedBefore, limit, offset))
+		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersByPersistentAndAnnouncedBeforePaginated())
+				.execute(Map.of(
+						"persistent", persistent,
+						"updatedBefore", announcedBefore,
+						"limit", limit,
+						"offset", offset))
 				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 				.recover(cause ->
 						Future.failedFuture(new DataStorageException("Database operation failed", cause))
@@ -589,138 +411,139 @@ public abstract class DatabaseStorage implements DataStorage {
 
 	@Override
 	public Future<Long> updatePeerAnnouncedTime(Id id, Id nodeId) {
-		log.debug("Updating peer announced time with id: {} @ {}", id, nodeId);
+		getLogger().debug("Updating peer announced time with id: {} @ {}", id, nodeId);
 		long now = System.currentTimeMillis();
-		return client.preparedQuery(updatePeerAnnouncedByIdAndNodeId())
-				.execute(Tuple.of(now, id.bytes(), nodeId.bytes()))
-				.map(v ->  v.rowCount() > 0 ? now : 0L)
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result() != 0)
-							log.debug("Updated peer announced time with id: {} @ {}", id, nodeId);
-						else
-							log.debug("No peer found with id: {} @ {}", id, nodeId);
-					} else {
-						log.error("Failed to update peer announced time with id: {} @ {}", id, nodeId, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().updatePeerAnnouncedByIdAndNodeId())
+						.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes(), "updated", now))
+						.map(r -> r.rowCount() > 0 ? now : 0L)
+		).andThen(ar -> {
+			if (ar.succeeded()) {
+				if (ar.result() != 0)
+					getLogger().debug("Updated peer announced time with id: {} @ {}", id, nodeId);
+				else
+					getLogger().debug("No peer found with id: {} @ {}", id, nodeId);
+			} else {
+				getLogger().error("Failed to update peer announced time with id: {} @ {}", id, nodeId, ar.cause());
+			}
+		}).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<Boolean> removePeer(Id id, Id nodeId) {
-		log.debug("Removing peer with id: {} @ {}", id, nodeId);
-		return client.preparedQuery(deletePeerByIdAndNodeId())
-				.execute(Tuple.of(id.bytes(), nodeId.bytes()))
-				.map(rowSet -> rowSet.rowCount() >= 1)
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result())
-							log.debug("Removed peer with id: {} @ {}", id, nodeId);
-						else
-							//noinspection LoggingSimilarMessage
-							log.debug("No peer found with id: {} @ {}", id, nodeId);
-					} else {
-						log.error("Failed to remove peer with id: {} @ {}", id, nodeId, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		getLogger().debug("Removing peer with id: {} @ {}", id, nodeId);
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().deletePeerByIdAndNodeId())
+						.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
+						.map(this::hasEffectedRows)
+		).andThen(ar -> {
+			if (ar.succeeded()) {
+				if (ar.result())
+					getLogger().debug("Removed peer with id: {} @ {}", id, nodeId);
+				else
+					//noinspection LoggingSimilarMessage
+					getLogger().debug("No peer found with id: {} @ {}", id, nodeId);
+			} else {
+				getLogger().error("Failed to remove peer with id: {} @ {}", id, nodeId, ar.cause());
+			}
+		}).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<Boolean> removePeers(Id id) {
-		log.debug("Removing peers with id: {}", id);
-		return client.preparedQuery(deletePeersById())
-				.execute(Tuple.of(id.bytes()))
-				.map(rowSet -> rowSet.rowCount() >= 1)
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result())
-							log.debug("Removed peers with id: {}", id);
-						else
-							log.debug("No peers found with id: {}", id);
-					} else {
-						log.error("Failed to remove peers with id: {}", id, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		getLogger().debug("Removing peers with id: {}", id);
+		return withTransaction(c ->
+				SqlTemplate.forUpdate(c, getDialect().deletePeersById())
+						.execute(Map.of("id", id.bytes()))
+						.map(this::hasEffectedRows)
+		).andThen(ar -> {
+			if (ar.succeeded()) {
+				if (ar.result())
+					getLogger().debug("Removed peers with id: {}", id);
+				else
+					getLogger().debug("No peers found with id: {}", id);
+			} else {
+				getLogger().error("Failed to remove peers with id: {}", id, ar.cause());
+			}
+		}).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
-	@SuppressWarnings("SameParameterValue")
-	protected static int rowToInteger(Row row, int defaultValue) {
-		return row != null ? row.getInteger(0) : defaultValue;
-	}
-
-	protected static int rowToInteger(Row row) {
-		return rowToInteger(row, 0);
+	protected static Map<String, Object> valueToMap(Value value, boolean persistent) {
+		Map<String, Object> map = new HashMap<>();
+		map.put("id", value.getId().bytes());
+		map.put("publicKey", value.getPublicKey() != null ? value.getPublicKey().bytes() : null);
+		map.put("privateKey", value.getPrivateKey());
+		map.put("recipient", value.getRecipient() != null ? value.getRecipient().bytes() : null);
+		map.put("nonce", value.getNonce());
+		map.put("signature", value.getSignature());
+		map.put("sequenceNumber", value.getSequenceNumber());
+		map.put("data", value.getData());
+		map.put("persistent", persistent);
+		long now = System.currentTimeMillis();
+		map.put("created", now);
+		map.put("updated", now);
+		return map;
 	}
 
 	protected static Value rowToValue(Row row) {
-		if (row == null)
-			return null;
-
-		// Column indices:
-		// 0: id (BLOB, NOT NULL)
-		// 1: persistent (BOOLEAN, NOT NULL)
-		// 2: publicKey (BLOB, nullable)
-		// 3: privateKey (BLOB, nullable)
-		// 4: recipient (BLOB, nullable)
-		// 5: nonce (BLOB, nullable)
-		// 6: signature (BLOB, nullable)
-		// 7: sequenceNumber (INTEGER, NOT NULL)
-		// 8: data (BLOB, nullable)
-		// 9: created (BIGINT, NOT NULL)
-		// 10: updated (BIGINT, NOT NULL)
-
-		// skip 0:id
-		// skip 1:persistent
-		Buffer buffer = row.getBuffer(2);
-		Id publicKey = buffer == null ? null : Id.of(buffer.getBytes());
-		buffer = row.getBuffer(3);
+		Id publicKey = getId(row, "public_key");
+		Buffer buffer = row.getBuffer("private_key");
 		byte[] privateKey = buffer == null ? null : buffer.getBytes();
-		buffer = row.getBuffer(4);
-		Id recipient = buffer == null ? null : Id.of(buffer.getBytes());
-		buffer = row.getBuffer(5);
+		Id recipient = getId(row, "recipient");
+		buffer = row.getBuffer("nonce");
 		byte[] nonce = buffer == null ? null : buffer.getBytes();
-		buffer = row.getBuffer(6);
+		buffer = row.getBuffer("signature");
 		byte[] signature = buffer == null ? null : buffer.getBytes();
-		int sequenceNumber = row.getInteger(7); // NOT NULL
-		buffer = row.getBuffer(8);
+		int sequenceNumber = row.getInteger("sequence_number"); // NOT NULL
+		buffer = row.getBuffer("data");
 		byte[] data = buffer == null ? null : buffer.getBytes();
 
 		return Value.of(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 	}
 
+	protected static Map<String, Object> peerToMap(PeerInfo peerInfo, boolean persistent) {
+		Map<String, Object> map = new HashMap<>();
+		map.put("id", peerInfo.getId().bytes());
+		map.put("nodeId", peerInfo.getNodeId().bytes());
+		map.put("privateKey", peerInfo.getPrivateKey());
+		map.put("origin", peerInfo.getOrigin() != null ? peerInfo.getOrigin().bytes() : null);
+		map.put("port", peerInfo.getPort());
+		map.put("alternativeUri", peerInfo.getAlternativeURI());
+		map.put("signature", peerInfo.getSignature());
+		map.put("persistent", persistent);
+		long now = System.currentTimeMillis();
+		map.put("created", now);
+		map.put("updated", now);
+		return map;
+	}
+
 	protected static PeerInfo rowToPeer(Row row) {
-		if (row == null)
-			return null;
-
-		// Column indices:
-		// 0: id (BLOB, NOT NULL)
-		// 1: nodeId (BLOB, NOT NULL)
-		// 2: persistent (BOOLEAN, NOT NULL)
-		// 3: privateKey (BLOB, nullable)
-		// 4: origin (BLOB, nullable)
-		// 5: port (INTEGER, NOT NULL)
-		// 6: alternativeURI (TEXT, nullable)
-		// 7: signature (BLOB, nullable)
-		// 8: created (BIGINT, NOT NULL)
-		// 9: updated (BIGINT, NOT NULL)
-
-		Id id = Id.of(row.getBuffer(0).getBytes()); // NOT NULL
-		Id nodeId = Id.of(row.getBuffer(1).getBytes()); // NOT NULL
-		Buffer buffer = row.getBuffer(3);
+		Id id = getId(row, "id");
+		Id nodeId = getId(row, "node_id");
+		Buffer buffer = row.getBuffer("private_key");
 		byte[] privateKey = buffer == null ? null : buffer.getBytes();
-		buffer = row.getBuffer(4);
-		Id origin = buffer == null ? null : Id.of(buffer.getBytes());
-		int port = row.getInteger(5); // NOT NULL
-		String alternativeURI = row.getString(6); // Nullable
-		buffer = row.getBuffer(7);
+		Id origin = getId(row, "origin");
+		int port = row.getInteger("port");
+		String alternativeURI = row.getString("alternative_uri");
+		buffer = row.getBuffer("signature");
 		byte[] signature = buffer == null ? null : buffer.getBytes();
 
 		return PeerInfo.of(id, privateKey, nodeId, origin, port, alternativeURI, signature);
+	}
+
+	private static Id getId(Row row, String column) {
+		Buffer buf = row.getBuffer(column);
+		return buf == null ? null : Id.of(buf.getBytes());
+	}
+
+	@Override
+	public Future<Void> close() {
+		return getClient().close();
 	}
 }

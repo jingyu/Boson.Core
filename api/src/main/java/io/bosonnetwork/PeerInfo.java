@@ -48,7 +48,7 @@ public class PeerInfo {
 	 */
 	public static final Object ATTRIBUTE_PEER_ID = new Object();
 
-	private final Id publicKey;			// Peer ID
+	private final Id publicKey;				// Peer ID
 	private final byte[] privateKey;		// Private key to sign the peer info
 	private final Id nodeId;				// The node that provide the service peer
 	private final Id origin;				// The node that announces the peer

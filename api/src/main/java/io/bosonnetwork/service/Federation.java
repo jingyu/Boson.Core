@@ -23,5 +23,5 @@ public interface Federation {
 
 	// public CompletableFuture<List<FederatedService>> getAllServices(Id nodeId);
 
-	public CompletableFuture<? extends FederatedService> getService(Id peerId);
+	public CompletableFuture<? extends FederatedService> getService(Id nodeId, Id peerId);
 }

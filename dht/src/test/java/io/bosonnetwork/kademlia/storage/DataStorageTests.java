@@ -54,7 +54,7 @@ public class DataStorageTests {
 	private static final Path testRoot = Path.of(System.getProperty("java.io.tmpdir"), "boson");
 	private static final Path testDir = Path.of(testRoot.toString(), "dht", "DataStorageTests");
 
-	private static final int CURRENT_SCHEMA_VERSION = 5;
+	private static final int CURRENT_SCHEMA_VERSION = 1;
 
 	private static final Faker faker = new Faker();
 
@@ -75,6 +75,7 @@ public class DataStorageTests {
 	private static long announced1;
 	private static long announced2;
 
+	private static PostgresqlServer pgServer;
 	private static final List<Arguments> dataStorages = new ArrayList<>();
 
 	@BeforeAll
@@ -88,28 +89,29 @@ public class DataStorageTests {
 
 		var futures = new ArrayList<Future<Integer>>();
 
-		inMemoryStorage = new InMemoryStorage();
-		var future1 = inMemoryStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+		pgServer = PostgresqlServer.start("boson_node", "test", "secret");
+		var postgresqlURI = pgServer.getDatabaseUrl();
+		postgresStorage = new PostgresStorage(postgresqlURI);
+		var future1 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
-			dataStorages.add(Arguments.of("InMemoryStorage", inMemoryStorage));
+			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
 		}));
 		futures.add(future1);
 
-		var sqliteURL = "jdbc:sqlite:" + testDir.resolve("storage.db");
-		sqliteStorage = new SQLiteStorage(sqliteURL);
+		var sqliteURI = "jdbc:sqlite:" + testDir.resolve("storage.db");
+		sqliteStorage = new SQLiteStorage(sqliteURI);
 		var future2 = sqliteStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
 			dataStorages.add(Arguments.of("SQLiteStorage", sqliteStorage));
 		}));
 		futures.add(future2);
 
-		var postgresqlURL = "postgresql://jingyu:secret@localhost:5432/test";
-		postgresStorage = new PostgresStorage(postgresqlURL);
-		var future3 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+		inMemoryStorage = new InMemoryStorage();
+		var future3 = inMemoryStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
 			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
-			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
+			dataStorages.add(Arguments.of("InMemoryStorage", inMemoryStorage));
 		}));
-		// futures.add(future3);
+		futures.add(future3);
 
 		Future.all(futures).onSuccess(unused -> {
 			try {
@@ -123,6 +125,23 @@ public class DataStorageTests {
 				context.failNow(e);
 			}
 		}).onComplete(context.succeedingThenComplete());
+	}
+
+	@AfterAll
+	static void tearDown(Vertx vertx, VertxTestContext context) {
+		var futures = new ArrayList<Future<Void>>();
+
+		for (var storageArg : dataStorages) {
+			var args = storageArg.get();
+			DataStorage storage1 = (DataStorage) args[1];
+			var future = storage1.close();
+			futures.add(future);
+		}
+
+		Future.all(futures).onComplete(context.succeeding(result -> {
+			pgServer.stop();
+			context.completeNow();
+		}));
 	}
 
 	private static List<Value> generateValues(int count) throws Exception {
@@ -199,27 +218,6 @@ public class DataStorageTests {
 		}
 
 		return multiPeers;
-	}
-
-	@AfterAll
-	static void tearDown(Vertx vertx, VertxTestContext context) {
-		var futures = new ArrayList<Future<Void>>();
-
-		for (var storageArg : dataStorages) {
-			var args = storageArg.get();
-			DataStorage storage1 = (DataStorage) args[1];
-			var future = storage1.close();
-			futures.add(future);
-		}
-
-		Future.all(futures).onComplete(context.succeeding(result -> {
-			try {
-				FileUtils.deleteFile(testRoot);
-			} catch (IOException ignore) {
-			}
-
-			context.completeNow();
-		}));
 	}
 
 	static Stream<Arguments> testStoragesProvider() {
@@ -1306,19 +1304,5 @@ public class DataStorageTests {
 				context.verify(() -> assertEquals(remaining, result.size()));
 			}));
 		})).onComplete(context.succeedingThenComplete());
-	}
-
-	@ParameterizedTest(name = "{0}")
-	@MethodSource("testStoragesProvider")
-	@Order(201)
-	void testInitializeAgain(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		storage.initialize(vertx, valueExpiration, peerInfoExpiration).andThen(ar -> {
-			context.verify(() -> {
-						assertTrue(ar.failed());
-						assertInstanceOf(DataStorageException.class, ar.cause());
-			});
-
-			context.completeNow();
-		});
 	}
 }

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.jdbcclient.JDBCConnectOptions;
 import io.vertx.jdbcclient.JDBCPool;
@@ -36,34 +37,44 @@ public class VersionedSchemaTests {
 
 	private static final List<Arguments> databases = new ArrayList<>();
 
+	private static PostgresqlServer pgServer;
+	private static SqlClient postgres;
+	private static SqlClient sqlite;
+
 	@BeforeAll
 	static void setup(Vertx vertx, VertxTestContext context) throws Exception {
+		FileUtils.deleteFile(testDir);
 		Files.createDirectories(testDir);
+
+		pgServer = PostgresqlServer.start("migration", "test", "secret");
+
+		var postgresURL = pgServer.getDatabaseUrl();
+		PgConnectOptions pgConnectOptions = PgConnectOptions.fromUri(postgresURL);
+		PoolOptions pgPoolOptions = new PoolOptions().setMaxSize(8);
+		postgres = PgBuilder.pool()
+				.with(pgPoolOptions)
+				.connectingTo(pgConnectOptions)
+				.using(vertx)
+				.build();
+		databases.add(Arguments.of("postgres", postgres));
 
 		var sqliteURL = "jdbc:sqlite:" + testDir.resolve("test.db");
 		JDBCConnectOptions sqliteConnectOptions = new JDBCConnectOptions()
 				.setJdbcUrl(sqliteURL);
 		// Single connection recommended for SQLite
 		PoolOptions sqlitePoolOptions = new PoolOptions().setMaxSize(1);
-		SqlClient sqliteClient = JDBCPool.pool(vertx, sqliteConnectOptions, sqlitePoolOptions);
-		databases.add(Arguments.of("sqlite", sqliteClient));
-
-		var postgresURL = "postgresql://jingyu:secret@localhost:5432/test";
-		PgConnectOptions pgConnectOptions = PgConnectOptions.fromUri(postgresURL);
-		PoolOptions pgPoolOptions = new PoolOptions().setMaxSize(8);
-		SqlClient pgClient = PgBuilder.pool()
-				.with(pgPoolOptions)
-				.connectingTo(pgConnectOptions)
-				.using(vertx)
-				.build();
-		// databases.add(Arguments.of("postgres", pgClient));
+		sqlite = JDBCPool.pool(vertx, sqliteConnectOptions, sqlitePoolOptions);
+		databases.add(Arguments.of("sqlite", sqlite));
 
 		context.completeNow();
 	}
 
 	@AfterAll
-	static void teardown() throws Exception {
-		FileUtils.deleteFile(testRoot);
+	static void teardown(VertxTestContext context) throws Exception {
+		Future.all(postgres.close(), sqlite.close()).onComplete(ar -> {
+			pgServer.stop();
+			context.completeNow();
+		});
 	}
 
 	static Stream<Arguments> testDatabaseProvider() {

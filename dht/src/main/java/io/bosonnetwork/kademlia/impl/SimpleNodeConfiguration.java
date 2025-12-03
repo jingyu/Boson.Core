@@ -35,7 +35,7 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 		this.port = config.port();
 		this.privateKey = config.privateKey();
 		this.dataPath = config.dataPath();
-		this.storageURL = config.storageURL() != null ? config.storageURL() : InMemoryStorage.STORAGE_URL;
+		this.storageURL = config.storageURL() != null ? config.storageURL() : InMemoryStorage.STORAGE_URI;
 		this.bootstrapNodes = new ArrayList<>(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 		this.enableSpamThrottling = config.enableSpamThrottling();
 		this.enableSuspiciousNodeDetector = config.enableSuspiciousNodeDetector();

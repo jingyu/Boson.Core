@@ -71,7 +71,7 @@ public class Pagination {
 		if (offset == 0 && limit == 0)
 			return ""; // caller may omit OFFSET/LIMIT completely
 
-		return " OFFSET " + offset + " LIMIT " + limit;
+		return " LIMIT " + limit + " OFFSET " + offset;
 	}
 
 	/**

@@ -266,22 +266,22 @@ public interface DataStorage {
 	 */
 	Future<Boolean> removePeers(Id id);
 
-	static boolean supports(String url) {
-		// now only support inmemory, sqlite and postgres
-		return url.equals(InMemoryStorage.STORAGE_URL) || url.startsWith(SQLiteStorage.STORAGE_URL_PREFIX) ||
-				url.startsWith(PostgresStorage.STORAGE_URL_PREFIX);
+	static boolean supports(String uri) {
+		// now only support in-memory, sqlite and postgres
+		return uri.equals(InMemoryStorage.STORAGE_URI) || uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX) ||
+				uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX);
 	}
 
-	static DataStorage create(String url) {
-		Objects.requireNonNull(url, "url");
+	static DataStorage create(String uri) {
+		Objects.requireNonNull(uri, "url");
 
-		if (url.equals(InMemoryStorage.STORAGE_URL))
+		if (uri.equals(InMemoryStorage.STORAGE_URI))
 			return new InMemoryStorage();
-		if (url.startsWith(SQLiteStorage.STORAGE_URL_PREFIX))
-			return new SQLiteStorage(url);
-		if (url.startsWith(PostgresStorage.STORAGE_URL_PREFIX))
-			return new PostgresStorage(url);
+		if (uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX))
+			return new SQLiteStorage(uri);
+		if (uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX))
+			return new PostgresStorage(uri);
 
-		throw new IllegalArgumentException("Unsupported storage: " + url);
+		throw new IllegalArgumentException("Unsupported storage: " + uri);
 	}
 }
