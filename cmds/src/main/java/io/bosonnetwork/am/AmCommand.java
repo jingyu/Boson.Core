@@ -25,12 +25,14 @@ package io.bosonnetwork.am;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 
 import picocli.CommandLine.Option;
 
 import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.access.impl.AccessManager;
+import io.bosonnetwork.utils.Json;
 
 /**
  * @hidden
@@ -54,7 +56,8 @@ public abstract class AmCommand {
 				file = file.toAbsolutePath();
 
 			try {
-				builder.load(file);
+				Map<String, Object> map = Json.yamlMapper().readValue(configFile, Json.mapType());
+				builder.template(map);
 			} catch (Exception e) {
 				System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
 				e.printStackTrace(System.err);
@@ -62,7 +65,7 @@ public abstract class AmCommand {
 			}
 
 			NodeConfiguration config = builder.build();
-			Path dataPath = config.dataPath();
+			Path dataPath = config.dataDir();
 			if (dataPath == null) {
 				System.out.println("No data path in the configuration.");
 				System.exit(-1);

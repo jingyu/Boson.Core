@@ -43,7 +43,6 @@ import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.storage.DataStorage;
-import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
 import io.bosonnetwork.vertx.VertxCaffeine;
@@ -91,7 +90,7 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 
 		try {
-			Signature.KeyPair keyPair = Signature.KeyPair.fromPrivateKey(Base58.decode(config.privateKey()));
+			Signature.KeyPair keyPair = Signature.KeyPair.fromPrivateKey(config.privateKey());
 			this.identity = new CachedCryptoIdentity(keyPair, null);
 		} catch (Exception e) {
 			log.error("Invalid configuration: private key is invalid");
@@ -119,30 +118,26 @@ public class KadNode extends BosonVerticle implements Node {
 		if (config.bootstrapNodes() == null || config.bootstrapNodes().isEmpty())
 			log.warn("No bootstrap nodes are configured");
 
-		Path dataPath = config.dataPath();
-		if (dataPath != null) {
-			if (Files.exists(dataPath)) {
-				if (!Files.isDirectory(dataPath)) {
-					log.error("Data path {} is not a directory", dataPath);
-					throw new IllegalArgumentException("Data path " + dataPath + " is not a directory");
+		Path dir = config.dataDir();
+		if (dir != null) {
+			if (Files.exists(dir)) {
+				if (!Files.isDirectory(dir)) {
+					log.error("Data path {} is not a directory", dir);
+					throw new IllegalArgumentException("Data path " + dir + " is not a directory");
 				}
 			} else {
 				try {
-					Files.createDirectories(dataPath);
+					Files.createDirectories(dir);
 				} catch (IOException e) {
-					log.error("Data path {} can not be created", dataPath);
-					throw new IllegalArgumentException("Data path " + dataPath + " can not be created", e);
+					log.error("Data path {} can not be created", dir);
+					throw new IllegalArgumentException("Data path " + dir + " can not be created", e);
 				}
 			}
-
-			log.info("Using data path {}, persistent is enabled", dataPath);
-		} else {
-			log.warn("No data path is configured, persistent is disabled");
 		}
 
-		if (config.storageURL() != null) {
-			if (!DataStorage.supports(config.storageURL()))
-				throw new IllegalArgumentException("unsupported storage URL: " + config.storageURL());
+		if (config.storageURI() != null) {
+			if (!DataStorage.supports(config.storageURI()))
+				throw new IllegalArgumentException("unsupported storage URL: " + config.storageURI());
 		} else {
 			log.warn("No storage URL is configured, in-memory storage is used");
 		}
@@ -202,7 +197,7 @@ public class KadNode extends BosonVerticle implements Node {
 	@Override
 	public synchronized VertxFuture<Void> start() {
 		if (this.vertx != null)
-			throw new IllegalStateException("Already started");
+			return VertxFuture.failedFuture(new IllegalStateException("Already started"));
 
 		Future<Void> future = config.vertx().deployVerticle(this).mapEmpty();
 		return VertxFuture.of(future);
@@ -211,7 +206,7 @@ public class KadNode extends BosonVerticle implements Node {
 	@Override
 	public VertxFuture<Void> stop() {
 		if (!isRunning())
-			throw new IllegalStateException("Not started");
+			return VertxFuture.failedFuture(new IllegalStateException("Not started"));
 
 		Promise<Void> promise = Promise.promise();
 		runOnContext(v -> {
@@ -235,7 +230,15 @@ public class KadNode extends BosonVerticle implements Node {
 	@Override
 	public Future<Void> deploy() {
 		tokenManager = new TokenManager();
-		storage = DataStorage.create(config.storageURL());
+
+		String storageURI = config.storageURI();
+		// fix the sqlite database file location
+		if (storageURI.startsWith("jdbc:sqlite:")) {
+			Path dbFile = Path.of(storageURI.substring("jdbc:sqlite:".length()));
+			if (!dbFile.isAbsolute())
+				storageURI = "jdbc:sqlite:" + config.dataDir().resolve(dbFile).toAbsolutePath();
+		}
+		storage = DataStorage.create(storageURI);
 
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
@@ -270,11 +273,9 @@ public class KadNode extends BosonVerticle implements Node {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
 			if (config.host4() != null) {
 				dht4 = new DHT(identity, Network.IPv4, config.host4(), config.port(), config.bootstrapNodes(),
-						storage, tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
+						storage, config.dataDir().resolve("dht4.cache"),
+						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
-
-				if (config.dataPath() != null)
-					dht4.enablePersistence(config.dataPath().resolve("dht4.cache"));
 
 				dht4.setConnectionStatusListener(listener);
 
@@ -288,11 +289,9 @@ public class KadNode extends BosonVerticle implements Node {
 
 			if (config.host6() != null) {
 				dht6 = new DHT(identity, Network.IPv6, config.host6(), config.port(), config.bootstrapNodes(),
-						storage, tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
+						storage, config.dataDir().resolve("dht6.cache"),
+						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
-
-				if (config.dataPath() != null)
-					dht6.enablePersistence(config.dataPath().resolve("dht6.cache"));
 
 				dht6.setConnectionStatusListener(listener);
 

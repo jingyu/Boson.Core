@@ -111,7 +111,7 @@ public class DHT extends BosonVerticle {
 
 	private final RoutingTable routingTable;
 	private long lastMaintenance;
-	private Path persistFile;
+	private final Path persistFile;
 
 	private final List<Long> timers;
 
@@ -124,7 +124,7 @@ public class DHT extends BosonVerticle {
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
 
 	public DHT(Identity identity, Network network, String host, int port, Collection<NodeInfo> bootstrapNodes,
-			   DataStorage storage, TokenManager tokenManager, Blacklist blacklist,
+			   DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
 			   boolean enableSuspiciousNodeDetector, boolean enableSpamThrottling, DHTMetrics metrics,
 			   boolean enableDeveloperMode) {
 		this.identity = identity;
@@ -132,6 +132,7 @@ public class DHT extends BosonVerticle {
 		this.host = host;
 		this.port = port;
 		this.storage = storage;
+		this.persistFile = persistFile;
 		this.tokenManager = tokenManager;
 		this.blacklist = blacklist;
 
@@ -191,10 +192,6 @@ public class DHT extends BosonVerticle {
 	protected void setSibling(DHT dht) {
 		assert (dht != null && dht != this);
 		this.sibling = dht;
-	}
-
-	public void enablePersistence(Path persistFile) {
-		this.persistFile = persistFile;
 	}
 
 	public void setConnectionStatusListener(ConnectionStatusListener listener) {

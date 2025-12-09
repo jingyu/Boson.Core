@@ -48,7 +48,10 @@ import io.bosonnetwork.access.AccessManager;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.service.BosonService;
 import io.bosonnetwork.service.BosonServiceException;
+import io.bosonnetwork.service.ClientAuthenticator;
+import io.bosonnetwork.service.ClientAuthorizer;
 import io.bosonnetwork.service.DefaultServiceContext;
+import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.ServiceContext;
 import io.bosonnetwork.utils.ApplicationLock;
 import io.bosonnetwork.utils.Json;
@@ -109,10 +112,10 @@ public class Main {
 	}
 
 	private static void loadServices() throws IOException {
-		if (config.dataPath() == null)
+		if (config.dataDir() == null)
 			return;
 
-		Path servicesDir = config.dataPath().resolve("services");
+		Path servicesDir = config.dataDir().resolve("services");
 		try (Stream<Path> stream = Files.list(servicesDir)) {
 			stream.filter(Files::isRegularFile)
 					.sorted(Main::compareConfigFileName)
@@ -131,8 +134,10 @@ public class Main {
 				return;
 			}
 
-			Path dataPath = config.dataPath() == null ? null : config.dataPath().resolve(svc.getId()).toAbsolutePath();
-			ServiceContext ctx = new DefaultServiceContext(vertx, node, accessManager, serviceConfig.configuration, dataPath);
+			Path dataPath = config.dataDir() == null ? null : config.dataDir().resolve(svc.getId()).toAbsolutePath();
+			ServiceContext ctx = new DefaultServiceContext(vertx, node,
+					ClientAuthenticator.allowAll(), ClientAuthorizer.noop(),
+					FederationAuthenticator.allowAll(), null, serviceConfig.configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), serviceConfig.className);
 
@@ -190,7 +195,8 @@ public class Main {
 
 				String configFile = args[++i];
 				try {
-					builder.load(configFile);
+					Map<String, Object> map = Json.yamlMapper().readValue(configFile, Json.mapType());
+					builder.template(map);
 				} catch (Exception e) {
 					System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
 					e.printStackTrace(System.err);
@@ -223,7 +229,7 @@ public class Main {
 					System.exit(-1);
 				}
 
-				builder.dataPath(args[++i]);
+				builder.dataDir(args[++i]);
 			} else if (args[i].equals("--bootstrap") || args[i].equals("-b")) {
 				if (i + 1 >= args.length) {
 					System.out.format("Missing the value for arg:%d %s\n", i, args[i]);
@@ -294,8 +300,8 @@ public class Main {
 
 		parseArgs(args);
 
-		Path lockFile = config.dataPath() != null ?
-				config.dataPath().resolve("lock") :
+		Path lockFile = config.dataDir() != null ?
+				config.dataDir().resolve("lock") :
 				Path.of("./lock");
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
 			initBosonNode();
@@ -310,7 +316,7 @@ public class Main {
 			}
 		} catch (IOException | IllegalStateException e) {
 			System.out.println("Another boson instance already running at " +
-					(config.dataPath() != null ? config.dataPath() : "."));
+					(config.dataDir() != null ? config.dataDir() : "."));
 		}
 	}
 }

@@ -26,7 +26,6 @@ package io.bosonnetwork.kademlia.rpc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -73,13 +72,7 @@ public class RPCServerTests {
 
 	private static final Faker faker = new Faker();
 
-	private static final String localAddr = AddressUtils.getAllAddresses()
-			.filter(Inet4Address.class::isInstance)
-			.filter(AddressUtils::isAnyUnicast)
-			.distinct()
-			.findFirst()
-			.map(InetAddress::getHostAddress)
-			.orElse(null);
+	private static final String localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class).getHostAddress();
 
 	private final static Map<Id, Value> values = new HashMap<>();
 	private final static Map<Id, List<PeerInfo>> peers = new HashMap<>();

@@ -26,6 +26,7 @@ package io.bosonnetwork.utils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -36,7 +37,6 @@ import java.net.SocketException;
 import java.net.StandardProtocolFamily;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -558,7 +558,7 @@ public class AddressUtils {
 		InetAddress target = null;
 		ProtocolFamily family = type == Inet6Address.class ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET;
 
-		try (DatagramChannel ch = DatagramChannel.open(family)) {
+		try (DatagramSocket socket = new DatagramSocket()) {
 			if (type == Inet4Address.class)
 				target = InetAddress.getByAddress(new byte[]{8, 8, 8, 8});
 			else if (type == Inet6Address.class)
@@ -566,9 +566,8 @@ public class AddressUtils {
 			else
 				throw new IllegalArgumentException("Unsupported type: " + type);
 
-			ch.connect(new InetSocketAddress(target, 63));
-			InetSocketAddress soa = (InetSocketAddress) ch.getLocalAddress();
-			InetAddress local = soa.getAddress();
+			socket.connect(new InetSocketAddress(target, 63));
+			InetAddress local = socket.getLocalAddress();
 
 			if (type.isInstance(local) && !local.isAnyLocalAddress())
 				return local;

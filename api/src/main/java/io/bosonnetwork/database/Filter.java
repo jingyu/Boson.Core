@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.database;
 
 import java.util.Arrays;
@@ -57,7 +79,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a non-equality filter (column <> #{paramName}).
+	 * Creates a non-equality filter (column &lt;&gt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param paramName the parameter name to bind
@@ -72,7 +94,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a non-equality filter (column <> #{paramName}).
+	 * Creates a non-equality filter (column &lt;&gt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param value     the value to bind
@@ -83,7 +105,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a less-than filter (column < #{paramName}).
+	 * Creates a less-than filter (column &lt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param paramName the parameter name to bind
@@ -98,7 +120,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a less-than filter (column < #{paramName}).
+	 * Creates a less-than filter (column &lt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param value     the value to bind
@@ -109,7 +131,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a less-than-or-equal filter (column <= #{paramName}).
+	 * Creates a less-than-or-equal filter (column &lt;= #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param paramName the parameter name to bind
@@ -124,7 +146,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a less-than-or-equal filter (column <= #{paramName}).
+	 * Creates a less-than-or-equal filter (column &lt;= #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param value     the value to bind
@@ -135,7 +157,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a greater-than filter (column > #{paramName}).
+	 * Creates a greater-than filter (column &gt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param paramName the parameter name to bind
@@ -150,7 +172,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a greater-than filter (column > #{paramName}).
+	 * Creates a greater-than filter (column &gt; #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param value     the value to bind
@@ -161,7 +183,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a greater-than-or-equal filter (column >= #{paramName}).
+	 * Creates a greater-than-or-equal filter (column &gt;= #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param paramName the parameter name to bind
@@ -176,7 +198,7 @@ public class Filter {
 	}
 
 	/**
-	 * Creates a greater-than-or-equal filter (column >= #{paramName}).
+	 * Creates a greater-than-or-equal filter (column &gt;= #{paramName}).
 	 *
 	 * @param column    the database column name
 	 * @param value     the value to bind
@@ -303,6 +325,11 @@ public class Filter {
 	}
 
 
+	/**
+	 * Returns the parameter bindings for this filter.
+	 *
+	 * @return a map of parameter names to their values
+	 */
 	public Map<String, Object> getParams() {
 		return Map.of();
 	}

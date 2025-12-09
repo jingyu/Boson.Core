@@ -25,65 +25,65 @@ package io.bosonnetwork.service;
 import io.bosonnetwork.Id;
 
 /**
- * Interface representing a client device in the Boson network.
+ * Interface containing information about a super node service instance.
  * <p>
- * A client device is associated with a user and can have specific attributes like a name, application information,
- * and usage statistics such as creation time, update time, and last seen details.
+ * This interface encapsulates details about where a service is running (host, port),
+ * its identity (peer ID, node ID), and identifiers for the service itself.
  */
-public interface ClientDevice {
+public interface ServiceInfo {
 	/**
-	 * Gets the unique identifier of the device.
+	 * Gets the unique peer identifier associated with the service.
 	 *
-	 * @return the device {@link Id}
+	 * @return the peer {@link Id}
 	 */
-	Id getId();
+	Id getPeerId();
 
 	/**
-	 * Gets the unique identifier of the user who owns this device.
+	 * Gets the unique identifier of the node hosting the service.
 	 *
-	 * @return the user {@link Id}
+	 * @return the node {@link Id}
 	 */
-	Id getUserId();
+	Id getNodeId();
 
 	/**
-	 * Gets the name of the device.
+	 * Gets the origin identifier, typically representing the entity responsible for the service.
 	 *
-	 * @return the device name
+	 * @return the origin {@link Id}
 	 */
-	String getName();
+	Id getOriginId();
 
 	/**
-	 * Gets the name of the application associated with this device.
+	 * Gets the hostname or IP address where the service is accessible.
 	 *
-	 * @return the application name
+	 * @return the host string
 	 */
-	String getApp();
+	String getHost();
 
 	/**
-	 * Gets the timestamp when the device was created.
+	 * Gets the network port number where the service is listening.
 	 *
-	 * @return the creation timestamp in milliseconds
+	 * @return the port number
 	 */
-	long getCreated();
+	int getPort();
 
 	/**
-	 * Gets the timestamp when the device information was last updated.
+	 * Gets an alternative endpoint URL or URI for accessing the service.
 	 *
-	 * @return the last update timestamp in milliseconds
+	 * @return the alternative endpoint string, or {@code null} if not available
 	 */
-	long getUpdated();
+	String getAlternativeEndpoint();
 
 	/**
-	 * Gets the timestamp when the device was last seen active.
+	 * Gets the unique identifier string for the specific service type.
 	 *
-	 * @return the last-seen timestamp in milliseconds
+	 * @return the service ID
 	 */
-	long getLastSeen();
+	String getServiceId();
 
 	/**
-	 * Gets the last known network address (e.g., IP address) of the device.
+	 * Gets the human-readable name of the service.
 	 *
-	 * @return the last known address as a String
+	 * @return the service name
 	 */
-	String getLastAddress();
+	String getServiceName();
 }

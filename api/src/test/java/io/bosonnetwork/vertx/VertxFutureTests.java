@@ -217,22 +217,22 @@ public class VertxFutureTests {
 		var ctx = vertx.getOrCreateContext();
 
 		Promise<String> promise = Promise.promise();
-		ctx.runOnContext(v -> {
-			try {
-				TimeUnit.MILLISECONDS.sleep(1900);
-				promise.complete("Foo bar");
-			} catch (InterruptedException e) {
-				promise.fail(e);
-			}
-		});
+		vertx.setTimer(2000, id -> promise.complete("Foo bar"));
 
 		VertxFuture<String> future = VertxFuture.of(promise.future());
 		ctx.runOnContext(v -> {
 			printThreadContext("context.verify");
 
-			IllegalStateException exception = assertThrows(IllegalStateException.class, future::get);
-	        assertEquals("Cannot not be called on vertx thread or event loop thread", exception.getMessage());
-			context.completeNow();
+			context.verify(() -> {
+				IllegalStateException exception = assertThrows(IllegalStateException.class, future::get);
+				assertEquals("Cannot not be called on vertx thread or event loop thread", exception.getMessage());
+				context.completeNow();
+			});
+		});
+
+		VertxFuture<String> completedFuture = VertxFuture.succeededFuture("Foo bar");
+		ctx.runOnContext(v -> {
+			context.verify(() -> assertEquals("Foo bar", completedFuture.join()));
 		});
 	}
 }

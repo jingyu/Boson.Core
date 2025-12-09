@@ -58,8 +58,8 @@ public class NodeSyncTests {
 				.vertx(vertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
-				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
+				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build();
 
@@ -80,8 +80,8 @@ public class NodeSyncTests {
 					.vertx(vertx)
 					.address4(localAddr)
 					.port(TEST_NODES_PORT_START + i)
-					.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + i))
-					.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
+					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
+					.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
 					.addBootstrap(bootstrap.getNodeInfo().getV4())
 					.enableDeveloperMode()
 					.build();
@@ -135,12 +135,7 @@ public class NodeSyncTests {
 	@BeforeAll
 	@Timeout(value = TEST_NODES + 1, unit = TimeUnit.MINUTES)
 	static void setup() throws Exception {
-		localAddr = AddressUtils.getAllAddresses()
-				.filter(Inet4Address.class::isInstance)
-				.filter(AddressUtils::isAnyUnicast)
-				.distinct()
-				.findFirst()
-				.orElse(null);
+		localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
 
 		if (localAddr == null)
 			fail("No eligible address to run the test.");
@@ -185,7 +180,7 @@ public class NodeSyncTests {
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 100)
 				.privateKey(keypair.privateKey().bytes())
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + nodeId))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + nodeId))
 				.build();
 
 		var node = new KadNode(config);

@@ -62,12 +62,7 @@ public class SybilTests {
 	private KadNode target;
 	private NodeInfo targetInfo;
 
-	private static final InetAddress localAddr = AddressUtils.getAllAddresses()
-			.filter(Inet4Address.class::isInstance)
-			.filter(AddressUtils::isAnyUnicast)
-			.distinct()
-			.findFirst()
-			.orElse(null);
+	private static final InetAddress localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
 
 	@BeforeEach
 	void setUp() throws Exception {
@@ -84,8 +79,8 @@ public class SybilTests {
 				.address4(localAddr)
 				.port(39001)
 				.generatePrivateKey()
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-target"))
-				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-target"))
+				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build());
 		target.start().get();
@@ -116,7 +111,7 @@ public class SybilTests {
 					.address4(localAddr)
 					.port(39002 + i)
 					.privateKey(sybilKey)
-					.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + i))
+					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
 					.enableDeveloperMode()
 					.build();
 
@@ -179,7 +174,7 @@ public class SybilTests {
 					.generatePrivateKey()
 					.address4(localAddr)
 					.port(39002)
-					.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + i))
+					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
 					.enableDeveloperMode()
 					.build();
 

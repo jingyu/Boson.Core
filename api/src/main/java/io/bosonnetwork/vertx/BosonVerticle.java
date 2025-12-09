@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.vertx;
 
-import java.util.List;
 import java.util.concurrent.Callable;
 
 import io.vertx.core.Context;
@@ -106,15 +105,6 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 */
 	public final JsonObject vertxConfig() {
 		return vertxContext.config();
-	}
-
-	/**
-	 * Returns the process arguments for the current Vert.x instance.
-	 *
-	 * @return a list of process arguments
-	 */
-	public final List<String> processArgs() {
-		return vertxContext.processArgs();
 	}
 
 	/**

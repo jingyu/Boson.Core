@@ -27,6 +27,7 @@ import java.net.InetAddress;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -88,6 +89,11 @@ import io.bosonnetwork.identifier.DIDConstants;
  */
 public class Json {
 	private static final String BOSON_JSON_MODULE_NAME = "io.bosonnetwork.utils.json.module";
+
+	/** The pre-configured Jackson {@link ObjectMapper} instance for JSON serialization and deserialization. */
+	public static final Base64.Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
+	/** The pre-configured Jackson {@link ObjectMapper} instance for JSON serialization and deserialization. */
+	public static final Base64.Decoder BASE64_DECODER = Base64.getUrlDecoder();
 
 	private static TypeReference<Map<String, Object>> _mapType;
 

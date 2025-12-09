@@ -13,6 +13,7 @@ import io.vertx.micrometer.VertxPrometheusOptions;
 
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.storage.InMemoryStorage;
 
 public class SimpleNodeConfiguration implements NodeConfiguration {
@@ -20,8 +21,8 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 	private final String host4;
 	private final String host6;
 	private final int port;
-	private final String privateKey;
-	private final Path dataPath;
+	private final Signature.PrivateKey privateKey;
+	private final Path dataDir;
 	private final String storageURL;
 	private final ArrayList<NodeInfo> bootstrapNodes;
 	private final boolean enableSpamThrottling;
@@ -34,8 +35,9 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 		this.host6 = config.host6();
 		this.port = config.port();
 		this.privateKey = config.privateKey();
-		this.dataPath = config.dataPath();
-		this.storageURL = config.storageURL() != null ? config.storageURL() : InMemoryStorage.STORAGE_URI;
+		this.dataDir = config.dataDir() != null ? config.dataDir().toAbsolutePath() :
+				Path.of(System.getProperty("user.dir")).resolve("node");
+		this.storageURL = config.storageURI() != null ? config.storageURI() : InMemoryStorage.STORAGE_URI;
 		this.bootstrapNodes = new ArrayList<>(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 		this.enableSpamThrottling = config.enableSpamThrottling();
 		this.enableSuspiciousNodeDetector = config.enableSuspiciousNodeDetector();
@@ -83,17 +85,17 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 	}
 
 	@Override
-	public String privateKey() {
+	public Signature.PrivateKey privateKey() {
 		return privateKey;
 	}
 
 	@Override
-	public Path dataPath() {
-		return dataPath;
+	public Path dataDir() {
+		return dataDir;
 	}
 
 	@Override
-	public String storageURL() {
+	public String storageURI() {
 		return storageURL;
 	}
 

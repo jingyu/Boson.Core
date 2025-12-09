@@ -69,9 +69,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	 * @param future the Vert.x Future to wrap
 	 */
 	protected VertxFuture(Future<T> future) {
-		this.future = future;
-
-		future.andThen(ar -> {
+		this.future = future.andThen(ar -> {
 			// update the internal state of CompletableFuture
 			if (ar.succeeded())
 				super.complete(ar.result());

@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.jline.builtins.ConfigurationPath;
@@ -57,6 +58,7 @@ import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.utils.ApplicationLock;
+import io.bosonnetwork.utils.Json;
 
 /**
  * @hidden
@@ -204,7 +206,8 @@ public class Main implements Callable<Integer> {
 
 		if (configFile != null && (!saveConfig || Files.exists(Path.of(configFile)))) {
 			try {
-				builder.load(configFile);
+				Map<String, Object> map = Json.yamlMapper().readValue(configFile, Json.mapType());
+				builder.template(map);
 			} catch (Exception e) {
 				System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
 				e.printStackTrace(System.err);
@@ -222,17 +225,17 @@ public class Main implements Callable<Integer> {
 			builder.port(port);
 
 		if (dataDir != null) {
-			builder.dataPath(dataDir);
+			builder.dataDir(dataDir);
 		} else {
-			if (!builder.hasDataPath())
-				builder.dataPath(DEFAULT_DATA_DIR);
+			if (!builder.hasDataDir())
+				builder.dataDir(DEFAULT_DATA_DIR);
 		}
 
 		if (storageURL != null) {
-			builder.storageURL(storageURL);
+			builder.storageURI(storageURL);
 		} else {
-			if (builder.hasDataPath())
-				builder.storageURL("jdbc:sqlite:" + builder.dataPath().resolve("node.db"));
+			if (builder.hasDataDir())
+				builder.storageURI("jdbc:sqlite:" + builder.dataDir().resolve("node.db"));
 		}
 
 		if (!builder.hasPrivateKey())
@@ -251,6 +254,8 @@ public class Main implements Callable<Integer> {
 		if (developerMode)
 			builder.enableDeveloperMode();
 
+		config = builder.build();
+
 		if (saveConfig) {
 			if (configFile == null && dataDir == null) {
 				System.out.println("No config file and no data directory specified, can not save the configuration.");
@@ -259,15 +264,14 @@ public class Main implements Callable<Integer> {
 
 			try {
 				Path targetFile = configFile != null ? Path.of(configFile) : Path.of(dataDir).resolve("config.yaml");
-				builder.save(targetFile);
+				Map<String, Object> map = ((DefaultNodeConfiguration) config).toMap();
+				Json.yamlMapper().writeValue(targetFile.toFile(), map);
 			} catch (Exception e) {
 				System.out.println("Can not save the config file: " + configFile + ", error: " + e.getMessage());
 				e.printStackTrace(System.err);
 				System.exit(-1);
 			}
 		}
-
-		config = builder.build();
 	}
 
 	private void initBosonNode() throws Exception {
@@ -298,7 +302,7 @@ public class Main implements Callable<Integer> {
 	}
 
 	private void setLogOutput() {
-		Path logDir = config.dataPath() != null ? config.dataPath() : Path.of("").toAbsolutePath();
+		Path logDir = config.dataDir() != null ? config.dataDir() : Path.of("").toAbsolutePath();
 		// with trailing slash
 		System.setProperty("BOSON_LOG_DIR", logDir.toString() + File.separator);
 	}
@@ -310,7 +314,7 @@ public class Main implements Callable<Integer> {
 
 		initTerminal();
 
-		Path lockFile = config.dataPath().resolve("lock");
+		Path lockFile = config.dataDir().resolve("lock");
 
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
 			initBosonNode();
@@ -336,7 +340,7 @@ public class Main implements Callable<Integer> {
 				}
 			}
 		} catch (IOException | IllegalStateException e) {
-			System.out.println("Another boson instance already running at " + config.dataPath());
+			System.out.println("Another boson instance already running at " + config.dataDir());
 			closeTerminal();
 			return -1;
 		}

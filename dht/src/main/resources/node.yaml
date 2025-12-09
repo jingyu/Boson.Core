@@ -1,0 +1,105 @@
+# ============================================================================
+# Sample configuration file for the Boson DHT Node
+#
+# Configuration file lookup order if no explicit path is provided:
+#
+#   Unix-like systems:
+#     1. ./node.yaml
+#     2. ~/.config/boson/node.yaml
+#     3. /usr/local/etc/boson/node.yaml
+#     4. /etc/boson/node.yaml
+#
+#   Windows:
+#     1. .\node.yaml
+#     2. %APPDATA%\boson\node.yaml
+#     3. %ProgramData%\boson\node.yaml
+# ============================================================================
+
+# IPv4 address the DHT node will bind to for incoming connections.
+#
+# Not recommended:
+#   - 0.0.0.0 (wildcard bind)
+#   - 127.0.0.1 (loopback)
+#
+# The node should bind to a specific, stable address so it can be uniquely
+# identified in the global DHT network.
+host4: 192.168.8.16
+
+# IPv6 address the DHT node will bind to.
+# Comment out or remove this field if IPv6 is not required.
+#
+# Not recommended:
+#   - :: (wildcard bind)
+#   - ::1 (loopback)
+#
+# Use a specific, stable IPv6 address to ensure the node remains uniquely
+# identifiable in the global DHT network.
+#
+# host6: 2001:db8:85a3::8a2e:370:7334
+
+# Port number for the DHT node to listen on.
+# Make sure this port is reachable from other nodes.
+port: 39001
+
+# Node private key.
+# Supported formats:
+#   - Hex-encoded string (must start with "0x")
+#   - Base58-encoded string
+# This key determines the node's long-term identity. Keep it secret.
+privateKey: 0x751a9612f9bd80e6e37a77a704dc2a99dbfb162c35cb138ca46eaacd656de9bedfbc8cf0871986c0cd89d6f0f2e24ce3c50088d8a66b41d7ef5f456c1defde28
+
+# Directory used by the node to store data such as routing tables,
+# persistent caches, and database files.
+#
+# If omitted, defaults to the current working directory.
+#
+# Recommended locations for user deployments:
+#   - Unix-like: ~/.local/share/boson/node
+#   - Windows:   %LOCALAPPDATA%\boson\node
+#
+# Recommended locations for system-wide deployments:
+#   - Unix-like: /var/lib/boson/node
+#   - Windows:   %ProgramData%\boson\node
+dataDir: ~/.local/share/boson/node
+
+# Storage backend used by the node.
+# Supported values:
+#   - PostgreSQL: postgresql://user:password@host:port/database
+#   - SQLite:     jdbc:sqlite:/path/to/sqlite.db
+#
+# For lightweight or embedded deployments, SQLite is recommended.
+# For super node deployments, prefer PostgreSQL.
+storageURL: jdbc:sqlite:node.db
+
+# Bootstrap nodes used when joining the DHT.
+# Each bootstrap node is a node info triple:
+#   [ nodeId, ipAddress, port ]
+#
+# Node ID must be a valid Base58-encoded node identifier.
+bootstraps:
+  - - 2dLbPsaySh9EGWwpgreYiLEPG3NDhaojj7DBBfSsRr6k
+    - 203.0.113.5
+    - 39001
+  - - 7jFV8w7eivjGEpaDu4V38EZ16CDhn4JutEdtGBWC67rF
+    - 198.51.100.8
+    - 39001
+
+# Enables spam throttling to protect against abusive or high-volume peers.
+# Default: true
+enableSpamThrottling: true
+
+# Enables detection of suspicious nodes (e.g., anomalous behaviors or patterns).
+# Default: true
+enableSuspiciousNodeDetector: true
+
+# Enables Prometheus-compatible metrics collection endpoint.
+# Useful for monitoring and diagnostics.
+# Default: false
+enableMetrics: false
+
+# Enables Developer Mode.
+# In this mode, the node accepts local/private network addresses
+# (e.g., RFC1918 addresses) in its routing table.
+# Do NOT use this in production environments.
+# Default: false
+enableDeveloperMode: false

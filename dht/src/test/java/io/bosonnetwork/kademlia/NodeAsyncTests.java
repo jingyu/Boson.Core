@@ -27,6 +27,7 @@ import io.vertx.core.VertxOptions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.Timeout;
 import io.vertx.junit5.VertxExtension;
@@ -48,6 +49,7 @@ import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.vertx.VertxFuture;
 
 @ExtendWith(VertxExtension.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Timeout(value = NodeAsyncTests.TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 public class NodeAsyncTests {
 	static final int TEST_NODES = 32;
@@ -68,8 +70,8 @@ public class NodeAsyncTests {
 				.vertx(vertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
-				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
+				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build();
 
@@ -82,26 +84,36 @@ public class NodeAsyncTests {
 		return bootstrap.stop();
 	}
 
-	private static <T> VertxFuture<Void> executeSequentially(int max, int index, Function<Integer, VertxFuture<T>> action) {
-		if (index >= max)
-			return VertxFuture.succeededFuture();
-
-		return action.apply(index)
-				.thenCompose(result -> executeSequentially(max, index + 1, action));
-	}
-
-	protected static VertxFuture<Void> executeSequentially(List<KadNode> nodes, int index, Function<KadNode, VertxFuture<Void>> action) {
-		if (index >= nodes.size())
-			return VertxFuture.succeededFuture();
-
-		var node = nodes.get(index);
-		return action.apply(node)
-				.thenCompose(v -> executeSequentially(nodes, index + 1, action))
-				.exceptionally(e -> {
+	private static <T> VertxFuture<Void> executeSequentially(int count, Function<Integer, VertxFuture<T>> action) {
+		VertxFuture<T> chain = VertxFuture.succeededFuture();
+		for (int i = 0; i < count; i++) {
+			final int index = i;
+			chain = chain.thenCompose(v -> action.apply(index).whenComplete((r, e) -> {
+				if (e != null) {
+					System.err.println("Index " + index + " failed");
 					//noinspection CallToPrintStackTrace
 					e.printStackTrace();
-					return null;
-				});
+				}
+			}));
+		}
+
+		return chain.thenApply(v -> null);
+	}
+
+	protected static VertxFuture<Void> executeSequentially(List<KadNode> nodes, Function<KadNode, VertxFuture<Void>> action) {
+		VertxFuture<Void> chain = VertxFuture.succeededFuture();
+
+		for (final KadNode node : nodes) {
+			chain = chain.thenCompose(v -> action.apply(node).whenComplete((r, e) -> {
+				if (e != null) {
+					System.err.println("Node " + node.getId() + " failed");
+					//noinspection CallToPrintStackTrace
+					e.printStackTrace();
+				}
+			}));
+		}
+
+		return chain;
 	}
 
 	private static VertxFuture<KadNode> createTestNode(int index) {
@@ -111,8 +123,8 @@ public class NodeAsyncTests {
 				.vertx(vertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START + index)
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + index))
-				.storageURL("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + index + File.separator + "storage.db"))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + index))
+				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + index + File.separator + "storage.db"))
 				.addBootstrap(bootstrap.getNodeInfo().getV4())
 				.enableDeveloperMode()
 				.build();
@@ -129,12 +141,11 @@ public class NodeAsyncTests {
 			}
 		});
 
-		node.start();
-		return VertxFuture.of(promise.future());
+		return node.start().thenApply(v -> node);
 	}
 
 	private static VertxFuture<Void> startTestNodes() {
-		return executeSequentially(TEST_NODES, 0, NodeAsyncTests::createTestNode)
+		return executeSequentially(TEST_NODES, NodeAsyncTests::createTestNode)
 				.whenComplete((v, e) -> {
 					if (e == null)
 						System.out.println("\n\n\007🟢 All the nodes are ready!!!");
@@ -146,7 +157,10 @@ public class NodeAsyncTests {
 	private static VertxFuture<Void> stopTestNodes() {
 		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
 		// cannot stop all the nodes in parallel, it will cause vertx internal error.
-		return executeSequentially(testNodes, 0, KadNode::stop);
+		return executeSequentially(testNodes, n -> {
+			System.out.format("\n\n\007🟢 Stopping the node %s ...\n", n.getId());
+			return n.stop();
+		});
 	}
 
 	private static VertxFuture<Void> dumpRoutingTable(String name, KadNode node) {
@@ -187,12 +201,7 @@ public class NodeAsyncTests {
 	@BeforeAll
 	@Timeout(value = TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 	static void setup(VertxTestContext context) throws Exception {
-		localAddr = AddressUtils.getAllAddresses()
-				.filter(Inet4Address.class::isInstance)
-				.filter(AddressUtils::isAnyUnicast)
-				.distinct()
-				.findFirst()
-				.orElse(null);
+		localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
 
 		if (localAddr == null)
 			fail("No eligible address to run the test.");
@@ -218,6 +227,7 @@ public class NodeAsyncTests {
 	}
 
 	@AfterAll
+	@Timeout(value = TEST_NODES + 1, timeUnit = TimeUnit.SECONDS)
 	static void teardown(VertxTestContext context) throws Exception {
 		dumpRoutingTables().thenCompose(v -> {
 			return stopTestNodes();
@@ -244,7 +254,7 @@ public class NodeAsyncTests {
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 100)
 				.privateKey(keypair.privateKey().bytes())
-				.dataPath(testDir.resolve("nodes"  + File.separator + "node-" + nodeId))
+				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + nodeId))
 				.build();
 
 		var node = new KadNode(config);
@@ -257,10 +267,10 @@ public class NodeAsyncTests {
 	@Test
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testFindNode(VertxTestContext context) {
-		executeSequentially(testNodes, 0, target -> {
+		executeSequentially(testNodes, target -> {
 			System.out.format("\n\n\007🟢 Looking up node %s ...\n", target.getId());
 
-			return executeSequentially(testNodes, 0, node -> {
+			return executeSequentially(testNodes, node -> {
 				System.out.format("\n\n\007⌛ %s looking up node %s ...\n", node.getId(), target.getId());
 				var future = (VertxFuture<Result<NodeInfo>>) node.findNode(target.getId());
 				return future.thenAccept(result -> {
@@ -278,14 +288,14 @@ public class NodeAsyncTests {
 	@Test
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testAnnounceAndFindPeer(VertxTestContext context) {
-		executeSequentially(testNodes, 0, announcer -> {
+		executeSequentially(testNodes, announcer -> {
 			var p = PeerInfo.create(announcer.getId(), 8888);
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			return ((VertxFuture<Void>)announcer.announcePeer(p)).thenCompose(v -> {
 				System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
 
-				return executeSequentially(testNodes, 0, node -> {
+				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 					var future = (VertxFuture<List<PeerInfo>>) node.findPeer(p.getId(), 0);
 					return future.thenAccept(result -> {
@@ -305,14 +315,14 @@ public class NodeAsyncTests {
 	@Test
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testStoreAndFindValue(VertxTestContext context) {
-		executeSequentially(testNodes, 0, announcer -> {
+		executeSequentially(testNodes, announcer -> {
 			var v = Value.createValue(("Hello from " + announcer.getId()).getBytes());
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 
 			return ((VertxFuture<Void>) announcer.storeValue(v)).thenCompose(na -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
-				return executeSequentially(testNodes, 0, node -> {
+				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					var future = (VertxFuture<Value>) node.findValue(v.getId());
 					return future.thenAccept(result -> {
@@ -333,7 +343,7 @@ public class NodeAsyncTests {
 		var values = new ArrayList<Value>(TEST_NODES);
 
 		// initial announcement
-		executeSequentially(testNodes, 0, announcer -> {
+		executeSequentially(testNodes, announcer -> {
 			var peerKeyPair = KeyPair.random();
 			var nonce = Nonce.random();
 			final Value v;
@@ -348,7 +358,7 @@ public class NodeAsyncTests {
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((VertxFuture<Void>)announcer.storeValue(v)).thenCompose(na -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
-				return executeSequentially(testNodes, 0, node -> {
+				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					var future = (VertxFuture<Value>) node.findValue(v.getId());
 					return future.thenAccept(result -> {
@@ -366,7 +376,7 @@ public class NodeAsyncTests {
 			});
 		}).thenCompose(unused -> {
 			// update announcement
-			return executeSequentially(testNodes.size(), 0, index -> {
+			return executeSequentially(testNodes.size(), index -> {
 				KadNode announcer = testNodes.get(index);
 				final Value v;
 				try {
@@ -380,7 +390,7 @@ public class NodeAsyncTests {
 				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 				return ((VertxFuture<Void>) announcer.storeValue(v)).thenCompose(unused1 -> {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
-					return executeSequentially(testNodes, 0, node -> {
+					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 						return ((VertxFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
 							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
@@ -404,7 +414,7 @@ public class NodeAsyncTests {
 		var recipients = new ArrayList<KeyPair>(TEST_NODES);
 
 		// initial announcement
-		executeSequentially(testNodes, 0, announcer -> {
+		executeSequentially(testNodes, announcer -> {
 			var recipient = KeyPair.random();
 			recipients.add(recipient);
 
@@ -423,7 +433,7 @@ public class NodeAsyncTests {
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((VertxFuture<Void>) announcer.storeValue(v)).thenCompose(unused -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
-				return executeSequentially(testNodes, 0, node -> {
+				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					return ((VertxFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
@@ -444,7 +454,7 @@ public class NodeAsyncTests {
 			});
 		}).thenCompose(unused -> {
 			// update announcement
-			return executeSequentially(testNodes.size(), 0, index -> {
+			return executeSequentially(testNodes.size(), index -> {
 				KadNode announcer = testNodes.get(index);
 				var recipient = recipients.get(index);
 				var data = ("Updated value from " + announcer.getId()).getBytes();
@@ -460,7 +470,7 @@ public class NodeAsyncTests {
 				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 				return ((VertxFuture<Void>) announcer.storeValue(v)).thenCompose(unused1 -> {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
-					return executeSequentially(testNodes, 0, node -> {
+					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 						return ((VertxFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
 							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());

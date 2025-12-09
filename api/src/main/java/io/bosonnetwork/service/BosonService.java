@@ -25,9 +25,11 @@ package io.bosonnetwork.service;
 
 import java.util.concurrent.CompletableFuture;
 
+import io.bosonnetwork.Id;
+
 /**
  * Interface BosonService is the basic abstraction for the extensible service on top of
- * Boson super node. This interface describes the basic information about the service
+ * the Boson super node. This interface describes the basic information about the service
  * itself and the life-cycle management methods. All super node services should implement
  * this interface.
  */
@@ -45,6 +47,45 @@ public interface BosonService {
 	 * @return the service name.
 	 */
 	String getName();
+
+	/**
+	 * Retrieves the peer identifier associated with the service.
+	 *
+	 * @return an {@link Id} object representing the peer identifier.
+	 */
+	Id getPeerId();
+
+	/**
+	 * Retrieves the host associated with the service.
+	 *
+	 * @return a string representing the host's address.
+	 */
+	String getHost();
+
+	/**
+	 * Retrieves the port number associated with the service.
+	 *
+	 * @return an integer representing the port number.
+	 */
+	int getPort();
+
+	/**
+	 * Retrieves an alternative endpoint for the service.
+	 *
+	 * @return a string representing the alternative endpoint.
+	 */
+	default String getAlternativeEndpoint() {
+		return null;
+	}
+
+	/**
+	 * Checks whether the federation feature is enabled for the service.
+	 *
+	 * @return true if federation is enabled, false otherwise.
+	 */
+	default boolean isFederationEnabled() {
+		return false;
+	}
 
 	/**
 	 * Get the running status

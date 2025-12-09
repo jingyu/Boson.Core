@@ -30,7 +30,6 @@ import io.vertx.core.Vertx;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
-import io.bosonnetwork.access.AccessManager;
 
 /**
  * The ServiceContext interface represents a context in which the services can access the
@@ -62,15 +61,35 @@ public interface ServiceContext {
 	 *
 	 * @return the {@code Path} object.
 	 */
-	Path getDataPath();
+	Path getDataDir();
 
 	/**
-	 * Gets the {@link io.bosonnetwork.access.AccessManager} instance that provided by
-	 * the host Boson node.
+	 * Gets the client authenticator instance.
 	 *
-	 * @return the AccessManager interface.
+	 * @return the {@link ClientAuthenticator} used for authenticating clients.
 	 */
-	AccessManager getAccessManager();
+	ClientAuthenticator getClientAuthenticator();
+
+	/**
+	 * Gets the client authorizer instance.
+	 *
+	 * @return the {@link ClientAuthorizer} used for authorizing client requests.
+	 */
+	ClientAuthorizer getClientAuthorizer();
+
+	/**
+	 * Gets the federation authenticator instance.
+	 *
+	 * @return the {@link FederationAuthenticator} used for authenticating federation requests.
+	 */
+	FederationAuthenticator getFederationAuthenticator();
+
+	/**
+	 * Gets the federation instance.
+	 *
+	 * @return the {@link Federation} object.
+	 */
+	Federation getFederation();
 
 	/**
 	 * Gets the service configuration data.
@@ -82,19 +101,20 @@ public interface ServiceContext {
 	/**
 	 * Set the service runtime property
 	 *
-	 * @param name the property name.
+	 * @param key the property key.
 	 * @param value the new value to be associated with the property name.
-	 * @return the previous value associated with {@code name}.
+	 * @return the previous value associated with {@code key}.
 	 */
-	Object setProperty(String name, Object value);
+	Object setProperty(Object key, Object value);
 
 	/**
-	 * Returns the value to which the specified name, or {@code null} if the service
-	 * contains no property value for the name.
+	 * Returns the value to which the specified key is mapped, or {@code null} if the service
+	 * contains no property value for the key.
 	 *
-	 * @param name the property name.
+	 * @param key the property key.
+	 * @param <T> the type of the property value.
 	 * @return the value of the specified property, or
      *         {@code null} if the service contains no mapping for the property.
 	 */
-	Object getProperty(String name);
+	<T> T getProperty(Object key);
 }

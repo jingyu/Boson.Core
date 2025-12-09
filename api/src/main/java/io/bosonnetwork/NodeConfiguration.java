@@ -29,6 +29,8 @@ import java.util.Collections;
 
 import io.vertx.core.Vertx;
 
+import io.bosonnetwork.crypto.Signature;
+
 /**
  * Configuration interface for customizing the initialization and behavior of a Boson DHT node.
  * <p>
@@ -98,9 +100,9 @@ public interface NodeConfiguration {
 	 * If {@code null} is returned, the node will generate a random private key upon startup.
 	 * </p>
 	 *
-	 * @return the private key as a string, or {@code null} if no key is set.
+	 * @return the private key, or {@code null} if no key is set.
 	 */
-	default String privateKey() {
+	default Signature.PrivateKey privateKey() {
 		return null;
 	}
 
@@ -113,7 +115,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the storage directory path, or {@code null} to disable persistence.
 	 */
-	default Path dataPath() {
+	default Path dataDir() {
 		return null;
 	}
 
@@ -122,7 +124,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the external storage URL as a string, or {@code null} if not configured.
 	 */
-	default String storageURL() {
+	default String storageURI() {
 		return null;
 	}
 

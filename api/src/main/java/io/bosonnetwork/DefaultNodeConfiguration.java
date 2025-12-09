@@ -25,36 +25,40 @@ package io.bosonnetwork;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.vertx.core.Vertx;
 
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Base58;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.utils.ConfigMap;
+import io.bosonnetwork.utils.Hex;
 
 /**
  * Default configuration implementation for the {@link NodeConfiguration} interface.
+ * <p>
+ * Use the {@link Builder} class to construct instances with a fluent API. The configuration
+ * can also be serialized to/from Map for persistence or network transmission.
+ * </p>
+ *
+ * @see NodeConfiguration
+ * @see Builder
  */
-@JsonPropertyOrder({"host4", "host6", "port", "privateKey", "dataPath", "storageURL", "bootstraps",
-		"spamThrottling", "suspiciousNodeDetector", "developerMode", "metrics"})
 public class DefaultNodeConfiguration implements NodeConfiguration {
 	/**
 	 * The default port for the DHT node, chosen from the IANA unassigned range (38866-39062).
@@ -71,75 +75,56 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	/**
 	 * IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4.
 	 */
-	@JsonProperty("host4")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	String host4;
+	private String host4;
 
 	/**
 	 * IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.
 	 */
-	@JsonProperty("host6")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	String host6;
+	private String host6;
 
 	/**
 	 * The port number for the DHT node.
 	 */
-	@JsonProperty("port")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	int port;
+	private int port;
 
 	/**
 	 * The node's private key, encoded in Base58.
 	 */
-	@JsonProperty("privateKey")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	String privateKey;
+	private Signature.PrivateKey privateKey;
 
 	/**
-	 * Path to the directory for persistent DHT data storage. If null, disables persistence.
+	 * Path to the directory for persistent DHT data storage. disables persistence if null.
 	 */
-	private Path dataPath;
+	private Path dataDir;
 
 	/**
-	 * Optional external storage URL for the node.
+	 * Optional external storage URI for the node.
 	 */
-	@JsonProperty("storageURL")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	private String storageURL;
+	private String storageURI;
 
 	/**
 	 * Set of bootstrap nodes for joining the DHT network.
 	 */
-	@JsonProperty("bootstraps")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private final Set<NodeInfo> bootstraps;
 
 	/**
 	 * Whether spam throttling is enabled for this node.
 	 */
-	@JsonProperty("spamThrottling")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private boolean enableSpamThrottling;
 
 	/**
 	 * Whether suspicious node detection is enabled for this node.
 	 */
-	@JsonProperty("suspiciousNodeDetector")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private boolean enableSuspiciousNodeDetector;
 
 	/**
 	 * Whether developer mode is enabled for this node.
 	 */
-	@JsonProperty("developerMode")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private boolean enableDeveloperMode;
 
 	/**
-	 * Whether metrics collection is enabled for this node.
+	 * Whether metrics is enabled for this node.
 	 */
-	@JsonProperty("metrics")
 	private boolean enableMetrics;
 
 	/**
@@ -148,12 +133,14 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * developer mode and metrics are disabled, and no bootstraps are set.
 	 */
 	private DefaultNodeConfiguration() {
-		this.bootstraps = new HashSet<>();
+		this.port = DEFAULT_DHT_PORT;
+		this.storageURI = "jdbc:sqlite:node.db";
 		this.enableSpamThrottling = true;
 		this.enableSuspiciousNodeDetector = true;
 		this.enableDeveloperMode = false;
 		this.enableMetrics = false;
-		this.port = DEFAULT_DHT_PORT;
+
+		this.bootstraps = new HashSet<>();
 	}
 
 	/**
@@ -163,6 +150,19 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	@Override
 	public Vertx vertx() {
 		return vertx;
+	}
+
+	/**
+	 * Sets the Vert.x instance for this configuration.
+	 * <p>
+	 * This method is typically used internally to inject the Vert.x instance after
+	 * configuration construction.
+	 * </p>
+	 *
+	 * @param vertx the Vert.x instance to set
+	 */
+	public void setVertx(Vertx vertx) {
+		this.vertx = vertx;
 	}
 
 	/**
@@ -197,7 +197,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the Base58-encoded private key string.
 	 */
 	@Override
-	public String privateKey() {
+	public Signature.PrivateKey privateKey() {
 		return privateKey;
 	}
 
@@ -206,27 +206,8 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the path to the persistent data directory, or null if persistence is disabled.
 	 */
 	@Override
-	public Path dataPath() {
-		return dataPath;
-	}
-
-	/**
-	 * For Jackson serialization: gets the string representation of the data path.
-	 * @return the string path, or null if not set.
-	 */
-	@JsonProperty("dataPath")
-	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	private String getDataPath() {
-		return dataPath != null ? dataPath.toString() : null;
-	}
-
-	/**
-	 * For Jackson deserialization: sets the data path from a string.
-	 * @param dataPath the string path to set (may be null).
-	 */
-	@JsonProperty("dataPath")
-	private void setDataPath(String dataPath) {
-		this.dataPath = normalizePath(dataPath != null ? Path.of(dataPath) : null);
+	public Path dataDir() {
+		return dataDir;
 	}
 
 	/**
@@ -234,8 +215,8 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the external storage URL, or null if not set.
 	 */
 	@Override
-	public String storageURL() {
-		return storageURL;
+	public String storageURI() {
+		return storageURI;
 	}
 
 	/**
@@ -276,11 +257,135 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 
 	/**
 	 * {@inheritDoc}
-	 * @return true if metrics collection is enabled.
+	 * @return true if metrics is enabled.
 	 */
 	@Override
 	public boolean enableMetrics() {
 		return enableMetrics;
+	}
+
+	/**
+	 * Creates a DefaultNodeConfiguration from a Map representation.
+	 * <p>
+	 * This static factory method deserializes a configuration from a Map structure.
+	 * The map should contain the following keys:
+	 * <ul>
+	 *   <li>{@code host4} (String, optional) - IPv4 address</li>
+	 *   <li>{@code host6} (String, optional) - IPv6 address (at least one of host4/host6 required)</li>
+	 *   <li>{@code port} (Integer, optional) - DHT port (defaults to 39001)</li>
+	 *   <li>{@code privateKey} (String, required) - Base58 or hex-encoded private key</li>
+	 *   <li>{@code dataDir} (String, optional) - Path to persistent data directory</li>
+	 *   <li>{@code storageURI} (String, required) - Storage URI (defaults to "jdbc:sqlite:node.db")</li>
+	 *   <li>{@code bootstraps} (List&lt;List&lt;Object&gt;&gt;, optional) - Bootstrap nodes as [id, host, port] triplets</li>
+	 *   <li>{@code enableSpamThrottling} (Boolean, optional) - Enable spam throttling (default: true)</li>
+	 *   <li>{@code enableSuspiciousNodeDetector} (Boolean, optional) - Enable suspicious node detection (default: true)</li>
+	 *   <li>{@code enableDeveloperMode} (Boolean, optional) - Enable developer mode (default: false)</li>
+	 *   <li>{@code enableMetrics} (Boolean, optional) - Enable metrics (default: false)</li>
+	 * </ul>
+	 *
+	 * @param map the map containing configuration data, must not be null or empty
+	 * @return a new DefaultNodeConfiguration instance
+	 * @throws NullPointerException if map is null
+	 * @throws IllegalArgumentException if map is empty, required fields are missing, or values are invalid
+	 */
+	public static DefaultNodeConfiguration fromMap(Map<String, Object> map) {
+		Objects.requireNonNull(map, "map");
+		if (map.isEmpty())
+			throw new IllegalArgumentException("Configuration is empty");
+
+		DefaultNodeConfiguration config = new DefaultNodeConfiguration();
+
+		ConfigMap m = new ConfigMap(map);
+
+		config.host4 = m.getString("host4", config.host4);
+		config.host6 = m.getString("host6", config.host6);
+		if (config.host4 == null || config.host4.isEmpty() && config.host6 == null || config.host6.isEmpty())
+			throw new IllegalArgumentException("Missing host4 or host6");
+
+		config.port = m.getPort("port", config.port);
+		String sk = m.getString("privateKey", null);
+		if (sk == null || sk.isEmpty())
+			throw new IllegalArgumentException("Missing privateKey");
+		try {
+			byte[] keyBytes = sk.startsWith("0x") ? Hex.decode(sk.substring(2)) : Base58.decode(sk);
+			config.privateKey = Signature.PrivateKey.fromBytes(keyBytes);
+		} catch (Exception e) {
+			throw new IllegalArgumentException("Invalid privateKey: " + config.privateKey);
+		}
+
+		String dir = m.getString("dataDir", null);
+		if (dir != null && !dir.isEmpty())
+			config.dataDir = Path.of(dir);
+
+		config.storageURI = m.getString("storageURI", config.storageURI);
+		if (config.storageURI == null || config.storageURI.isEmpty())
+			throw new IllegalArgumentException("Missing storageURI");
+
+		List<List<Object>> lst = m.getList("bootstraps");
+		if (lst != null && !lst.isEmpty()) {
+			lst.forEach(b -> {
+				if (b.size() != 3)
+					throw new IllegalArgumentException("Invalid bootstrap node: missing fields - " + b);
+
+				try {
+					Id id = Id.of((String) b.get(0));
+					String host = (String) b.get(1);
+					int port = (int) b.get(2);
+
+					config.bootstraps.add(new NodeInfo(id, host, port));
+				} catch (Exception e) {
+					throw new IllegalArgumentException("Invalid bootstrap node: " + b);
+				}
+			});
+		}
+
+		config.enableSpamThrottling = m.getBoolean("enableSpamThrottling", config.enableSpamThrottling);
+		config.enableSuspiciousNodeDetector = m.getBoolean("enableSuspiciousNodeDetector", config.enableSuspiciousNodeDetector);
+		config.enableDeveloperMode = m.getBoolean("enableDeveloperMode", config.enableDeveloperMode);
+		config.enableMetrics = m.getBoolean("enableMetrics", config.enableMetrics);
+
+		return config;
+	}
+
+	/**
+	 * Serializes this configuration to a Map representation.
+	 * <p>
+	 * The returned map contains all configured values and can be used for persistence,
+	 * network transmission, or creating a new configuration via {@link #fromMap(Map)}.
+	 * Null or empty values are excluded from the map.
+	 * </p>
+	 *
+	 * @return a Map containing the configuration data
+	 */
+	public Map<String, Object> toMap() {
+		HashMap<String, Object> map = new HashMap<>();
+
+		if (host4 != null)
+			map.put("host4", host4);
+
+		if (host6 != null)
+			map.put("host6", host6);
+
+		map.put("port", port);
+		map.put("privateKey", privateKey);
+
+		if (dataDir != null)
+			map.put("dataDir", dataDir);
+
+		map.put("storageURI", storageURI);
+
+		if (!bootstraps.isEmpty()) {
+			List<List<Object>> lst = new ArrayList<>();
+			bootstraps.forEach(n -> lst.add(Arrays.asList(n.getId().toString(), n.getHost(), n.getPort())));
+			map.put("bootstraps", lst);
+		}
+
+		map.put("enableSpamThrottling", enableSpamThrottling);
+		map.put("enableSuspiciousNodeDetector", enableSuspiciousNodeDetector);
+		map.put("enableDeveloperMode", enableDeveloperMode);
+		map.put("enableMetrics", enableMetrics);
+
+		return map;
 	}
 
 	/**
@@ -297,7 +402,39 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * Constructs a new Builder with default settings.
 		 */
 		protected Builder() {
-			reset();
+			config = new DefaultNodeConfiguration();
+		}
+
+		/**
+		 * Gets or lazily initializes the configuration instance.
+		 * <p>
+		 * This private helper ensures the config field is initialized on first access.
+		 * </p>
+		 *
+		 * @return the configuration instance
+		 */
+		private DefaultNodeConfiguration config() {
+			return config == null ? config = new DefaultNodeConfiguration() : config;
+		}
+
+		/**
+		 * Initializes this builder from a template Map.
+		 * <p>
+		 * This method loads a complete configuration from a Map, replacing any previously
+		 * set values. The template map should follow the same structure as expected by
+		 * {@link DefaultNodeConfiguration#fromMap(Map)}.
+		 * </p>
+		 *
+		 * @param template the template map containing configuration data, must not be null
+		 * @return this Builder for chaining
+		 * @throws NullPointerException if template is null
+		 * @throws IllegalArgumentException if the template is invalid
+		 * @see DefaultNodeConfiguration#fromMap(Map)
+		 */
+		public Builder template(Map<String, Object> template) {
+			Objects.requireNonNull(template, "template");
+			this.config = DefaultNodeConfiguration.fromMap(template);
+			return this;
 		}
 
 		/**
@@ -308,7 +445,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 */
 		public Builder vertx(Vertx vertx) {
 			Objects.requireNonNull(vertx, "vertx");
-			config.vertx = vertx;
+			config().vertx = vertx;
 			return this;
 		}
 
@@ -318,16 +455,11 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @throws IllegalStateException if no suitable IPv4 address is found
 		 */
 		public Builder autoHost4() {
-			InetAddress addr = AddressUtils.getAllAddresses()
-					.filter(Inet4Address.class::isInstance)
-					.filter(AddressUtils::isAnyUnicast)
-					.distinct()
-					.findFirst()
-					.orElse(null);
+			InetAddress addr = AddressUtils.getDefaultRouteAddress(Inet6Address.class);
 			if (addr == null)
 				throw new IllegalStateException("No available IPv4 address");
 
-			config.host4 = addr.getHostAddress();
+			config().host4 = addr.getHostAddress();
 			return this;
 		}
 
@@ -337,16 +469,11 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @throws IllegalStateException if no suitable IPv6 address is found
 		 */
 		public Builder autoHost6() {
-			InetAddress addr = AddressUtils.getAllAddresses()
-					.filter(Inet6Address.class::isInstance)
-					.filter(AddressUtils::isAnyUnicast)
-					.distinct()
-					.findFirst()
-					.orElse(null);
+			InetAddress addr = AddressUtils.getDefaultRouteAddress(Inet6Address.class);
 			if (addr == null)
 				throw new IllegalStateException("No available IPv6 address");
 
-			config.host6 = addr.getHostAddress();
+			config().host6 = addr.getHostAddress();
 			return this;
 		}
 
@@ -356,28 +483,28 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @throws IllegalStateException if neither IPv4 nor IPv6 addresses are found
 		 */
 		public Builder autoHosts() {
-			InetAddress addr4 = AddressUtils.getAllAddresses()
-					.filter(Inet4Address.class::isInstance)
-					.filter(AddressUtils::isAnyUnicast)
-					.distinct()
-					.findFirst()
-					.orElse(null);
+			InetAddress addr4;
+			try {
+				addr4 = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
+			} catch (Exception e) {
+				addr4 = null;
+			}
 
-			InetAddress addr6 = AddressUtils.getAllAddresses()
-					.filter(Inet6Address.class::isInstance)
-					.filter(AddressUtils::isAnyUnicast)
-					.distinct()
-					.findFirst()
-					.orElse(null);
+			InetAddress addr6;
+			try {
+				addr6 = AddressUtils.getDefaultRouteAddress(Inet6Address.class);
+			} catch (Exception e) {
+				addr6 = null;
+			}
 
 			if (addr4 == null && addr6 == null)
 				throw new IllegalStateException("No available IPv4/6 address");
 
 			if (addr4 != null)
-				config.host4 = addr4.getHostAddress();
+				config().host4 = addr4.getHostAddress();
 
 			if (addr6 != null)
-				config.host6 = addr6.getHostAddress();
+				config().host6 = addr6.getHostAddress();
 
 			return this;
 		}
@@ -387,7 +514,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @param host the string host name or IPv4 address (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the host is not a valid IPv4 address
-		 * @throws NullPointerException if host is null
+		 * @throws NullPointerException if the host is null
 		 */
 		public Builder host4(String host) {
 			Objects.requireNonNull(host, "host");
@@ -412,7 +539,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 				throw new IllegalArgumentException("Not any unicast address");
 
 			if (addr instanceof Inet4Address)
-				config.host4 = addr.getHostAddress();
+				config().host4 = addr.getHostAddress();
 			else
 				throw new IllegalArgumentException("Invalid IPv4 address: " + addr);
 
@@ -424,7 +551,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @param host the string host name or IPv6 address (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the host is not a valid IPv6 address
-		 * @throws NullPointerException if host is null
+		 * @throws NullPointerException if the host is null
 		 */
 		public Builder host6(String host) {
 			Objects.requireNonNull(host, "host");
@@ -449,7 +576,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 				throw new IllegalArgumentException("Not any unicast address");
 
 			if (addr instanceof Inet6Address)
-				config.host6 = addr.getHostAddress();
+				config().host6 = addr.getHostAddress();
 			else
 				throw new IllegalArgumentException("Invalid IPv6 address: " + addr);
 
@@ -466,7 +593,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 			if (port <= 0 || port > 65535)
 				throw new IllegalArgumentException("Invalid port: " + port);
 
-			config.port = port;
+			config().port = port;
 			return this;
 		}
 
@@ -475,7 +602,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder generatePrivateKey() {
-			config.privateKey = Base58.encode(Signature.KeyPair.random().privateKey().bytes());
+			config().privateKey = Signature.KeyPair.random().privateKey();
 			return this;
 		}
 
@@ -486,28 +613,24 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @throws IllegalArgumentException if the key is not 64 bytes
 		 */
 		public Builder privateKey(byte[] privateKey) {
-			if (privateKey == null || privateKey.length != 64)
-				throw new IllegalArgumentException("Invalid private key");
-
-			config.privateKey = Base58.encode(privateKey);
+			Objects.requireNonNull(privateKey, "privateKey");
+			config().privateKey = Signature.PrivateKey.fromBytes(privateKey);
 			return this;
 		}
 
 		/**
 		 * Set the node's private key from a Base58-encoded string.
-		 * @param privateKey the Base58-encoded private key string (must not be null)
+		 * @param privateKey the Base58-encoded or hex-encoded private key string (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the key is not 64 bytes when decoded
 		 * @throws NullPointerException if privateKey is null
 		 */
 		public Builder privateKey(String privateKey) {
 			Objects.requireNonNull(privateKey, "privateKey");
-
-			byte[] key = Base58.decode(privateKey);
-			if (key.length != 64)
-				throw new IllegalArgumentException("Invalid private key");
-
-			config.privateKey = privateKey;
+			byte[] key = privateKey.startsWith("0x") ?
+					Hex.decode(privateKey, 2, privateKey.length() - 2) :
+					Base58.decode(privateKey);
+			config().privateKey = Signature.PrivateKey.fromBytes(key);
 			return this;
 		}
 
@@ -516,35 +639,35 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return true if a private key is set, false otherwise
 		 */
 		public boolean hasPrivateKey() {
-			return config.privateKey != null;
+			return config().privateKey != null;
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a string path.
-		 * @param path the string path (may be null to disable persistence)
+		 * @param dir the string path (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
-		public Builder dataPath(String path) {
-			return dataPath(path != null ? Path.of(path) : null);
+		public Builder dataDir(String dir) {
+			return dataDir(dir != null ? Path.of(dir) : null);
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a File object.
-		 * @param path the File pointing to the storage directory (may be null to disable persistence)
+		 * @param path the File pointing to the storage directory (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
-		public Builder dataPath(File path) {
-			dataPath(path != null ? path.toPath() : null);
+		public Builder dataDir(File path) {
+			dataDir(path != null ? path.toPath() : null);
 			return this;
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a Path.
-		 * @param path the Path to the storage directory (may be null to disable persistence)
+		 * @param path the Path to the storage directory (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
-		public Builder dataPath(Path path) {
-			config.dataPath = normalizePath(path);
+		public Builder dataDir(Path path) {
+			config().dataDir = path;
 			return this;
 		}
 
@@ -552,27 +675,29 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * Checks if a data path has been set.
 		 * @return true if a data path is set, false otherwise
 		 */
-		public boolean hasDataPath() {
-			return config.dataPath != null;
+		public boolean hasDataDir() {
+			return config().dataDir != null;
 		}
 
 		/**
 		 * Gets the current data path set in the builder.
 		 * @return the Path to the storage directory, or null if not set
 		 */
-		public Path dataPath() {
-			return config.dataPath;
+		public Path dataDir() {
+			return config().dataDir;
 		}
 
 		/**
 		 * Set the external storage URL for the node.
-		 * @param storageURL the storage URL (must not be null)
+		 * @param storageURI the storage URL (must not be null)
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if storageURL is null
+		 * @throws NullPointerException if storageURI is null
 		 */
-		public Builder storageURL(String storageURL) {
-			Objects.requireNonNull(storageURL, "storageURL");
-			config.storageURL = storageURL;
+		public Builder storageURI(String storageURI) {
+			Objects.requireNonNull(storageURI, "storageURI");
+			if (!storageURI.startsWith("postgresql://") && !storageURI.startsWith("jdbc:sqlite:"))
+				throw new IllegalArgumentException("Unsupported storage URL: " + storageURI);
+			config().storageURI = storageURI;
 			return this;
 		}
 
@@ -585,7 +710,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 */
 		public Builder addBootstrap(String id, String addr, int port) {
 			NodeInfo node = new NodeInfo(Id.of(id), addr, port);
-			config.bootstraps.add(node);
+			config().bootstraps.add(node);
 			return this;
 		}
 
@@ -598,7 +723,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 */
 		public Builder addBootstrap(Id id, InetAddress addr, int port) {
 			NodeInfo node = new NodeInfo(id, addr, port);
-			config.bootstraps.add(node);
+			config().bootstraps.add(node);
 			return this;
 		}
 
@@ -610,7 +735,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 */
 		public Builder addBootstrap(Id id, InetSocketAddress addr) {
 			NodeInfo node = new NodeInfo(id, addr);
-			config.bootstraps.add(node);
+			config().bootstraps.add(node);
 			return this;
 		}
 
@@ -618,11 +743,11 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * Add a new bootstrap node to the configuration.
 		 * @param node the NodeInfo of the bootstrap node (must not be null)
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if node is null
+		 * @throws NullPointerException if the node is null
 		 */
 		public Builder addBootstrap(NodeInfo node) {
 			Objects.requireNonNull(node, "node");
-			config.bootstraps.add(node);
+			config().bootstraps.add(node);
 			return this;
 		}
 
@@ -630,11 +755,11 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * Add multiple bootstrap nodes to the configuration.
 		 * @param nodes the collection of NodeInfo bootstrap nodes (must not be null)
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if nodes is null
+		 * @throws NullPointerException if the nodes parameter is null
 		 */
 		public Builder addBootstrap(Collection<NodeInfo> nodes) {
 			Objects.requireNonNull(nodes, "nodes");
-			config.bootstraps.addAll(nodes);
+			config().bootstraps.addAll(nodes);
 			return this;
 		}
 
@@ -643,7 +768,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder enableSpamThrottling() {
-			config.enableSpamThrottling = true;
+			config().enableSpamThrottling = true;
 			return this;
 		}
 
@@ -652,7 +777,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder disableSpamThrottling() {
-			config.enableSpamThrottling = false;
+			config().enableSpamThrottling = false;
 			return this;
 		}
 
@@ -661,7 +786,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder enableSuspiciousNodeDetector() {
-			config.enableSuspiciousNodeDetector = true;
+			config().enableSuspiciousNodeDetector = true;
 			return this;
 		}
 
@@ -670,7 +795,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder disableSuspiciousNodeDetector() {
-			config.enableSuspiciousNodeDetector = false;
+			config().enableSuspiciousNodeDetector = false;
 			return this;
 		}
 
@@ -679,7 +804,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder enableDeveloperMode() {
-			config.enableDeveloperMode = true;
+			config().enableDeveloperMode = true;
 			return this;
 		}
 
@@ -688,134 +813,18 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder disableDeveloperMode() {
-			config.enableDeveloperMode = false;
+			config().enableDeveloperMode = false;
 			return this;
 		}
 
 		/**
-		 * Enables metrics collection for the node.
+		 * Enables metrics for the node.
+		 * @param enable true to enable metrics, false to disable
 		 * @return this Builder for chaining
 		 */
-		public Builder enableMetrics() {
-			config.enableMetrics = true;
+		public Builder enableMetrics(boolean enable) {
+			config().enableMetrics = enable;
 			return this;
-		}
-
-		/**
-		 * Disables metrics collection for the node.
-		 * @return this Builder for chaining
-		 */
-		public Builder disableMetrics() {
-			config.enableMetrics = false;
-			return this;
-		}
-
-		/**
-		 * Loads the configuration data from a JSON or YAML file.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the string file path to load (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during loading
-		 * @throws IllegalArgumentException if the file does not exist or is a directory
-		 */
-		public Builder load(String file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			Path configFile = Path.of(file);
-			return load(configFile);
-		}
-
-		/**
-		 * Loads the configuration data from a JSON or YAML file.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the File to load (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during loading
-		 * @throws IllegalArgumentException if the file does not exist or is a directory
-		 */
-		public Builder load(File file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			return load(file.toPath());
-		}
-
-		/**
-		 * Loads the configuration data from a JSON or YAML file.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the Path to the file to load (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during loading
-		 * @throws IllegalArgumentException if the file does not exist or is a directory
-		 */
-		public Builder load(Path file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			file = normalizePath(file);
-			if (Files.notExists(file) || Files.isDirectory(file))
-				throw new IllegalArgumentException("Invalid config file: " + file);
-
-			try (InputStream in = Files.newInputStream(file)) {
-				ObjectMapper mapper = file.getFileName().toString().endsWith(".json") ?
-						Json.objectMapper() : Json.yamlMapper();
-				config = mapper.readValue(in, DefaultNodeConfiguration.class);
-			}
-
-			return this;
-		}
-
-		/**
-		 * Saves the current configuration to a file in JSON or YAML format.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the string file path to save to (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during saving
-		 * @throws IllegalArgumentException if the file path is a directory
-		 */
-		public Builder save(String file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			return save(Path.of(file));
-		}
-
-		/**
-		 * Saves the current configuration to a file in JSON or YAML format.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the File to save to (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during saving
-		 * @throws IllegalArgumentException if the file path is a directory
-		 */
-		public Builder save(File file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			return save(file.toPath());
-		}
-
-		/**
-		 * Saves the current configuration to a file in JSON or YAML format.
-		 * The format is determined by the file extension (.json for JSON, otherwise YAML).
-		 * @param file the Path to save to (must not be null)
-		 * @return this Builder for chaining
-		 * @throws IOException if I/O error occurs during saving
-		 * @throws IllegalArgumentException if the file path is a directory
-		 */
-		public Builder save(Path file) throws IOException {
-			Objects.requireNonNull(file, "file");
-			file = normalizePath(file);
-			if (Files.exists(file) && Files.isDirectory(file))
-				throw new IllegalArgumentException("Invalid config file: " + file);
-
-			Files.createDirectories(file.getParent());
-			try (OutputStream out = Files.newOutputStream(file)) {
-				ObjectMapper mapper = file.getFileName().toString().endsWith(".json") ?
-						Json.objectMapper() : Json.yamlMapper();
-				mapper.writeValue(out, config);
-			}
-
-			return this;
-		}
-
-		/**
-		 * Resets the configuration builder object to the initial state,
-		 * clearing all existing settings.
-		 */
-		private void reset() {
-			config = new DefaultNodeConfiguration();
 		}
 
 		/**
@@ -825,31 +834,15 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @return the {@link NodeConfiguration} instance
 		 */
 		public NodeConfiguration build() {
-			if (config.privateKey == null)
-				config.privateKey = Base58.encode(Signature.KeyPair.random().privateKey().bytes());
+			if (config().host4() == null && config().host6() == null)
+				throw new IllegalArgumentException("Missing host4 or host6");
 
-			DefaultNodeConfiguration c = config;
-			reset();
+			if (config().privateKey == null)
+				generatePrivateKey();
+
+			DefaultNodeConfiguration c = config();
+			config = null;
 			return c;
 		}
-	}
-
-	/**
-	 * Normalizes a filesystem path, expanding '~' to the user's home directory if present,
-	 * and converting to an absolute path.
-	 * @param path the path to normalize (may be null)
-	 * @return the normalized absolute path, or null if input is null
-	 */
-	private static Path normalizePath(Path path) {
-		if (path == null)
-			return null;
-
-		path = path.normalize();
-		if (path.startsWith("~"))
-			path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
-		else
-			path = path.toAbsolutePath();
-
-		return path;
 	}
 }

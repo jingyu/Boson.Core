@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.database;
 
 import java.util.ArrayList;
@@ -11,11 +33,11 @@ import java.util.stream.Collectors;
  * Supports multiple fields and prevents SQL injection by validating column names.
  * <p>
  * Example:
+ * <pre>
  * Ordering order = Ordering.by("name").asc()
  *                          .then("created").desc();
- * <br/>
  * String sql = order.toSql(); // " ORDER BY name ASC, created DESC"
- * </p>
+ * </pre>
  */
 public class Ordering {
 	/** Special instance representing no ordering. Method toSql() returns an empty string. */
@@ -33,9 +55,11 @@ public class Ordering {
 
 	/**
 	 * Represents a column and its sorting direction in an SQL ORDER BY clause.
-	 * A Field is used to specify the sorting criteria for a query. Each Field contains:
-	 * - A column, representing the name of the database column to sort by.
-	 * - A direction, indicating whether the sorting should be ascending or descending.
+	 * <p>
+	 * A Field is used to specify the sorting criteria for a query. Each Field contains
+	 * a column name representing the database column to sort by, and a direction
+	 * indicating whether the sorting should be ascending or descending.
+	 * </p>
 	 *
 	 * @param column    representing the name of the database column to sort by.
 	 * @param direction indicating whether the sorting should be ascending or descending.
@@ -43,6 +67,11 @@ public class Ordering {
 	public record Field(String column, Direction direction) {
 	}
 
+	/**
+	 * Constructs an Ordering with the specified list of fields.
+	 *
+	 * @param fields the list of fields to order by
+	 */
 	private Ordering(List<Field> fields) {
 		this.fields = Collections.unmodifiableList(fields);
 	}
@@ -92,7 +121,7 @@ public class Ordering {
 	 * Generates a unique identifier string representing the ordering configuration
 	 * based on the fields. If no fields are present, it returns "none".
 	 *
-	 * @return a string in the format "orderBy_<column>_<direction>_..." or "none" if no fields are defined
+	 * @return a string in the format "orderBy_column_direction_..." or "none" if no fields are defined
 	 */
 	public String identifier() {
 		if (fields.isEmpty())
@@ -192,6 +221,16 @@ public class Ordering {
 		}
 	}
 
+	/**
+	 * Validates that the column name contains only safe characters.
+	 * <p>
+	 * Only letters, digits, and underscores are allowed (safe for SQL identifiers).
+	 * Optionally supports qualified names with a single dot (e.g., "table.column").
+	 * </p>
+	 *
+	 * @param column the column name to validate
+	 * @throws IllegalArgumentException if the column name is invalid
+	 */
 	private static void validateColumn(String column) {
 		// Only letters, digits, and underscore allowed (safe for SQL identifiers)
 		if (!column.matches("^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?$"))
