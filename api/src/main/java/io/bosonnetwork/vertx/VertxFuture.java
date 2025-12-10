@@ -22,6 +22,9 @@
 
 package io.bosonnetwork.vertx;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -856,6 +859,54 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	@Override
 	public CompletionStage<T> minimalCompletionStage() {
 		return new MinimalStage<>(future);
+	}
+
+	/**
+	 * Returns a new VertxFuture that is completed when all the given futures complete.
+	 *
+	 * @param futures the futures to wait for
+	 * @return a new VertxFuture that is completed when all the given futures complete
+	 */
+	public static VertxFuture<Void> allOf(VertxFuture<?>... futures) {
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		Future<Void> cf = Future.all(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new VertxFuture that is completed when all the given futures complete.
+	 *
+	 * @param futures the collection of futures to wait for
+	 * @return a new VertxFuture that is completed when all the given futures complete
+	 */
+	public static VertxFuture<Void> allOf(Collection<VertxFuture<?>> futures) {
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		Future<Void> cf = Future.all(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new VertxFuture that is completed when any of the given futures succeed.
+	 *
+	 * @param futures the futures to wait for
+	 * @return a new VertxFuture that is completed when any of the given futures succeed
+	 */
+	public static VertxFuture<Void> anyOf(VertxFuture<?>... futures) {
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		Future<Void> cf = Future.any(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new VertxFuture that is completed when any of the given futures succeed.
+	 *
+	 * @param futures the collection of futures to wait for
+	 * @return a new VertxFuture that is completed when any of the given futures succeed
+	 */
+	public static VertxFuture<Void> anyOf(Collection<VertxFuture<?>> futures) {
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		Future<Void> cf = Future.any(vfs).mapEmpty();
+		return of(cf);
 	}
 
 	/**

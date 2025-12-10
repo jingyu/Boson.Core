@@ -211,7 +211,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	/**
 	 * Internal helper method to simulate undeployment under Vert.x 5.x’s {@code Deployable} interface.
 	 * <p>
-	 * This should not be called directly by user code. It is used by Vert.x internals or
+	 * User code should not call this directly. It is used by Vert.x internals or
 	 * integration layers that work with Vert.x 5.x’s deployment model.
 	 * </p>
 	 *

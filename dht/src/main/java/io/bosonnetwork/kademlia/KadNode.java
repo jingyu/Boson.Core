@@ -195,7 +195,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public synchronized VertxFuture<Void> start() {
+	public VertxFuture<Void> start() {
 		if (this.vertx != null)
 			return VertxFuture.failedFuture(new IllegalStateException("Already started"));
 

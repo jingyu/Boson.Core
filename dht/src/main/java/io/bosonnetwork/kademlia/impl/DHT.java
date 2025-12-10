@@ -990,8 +990,10 @@ public class DHT extends BosonVerticle {
 
 		runOnContext(v -> {
 			NodeInfo node = routingTable.getEntry(id, true);
-			if (option == LookupOption.LOCAL)
+			if (option == LookupOption.LOCAL) {
 				promise.complete(node);
+				return;
+			}
 
 			if (node != null && option != LookupOption.CONSERVATIVE) {
 				promise.complete(node);

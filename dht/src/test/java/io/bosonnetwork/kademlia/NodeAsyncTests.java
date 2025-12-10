@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,10 +15,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
@@ -57,9 +56,14 @@ public class NodeAsyncTests {
 
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "NodeAsyncTests");
 
-	private static InetAddress localAddr;
+	private static final InetAddress localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
 
-	private static Vertx vertx;
+	private static final Vertx testingVertx =Vertx.vertx(new VertxOptions()
+			.setEventLoopPoolSize(32)
+			.setWorkerPoolSize(8)
+			.setBlockedThreadCheckIntervalUnit(TimeUnit.SECONDS)
+			.setBlockedThreadCheckInterval(120));
+
 	private static KadNode bootstrap;
 	private static final List<KadNode> testNodes = new ArrayList<>(TEST_NODES);
 
@@ -67,7 +71,7 @@ public class NodeAsyncTests {
 		System.out.println("\n\n\007🟢 Starting the bootstrap node ...");
 
 		var config = NodeConfiguration.builder()
-				.vertx(vertx)
+				.vertx(testingVertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
@@ -120,7 +124,7 @@ public class NodeAsyncTests {
 		System.out.format("\n\n\007🟢 Starting the node %d ...\n", index);
 
 		var config = NodeConfiguration.builder()
-				.vertx(vertx)
+				.vertx(testingVertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START + index)
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + index))
@@ -132,16 +136,24 @@ public class NodeAsyncTests {
 		var node = new KadNode(config);
 		testNodes.add(node);
 
-		Promise<KadNode> promise = Promise.promise();
+		Promise<Void> promise = Promise.promise();
 		node.addConnectionStatusListener(new ConnectionStatusListener() {
 			@Override
 			public void connected(Network network) {
 				System.out.printf("\007🟢 The node %d - %s is ready ...\n", index, node.getId());
-				promise.complete(node);
+				promise.complete();
 			}
 		});
 
-		return node.start().thenApply(v -> node);
+		// WARNING: This currently causes teardown failures.
+		//          Stopping the first node triggers undeployment of all test nodes.
+		//          The root cause is still unknown and needs further investigation.
+		/*/
+		node.start();
+		return VertxFuture.of(promise.future()).thenApply(v -> node);
+		*/
+		// But this will work well.
+		return node.start().thenCompose(v -> VertxFuture.of(promise.future())).thenApply(v -> node);
 	}
 
 	private static VertxFuture<Void> startTestNodes() {
@@ -174,74 +186,56 @@ public class NodeAsyncTests {
 		}
 	}
 
-	/*/
 	private static VertxFuture<Void> dumpRoutingTables() {
-		return dumpRoutingTable("node-bootstrap", bootstrap).thenCompose(v -> {
-			return executeSequentially(testNodes.size(), 0, index -> {
-				KadNode node = testNodes.get(index);
-				return dumpRoutingTable("node-" + index, node);
-			});
-		});
-	}
-	*/
-
-	private static VertxFuture<Void> dumpRoutingTables() {
-		List<Future<Void>> futures = new ArrayList<>(testNodes.size() + 1);
-		futures.add(dumpRoutingTable("node-bootstrap", bootstrap).toVertxFuture());
+		List<VertxFuture<?>> futures = new ArrayList<>(testNodes.size() + 1);
+		futures.add(dumpRoutingTable("node-bootstrap", bootstrap));
 
 		for (int i = 0; i < testNodes.size(); i++)
-			futures.add(dumpRoutingTable("node-" + i, testNodes.get(i)).toVertxFuture());
+			futures.add(dumpRoutingTable("node-" + i, testNodes.get(i)));
 
-		return VertxFuture.of(Future.all(futures).mapEmpty());
+		return VertxFuture.allOf(futures);
 	}
 
 	// in Vert.x 4.5.x, not support asynchronous lifecycle on static @BeforeAll and @AfterAll methods.
-	// So we use synchronous method to setup and teardown to make it compatible with Vert.x 4.5.x and 5.0.x
+	// So we use synchronous method to do setup and teardown to make it compatible with Vert.x 4.5.x and 5.0.x
 
 	@BeforeAll
 	@Timeout(value = TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 	static void setup(VertxTestContext context) throws Exception {
-		localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
-
-		if (localAddr == null)
-			fail("No eligible address to run the test.");
-		else
-			System.out.println("🟢 local address: " + localAddr.getHostAddress());
-
 		if (Files.exists(testDir))
 			FileUtils.deleteFile(testDir);
 
 		Files.createDirectories(testDir);
 
-		vertx = Vertx.vertx(new VertxOptions()
-				.setEventLoopPoolSize(32)
-				.setWorkerPoolSize(8)
-				.setBlockedThreadCheckIntervalUnit(TimeUnit.SECONDS)
-				.setBlockedThreadCheckInterval(120));
-
-		startBootstrap().thenCompose(v -> startTestNodes()).toVertxFuture()
-				.onComplete(context.succeeding(v -> {
-					System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
-					context.completeNow();
-				}));
+		startBootstrap().thenCompose(v -> startTestNodes()).whenComplete((v, e) -> {
+			if (e == null) {
+				System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
+				context.completeNow();
+			} else {
+				context.failNow(e);
+			}
+		});
 	}
 
 	@AfterAll
 	@Timeout(value = TEST_NODES + 1, timeUnit = TimeUnit.SECONDS)
-	static void teardown(VertxTestContext context) throws Exception {
-		dumpRoutingTables().thenCompose(v -> {
-			return stopTestNodes();
-		}).thenCompose(v -> {
-			return stopBootstrap();
-		}).thenRun(() -> {
-			try {
-				FileUtils.deleteFile(testDir);
-			} catch (Exception e) {
-				fail(e);
-			}
-
-			System.out.format("\n\n\007🟢 Test cases finished\n");
-		}).toVertxFuture().onComplete(context.succeedingThenComplete());
+	static void teardown(VertxTestContext context) {
+		dumpRoutingTables().thenCompose(v -> stopTestNodes())
+				.thenCompose(v -> stopBootstrap())
+				.thenRun(() -> {
+					try {
+						FileUtils.deleteFile(testDir);
+					} catch (Exception e) {
+						throw new CompletionException(e);
+					}
+				}).whenComplete((v, e) -> {
+					if (e == null) {
+						System.out.format("\n\n\007🟢 Test cases finished\n");
+						context.completeNow();
+					} else {
+						context.failNow(e);
+					}
+				});
 	}
 
 	@Test
@@ -250,7 +244,7 @@ public class NodeAsyncTests {
 		Id nodeId = Id.of(keypair.publicKey().bytes());
 
 		var config = NodeConfiguration.builder()
-				.vertx(vertx)
+				.vertx(testingVertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 100)
 				.privateKey(keypair.privateKey().bytes())
