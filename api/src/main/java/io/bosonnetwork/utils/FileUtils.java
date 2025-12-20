@@ -98,7 +98,7 @@ public class FileUtils {
 			}
 		}
 
-		return path;
+		return path == null ? null : path.toAbsolutePath();
 	}
 
 	/**

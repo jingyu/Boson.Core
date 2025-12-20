@@ -32,9 +32,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
-import java.net.ProtocolFamily;
 import java.net.SocketException;
-import java.net.StandardProtocolFamily;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -58,7 +56,7 @@ public class AddressUtils {
 	// IPv4 Bogon ranges (excludes ranges covered by InetAddress methods)
 	// Reference: RFC 1918, RFC 6890
 	private static final String[] IPV4_BOGON_RANGES = {
-			// "0.0.0.0/8", 		// Any local
+			// "0.0.0.0/8",			// Any local
 			// "10.0.0.0/8",		// Site local
 			"100.64.0.0/10",        // Private network - shared address space (RFC 6598)
 			// "127.0.0.0/8",		// Loopback
@@ -555,10 +553,9 @@ public class AddressUtils {
 	 * @throws IllegalArgumentException if the type is not supported
 	 */
 	public static InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
-		InetAddress target = null;
-		ProtocolFamily family = type == Inet6Address.class ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET;
-
 		try (DatagramSocket socket = new DatagramSocket()) {
+			InetAddress target;
+
 			if (type == Inet4Address.class)
 				target = InetAddress.getByAddress(new byte[]{8, 8, 8, 8});
 			else if (type == Inet6Address.class)

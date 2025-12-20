@@ -72,6 +72,7 @@ public class RPCServerTests {
 
 	private static final Faker faker = new Faker();
 
+	@SuppressWarnings("ConstantConditions")
 	private static final String localAddr = AddressUtils.getDefaultRouteAddress(Inet4Address.class).getHostAddress();
 
 	private final static Map<Id, Value> values = new HashMap<>();

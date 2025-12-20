@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import io.bosonnetwork.Id;
+
 /**
  * A wrapper around a {@code Map<String, Object>} that provides type-safe configuration value retrieval.
  * <p>
@@ -375,7 +377,6 @@ public class ConfigMap implements Map<String, Object> {
 		return port;
 	}
 
-
 	/**
 	 * Retrieves a valid port number for the specified key, or returns a default value if the key is not present.
 	 * <p>
@@ -394,6 +395,49 @@ public class ConfigMap implements Map<String, Object> {
 		if (port < 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port number - " + key + ": " + port);
 		return port;
+	}
+
+	/**
+	 * Retrieves the Id associated with the specified key from the map.
+	 * The key must not be null, and the corresponding value in the map must be a valid String
+	 * representation of an Id. If the key is not present or the value is invalid, an exception
+	 * is thrown.
+	 *
+	 * @param key the key whose associated Id is to be retrieved
+	 * @return the Id associated with the specified key
+	 * @throws NullPointerException if the key is null
+	 * @throws IllegalArgumentException if the key is not present in the map, or if the
+	 * value associated with the key is not a valid String representation of an Id
+	 */
+	public Id getId(String key) {
+		Objects.requireNonNull(key);
+		Object val = map.get(key);
+		if (val == null)
+			throw new IllegalArgumentException("Missing Id value - " + key);
+		else if (val instanceof String s)
+			try {
+				return Id.of(s);
+			} catch (Exception e) {
+				throw new IllegalArgumentException("Invalid Id value - " + key + ": " + val);
+			}
+		else
+			throw new IllegalArgumentException("Invalid Id value - " + key + ": " + val);
+	}
+
+	/**
+	 * Retrieves the identifier associated with the specified key. If the key is not found
+	 * in the map, the provided default identifier is returned.
+	 *
+	 * @param key the key whose associated Id is to be retrieved
+	 * @param def the default identifier to return if the key is not present in the map
+	 * @return the identifier associated with the given key, or the default identifier if the key is not found
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the value associated with the key is not a valid String
+	 *                                  representation of an Id
+	 */
+	public Id getId(String key, Id def) {
+		Objects.requireNonNull(key);
+		return map.containsKey(key) ? getId(key) : def;
 	}
 
 	/**

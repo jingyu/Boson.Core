@@ -274,6 +274,10 @@ public interface VertxDatabase {
 	 * @return a future completing when the connection is closed
 	 */
 	default Future<Void> close() {
-		return getClient().close();
+		SqlClient client = getClient();
+		if (client == null)
+			return Future.succeededFuture();
+
+		return client.close();
 	}
 }

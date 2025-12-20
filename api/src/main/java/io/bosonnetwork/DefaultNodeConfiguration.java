@@ -299,7 +299,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 
 		config.host4 = m.getString("host4", config.host4);
 		config.host6 = m.getString("host6", config.host6);
-		if (config.host4 == null || config.host4.isEmpty() && config.host6 == null || config.host6.isEmpty())
+		if ((config.host4 == null || config.host4.isEmpty()) && (config.host6 == null || config.host6.isEmpty()))
 			throw new IllegalArgumentException("Missing host4 or host6");
 
 		config.port = m.getPort("port", config.port);
@@ -367,7 +367,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 			map.put("host6", host6);
 
 		map.put("port", port);
-		map.put("privateKey", privateKey);
+		map.put("privateKey", Base58.encode(privateKey.bytes()));
 
 		if (dataDir != null)
 			map.put("dataDir", dataDir);
