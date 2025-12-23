@@ -85,7 +85,7 @@ public class VersionedSchemaTests {
 	@MethodSource("testDatabaseProvider")
 	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
 	void testMigrate(String name, SqlClient client, VertxTestContext context) {
-		Path schemaPath = Path.of(getClass().getClassLoader().getResource("db/" + name).getPath());
+		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/" + name).getPath());
 
 		VersionedSchema schema = VersionedSchema.init(client, schemaPath);
 		schema.migrate().onComplete(context.succeeding(v -> {

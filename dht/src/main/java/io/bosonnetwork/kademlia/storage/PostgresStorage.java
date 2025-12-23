@@ -62,7 +62,7 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 
 	@Override
 	protected Path getSchemaPath() {
-		URL schemaPath = getClass().getClassLoader().getResource("db/postgres");
+		URL schemaPath = getClass().getResource("/db/kadnode/postgres");
 		if (schemaPath == null || schemaPath.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
