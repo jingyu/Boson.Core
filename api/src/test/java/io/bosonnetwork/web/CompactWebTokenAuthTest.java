@@ -41,7 +41,7 @@ public class CompactWebTokenAuthTest {
 	private static final ClientDevice iPad = new TestClientDevice(Id.of(iPadKeyPair.publicKey().bytes()), alice.getId(),
 			"iPad", "TestCase");
 
-	private static final io.bosonnetwork.web.CompactWebTokenAuth.UserRepository repo = new io.bosonnetwork.web.CompactWebTokenAuth.UserRepository() {
+	private static final CompactWebTokenAuth.UserRepository repo = new CompactWebTokenAuth.UserRepository() {
 		@Override
 		public Future<?> getSubject(Id subject) {
 			return subject.equals(alice.getId()) ?
@@ -55,7 +55,7 @@ public class CompactWebTokenAuthTest {
 		}
 	};
 
-	private static final io.bosonnetwork.web.CompactWebTokenAuth auth = io.bosonnetwork.web.CompactWebTokenAuth.create(superNodeIdentity, repo,
+	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(superNodeIdentity, repo,
 			DEFAULT_LIFETIME, DEFAULT_LIFETIME, 0);
 
 	@Test
@@ -76,7 +76,6 @@ public class CompactWebTokenAuthTest {
 				assertFalse(user.expired());
 			});
 		}));
-
 
 		String deviceToken = auth.generateToken(alice.getId(), iPad.getId(), "test");
 		System.out.println(deviceToken);

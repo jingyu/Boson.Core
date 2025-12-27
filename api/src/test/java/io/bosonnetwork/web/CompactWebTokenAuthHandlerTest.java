@@ -28,7 +28,7 @@ public class CompactWebTokenAuthHandlerTest {
 	private static final ClientUser alice = new TestClientUser(Id.of(aliceKeyPair.publicKey().bytes()),
 			"Alice", null, null, null);
 
-	private static final io.bosonnetwork.web.CompactWebTokenAuth.UserRepository repo = new io.bosonnetwork.web.CompactWebTokenAuth.UserRepository() {
+	private static final CompactWebTokenAuth.UserRepository repo = new CompactWebTokenAuth.UserRepository() {
 		@Override
 		public Future<?> getSubject(Id subject) {
 			return subject.equals(alice.getId()) ?
@@ -41,7 +41,7 @@ public class CompactWebTokenAuthHandlerTest {
 		}
 	};
 
-	private static final io.bosonnetwork.web.CompactWebTokenAuth auth = io.bosonnetwork.web.CompactWebTokenAuth.create(superNodeIdentity, repo,
+	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(superNodeIdentity, repo,
 			3600, 3600, 0);
 
 	@Test
@@ -51,7 +51,7 @@ public class CompactWebTokenAuthHandlerTest {
 		
 		// Protected route requiring "read" scope
 		router.get("/protected")
-			.handler(io.bosonnetwork.web.CompactWebTokenAuthHandler.create(auth).withScope("read"))
+			.handler(CompactWebTokenAuthHandler.create(auth).withScope("read"))
 			.handler(ctx -> ctx.response().end(new JsonObject().put("status", "ok").encode()));
 
 		vertx.createHttpServer()
@@ -80,7 +80,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerMissingScope(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(io.bosonnetwork.web.CompactWebTokenAuthHandler.create(auth).withScope("admin"))
+			.handler(CompactWebTokenAuthHandler.create(auth).withScope("admin"))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
@@ -109,7 +109,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerWithPadding(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(io.bosonnetwork.web.CompactWebTokenAuthHandler.create(auth))
+			.handler(CompactWebTokenAuthHandler.create(auth))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
