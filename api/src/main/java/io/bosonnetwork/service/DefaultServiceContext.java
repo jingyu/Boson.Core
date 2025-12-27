@@ -45,6 +45,7 @@ public class DefaultServiceContext implements ServiceContext {
 	private final ClientAuthenticator clientAuthenticator;
 	private final ClientAuthorizer clientAuthorizer;
 	private final FederationAuthenticator federationAuthenticator;
+	private final Clients clients;
 	private final Federation federation;
 	private final Map<String, Object> configuration;
 	private final Path dataDir;
@@ -63,13 +64,14 @@ public class DefaultServiceContext implements ServiceContext {
 	 * @param dataDir                 the path to the persistence data directory, or {@code null} if not available
 	 */
 	public DefaultServiceContext(Vertx vertx, Node node, ClientAuthenticator clientAuthenticator, ClientAuthorizer clientAuthorizer,
-								 FederationAuthenticator federationAuthenticator, Federation federation,
+								 FederationAuthenticator federationAuthenticator, Clients clients, Federation federation,
 								 Map<String, Object> configuration, Path dataDir) {
 		this.vertx = vertx;
 		this.node = node;
 		this.clientAuthenticator = clientAuthenticator;
 		this.clientAuthorizer = clientAuthorizer;
 		this.federationAuthenticator = federationAuthenticator;
+		this.clients = clients;
 		this.federation = federation;
 		this.configuration = configuration;
 		this.dataDir = dataDir;
@@ -129,6 +131,14 @@ public class DefaultServiceContext implements ServiceContext {
 	@Override
 	public FederationAuthenticator getFederationAuthenticator() {
 		return federationAuthenticator;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public Clients getClients() {
+		return clients;
 	}
 
 	/**

@@ -85,6 +85,14 @@ public interface ServiceContext {
 	FederationAuthenticator getFederationAuthenticator();
 
 	/**
+	 * Retrieves the {@link Clients} instance, which provides access to client management functionalities such as
+	 * querying user information, checking for user or device existence, and retrieving associated devices.
+	 *
+	 * @return the {@link Clients} instance used for accessing client-related operations within the service context.
+	 */
+	Clients getClients();
+
+	/**
 	 * Gets the federation instance.
 	 *
 	 * @return the {@link Federation} object.

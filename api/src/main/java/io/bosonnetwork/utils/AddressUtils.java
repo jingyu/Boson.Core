@@ -563,7 +563,7 @@ public class AddressUtils {
 			else
 				throw new IllegalArgumentException("Unsupported type: " + type);
 
-			socket.connect(new InetSocketAddress(target, 63));
+			socket.connect(new InetSocketAddress(target, 53));
 			InetAddress local = socket.getLocalAddress();
 
 			if (type.isInstance(local) && !local.isAnyLocalAddress())
@@ -574,6 +574,29 @@ public class AddressUtils {
 			throw new RuntimeException("Failed to get default route address", e);
 		}
 	}
+
+	/*/
+	public static InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
+		try {
+			for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+				if (!nif.isUp() || nif.isLoopback() || nif.isVirtual())
+					continue;
+
+				for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
+					if (!type.isInstance(addr))
+						continue;
+					if (addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress())
+						continue;
+
+					return addr;
+				}
+			}
+			return null;
+		} catch (SocketException e) {
+			throw new RuntimeException("Failed to get default router address", e);
+		}
+	}
+	*/
 
 	/**
 	 * Converts a socket address to a readable string, with optional alignment.

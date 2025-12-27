@@ -48,6 +48,17 @@ public interface ClientAuthenticator {
 	CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature);
 
 	/**
+	 * Authenticates a user based on their unique identifier.
+	 *
+	 * @param userId the unique identifier of the user to authenticate
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the user
+	 *         is successfully authenticated, or {@code false} otherwise
+	 */
+	default CompletableFuture<Boolean> authenticateUser(Id userId) {
+		return authenticateUser(userId, null, null);
+	}
+
+	/**
 	 * Authenticates a specific device belonging to a user.
 	 *
 	 * @param userId    the unique identifier of the user who owns the device
@@ -59,6 +70,20 @@ public interface ClientAuthenticator {
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address);
+
+	/**
+	 * Authenticates a specific device belonging to a user using the provided user ID, device ID,
+	 * and network address.
+	 *
+	 * @param userId   the unique identifier of the user who owns the device
+	 * @param deviceId the unique identifier of the device attempting to authenticate
+	 * @param address  the network address (e.g., IP address) from which the device is connecting
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is successfully
+	 *         authenticated, or {@code false} otherwise
+	 */
+	default CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, String address) {
+		return authenticateDevice(userId, deviceId, null, null, address);
+	}
 
 	/**
 	 * Returns a `ClientAuthenticator` instance that allows all authentication attempts.
@@ -73,16 +98,14 @@ public interface ClientAuthenticator {
 		return new ClientAuthenticator() {
 			@Override
 			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
-				return userId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
+				return CompletableFuture.completedFuture(isValid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
-				return deviceId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
+				return CompletableFuture.completedFuture(isValid);
 			}
 		};
 	}
@@ -106,9 +129,8 @@ public interface ClientAuthenticator {
 				if (!userDeviceMap.containsKey(userId))
 					return CompletableFuture.completedFuture(false);
 
-				return userId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
+				return CompletableFuture.completedFuture(isValid);
 			}
 
 			@Override
@@ -116,9 +138,8 @@ public interface ClientAuthenticator {
 				if (!userDeviceMap.containsKey(userId) || !userDeviceMap.get(userId).contains(deviceId))
 					return CompletableFuture.completedFuture(false);
 
-				return deviceId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
+				return CompletableFuture.completedFuture(isValid);
 			}
 		};
 	}

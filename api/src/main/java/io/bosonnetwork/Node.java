@@ -43,6 +43,19 @@ import io.bosonnetwork.crypto.CryptoException;
  */
 public interface Node extends Identity {
 	/**
+	 * A constant representing the maximum age for a peer, expressed in milliseconds.
+	 * This value is used to define the threshold after which a peer entity is
+	 * considered outdated or expired. The value is set to 2 hours (120 minutes).
+	 */
+	static final int MAX_PEER_AGE = 120 * 60 * 1000;             // 2 hours in milliseconds
+	/**
+	 * A constant representing the maximum age for a value, expressed in milliseconds.
+	 * This value is used to define the threshold after which a value entity is
+	 * considered outdated or expired. The value is set to 2 hours (120 minutes).
+	 */
+	static final int MAX_VALUE_AGE = 120 * 60 * 1000;            // 2 hours in milliseconds
+
+	/**
 	 * Gets the ID of the node.
 	 *
 	 * @return the {@link Id} of the node

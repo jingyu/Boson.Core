@@ -54,8 +54,6 @@ public class KadNode extends BosonVerticle implements Node {
 	public static final int VERSION_NUMBER = 1;
 	public static final int VERSION = Version.build(SHORT_NAME, VERSION_NUMBER);
 
-	public static final int MAX_PEER_AGE = 120 * 60 * 1000;                // 2 hours in milliseconds
-	public static final int MAX_VALUE_AGE = 120 * 60 * 1000;            // 2 hours in milliseconds
 	public static final int RE_ANNOUNCE_INTERVAL = 5 * 60 * 1000;        // 5 minutes in milliseconds
 	public static final int STORAGE_EXPIRE_INTERVAL = 10 * 60 * 1000;    // 10 minutes in milliseconds
 

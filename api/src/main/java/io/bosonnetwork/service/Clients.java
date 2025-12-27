@@ -42,7 +42,7 @@ public interface Clients {
 	 * @return a {@link CompletableFuture} that completes with the {@link ClientUser} object if found,
 	 *         or completes with {@code null} if the user does not exist
 	 */
-	CompletableFuture<? extends ClientUser> getUser(Id userId);
+	CompletableFuture<ClientUser> getUser(Id userId);
 
 	/**
 	 * Checks if a user with the specified ID exists.
@@ -59,7 +59,7 @@ public interface Clients {
 	 * @param userId the unique identifier of the user whose devices are to be retrieved
 	 * @return a {@link CompletableFuture} that completes with a list of {@link ClientDevice} objects belonging to the user
 	 */
-	CompletableFuture<List<? extends ClientDevice>> getDevices(Id userId);
+	CompletableFuture<List<ClientDevice>> getDevices(Id userId);
 
 	/**
 	 * Retrieves the device information for a given device ID.
@@ -68,7 +68,7 @@ public interface Clients {
 	 * @return a {@link CompletableFuture} that completes with the {@link ClientDevice} object if found,
 	 *         or completes with {@code null} if the device does not exist
 	 */
-	CompletableFuture<? extends ClientDevice> getDevice(Id deviceId);
+	CompletableFuture<ClientDevice> getDevice(Id deviceId);
 
 	/**
 	 * Checks if a device with the specified ID exists.

@@ -455,7 +455,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 * @throws IllegalStateException if no suitable IPv4 address is found
 		 */
 		public Builder autoHost4() {
-			InetAddress addr = AddressUtils.getDefaultRouteAddress(Inet6Address.class);
+			InetAddress addr = AddressUtils.getDefaultRouteAddress(Inet4Address.class);
 			if (addr == null)
 				throw new IllegalStateException("No available IPv4 address");
 
