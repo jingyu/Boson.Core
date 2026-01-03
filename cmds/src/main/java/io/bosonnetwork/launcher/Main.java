@@ -137,7 +137,7 @@ public class Main {
 			Path dataPath = config.dataDir() == null ? null : config.dataDir().resolve(svc.getId()).toAbsolutePath();
 			ServiceContext ctx = new DefaultServiceContext(vertx, node,
 					ClientAuthenticator.allowAll(), ClientAuthorizer.noop(),
-					FederationAuthenticator.allowAll(), null, serviceConfig.configuration, dataPath);
+					FederationAuthenticator.allowAll(), null, null, serviceConfig.configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), serviceConfig.className);
 

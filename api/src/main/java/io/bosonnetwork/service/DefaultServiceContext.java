@@ -59,6 +59,7 @@ public class DefaultServiceContext implements ServiceContext {
 	 * @param clientAuthenticator     the authenticator for client connections
 	 * @param clientAuthorizer        the authorizer for client requests
 	 * @param federationAuthenticator the authenticator for federation communications
+	 * @param clients                 the clients management component
 	 * @param federation              the federation instance
 	 * @param configuration           the configuration data for the service
 	 * @param dataDir                 the path to the persistence data directory, or {@code null} if not available

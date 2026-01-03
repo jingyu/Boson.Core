@@ -54,14 +54,14 @@ import io.bosonnetwork.utils.Pair;
  * designed for efficiency. The token structure is partially inspired by JWT but simplified
  * and using CBOR/base64url encoding.
  * </p>
- * <h3>Token Format</h3>
+ * <h2>Token Format</h2>
  * <pre>
  * token = payload.signature
  * payload = base64url(CBOR(claims))
  * signature = base64url(ED25519Signature(SHA256(payload)))
  * </pre>
  *
- * <h3>Claims Definition</h3>
+ * <h2>Claims Definition</h2>
  * <p>Server issued token claims:</p>
  * <ul>
  *   <li><b>jti</b>: Token ID (nonce)</li>
@@ -116,6 +116,14 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 		 */
 		Future<?> getAssociated(Id subject, Id associated);
 
+		/**
+		 * Creates a {@code UserRepository} instance using the provided {@code ClientAuthenticator}.
+		 * The returned repository facilitates access to user-related data and entities
+		 * by leveraging the given authenticator for security purposes.
+		 *
+		 * @param authenticator the {@code ClientAuthenticator} instance used to validate client authentication
+		 * @return a {@code UserRepository} implementation that utilizes the given {@code ClientAuthenticator}
+		 */
 		static UserRepository fromClientAuthenticator(ClientAuthenticator authenticator) {
 			return new AuthenticatorUserRepo(authenticator);
 		}
@@ -276,6 +284,14 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 				maxServerIssuedTokenLifetime, maxClientIssuedTokenLifetime, leeway);
 	}
 
+	/**
+	 * Creates a new instance of CompactWebTokenAuth with the specified identity, user repository,
+	 * and default configuration values for token lifetimes and leeway.
+	 *
+	 * @param identity the identity associated with the authentication process
+	 * @param userRepository the repository used for managing user data
+	 * @return a new instance of CompactWebTokenAuth
+	 */
 	public static CompactWebTokenAuth create(Identity identity, UserRepository userRepository) {
 		return new CompactWebTokenAuth(identity, userRepository,
 				MAX_SERVER_ISSUED_TOKEN_LIFETIME, MAX_CLIENT_ISSUED_TOKEN_LIFETIME, DEFAULT_LEEWAY);

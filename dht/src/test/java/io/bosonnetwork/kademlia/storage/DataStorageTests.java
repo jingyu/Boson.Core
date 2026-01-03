@@ -89,14 +89,25 @@ public class DataStorageTests {
 
 		var futures = new ArrayList<Future<Integer>>();
 
-		pgServer = PostgresqlServer.start("boson_node", "test", "secret");
-		var postgresqlURI = pgServer.getDatabaseUrl();
-		postgresStorage = new PostgresStorage(postgresqlURI);
-		var future1 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
-			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
-			dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
-		}));
-		futures.add(future1);
+		try {
+			pgServer = PostgresqlServer.start("boson_node", "test", "secret");
+		} catch (Exception e) {
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			System.err.println("Start PostgreSQL container failed: " + e.getMessage());
+			System.err.println("Check your Docker installation.");
+			System.err.println("Skipping Postgres tests.");
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+		}
+
+		if (pgServer != null) {
+			var postgresqlURI = pgServer.getDatabaseUrl();
+			postgresStorage = new PostgresStorage(postgresqlURI);
+			var future1 = postgresStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
+				context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
+				dataStorages.add(Arguments.of("PostgresStorage", postgresStorage));
+			}));
+			futures.add(future1);
+		}
 
 		var sqliteURI = "jdbc:sqlite:" + testDir.resolve("storage.db");
 		sqliteStorage = new SQLiteStorage(sqliteURI);
@@ -139,7 +150,8 @@ public class DataStorageTests {
 		}
 
 		Future.all(futures).onComplete(context.succeeding(result -> {
-			pgServer.stop();
+			if (pgServer != null)
+				pgServer.stop();
 			context.completeNow();
 		}));
 	}

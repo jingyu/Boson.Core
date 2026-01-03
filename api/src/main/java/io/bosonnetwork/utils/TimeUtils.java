@@ -31,6 +31,7 @@ import java.time.temporal.TemporalUnit;
 /**
  * Data and time related utility functions.
  */
+@Deprecated
 public class TimeUtils {
 	/**
 	 * Parse human friendly duration from a text string.
@@ -49,6 +50,7 @@ public class TimeUtils {
 	 * @return the parsed {@code Duration} object.
 	 * @throws DateTimeParseException if the text cannot be parsed to a duration.
 	 */
+	@Deprecated
 	public static Duration parseDuration(CharSequence duration) throws DateTimeParseException {
 		int idx = duration.length() - 1;
         final char specifier = duration.charAt(idx);

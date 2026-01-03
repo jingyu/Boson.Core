@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.utils;
 
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
@@ -47,8 +49,8 @@ public class ConfigMap implements Map<String, Object> {
 	/**
 	 * Constructs a new ConfigMap wrapping the provided map.
 	 *
-	 * @param map the underlying map to wrap, must not be null
-	 * @throws NullPointerException if map is null
+	 * @param map the underlying map to wrap must not be null
+	 * @throws NullPointerException if the map is null
 	 */
 	public ConfigMap(Map<String, Object> map) {
 		Objects.requireNonNull(map);
@@ -61,9 +63,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * If the value is an Enum, returns its name. Otherwise, converts the value to string using toString().
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the string value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing
 	 */
 	public String getString(String key) {
@@ -80,12 +82,12 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a string value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a string value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the string value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public String getString(String key, String def) {
 		Objects.requireNonNull(key);
@@ -98,9 +100,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * Supports conversion from Boolean (true=1, false=0) and String (parsed as Double).
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the numeric value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing or the value cannot be converted to a number
 	 */
 	public Number getNumber(String key) {
@@ -123,12 +125,12 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a numeric value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a numeric value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the numeric value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public Number getNumber(String key, Number def) {
 		Objects.requireNonNull(key);
@@ -141,9 +143,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * Supports conversion from Number (using intValue()), Boolean (true=1, false=0), and String (parsed as Integer).
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the integer value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing or the value cannot be converted to an integer
 	 */
 	public int getInteger(String key) {
@@ -168,12 +170,12 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves an integer value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves an integer value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the integer value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public int getInteger(String key, int def) {
 		Objects.requireNonNull(key);
@@ -186,10 +188,10 @@ public class ConfigMap implements Map<String, Object> {
 	 * Supports conversion from Number (using longValue()), Boolean (true=1L, false=0L), and String (parsed as Long).
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the long value
-	 * @throws NullPointerException if key is null
-	 * @throws IllegalArgumentException if the key is missing or the value cannot be converted to a long
+	 * @throws NullPointerException if the key is null
+	 * @throws IllegalArgumentException if the key is missing or the value cannot be converted to a long integer
 	 */
 	public long getLong(String key) {
 		Objects.requireNonNull(key);
@@ -213,12 +215,12 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a long value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a long value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the long value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public long getLong(String key, long def) {
 		Objects.requireNonNull(key);
@@ -231,9 +233,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * Supports conversion from String ("true"/"false", case-insensitive) and Integer (0=false, 1=true).
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the boolean value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing or the value cannot be converted to a boolean
 	 */
 	public boolean getBoolean(String key) {
@@ -260,16 +262,127 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a boolean value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a boolean value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the boolean value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public boolean getBoolean(String key, boolean def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getBoolean(key) : def;
+	}
+
+	/**
+	 * Retrieves a {@link Path} object corresponding to the provided key.
+	 * The method ensures the key is not null and attempts to retrieve a value from an internal map.
+	 * If the value is a string representing a path and starts with '~', it resolves the path relative to the user's home directory.
+	 * If the key is missing or the value is invalid, an exception is thrown.
+	 *
+	 * @param key the string key used to look up the value in the map; must not be null
+	 * @return the resolved {@link Path} object corresponding to the provided key
+	 * @throws NullPointerException if the key is null
+	 * @throws IllegalArgumentException if the key is missing from the map, or the value associated with it is not a valid path
+	 */
+	public Path getPath(String key) {
+		Objects.requireNonNull(key);
+		Object val = map.get(key);
+		if (val == null) {
+			throw new IllegalArgumentException("Missing value - " + key);
+		} else if (val instanceof String s) {
+			try {
+				Path path = Path.of(s);
+				if (path.startsWith("~"))
+					path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
+				return path;
+			} catch (InvalidPathException e) {
+				throw new IllegalArgumentException("Invalid path value - " + key + ": " + s, e);
+			}
+		} else {
+			throw new IllegalArgumentException("Invalid path value - " + key + ": " + val);
+		}
+	}
+
+	/**
+	 * Retrieves the path associated with the specified key from the internal map. If the key is not present,
+	 * the provided default path is returned.
+	 *
+	 * @param key the key whose associated path is to be returned; must not be null
+	 * @param def the default path to return if the key is not present in the map
+	 * @return the path associated with the specified key, or the default path if the key is not found
+	 */
+	public Path getPath(String key, Path def) {
+		Objects.requireNonNull(key);
+		return map.containsKey(key) ? getPath(key) : def;
+	}
+
+	/**
+	 * Retrieves the size associated with the specified key and converts it into its long representation.
+	 * The value corresponding to the key can be:
+	 * - An Integer: returned as is.
+	 * - A Long: returned as is.
+	 * - A String: representing a plain number or a size with units (e.g., "k" for kilobytes, "m" for megabytes,
+	 *   "g" for gigabytes, "b" for bytes). The method parses and converts it accordingly.
+	 *
+	 * @param key the key whose corresponding size value is to be retrieved and converted
+	 * @return the size value as a long type
+	 * @throws NullPointerException if the provided key is null
+	 * @throws IllegalArgumentException if the key is missing in the map, or if the size value is invalid or
+	 *         uses unsupported units
+	 */
+	public long getSize(String key) {
+		Objects.requireNonNull(key);
+		Object val = map.get(key);
+		if (val == null) {
+			throw new IllegalArgumentException("Missing value - " + key);
+		} else if (val instanceof Integer i) {
+			return i;
+		} else if (val instanceof Long l) {
+			return l;
+		} else if (val instanceof String s) {
+			int idx = s.length() - 1;
+			final char specifier = s.charAt(idx);
+			if (specifier >= '0' && specifier <= '9') {
+				// no unit specified, assume a plain number
+				try {
+					return Long.parseLong(s);
+				} catch (NumberFormatException e) {
+					throw new IllegalArgumentException("Invalid size value - " + key + ": " + s, e);
+				}
+			} else {
+				int weight = switch (Character.toLowerCase(specifier)) {
+					case 'b' -> 1;
+					case 'k' -> 1024;
+					case 'm' -> 1024 * 1024;
+					case 'g' -> 1024 * 1024 * 1024;
+					default -> throw new IllegalArgumentException("Invalid size value - " + key + ": " + s +
+							", units: b, k, m, g");
+				};
+
+				try {
+					long size = Long.parseLong(s, 0, idx, 10);
+					return size * weight;
+				} catch (NumberFormatException e) {
+					throw new IllegalArgumentException("Invalid size value - " + key + ": " + s, e);
+				}
+			}
+		} else {
+			throw new IllegalArgumentException("Invalid size value - " + key + ": " + val);
+		}
+	}
+
+	/**
+	 * Retrieves the size associated with the specified key. If the key does not exist
+	 * in the map, the default value provided is returned.
+	 *
+	 * @param key the key whose associated size is to be retrieved, must not be null
+	 * @param def the default value to return if the key is not present in the map
+	 * @return the size associated with the specified key if it exists, or the default value otherwise
+	 */
+	public long getSize(String key, long def) {
+		Objects.requireNonNull(key);
+		return map.containsKey(key) ? getSize(key) : def;
 	}
 
 	/**
@@ -291,9 +404,9 @@ public class ConfigMap implements Map<String, Object> {
 	 *  <li>y - years</li>
 	 * </ul>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the parsed {@code Duration} object
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing or the value cannot be parsed as a duration
 	 */
 	public Duration getDuration(String key) {
@@ -332,12 +445,12 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a duration value for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a duration value for the specified key or returns a default value if the key is not present.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default value to return if the key is not present
 	 * @return the duration value or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 */
 	public Duration getDuration(String key, Duration def) {
 		Objects.requireNonNull(key);
@@ -349,9 +462,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * <p>
 	 * The port must be in the valid range [0, 65535]. Supports conversion from Integer and String.
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the port number
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the key is missing, the value cannot be converted to an integer,
 	 *                                  or the port is outside the valid range [0, 65535]
 	 */
@@ -378,15 +491,15 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * Retrieves a valid port number for the specified key, or returns a default value if the key is not present.
+	 * Retrieves a valid port number for the specified key or returns a default value if the key is not present.
 	 * <p>
 	 * The port (including the default) must be in the valid range [0, 65535].
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @param def the default port number to return if the key is not present
 	 * @return the port number or the default value
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the port is outside the valid range [0, 65535]
 	 */
 	public int getPort(String key, int def) {
@@ -446,9 +559,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * The value must be a Map, which will be wrapped in a new ConfigMap instance.
 	 * </p>
 	 *
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return a ConfigMap wrapping the nested configuration, or null if the key is not present
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a Map
 	 */
 	public ConfigMap getObject(String key) {
@@ -472,9 +585,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * </p>
 	 *
 	 * @param <T> the type of elements in the list
-	 * @param key the configuration key, must not be null
+	 * @param key the configuration key, key must not be null
 	 * @return the list value, or null if the key is not present
-	 * @throws NullPointerException if key is null
+	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a List
 	 */
 	public <T> List<T> getList(String key) {

@@ -46,17 +46,27 @@ public class VersionedSchemaTests {
 		FileUtils.deleteFile(testDir);
 		Files.createDirectories(testDir);
 
-		pgServer = PostgresqlServer.start("migration", "test", "secret");
+		try {
+			pgServer = PostgresqlServer.start("migration", "test", "secret");
+		} catch (Exception e) {
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			System.err.println("Start PostgreSQL container failed: " + e.getMessage());
+			System.err.println("Check your Docker installation.");
+			System.err.println("Skipping Postgres tests.");
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+		}
 
-		var postgresURL = pgServer.getDatabaseUrl();
-		PgConnectOptions pgConnectOptions = PgConnectOptions.fromUri(postgresURL);
-		PoolOptions pgPoolOptions = new PoolOptions().setMaxSize(8);
-		postgres = PgBuilder.pool()
-				.with(pgPoolOptions)
-				.connectingTo(pgConnectOptions)
-				.using(vertx)
-				.build();
-		databases.add(Arguments.of("postgres", postgres));
+		if (pgServer != null) {
+			var postgresURL = pgServer.getDatabaseUrl();
+			PgConnectOptions pgConnectOptions = PgConnectOptions.fromUri(postgresURL);
+			PoolOptions pgPoolOptions = new PoolOptions().setMaxSize(8);
+			postgres = PgBuilder.pool()
+					.with(pgPoolOptions)
+					.connectingTo(pgConnectOptions)
+					.using(vertx)
+					.build();
+			databases.add(Arguments.of("postgres", postgres));
+		}
 
 		var sqliteURL = "jdbc:sqlite:" + testDir.resolve("test.db");
 		JDBCConnectOptions sqliteConnectOptions = new JDBCConnectOptions()
@@ -71,8 +81,11 @@ public class VersionedSchemaTests {
 
 	@AfterAll
 	static void teardown(VertxTestContext context) throws Exception {
-		Future.all(postgres.close(), sqlite.close()).onComplete(ar -> {
-			pgServer.stop();
+		Future<Void> f1 = postgres != null ? postgres.close().onComplete(ar -> pgServer.stop())
+				: Future.succeededFuture();
+		Future<Void> f2 = sqlite != null ? sqlite.close() : Future.succeededFuture();
+
+		Future.all(f1, f2).onComplete(ar -> {
 			context.completeNow();
 		});
 	}

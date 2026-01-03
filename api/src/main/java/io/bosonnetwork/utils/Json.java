@@ -890,7 +890,11 @@ public class Json {
 	 * @throws IllegalArgumentException if the object cannot be serialized
 	 */
 	public static String toString(Object object) {
-		return toString(object, null);
+		try {
+			return objectMapper().writeValueAsString(object);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("object can not be serialized", e);
+		}
 	}
 
 	/**
