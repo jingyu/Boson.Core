@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -40,6 +41,7 @@ import io.vertx.core.file.OpenOptions;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
+import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,16 +49,36 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.utils.Hex;
 
 /**
- * Simple, file-based schema migration helper for Vert.x SQL clients.
- * <p>
- * Reads migration SQL files from a directory, detects the database flavor,
- * and applies pending migrations transactionally, recording versions in a schema_versions table.
+ * A lightweight, file-based schema migration helper for Vert.x SQL clients.
+ *
+ * <p>This component applies versioned SQL migrations located in a directory,
+ * records applied versions in a {@code schema_versions} table, and ensures
+ * migration integrity via SHA-256 checksum validation.</p>
+ *
+ * <p>Features:
+ * <ul>
+ *   <li>Versioned migrations using {@code &lt;version&gt;_&lt;description&gt;.sql} naming</li>
+ *   <li>Transactional execution of migrations</li>
+ *   <li>Checksum verification to detect script tampering</li>
+ *   <li>Optional PostgreSQL schema isolation via {@code SET search_path}</li>
+ *   <li>Compatible with PostgreSQL and SQLite (Vert.x SQL clients)</li>
+ * </ul>
+ *
+ * <p>This class is designed for application-managed schema migrations and
+ * intentionally avoids external JDBC-based migration frameworks.</p>
+ *
+ * <p>Future extensions:
+ * <ul>
+ *   <li>Baseline support for existing schemas</li>
+ *   <li>Repair support for checksum mismatch recovery</li>
+ * </ul>
  * </p>
  */
 public class VersionedSchema implements VertxDatabase {
 	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "",  null,"", 0, 0, true);
 	private final Vertx vertx;
 	private final SqlClient client;
+	private final String schema;
 	private final Path schemaPath;
 	private String databaseProductName;
 	private SchemaVersion currentVersion;
@@ -64,15 +86,15 @@ public class VersionedSchema implements VertxDatabase {
 	private static final Logger log = LoggerFactory.getLogger(VersionedSchema.class);
 
 	/**
-	 * Immutable record of a migration application state.
+	 * Immutable record representing an applied schema migration.
 	 *
-	 * @param version      schema version number
-	 * @param description  human-readable description
-	 * @param hash         SHA-256 hash of the migration script
-	 * @param appliedBy    user/process that applied the migration
-	 * @param appliedAt    timestamp (ms) when started
-	 * @param consumedTime duration (ms) spent applying
-	 * @param success      whether migration succeeded
+	 * @param version       numeric migration version
+	 * @param description   human-readable description (from file name or SQL comment)
+	 * @param hash          SHA-256 checksum of the migration script
+	 * @param appliedBy     identifier of the user or process applying the migration
+	 * @param appliedAt     timestamp in milliseconds when migration started
+	 * @param consumedTime  duration in milliseconds spent applying the migration
+	 * @param success       whether the migration completed successfully
 	 */
 	public record SchemaVersion(int version, String description, String hash, String appliedBy, long appliedAt,
 								   long consumedTime, boolean success) {}
@@ -117,23 +139,43 @@ public class VersionedSchema implements VertxDatabase {
 		*/
 	}
 
-	private VersionedSchema(Vertx vertx, SqlClient client, Path schemaPath) {
+	private VersionedSchema(Vertx vertx, SqlClient client, String schema, Path schemaPath) {
 		this.vertx = vertx;
 		this.client = client;
+		this.schema = schema;
 		this.schemaPath = schemaPath;
 		this.currentVersion = EMPTY_VERSION;
 	}
 
 	/**
-	 * Initializes a new {@link VersionedSchema} instance.
+	 * Initializes a {@link VersionedSchema} using the database default schema.
+	 *
+	 * <p>Migrations will be applied using the database's default schema
+	 * (for example {@code public} in PostgreSQL).</p>
 	 *
 	 * @param vertx      Vert.x instance
 	 * @param client     Vert.x SQL client
 	 * @param schemaPath directory containing migration SQL files
-	 * @return a new versioned schema helper
+	 * @return a new {@link VersionedSchema} instance
 	 */
 	public static VersionedSchema init(Vertx vertx, SqlClient client, Path schemaPath) {
-		return new VersionedSchema(vertx, client, schemaPath);
+		return new VersionedSchema(vertx, client, null, schemaPath);
+	}
+
+	/**
+	 * Initializes a new instance of {@link VersionedSchema}.
+	 *
+	 * @param vertx      the Vert.x instance used for database operations and event loops
+	 * @param client     the SQL client used for executing migrations
+	 * @param schema     the schema name where migrations will be applied
+	 * @param schemaPath the path to the directory containing migration SQL files
+	 * @return a new {@link VersionedSchema} instance configured for the provided parameters
+	 */
+	public static VersionedSchema init(Vertx vertx, SqlClient client, String schema, Path schemaPath) {
+		if (schema != null && !schema.matches("[a-z][a-z0-9_]{0,31}"))
+			throw new IllegalArgumentException("Invalid schema name");
+
+		return new VersionedSchema(vertx, client, schema, schemaPath);
 	}
 
 	/**
@@ -156,31 +198,49 @@ public class VersionedSchema implements VertxDatabase {
 	}
 
 	/**
-	 * Discovers and applies pending migrations found under {@code schemaPath}.
+	 * Discovers and applies pending schema migrations.
+	 *
+	 * <p>The migration process consists of:
 	 * <ol>
-	 *   <li>Ensures the schema_versions table exists.</li>
-	 *   <li>Reads the latest applied version.</li>
-	 *   <li>Parses and sorts new migration files.</li>
-	 *   <li>Applies each migration in order, transactionally.</li>
+	 *   <li>Detecting the database product</li>
+	 *   <li>Creating the target schema (PostgreSQL only, if configured)</li>
+	 *   <li>Ensuring the {@code schema_versions} table exists</li>
+	 *   <li>Loading applied migration history</li>
+	 *   <li>Validating migration order and checksums</li>
+	 *   <li>Applying new migrations transactionally</li>
 	 * </ol>
 	 *
-	 * @return a future completed when all pending migrations are applied
+	 * <p>If an already-applied migration differs in version or checksum,
+	 * the migration process fails immediately.</p>
+	 *
+	 * @return a future that completes when all pending migrations have been applied,
+	 *         or fails if validation or execution fails
 	 */
 	public Future<Void> migrate() {
 		return getDatabaseProductName().compose(name -> {
 			databaseProductName = name;
 			log.debug("Migration check: target database product {}", name);
-			return query(createSchemaVersionTable()).execute();
-		}).compose(v -> {
-			Future<List<SchemaVersion>> versionsFuture = getSchemaVersions().andThen(ar -> {
-				if (ar.succeeded()) {
-					List<SchemaVersion> versions = ar.result();
-					if (!versions.isEmpty())
-						this.currentVersion = versions.get(versions.size() - 1);
-				} else {
-					log.warn("Migration check: error reading schema versions - {}", ar.cause().getMessage());
-				}
-			});
+
+			if (!databaseProductName.toLowerCase().contains("postgres") && schema != null)
+				return Future.failedFuture(new IllegalStateException("Schema migration with custom schema is not supported for " + databaseProductName));
+
+			return Future.succeededFuture();
+		}).compose(na -> {
+			Future<List<SchemaVersion>> versionsFuture = withTransaction(c ->
+					createSchema(c)
+							.compose(v -> setSchema(c))
+							.compose(v -> createSchemaVersionTable(c))
+							.compose(v -> getSchemaVersions(c))
+							.andThen(ar -> {
+								if (ar.succeeded()) {
+									List<SchemaVersion> versions = ar.result();
+									if (!versions.isEmpty())
+										this.currentVersion = versions.get(versions.size() - 1);
+								} else {
+									log.warn("Migration check: error init or reading schema versions - {}", ar.cause().getMessage());
+								}
+							})
+			);
 
 			Future<List<Migration>> migrationsFuture = getMigrations().andThen(ar -> {
 				if (ar.failed())
@@ -233,50 +293,55 @@ public class VersionedSchema implements VertxDatabase {
 		});
 	}
 
+	private <T> Future<T> withSchemaTransaction(Function<SqlConnection, Future<T>> function) {
+		return withTransaction(c -> setSchema(c).compose(v -> function.apply(c)));
+	}
+
 	/**
 	 * Reads the current applied schema versions from the database.
 	 *
 	 * @return a future with the list of applied {@link SchemaVersion}, empty list if none
 	 */
-	private Future<List<SchemaVersion>> getSchemaVersions() {
-		return query(selectSchemaVersions())
-				.execute()
-				.map(VersionedSchema::mapToSchemaVersions);
+	private Future<List<SchemaVersion>> getSchemaVersions(SqlClient client) {
+		return client.query(selectSchemaVersions())
+						.execute()
+						.map(VersionedSchema::mapToSchemaVersions);
 	}
 
-	private static boolean getBoolean(Row row, String columnName) {
-		Object value = row.getValue(columnName);
-		return value instanceof Boolean b ? b :
-				(value instanceof Number n ? n.intValue() != 0 :
-						(value instanceof String s && Boolean.parseBoolean(s)));
+	private Future<Void> createSchemaVersionTable(SqlClient client) {
+		return client.query(createSchemaVersion())
+					.execute()
+					.mapEmpty();
 	}
 
-	private static List<SchemaVersion> mapToSchemaVersions(RowSet<Row> rowSet) {
-		if (rowSet.size() == 0)
-			return List.of();
-
-		List<SchemaVersion> versions = new ArrayList<>(rowSet.size());
-		for (Row row : rowSet) {
-			int version = row.getInteger("version");
-			String description = row.getString("description");
-			String hash = row.getString("hash");
-			String appliedBy = row.getString("applied_by");
-			long appliedAt = row.getLong("applied_at");
-			long consumedTime = row.getLong("consumed_time");
-			boolean success = getBoolean(row, "success");
-
-			SchemaVersion v = new SchemaVersion(version, description, hash, appliedBy, appliedAt, consumedTime, success);
-			versions.add(v);
-		}
-
-		return versions;
+	private Future<Void> createSchema(SqlClient client) {
+		if (schema == null)
+			return Future.succeededFuture();
+		else
+			return client.query("CREATE SCHEMA IF NOT EXISTS " + schema)
+					.execute()
+					.mapEmpty();
 	}
+
+	private Future<Void> setSchema(SqlClient client) {
+		if (schema == null)
+			return Future.succeededFuture();
+		else
+			return client.query("SET search_path TO " + schema/* + ", public" */)
+					.execute()
+					.mapEmpty();
+	}
+
 
 	/**
-	 * Scans {@code schemaPath} and returns all the migrations.
-	 * File names must follow: {@code <version>_<description>.sql}.
+	 * Scans the migration directory and parses all migration scripts.
 	 *
-	 * @return a future with the list of migrations, empty list if none
+	 * <p>Migration files must follow the naming convention
+	 * {@code &lt;version&gt;_&lt;description&gt;.sql}. Files are sorted by
+	 * version in ascending order, and each file is checksummed using SHA-256.</p>
+	 *
+	 * @return a future containing the ordered list of migrations,
+	 *         or an empty list if none are found
 	 */
 	private Future<List<Migration>> getMigrations() {
 		if (schemaPath == null) {
@@ -335,38 +400,13 @@ public class VersionedSchema implements VertxDatabase {
 		});
 	}
 
-	private Future<String> sha256(Path path) {
-		MessageDigest digest;
-		try {
-			digest = MessageDigest.getInstance("SHA-256");
-		} catch (Exception e) {
-			return Future.failedFuture(e);
-		}
-
-		return vertx.fileSystem().open(path.toString(), new OpenOptions().setRead(true).setWrite(false)).compose(file -> {
-			Promise<String> promise = Promise.promise();
-
-			file.handler(buffer -> digest.update(buffer.getBytes()))
-					.exceptionHandler(e -> {
-						file.close();
-						promise.fail(e);
-					})
-					.endHandler(v -> {
-						String hash = Hex.encode(digest.digest());
-						file.close();
-						promise.complete(hash);
-					});
-
-			return promise.future();
-		});
-	}
-
 	/**
-	 * Build a migration file name into a {@link Migration}.
-	 * Expected format: {@code <version>_<description>.sql}
+	 * Parses a migration file name and computes its checksum.
 	 *
-	 * @param file path to the migration file
-	 * @return a future with the parsed migration file
+	 * <p>Expected file name format: {@code &lt;version&gt;_&lt;description&gt;.sql}</p>
+	 *
+	 * @param file path to the migration SQL file
+	 * @return a future containing the parsed {@link Migration}
 	 */
 	private Future<Migration> buildMigration(Path file) {
 		String fileName = file.getFileName().toString();
@@ -551,16 +591,20 @@ public class VersionedSchema implements VertxDatabase {
 	}
 
 	/**
-	 * Applies a single migration inside a transaction and persists the new schema version.
+	 * Applies a single migration inside a database transaction.
+	 *
+	 * <p>The migration SQL file is split into individual statements, which are
+	 * executed sequentially. Upon successful execution, a new entry is recorded
+	 * in the {@code schema_versions} table.</p>
 	 *
 	 * @param migration the migration to apply
-	 * @return a future completing with the new {@link SchemaVersion} when done
+	 * @return a future completing with the applied {@link SchemaVersion}
 	 */
 	private Future<SchemaVersion> applyMigration(Migration migration) {
 		log.info("Migration: applying migration version {} from {}...", migration.version, migration.fileName());
 
 		long begin = System.currentTimeMillis();
-		return withTransaction(connection -> {
+		return withSchemaTransaction(connection -> {
 			Promise<SchemaVersion> promise = Promise.promise();
 			Future<Void> chain = Future.succeededFuture();
 			try (BufferedReader reader = new BufferedReader(new FileReader(migration.file()))) {
@@ -572,7 +616,7 @@ public class VersionedSchema implements VertxDatabase {
 				while ((statement = nextStatement(reader)) != null) {
 					final String sql = statement;
 
-					chain = chain.compose(v -> {
+					chain = chain.compose(vv -> {
 						log.trace("Migration: executing statement {}", sql);
 						return connection.query(sql).execute()
 								.andThen(ar -> {
@@ -585,7 +629,7 @@ public class VersionedSchema implements VertxDatabase {
 				return Future.failedFuture(new IllegalStateException("Failed to read migration file", e));
 			}
 
-			chain.compose(v -> {
+			chain.compose(vv -> {
 				long duration = System.currentTimeMillis() - begin;
 				log.info("Migration: applied migration file {} in {} ms", migration.fileName(), duration);
 				log.debug("Migration: updating schema version...");
@@ -612,12 +656,66 @@ public class VersionedSchema implements VertxDatabase {
 		});
 	}
 
+	private static List<SchemaVersion> mapToSchemaVersions(RowSet<Row> rowSet) {
+		if (rowSet.size() == 0)
+			return List.of();
+
+		List<SchemaVersion> versions = new ArrayList<>(rowSet.size());
+		for (Row row : rowSet) {
+			int version = row.getInteger("version");
+			String description = row.getString("description");
+			String hash = row.getString("hash");
+			String appliedBy = row.getString("applied_by");
+			long appliedAt = row.getLong("applied_at");
+			long consumedTime = row.getLong("consumed_time");
+			boolean success = getBoolean(row, "success");
+
+			SchemaVersion v = new SchemaVersion(version, description, hash, appliedBy, appliedAt, consumedTime, success);
+			versions.add(v);
+		}
+
+		return versions;
+	}
+
+	private static boolean getBoolean(Row row, String columnName) {
+		Object value = row.getValue(columnName);
+		return value instanceof Boolean b ? b :
+				(value instanceof Number n ? n.intValue() != 0 :
+						(value instanceof String s && Boolean.parseBoolean(s)));
+	}
+
+	private Future<String> sha256(Path path) {
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (Exception e) {
+			return Future.failedFuture(e);
+		}
+
+		return vertx.fileSystem().open(path.toString(), new OpenOptions().setRead(true).setWrite(false)).compose(file -> {
+			Promise<String> promise = Promise.promise();
+
+			file.handler(buffer -> digest.update(buffer.getBytes()))
+					.exceptionHandler(e -> {
+						file.close();
+						promise.fail(e);
+					})
+					.endHandler(v -> {
+						String hash = Hex.encode(digest.digest());
+						file.close();
+						promise.complete(hash);
+					});
+
+			return promise.future();
+		});
+	}
+
 	/**
 	 * Creates schema_versions table if it does not exist.
 	 *
 	 * @return DDL for creating the schema_versions table if it does not exist
 	 */
-	protected String createSchemaVersionTable() {
+	protected String createSchemaVersion() {
 		return createSchemaVersionTable;
 	}
 

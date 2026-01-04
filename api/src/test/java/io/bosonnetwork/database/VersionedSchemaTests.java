@@ -20,6 +20,10 @@ import io.vertx.sqlclient.SqlClient;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -31,6 +35,7 @@ import io.vertx.junit5.VertxTestContext;
 import io.bosonnetwork.utils.FileUtils;
 
 @ExtendWith(VertxExtension.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class VersionedSchemaTests {
 	private static final Path testRoot = Path.of(System.getProperty("java.io.tmpdir"), "boson");
 	private static final Path testDir = Path.of(testRoot.toString(), "utils", "VersionedSchemaTests");
@@ -97,10 +102,45 @@ public class VersionedSchemaTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testDatabaseProvider")
 	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
+	@Order(1)
 	void testMigrate(String name, SqlClient client, Vertx vertx, VertxTestContext context) {
 		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/" + name).getPath());
 
 		VersionedSchema schema = VersionedSchema.init(vertx, client, schemaPath);
+		schema.migrate().onComplete(context.succeeding(v -> {
+			context.verify(() -> {
+				var sv = schema.getCurrentVersion();
+				assertEquals(10, sv.version());
+				assertEquals("Trigger: log message insertions into audit_log", sv.description());
+			});
+
+			context.completeNow();
+		}));
+	}
+
+	@Test
+	@Order(2)
+	void testMigrateWithSchemaFoo(Vertx vertx, VertxTestContext context) {
+		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
+
+		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "foo", schemaPath);
+		schema.migrate().onComplete(context.succeeding(v -> {
+			context.verify(() -> {
+				var sv = schema.getCurrentVersion();
+				assertEquals(10, sv.version());
+				assertEquals("Trigger: log message insertions into audit_log", sv.description());
+			});
+
+			context.completeNow();
+		}));
+	}
+
+	@Test
+	@Order(3)
+	void testMigrateWithSchemaBar(Vertx vertx, VertxTestContext context) {
+		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
+
+		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "bar", schemaPath);
 		schema.migrate().onComplete(context.succeeding(v -> {
 			context.verify(() -> {
 				var sv = schema.getCurrentVersion();
