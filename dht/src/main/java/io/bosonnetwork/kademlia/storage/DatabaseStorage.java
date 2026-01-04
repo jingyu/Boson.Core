@@ -64,7 +64,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		this.valueExpiration = valueExpiration;
 		this.peerInfoExpiration = peerInfoExpiration;
 
-		VersionedSchema schema = VersionedSchema.init(getClient(), getSchemaPath());
+		VersionedSchema schema = VersionedSchema.init(vertx, getClient(), getSchemaPath());
 		return schema.migrate().andThen(ar -> {
 					if (ar.succeeded()) {
 						schemaVersion = schema.getCurrentVersion().version();

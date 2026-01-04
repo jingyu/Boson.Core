@@ -97,10 +97,10 @@ public class VersionedSchemaTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testDatabaseProvider")
 	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
-	void testMigrate(String name, SqlClient client, VertxTestContext context) {
+	void testMigrate(String name, SqlClient client, Vertx vertx, VertxTestContext context) {
 		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/" + name).getPath());
 
-		VersionedSchema schema = VersionedSchema.init(client, schemaPath);
+		VersionedSchema schema = VersionedSchema.init(vertx, client, schemaPath);
 		schema.migrate().onComplete(context.succeeding(v -> {
 			context.verify(() -> {
 				var sv = schema.getCurrentVersion();

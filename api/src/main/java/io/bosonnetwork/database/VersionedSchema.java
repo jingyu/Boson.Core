@@ -26,22 +26,25 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
+import io.vertx.core.file.FileProps;
+import io.vertx.core.file.FileSystem;
+import io.vertx.core.file.OpenOptions;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
 import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.bosonnetwork.utils.Hex;
 
 /**
  * Simple, file-based schema migration helper for Vert.x SQL clients.
@@ -51,7 +54,8 @@ import org.slf4j.LoggerFactory;
  * </p>
  */
 public class VersionedSchema implements VertxDatabase {
-	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "", "", 0, 0, true);
+	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "",  null,"", 0, 0, true);
+	private final Vertx vertx;
 	private final SqlClient client;
 	private final Path schemaPath;
 	private String databaseProductName;
@@ -64,17 +68,19 @@ public class VersionedSchema implements VertxDatabase {
 	 *
 	 * @param version      schema version number
 	 * @param description  human-readable description
+	 * @param hash         SHA-256 hash of the migration script
 	 * @param appliedBy    user/process that applied the migration
 	 * @param appliedAt    timestamp (ms) when started
 	 * @param consumedTime duration (ms) spent applying
 	 * @param success      whether migration succeeded
 	 */
-	public record SchemaVersion(int version, String description, String appliedBy, long appliedAt,
+	public record SchemaVersion(int version, String description, String hash, String appliedBy, long appliedAt,
 								   long consumedTime, boolean success) {}
 
 	private static class Migration {
 		private final int version;
 		private String description;
+		private final String hash;
 		private final Path path;
 
 		/**
@@ -82,11 +88,13 @@ public class VersionedSchema implements VertxDatabase {
 		 *
 		 * @param version     numeric version
 		 * @param description textual description
+		 * @param hash        SHA-256 hash of the migration script
 		 * @param path        file path to the SQL script
 		 */
-		public Migration(int version, String description, Path path) {
+		public Migration(int version, String description, String hash, Path path) {
 			this.version = version;
 			this.description = description;
+			this.hash = hash;
 			this.path = path;
 		}
 
@@ -109,7 +117,8 @@ public class VersionedSchema implements VertxDatabase {
 		*/
 	}
 
-	private VersionedSchema(SqlClient client, Path schemaPath) {
+	private VersionedSchema(Vertx vertx, SqlClient client, Path schemaPath) {
+		this.vertx = vertx;
 		this.client = client;
 		this.schemaPath = schemaPath;
 		this.currentVersion = EMPTY_VERSION;
@@ -118,12 +127,13 @@ public class VersionedSchema implements VertxDatabase {
 	/**
 	 * Initializes a new {@link VersionedSchema} instance.
 	 *
+	 * @param vertx      Vert.x instance
 	 * @param client     Vert.x SQL client
 	 * @param schemaPath directory containing migration SQL files
 	 * @return a new versioned schema helper
 	 */
-	public static VersionedSchema init(SqlClient client, Path schemaPath) {
-		return new VersionedSchema(client, schemaPath);
+	public static VersionedSchema init(Vertx vertx, SqlClient client, Path schemaPath) {
+		return new VersionedSchema(vertx, client, schemaPath);
 	}
 
 	/**
@@ -161,48 +171,77 @@ public class VersionedSchema implements VertxDatabase {
 			databaseProductName = name;
 			log.debug("Migration check: target database product {}", name);
 			return query(createSchemaVersionTable()).execute();
-		}).compose(v ->
-				getSchemaVersion()
-		).compose(v -> {
-			int version = 0;
-			if (v != null) {
-				this.currentVersion = v;
-				version = this.currentVersion.version();
+		}).compose(v -> {
+			Future<List<SchemaVersion>> versionsFuture = getSchemaVersions().andThen(ar -> {
+				if (ar.succeeded()) {
+					List<SchemaVersion> versions = ar.result();
+					if (!versions.isEmpty())
+						this.currentVersion = versions.get(versions.size() - 1);
+				} else {
+					log.warn("Migration check: error reading schema versions - {}", ar.cause().getMessage());
+				}
+			});
+
+			Future<List<Migration>> migrationsFuture = getMigrations().andThen(ar -> {
+				if (ar.failed())
+					log.warn("Migration check: error reading migrations - {}", ar.cause().getMessage());
+			});
+
+			return Future.all(versionsFuture, migrationsFuture);
+		}).compose(cf -> {
+			List<SchemaVersion> versions = cf.resultAt(0);
+			List<Migration> migrations = cf.resultAt(1);
+
+			if (migrations.size() < versions.size()) {
+				log.error("Migration check: database schema version mismatch: {} migrations found, {} recorded",
+						migrations.size(), versions.size());
+				return Future.failedFuture(new IllegalStateException("Database schema version mismatch"));
 			}
 
-			try {
-				return Future.succeededFuture(getNewMigrations(version));
-			} catch (IOException | IllegalStateException e) {
-				return Future.failedFuture(new IllegalStateException("Migration check failed", e));
+			for (int i = 0; i < versions.size(); i++) {
+				SchemaVersion v = versions.get(i);
+				Migration m = migrations.get(i);
+				if (v.version != m.version) {
+					log.error("Migration check: database schema version mismatch: {} recorded, {} found - {}",
+							v.version, m.version, m.fileName());
+					return Future.failedFuture(new IllegalStateException("Database schema version mismatch"));
+				}
+				if (!v.hash.equals(m.hash)) {
+					log.error("Migration check: database schema version {} hash mismatch: {} recorded, {} found - {}",
+							v.version, v.hash, m.hash, m.fileName());
+					return Future.failedFuture(new IllegalStateException("Database schema version mismatch"));
+				}
 			}
-		}).compose(migrations -> {
-			if (migrations.isEmpty())
+
+			if (versions.size() == migrations.size()) {
+				log.info("Migration check: no new migrations found");
 				return Future.succeededFuture();
+			}
 
-			Promise<Void> promise = Promise.promise();
 			Future<Void> chain = Future.succeededFuture();
-			for (Migration migration : migrations)
+			for (int i = versions.size(); i < migrations.size(); i++) {
+				Migration migration = migrations.get(i);
 				chain = chain.compose(na ->
 						applyMigration(migration).map(v -> {
 							this.currentVersion = v;
 							return null;
 						})
 				);
+			}
 
-			chain.onComplete(promise);
-			return promise.future();
+			return chain;
 		});
 	}
 
 	/**
-	 * Reads the latest successful schema version from the database.
+	 * Reads the current applied schema versions from the database.
 	 *
-	 * @return a future with the last applied {@link SchemaVersion} or {@code null}
+	 * @return a future with the list of applied {@link SchemaVersion}, empty list if none
 	 */
-	private Future<SchemaVersion> getSchemaVersion() {
-		return query(selectSchemaVersion())
+	private Future<List<SchemaVersion>> getSchemaVersions() {
+		return query(selectSchemaVersions())
 				.execute()
-				.map(VersionedSchema::mapToSchemaVersion);
+				.map(VersionedSchema::mapToSchemaVersions);
 	}
 
 	private static boolean getBoolean(Row row, String columnName) {
@@ -212,112 +251,143 @@ public class VersionedSchema implements VertxDatabase {
 						(value instanceof String s && Boolean.parseBoolean(s)));
 	}
 
-	private static SchemaVersion mapToSchemaVersion(RowSet<Row> rowSet) {
+	private static List<SchemaVersion> mapToSchemaVersions(RowSet<Row> rowSet) {
 		if (rowSet.size() == 0)
-			return null;
+			return List.of();
 
-		// first row only
-		Row row = rowSet.iterator().next();
-		int version = row.getInteger("version");
-		String description = row.getString("description");
-		String appliedBy = row.getString("applied_by");
-		long appliedAt = row.getLong("applied_at");
-		long consumedTime = row.getLong("consumed_time");
-		boolean success = getBoolean(row, "success");
+		List<SchemaVersion> versions = new ArrayList<>(rowSet.size());
+		for (Row row : rowSet) {
+			int version = row.getInteger("version");
+			String description = row.getString("description");
+			String hash = row.getString("hash");
+			String appliedBy = row.getString("applied_by");
+			long appliedAt = row.getLong("applied_at");
+			long consumedTime = row.getLong("consumed_time");
+			boolean success = getBoolean(row, "success");
 
-		return new SchemaVersion(version, description, appliedBy, appliedAt, consumedTime, success);
+			SchemaVersion v = new SchemaVersion(version, description, hash, appliedBy, appliedAt, consumedTime, success);
+			versions.add(v);
+		}
+
+		return versions;
 	}
 
 	/**
-	 * Scans {@code schemaPath} and returns migrations with the version greater than {@code currentVersion}.
+	 * Scans {@code schemaPath} and returns all the migrations.
 	 * File names must follow: {@code <version>_<description>.sql}.
 	 *
-	 * @param currentVersion the latest applied version
-	 * @return sorted list of pending migrations
-	 * @throws IOException            when reading the directory fails
-	 * @throws IllegalStateException  on duplicate versions or malformed names
+	 * @return a future with the list of migrations, empty list if none
 	 */
-	private List<Migration> getNewMigrations(int currentVersion) throws IOException, IllegalStateException {
+	private Future<List<Migration>> getMigrations() {
 		if (schemaPath == null) {
 			log.warn("Migration check: skipping, no schema migration path set");
-			return List.of();
+			return Future.succeededFuture(List.of());
 		}
 
 		log.info("Migration check: checking for new migrations from {} ...", schemaPath);
 
-		List<Migration> migrations = new ArrayList<>();
-		Files.walkFileTree(schemaPath, new SimpleFileVisitor<>() {
-			@Override
-			@SuppressWarnings("NullableProblems")
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+		FileSystem fs = vertx.fileSystem();
+		return fs.readDir(schemaPath.toString()).compose(files -> {
+			List<Migration> migrations = new ArrayList<>();
+			Future<Void> future = Future.succeededFuture();
+
+			for (String f : files) {
+				FileProps props = fs.propsBlocking(f);
+				if (!props.isRegularFile()) {
+					log.warn("Migration check: ignore non-regular file {}", f);
+					continue;
+				}
+
+				Path file = Path.of(f);
 				String name = file.getFileName().toString();
 				if (!name.endsWith(".sql")) {
 					log.warn("Migration check: ignore non-SQL file {}", name);
-					return FileVisitResult.CONTINUE;
+					continue;
 				}
 
-				Migration migration;
-				try {
-					migration = parseFileName(file);
-					if (migration.version <= currentVersion)
-						return FileVisitResult.CONTINUE;
-				} catch (IllegalStateException e) {
-					log.warn("Migration check: ignore malformed file name {} - {}", name, e.getMessage());
-					return FileVisitResult.CONTINUE;
-				}
-
-				migrations.add(migration);
-				return FileVisitResult.CONTINUE;
+				future = future.compose(v -> buildMigration(file).andThen(ar -> {
+					if (ar.succeeded())
+						migrations.add(ar.result());
+					else
+						log.warn("Migration check: error build migration from {} - {}", name, ar.cause().getMessage());
+				}).mapEmpty());
 			}
-		});
 
-		if (migrations.isEmpty()) {
-			log.info("Migration check: no new migrations found");
-			return List.of();
+			return future.map(migrations);
+		}).map(migrations -> {
+			if (migrations.isEmpty()) {
+				log.warn("Migration check: no any migrations found");
+				return List.of();
+			}
+
+			migrations.sort((m1, m2) -> {
+				if (m1.version == m2.version) {
+					log.error("Migration check: Migration file version must be unique. File names: {} and {}",
+							m1.fileName(), m2.fileName());
+					throw new IllegalStateException("Migration file version must be unique");
+				}
+
+				// noinspection ComparatorMethodParameterNotUsed
+				return Integer.compare(m1.version, m2.version);
+			});
+
+			return migrations;
+		});
+	}
+
+	private Future<String> sha256(Path path) {
+		MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (Exception e) {
+			return Future.failedFuture(e);
 		}
 
-		migrations.sort((m1, m2) -> {
-			if (m1.version == m2.version) {
-				log.error("Migration check: Migration file version must be unique. File names: {} and {}",
-						m1.fileName(), m2.fileName());
-				throw new IllegalStateException("Migration file version must be unique");
-			}
+		return vertx.fileSystem().open(path.toString(), new OpenOptions().setRead(true).setWrite(false)).compose(file -> {
+			Promise<String> promise = Promise.promise();
 
-			// noinspection ComparatorMethodParameterNotUsed
-			return Integer.compare(m1.version, m2.version);
+			file.handler(buffer -> digest.update(buffer.getBytes()))
+					.exceptionHandler(e -> {
+						file.close();
+						promise.fail(e);
+					})
+					.endHandler(v -> {
+						String hash = Hex.encode(digest.digest());
+						file.close();
+						promise.complete(hash);
+					});
+
+			return promise.future();
 		});
-
-		return migrations;
 	}
 
 	/**
-	 * Parses a migration file name into a {@link Migration}.
+	 * Build a migration file name into a {@link Migration}.
 	 * Expected format: {@code <version>_<description>.sql}
 	 *
 	 * @param file path to the migration file
-	 * @return parsed {@link Migration}
-	 * @throws IllegalStateException if the name does not match the expected pattern
+	 * @return a future with the parsed migration file
 	 */
-	private static Migration parseFileName(Path file) {
+	private Future<Migration> buildMigration(Path file) {
 		String fileName = file.getFileName().toString();
 		String[] parts = fileName.split("_", 2);
 		if (parts.length != 2)
-			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
+			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
 
 		int version;
 		try {
 			version = Integer.parseInt(parts[0]);
 		} catch (NumberFormatException e) {
-			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
+			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
 		}
 
 		int dotIndex = parts[1].lastIndexOf('.');
 		String baseName = (dotIndex == -1) ? parts[1] : parts[1].substring(0, dotIndex);
 		if (baseName.isEmpty())
-			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
+			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
 
 		String description = baseName.replace('_', ' ');
-		return new Migration(version, description, file);
+		return sha256(file).map(hash -> new Migration(version, description, hash, file));
 	}
 
 	/**
@@ -520,11 +590,12 @@ public class VersionedSchema implements VertxDatabase {
 				log.info("Migration: applied migration file {} in {} ms", migration.fileName(), duration);
 				log.debug("Migration: updating schema version...");
 				SchemaVersion newVersion = new SchemaVersion(migration.version, migration.description,
-						"", begin, duration, true);
+						migration.hash, "", begin, duration, true);
 				return connection.preparedQuery(insertSchemaVersion())
 						.execute(
 								Tuple.of(newVersion.version,
 										newVersion.description,
+										newVersion.hash,
 										newVersion.appliedBy,
 										newVersion.appliedAt,
 										newVersion.consumedTime,
@@ -555,8 +626,8 @@ public class VersionedSchema implements VertxDatabase {
 	 *
 	 * @return SQL for selecting the latest successful schema version
 	 */
-	protected String selectSchemaVersion() {
-		return selectSchemaVersion;
+	protected String selectSchemaVersions() {
+		return selectSchemaVersions;
 	}
 
 	/**
@@ -576,26 +647,26 @@ public class VersionedSchema implements VertxDatabase {
 			CREATE TABLE IF NOT EXISTS schema_versions(
 				version INTEGER PRIMARY KEY,
 				description VARCHAR(512) UNIQUE DEFAULT NULL,
+				hash VARCHAR(128) NOT NULL,
 				applied_by VARCHAR(128),
 				applied_at BIGINT NOT NULL,
 				consumed_time BIGINT DEFAULT 0,
 				success BOOLEAN NOT NULL)
 			""";
 
-	private static final String selectSchemaVersion = """
+	private static final String selectSchemaVersions = """
 			SELECT * FROM schema_versions
 				WHERE success = TRUE
-				ORDER BY version DESC
-				LIMIT 1
+				ORDER BY version ASC
 			""";
 
 	private static final String insertSchemaVersionWithQuestionMarks = """
-			INSERT INTO schema_versions(version, description, applied_by, applied_at, consumed_time, success)
-				VALUES(?, ?, ?, ?, ?, ?)
+			INSERT INTO schema_versions(version, description, hash, applied_by, applied_at, consumed_time, success)
+				VALUES(?, ?, ?, ?, ?, ?, ?)
 			""";
 
 	private static final String insertSchemaVersionWithIndexedParameters = """
-			INSERT INTO schema_versions(version, description, applied_by, applied_at, consumed_time, success)
-				VALUES($1, $2, $3, $4, $5, $6)
+			INSERT INTO schema_versions(version, description, hash, applied_by, applied_at, consumed_time, success)
+				VALUES($1, $2, $3, $4, $5, $6, $7)
 			""";
 }
