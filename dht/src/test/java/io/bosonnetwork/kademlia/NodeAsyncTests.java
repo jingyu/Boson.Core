@@ -75,7 +75,7 @@ public class NodeAsyncTests {
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
-				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
+				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build();
 
@@ -128,7 +128,7 @@ public class NodeAsyncTests {
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START + index)
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + index))
-				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + index + File.separator + "storage.db"))
+				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + index + File.separator + "storage.db"))
 				.addBootstrap(bootstrap.getNodeInfo().getV4())
 				.enableDeveloperMode()
 				.build();

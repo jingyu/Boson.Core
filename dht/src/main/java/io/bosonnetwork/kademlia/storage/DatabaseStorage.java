@@ -53,7 +53,11 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 
 	protected abstract void init(Vertx vertx);
 
-	protected abstract Path getSchemaPath();
+	protected abstract Path getMigrationPath();
+
+	protected String getSchema() {
+		return null;
+	}
 
 	protected abstract SqlDialect getDialect();
 
@@ -64,7 +68,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		this.valueExpiration = valueExpiration;
 		this.peerInfoExpiration = peerInfoExpiration;
 
-		VersionedSchema schema = VersionedSchema.init(vertx, getClient(), getSchemaPath());
+		VersionedSchema schema = VersionedSchema.init(vertx, getClient(), getSchema(), getMigrationPath());
 		return schema.migrate().andThen(ar -> {
 					if (ar.succeeded()) {
 						schemaVersion = schema.getCurrentVersion().version();
@@ -165,66 +169,72 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	@Override
 	public Future<Value> getValue(Id id) {
 		getLogger().debug("Getting value with id: {}", id);
-		return SqlTemplate.forQuery(getClient(), getDialect().selectValueById())
-				.execute(Map.of("id", id.bytes()))
-				.map(rows -> findUnique(rows, DatabaseStorage::rowToValue))
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result() != null)
-							getLogger().debug("Got value with id: {}", id);
-						else
-							//noinspection LoggingSimilarMessage
-							getLogger().debug("No value found with id: {}", id);
-					} else {
-						getLogger().error("Failed to get value with id: {}", id, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectValueById())
+						.execute(Map.of("id", id.bytes()))
+						.map(rows -> findUnique(rows, DatabaseStorage::rowToValue))
+						.andThen(ar -> {
+							if (ar.succeeded()) {
+								if (ar.result() != null)
+									getLogger().debug("Got value with id: {}", id);
+								else
+									//noinspection LoggingSimilarMessage
+									getLogger().debug("No value found with id: {}", id);
+							} else {
+								getLogger().error("Failed to get value with id: {}", id, ar.cause());
+							}
+						})
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<Value>> getValues() {
-		return query(getDialect().selectAllValues())
-				.execute()
-				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				c.query(getDialect().selectAllValues())
+						.execute()
+						.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<Value>> getValues(int offset, int limit) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectAllValuesPaginated())
-				.execute(Map.of("limit", limit, "offset", offset))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectAllValuesPaginated())
+						.execute(Map.of("limit", limit, "offset", offset))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<Value>> getValues(boolean persistent, long announcedBefore) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectValuesByPersistentAndAnnouncedBefore())
-				.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectValuesByPersistentAndAnnouncedBefore())
+						.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<Value>> getValues(boolean persistent, long announcedBefore, int offset, int limit) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectValuesByPersistentAndAnnouncedBeforePaginated())
-				.execute(Map.of(
-						"persistent", persistent,
-						"updatedBefore", announcedBefore,
-						"limit", limit,
-						"offset", offset))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectValuesByPersistentAndAnnouncedBeforePaginated())
+						.execute(Map.of(
+								"persistent", persistent,
+								"updatedBefore", announcedBefore,
+								"limit", limit,
+								"offset", offset))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToValue))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
@@ -256,7 +266,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deleteValueById())
 						.execute(Map.of("id", id.bytes()))
-						.map(this::hasEffectedRows)
+						.map(this::hasAffectedRows)
 		).andThen(ar -> {
 			if (ar.succeeded()) {
 				if (ar.result())
@@ -326,87 +336,95 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	@Override
 	public Future<PeerInfo> getPeer(Id id, Id nodeId) {
 		getLogger().debug("Getting peer with id: {} @ {}", id, nodeId);
-		return SqlTemplate.forQuery(getClient(), getDialect().selectPeerByIdAndNodeId())
-				.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
-				.map(rows -> findUnique(rows, DatabaseStorage::rowToPeer))
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (ar.result() != null)
-							getLogger().debug("Got peer with id: {} @ {}", id, nodeId);
-						else
-							//noinspection LoggingSimilarMessage
-							getLogger().debug("No peer found with id: {} @ {}", id, nodeId);
-					} else {
-						getLogger().error("Failed to get peer with id: {} @ {}", id, nodeId, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectPeerByIdAndNodeId())
+						.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
+						.map(rows -> findUnique(rows, DatabaseStorage::rowToPeer))
+						.andThen(ar -> {
+							if (ar.succeeded()) {
+								if (ar.result() != null)
+									getLogger().debug("Got peer with id: {} @ {}", id, nodeId);
+								else
+									//noinspection LoggingSimilarMessage
+									getLogger().debug("No peer found with id: {} @ {}", id, nodeId);
+							} else {
+								getLogger().error("Failed to get peer with id: {} @ {}", id, nodeId, ar.cause());
+							}
+						})
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(Id id) {
 		getLogger().debug("Getting peers with id: {}", id);
-		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersById())
-				.execute(Map.of("id", id.bytes()))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
-				.andThen(ar -> {
-					if (ar.succeeded()) {
-						if (!ar.result().isEmpty())
-							getLogger().debug("Got peers with id: {}", id);
-						else
-							//noinspection LoggingSimilarMessage
-							getLogger().debug("No peers found with id: {}", id);
-					} else {
-						getLogger().error("Failed to get peers with id: {}", id, ar.cause());
-					}
-				}).recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectPeersById())
+						.execute(Map.of("id", id.bytes()))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
+						.andThen(ar -> {
+							if (ar.succeeded()) {
+								if (!ar.result().isEmpty())
+									getLogger().debug("Got peers with id: {}", id);
+								else
+									//noinspection LoggingSimilarMessage
+									getLogger().debug("No peers found with id: {}", id);
+							} else {
+								getLogger().error("Failed to get peers with id: {}", id, ar.cause());
+							}
+						})
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<PeerInfo>> getPeers() {
-		return query(getDialect().selectAllPeers())
-				.execute()
-				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				c.query(getDialect().selectAllPeers())
+						.execute()
+						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(int offset, int limit) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectAllPeersPaginated())
-				.execute(Map.of("limit", limit, "offset", offset))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectAllPeersPaginated())
+						.execute(Map.of("limit", limit, "offset", offset))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(boolean persistent, long announcedBefore) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersByPersistentAndAnnouncedBefore())
-				.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectPeersByPersistentAndAnnouncedBefore())
+						.execute(Map.of("persistent", persistent, "updatedBefore", announcedBefore))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
 	public Future<List<PeerInfo>> getPeers(boolean persistent, long announcedBefore, int offset, int limit) {
-		return SqlTemplate.forQuery(getClient(), getDialect().selectPeersByPersistentAndAnnouncedBeforePaginated())
-				.execute(Map.of(
-						"persistent", persistent,
-						"updatedBefore", announcedBefore,
-						"limit", limit,
-						"offset", offset))
-				.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
-				.recover(cause ->
-						Future.failedFuture(new DataStorageException("Database operation failed", cause))
-				);
+		return withConnection(c ->
+				SqlTemplate.forQuery(c, getDialect().selectPeersByPersistentAndAnnouncedBeforePaginated())
+						.execute(Map.of(
+								"persistent", persistent,
+								"updatedBefore", announcedBefore,
+								"limit", limit,
+								"offset", offset))
+						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
+		).recover(cause ->
+				Future.failedFuture(new DataStorageException("Database operation failed", cause))
+		);
 	}
 
 	@Override
@@ -437,7 +455,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deletePeerByIdAndNodeId())
 						.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
-						.map(this::hasEffectedRows)
+						.map(this::hasAffectedRows)
 		).andThen(ar -> {
 			if (ar.succeeded()) {
 				if (ar.result())
@@ -459,7 +477,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deletePeersById())
 						.execute(Map.of("id", id.bytes()))
-						.map(this::hasEffectedRows)
+						.map(this::hasAffectedRows)
 		).andThen(ar -> {
 			if (ar.succeeded()) {
 				if (ar.result())

@@ -133,11 +133,11 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 		}
 
-		if (config.storageURI() != null) {
-			if (!DataStorage.supports(config.storageURI()))
-				throw new IllegalArgumentException("unsupported storage URL: " + config.storageURI());
+		if (config.databaseUri() != null) {
+			if (!DataStorage.supports(config.databaseUri()))
+				throw new IllegalArgumentException("unsupported storage URL: " + config.databaseUri());
 		} else {
-			log.warn("No storage URL is configured, in-memory storage is used");
+			throw new IllegalArgumentException("No database is configured");
 		}
 	}
 
@@ -229,14 +229,14 @@ public class KadNode extends BosonVerticle implements Node {
 	public Future<Void> deploy() {
 		tokenManager = new TokenManager();
 
-		String storageURI = config.storageURI();
+		String storageURI = config.databaseUri();
 		// fix the sqlite database file location
 		if (storageURI.startsWith("jdbc:sqlite:")) {
 			Path dbFile = Path.of(storageURI.substring("jdbc:sqlite:".length()));
 			if (!dbFile.isAbsolute())
 				storageURI = "jdbc:sqlite:" + config.dataDir().resolve(dbFile).toAbsolutePath();
 		}
-		storage = DataStorage.create(storageURI);
+		storage = DataStorage.create(storageURI, config.databasePoolSize(), config.databaseSchemaName());
 
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();

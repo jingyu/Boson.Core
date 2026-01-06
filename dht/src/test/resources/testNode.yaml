@@ -1,0 +1,11 @@
+host4: 192.168.8.10
+port: 39001
+# node id: GMDVFJ5zdvS88Do5TbPAHnMHMsZt282A84KjfptVXQAb
+privateKey: 253vmGfhqrrGrzqzxu9NBPGgZFA1iHqyeEJMMZem7ebBn8nApYgFX8diYpLFdb34vdPMutt1eAeW2tvWEWwJH9nP
+dataDir: .
+database:
+  uri: jdbc:sqlite:node.db
+enableSpamThrottling: true
+enableSuspiciousNodeDetector: true
+enableDeveloperMode: true
+enableMetrics: false

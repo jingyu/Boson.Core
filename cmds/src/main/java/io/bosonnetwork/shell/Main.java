@@ -232,10 +232,10 @@ public class Main implements Callable<Integer> {
 		}
 
 		if (storageURL != null) {
-			builder.storageURI(storageURL);
+			builder.database(storageURL);
 		} else {
 			if (builder.hasDataDir())
-				builder.storageURI("jdbc:sqlite:" + builder.dataDir().resolve("node.db"));
+				builder.database("jdbc:sqlite:" + builder.dataDir().resolve("node.db"));
 		}
 
 		if (!builder.hasPrivateKey())

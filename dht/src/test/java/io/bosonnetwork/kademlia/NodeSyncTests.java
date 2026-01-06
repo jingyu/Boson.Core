@@ -59,7 +59,7 @@ public class NodeSyncTests {
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
-				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
+				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build();
 
@@ -81,7 +81,7 @@ public class NodeSyncTests {
 					.address4(localAddr)
 					.port(TEST_NODES_PORT_START + i)
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
-					.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
+					.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
 					.addBootstrap(bootstrap.getNodeInfo().getV4())
 					.enableDeveloperMode()
 					.build();

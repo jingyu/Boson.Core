@@ -23,12 +23,11 @@
 package io.bosonnetwork.database;
 
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import io.vertx.core.Future;
 import io.vertx.sqlclient.Pool;
-import io.vertx.sqlclient.PreparedQuery;
-import io.vertx.sqlclient.Query;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
@@ -72,23 +71,37 @@ public interface VertxDatabase {
 	}
 
 	/**
-	 * Creates a simple text query using the underlying client.
+	 * Performs per-connection initialization before executing any SQL.
+	 * <p>
+	 * This method is invoked every time a {@link SqlConnection} is acquired
+	 * (both for pooled and non-pooled clients), before any queries or
+	 * transactions are executed.
+	 * <p>
+	 * Typical use cases include:
+	 * <ul>
+	 *   <li>Setting PostgreSQL {@code search_path}</li>
+	 *   <li>Configuring session variables</li>
+	 *   <li>Applying tenant- or schema-specific settings</li>
+	 * </ul>
+	 * <p>
+	 * If this method fails, the associated operation or transaction will fail.
+	 * Implementations should not suppress errors.
+	 * <p>
+	 * Implementations must be idempotent.
 	 *
-	 * @param sql SQL text to execute
-	 * @return a Vert.x {@link Query} for the provided SQL
+	 * @param connection the connection to prepare
+	 * @return a future completing when initialization is complete
 	 */
-	default Query<RowSet<Row>> query(String sql) {
-		return getClient().query(sql);
+	default Future<Void> prepareConnection(SqlConnection connection) {
+		return Future.succeededFuture();
 	}
 
-	/**
-	 * Creates a prepared query using the underlying client.
-	 *
-	 * @param sql SQL text with placeholders
-	 * @return a Vert.x {@link PreparedQuery} for the provided SQL
-	 */
-	default PreparedQuery<RowSet<Row>> preparedQuery(String sql) {
-		return getClient().preparedQuery(sql);
+	private <R>BiFunction<SqlConnection, String, Future<R>> wrapped(Function<String, R> function) {
+		return (c, t) -> prepareConnection(c).map(v -> function.apply(t));
+	}
+
+	private <R>Function<SqlConnection, Future<R>> wrappedAsync(Function<SqlConnection, Future<R>> function) {
+		return c -> prepareConnection(c).compose(v -> function.apply(c));
 	}
 
 	/**
@@ -105,9 +118,9 @@ public interface VertxDatabase {
 	 */
 	default <T> Future<T> withTransaction(Function<SqlConnection, Future<T>> function) {
 		if (getClient() instanceof Pool p) {
-			return p.withTransaction(function);
-		} else if (getClient() instanceof SqlConnection c) {
-			return withTransaction(c, function);
+			return p.withTransaction(c -> wrappedAsync(function).apply(c));
+		} else if (getClient() instanceof SqlConnection connection) {
+			return withTransaction(connection, c -> wrappedAsync(function).apply(c));
 		} else {
 			return Future.failedFuture(new IllegalStateException("Client must be an instance of SqlConnection or Pool"));
 		}
@@ -141,11 +154,9 @@ public interface VertxDatabase {
 	 */
 	default <T> Future<T> withConnection(Function<SqlConnection, Future<T>> function) {
 		if (getClient() instanceof SqlConnection c) {
-			return function.apply(c);
+			return wrappedAsync(function).apply(c);
 		} else if (getClient() instanceof Pool p) {
-			return p.getConnection().compose(c ->
-					function.apply(c).onComplete(ar -> c.close())
-			);
+			return p.withConnection(c -> wrappedAsync(function).apply(c));
 		} else {
 			return Future.failedFuture(new IllegalStateException("Client must be an instance of SqlConnection or Pool"));
 		}
@@ -264,7 +275,7 @@ public interface VertxDatabase {
 	 * @param result the SQL result to check
 	 * @return true if at least one row was affected, false otherwise
 	 */
-	default boolean hasEffectedRows(SqlResult<?> result) {
+	default boolean hasAffectedRows(SqlResult<?> result) {
 		return result.rowCount() > 0;
 	}
 

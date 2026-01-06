@@ -120,11 +120,33 @@ public interface NodeConfiguration {
 	}
 
 	/**
-	 * Provides the URL for external storage used by the DHT node.
+	 * Provides the URL for database storage used by the DHT node.
 	 *
-	 * @return the external storage URL as a string, or {@code null} if not configured.
+	 * @return the external database URL as a string, or {@code null} if not configured.
 	 */
-	default String storageURI() {
+	default String databaseUri() {
+		return "jdbc:sqlite:node.db";
+	}
+
+	/**
+	 * Provides the configured size of the database connection pool.
+	 *
+	 * This value determines the maximum number of database connections that can be
+	 * simultaneously maintained by the application for performing database operations.
+	 *
+	 * @return the size of the database connection pool, or {@code 0} if no specific pool size is defined.
+	 */
+	default int databasePoolSize() {
+		return 0;
+	}
+
+	/**
+	 * Returns the database schema name.
+	 * This typically corresponds to a namespace, such as the PostgreSQL search path.
+	 *
+	 * @return the name of the database schema as a string, or {@code null} if no schema is specified.
+	 */
+	default String databaseSchemaName() {
 		return null;
 	}
 

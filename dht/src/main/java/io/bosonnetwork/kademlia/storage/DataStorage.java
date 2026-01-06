@@ -272,15 +272,15 @@ public interface DataStorage {
 				uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX);
 	}
 
-	static DataStorage create(String uri) {
+	static DataStorage create(String uri, int poolSize, String schema) {
 		Objects.requireNonNull(uri, "url");
 
 		if (uri.equals(InMemoryStorage.STORAGE_URI))
 			return new InMemoryStorage();
 		if (uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX))
-			return new SQLiteStorage(uri);
+			return new SQLiteStorage(uri, poolSize);
 		if (uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX))
-			return new PostgresStorage(uri);
+			return new PostgresStorage(uri, poolSize, schema);
 
 		throw new IllegalArgumentException("Unsupported storage: " + uri);
 	}

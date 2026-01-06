@@ -62,14 +62,32 @@ privateKey: 0x751a9612f9bd80e6e37a77a704dc2a99dbfb162c35cb138ca46eaacd656de9bedf
 #   - Windows:   %ProgramData%\boson\node
 dataDir: ~/.local/share/boson/node
 
-# Storage backend used by the node.
-# Supported values:
+# Database configuration.
+#
+# Supported database URIs:
 #   - PostgreSQL: postgresql://user:password@host:port/database
 #   - SQLite:     jdbc:sqlite:/path/to/sqlite.db
 #
 # For lightweight or embedded deployments, SQLite is recommended.
-# For super node deployments, prefer PostgreSQL.
-storageURL: jdbc:sqlite:node.db
+# For super node or high-concurrency deployments, prefer PostgreSQL.
+#
+# Configuration fields:
+#   uri:
+#     Database connection URI.
+#
+#   poolSize:
+#     Size of the database connection pool.
+#     A value of 0 means "use the database implementation default".
+#
+#   schema:
+#     Database schema (namespace) name.
+#     This option is only applicable to PostgreSQL.
+#     For other databases (e.g., SQLite), this field is ignored.
+#
+database:
+  uri: jdbc:sqlite:node.db
+  # poolSize: 0
+  # schema: kademlia
 
 # Bootstrap nodes used when joining the DHT.
 # Each bootstrap node is a node info triple:

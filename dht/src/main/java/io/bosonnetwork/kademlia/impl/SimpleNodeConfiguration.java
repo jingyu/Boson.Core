@@ -23,7 +23,9 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 	private final int port;
 	private final Signature.PrivateKey privateKey;
 	private final Path dataDir;
-	private final String storageURL;
+	private final String databaseUri;
+	private final int databasePoolSize;
+	private final String databaseSchemaName;
 	private final ArrayList<NodeInfo> bootstrapNodes;
 	private final boolean enableSpamThrottling;
 	private final boolean enableSuspiciousNodeDetector;
@@ -37,7 +39,9 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 		this.privateKey = config.privateKey();
 		this.dataDir = config.dataDir() != null ? config.dataDir().toAbsolutePath() :
 				Path.of(System.getProperty("user.dir")).resolve("node");
-		this.storageURL = config.storageURI() != null ? config.storageURI() : InMemoryStorage.STORAGE_URI;
+		this.databaseUri = config.databaseUri() != null ? config.databaseUri() : InMemoryStorage.STORAGE_URI;
+		this.databasePoolSize = config.databasePoolSize();
+		this.databaseSchemaName = config.databaseSchemaName();
 		this.bootstrapNodes = new ArrayList<>(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());
 		this.enableSpamThrottling = config.enableSpamThrottling();
 		this.enableSuspiciousNodeDetector = config.enableSuspiciousNodeDetector();
@@ -95,8 +99,18 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 	}
 
 	@Override
-	public String storageURI() {
-		return storageURL;
+	public String databaseUri() {
+		return databaseUri;
+	}
+
+	@Override
+	public int databasePoolSize() {
+		return databasePoolSize;
+	}
+
+	@Override
+	public String databaseSchemaName() {
+		return databaseSchemaName;
 	}
 
 	@Override

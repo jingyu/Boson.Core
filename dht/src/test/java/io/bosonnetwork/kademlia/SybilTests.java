@@ -80,7 +80,7 @@ public class SybilTests {
 				.port(39001)
 				.generatePrivateKey()
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-target"))
-				.storageURI("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
+				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
 				.enableDeveloperMode()
 				.build());
 		target.start().get();

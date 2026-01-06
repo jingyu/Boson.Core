@@ -25,12 +25,14 @@ package io.bosonnetwork.kademlia.storage;
 import java.net.URL;
 import java.nio.file.Path;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.pgclient.PgBuilder;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.sqlclient.Pool;
 import io.vertx.sqlclient.PoolOptions;
 import io.vertx.sqlclient.SqlClient;
+import io.vertx.sqlclient.SqlConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,20 +40,28 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 	protected static final String STORAGE_URI_PREFIX = "postgresql://";
 
 	private final String connectionUri;
+	private final int poolSize;
+	private final String schema;
 	private Pool client;
 	private SqlDialect sqlDialect;
 
 	private static final Logger log = LoggerFactory.getLogger(PostgresStorage.class);
 
-	protected PostgresStorage(String connectionUri) {
+	protected PostgresStorage(String connectionUri, int poolSize, String schema) {
 		this.connectionUri = connectionUri;
+		this.poolSize = poolSize > 0 ? poolSize : 8;
+		this.schema = schema;
+	}
+
+	protected PostgresStorage(String connectionUri) {
+		this(connectionUri, 0, null);
 	}
 
 	// postgresql://[user[:password]@][host][:port][,...][/dbname][?param1=value1&...]
 	@Override
 	protected void init(Vertx vertx) {
 		PgConnectOptions connectOptions = PgConnectOptions.fromUri(connectionUri);
-		PoolOptions poolOptions = new PoolOptions().setMaxSize(8);
+		PoolOptions poolOptions = new PoolOptions().setMaxSize(poolSize);
 		client = PgBuilder.pool()
 				.with(poolOptions)
 				.connectingTo(connectOptions)
@@ -61,17 +71,32 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 	}
 
 	@Override
-	protected Path getSchemaPath() {
-		URL schemaPath = getClass().getResource("/db/kadnode/postgres");
-		if (schemaPath == null || schemaPath.getPath() == null)
+	protected Path getMigrationPath() {
+		URL migrationResource = getClass().getResource("/db/kadnode/postgres");
+		if (migrationResource == null || migrationResource.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
-		return Path.of(schemaPath.getPath());
+		return Path.of(migrationResource.getPath());
+	}
+
+	@Override
+	protected String getSchema() {
+		return schema;
 	}
 
 	@Override
 	public SqlClient getClient() {
 		return client;
+	}
+
+	@Override
+	public Future<Void> prepareConnection(SqlConnection connection) {
+		if (schema == null)
+			return Future.succeededFuture();
+		else
+			return connection.query("SET search_path TO " + schema)
+					.execute()
+					.mapEmpty();
 	}
 
 	@Override

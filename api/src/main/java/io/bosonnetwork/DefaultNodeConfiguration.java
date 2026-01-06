@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,7 +63,9 @@ import io.bosonnetwork.utils.Hex;
 public class DefaultNodeConfiguration implements NodeConfiguration {
 	/**
 	 * The default port for the DHT node, chosen from the IANA unassigned range (38866-39062).
-	 * See: https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml
+	 * See: <a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml">
+	 *     IANA unassigned range (38866-39062)
+	 *     </a>
 	 */
 	private static final int DEFAULT_DHT_PORT = 39001;
 
@@ -72,59 +75,43 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 */
 	private Vertx vertx;
 
-	/**
-	 * IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4.
-	 */
+	/** IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4. */
 	private String host4;
 
-	/**
-	 * IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.
-	 */
+	/** IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.*/
 	private String host6;
 
-	/**
-	 * The port number for the DHT node.
-	 */
+	/** The port number for the DHT node. */
 	private int port;
 
-	/**
-	 * The node's private key, encoded in Base58.
-	 */
+	/** The node's private key, encoded in Base58. */
 	private Signature.PrivateKey privateKey;
 
-	/**
-	 * Path to the directory for persistent DHT data storage. disables persistence if null.
-	 */
+	/** Path to the directory for persistent DHT data storage. disables persistence if null. */
 	private Path dataDir;
 
-	/**
-	 * Optional external storage URI for the node.
-	 */
-	private String storageURI;
+	/** Database storage URI for the node. */
+	private String databaseUri;
 
-	/**
-	 * Set of bootstrap nodes for joining the DHT network.
-	 */
+	/** Database connection pool size. */
+	private int databasePoolSize;
+
+	/** Database schema name. Available for PostgreSQL only*/
+	private String databaseSchemaName;
+
+	/** Set of bootstrap nodes for joining the DHT network. */
 	private final Set<NodeInfo> bootstraps;
 
-	/**
-	 * Whether spam throttling is enabled for this node.
-	 */
+	/** Whether spam throttling is enabled for this node. */
 	private boolean enableSpamThrottling;
 
-	/**
-	 * Whether suspicious node detection is enabled for this node.
-	 */
+	/** Whether suspicious node detection is enabled for this node. */
 	private boolean enableSuspiciousNodeDetector;
 
-	/**
-	 * Whether developer mode is enabled for this node.
-	 */
+	/** Whether developer mode is enabled for this node. */
 	private boolean enableDeveloperMode;
 
-	/**
-	 * Whether metrics is enabled for this node.
-	 */
+	/** Whether metrics is enabled for this node. */
 	private boolean enableMetrics;
 
 	/**
@@ -134,7 +121,9 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 */
 	private DefaultNodeConfiguration() {
 		this.port = DEFAULT_DHT_PORT;
-		this.storageURI = "jdbc:sqlite:node.db";
+		this.databaseUri = "jdbc:sqlite:node.db";
+		this.databasePoolSize = 0;
+		this.databaseSchemaName = null;
 		this.enableSpamThrottling = true;
 		this.enableSuspiciousNodeDetector = true;
 		this.enableDeveloperMode = false;
@@ -212,11 +201,21 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 
 	/**
 	 * {@inheritDoc}
-	 * @return the external storage URL, or null if not set.
+	 * @return the database storage URL, or null if not set.
 	 */
 	@Override
-	public String storageURI() {
-		return storageURI;
+	public String databaseUri() {
+		return databaseUri;
+	}
+
+	@Override
+	public int databasePoolSize() {
+		return databasePoolSize;
+	}
+
+	@Override
+	public String databaseSchemaName() {
+		return databaseSchemaName;
 	}
 
 	/**
@@ -275,18 +274,20 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 *   <li>{@code port} (Integer, optional) - DHT port (defaults to 39001)</li>
 	 *   <li>{@code privateKey} (String, required) - Base58 or hex-encoded private key</li>
 	 *   <li>{@code dataDir} (String, optional) - Path to persistent data directory</li>
-	 *   <li>{@code storageURI} (String, required) - Storage URI (defaults to "jdbc:sqlite:node.db")</li>
-	 *   <li>{@code bootstraps} (List&lt;List&lt;Object&gt;&gt;, optional) - Bootstrap nodes as [id, host, port] triplets</li>
+	 *   <li>{@code databaseUri} (String, required) - Database URI (defaults to "jdbc:sqlite:node.db")</li>
+	 *   <li>{@code databasePoolSize} (int, optional) - Database pool size (defaults to 0)</li>
+	 *   <li>{@code databaseSchemaName} (String, optional) - Database schema name (defaults to null)</li>
+	 *   <li>{@code bootstraps} (List&lt;List&lt;Object&gt;&gt; optional) - Bootstrap nodes as [id, host, port] triplets</li>
 	 *   <li>{@code enableSpamThrottling} (Boolean, optional) - Enable spam throttling (default: true)</li>
 	 *   <li>{@code enableSuspiciousNodeDetector} (Boolean, optional) - Enable suspicious node detection (default: true)</li>
 	 *   <li>{@code enableDeveloperMode} (Boolean, optional) - Enable developer mode (default: false)</li>
 	 *   <li>{@code enableMetrics} (Boolean, optional) - Enable metrics (default: false)</li>
 	 * </ul>
 	 *
-	 * @param map the map containing configuration data, must not be null or empty
+	 * @param map the map containing configuration data, the map must not be null or empty
 	 * @return a new DefaultNodeConfiguration instance
-	 * @throws NullPointerException if map is null
-	 * @throws IllegalArgumentException if map is empty, required fields are missing, or values are invalid
+	 * @throws NullPointerException if the map is null
+	 * @throws IllegalArgumentException if the map is empty, required fields are missing, or values are invalid
 	 */
 	public static DefaultNodeConfiguration fromMap(Map<String, Object> map) {
 		Objects.requireNonNull(map, "map");
@@ -317,9 +318,23 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		if (dir != null && !dir.isEmpty())
 			config.dataDir = Path.of(dir);
 
-		config.storageURI = m.getString("storageURI", config.storageURI);
-		if (config.storageURI == null || config.storageURI.isEmpty())
-			throw new IllegalArgumentException("Missing storageURI");
+		ConfigMap db = m.getObject("database");
+		if (db != null && !db.isEmpty()) {
+			config.databaseUri = db.getString("uri", config.databaseUri);
+			if (config.databaseUri == null || config.databaseUri.isEmpty())
+				throw new IllegalArgumentException("Missing database URI");
+			config.databasePoolSize = db.getInteger("poolSize", config.databasePoolSize);
+			if (config.databasePoolSize < 0)
+				throw new IllegalArgumentException("Invalid database pool size: " + config.databasePoolSize);
+			String schemaName = db.getString("schema", config.databaseSchemaName);
+			if (schemaName != null && !schemaName.isEmpty()) {
+				if (!schemaName.matches("[a-z][a-z0-9_]{0,31}"))
+					throw new IllegalArgumentException("Invalid schema name");
+				config.databaseSchemaName = schemaName;
+			} else {
+				config.databaseSchemaName = null;
+			}
+		}
 
 		List<List<Object>> lst = m.getList("bootstraps");
 		if (lst != null && !lst.isEmpty()) {
@@ -358,7 +373,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return a Map containing the configuration data
 	 */
 	public Map<String, Object> toMap() {
-		HashMap<String, Object> map = new HashMap<>();
+		HashMap<String, Object> map = new LinkedHashMap<>();
 
 		if (host4 != null)
 			map.put("host4", host4);
@@ -372,7 +387,13 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		if (dataDir != null)
 			map.put("dataDir", dataDir);
 
-		map.put("storageURI", storageURI);
+		HashMap<String, Object> db = new LinkedHashMap<>();
+		db.put("uri", databaseUri);
+		if (databasePoolSize > 0)
+			db.put("poolSize", databasePoolSize);
+		if (databaseSchemaName != null)
+			db.put("schema", databaseSchemaName);
+		map.put("database", db);
 
 		if (!bootstraps.isEmpty()) {
 			List<List<Object>> lst = new ArrayList<>();
@@ -427,7 +448,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 *
 		 * @param template the template map containing configuration data, must not be null
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if template is null
+		 * @throws NullPointerException if the template is null
 		 * @throws IllegalArgumentException if the template is invalid
 		 * @see DefaultNodeConfiguration#fromMap(Map)
 		 */
@@ -688,16 +709,59 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		}
 
 		/**
-		 * Set the external storage URL for the node.
-		 * @param storageURI the storage URL (must not be null)
+		 * Set the database URI for the node.
+		 * @param uri the database URI (must not be null)
+		 * @param poolSize the database connection pool size
 		 * @return this Builder for chaining
 		 * @throws NullPointerException if storageURI is null
+		 * @throws IllegalArgumentException if the URI is not supported or the pool size is invalid
 		 */
-		public Builder storageURI(String storageURI) {
-			Objects.requireNonNull(storageURI, "storageURI");
-			if (!storageURI.startsWith("postgresql://") && !storageURI.startsWith("jdbc:sqlite:"))
-				throw new IllegalArgumentException("Unsupported storage URL: " + storageURI);
-			config().storageURI = storageURI;
+		public Builder database(String uri, int poolSize) {
+			Objects.requireNonNull(uri, "uri");
+			if (poolSize < 0)
+				throw new IllegalArgumentException("Invalid pool size: " + poolSize);
+
+			if (!uri.startsWith("postgresql://") && !uri.startsWith("jdbc:sqlite:"))
+				throw new IllegalArgumentException("Unsupported storage URL: " + uri);
+			config().databaseUri = uri;
+			config().databasePoolSize = poolSize;
+			return this;
+		}
+
+		/**
+		 * Set the database URI for the node.
+		 * @param uri the database URI (must not be null)
+		 * @return this Builder for chaining
+		 * @throws NullPointerException if storageURI is null
+		 * @throws IllegalArgumentException if the URI is not supported or the pool size is invalid
+		 */
+		public Builder database(String uri) {
+			return database(uri, 0);
+		}
+
+		/**
+		 * Sets the database schema name to be used. The schema name must start with a
+		 * lowercase letter and may contain lowercase letters, digits, and underscores
+		 * with a maximum length of 32 characters. If the provided schema is null or
+		 * empty, the schema name will be set to null.
+		 * <p>
+		 * NOTICE: the schema only available to PostgreSQL databases.
+		 *         It will be ignored for SQLite databases.
+		 *
+		 * @param schema the name of the database schema
+		 * @return the builder instance for method chaining
+		 * @throws IllegalArgumentException if the schema name does not match the
+		 *         required pattern or exceeds the maximum length
+		 */
+		public Builder databaseSchemaName(String schema) {
+			if (schema == null || schema.isEmpty()) {
+				config().databaseSchemaName = null;
+			} else {
+				if (!schema.matches("[a-z][a-z0-9_]{0,31}"))
+					throw new IllegalArgumentException("Invalid schema name");
+				config().databaseSchemaName = schema;
+			}
+
 			return this;
 		}
 

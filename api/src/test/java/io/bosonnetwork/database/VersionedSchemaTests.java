@@ -104,9 +104,9 @@ public class VersionedSchemaTests {
 	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
 	@Order(1)
 	void testMigrate(String name, SqlClient client, Vertx vertx, VertxTestContext context) {
-		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/" + name).getPath());
+		Path migrationPath = Path.of(getClass().getResource("/db/schema_test/" + name).getPath());
 
-		VersionedSchema schema = VersionedSchema.init(vertx, client, schemaPath);
+		VersionedSchema schema = VersionedSchema.init(vertx, client, migrationPath);
 		schema.migrate().onComplete(context.succeeding(v -> {
 			context.verify(() -> {
 				var sv = schema.getCurrentVersion();
@@ -121,9 +121,9 @@ public class VersionedSchemaTests {
 	@Test
 	@Order(2)
 	void testMigrateWithSchemaFoo(Vertx vertx, VertxTestContext context) {
-		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
+		Path migrationPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
 
-		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "foo", schemaPath);
+		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "foo", migrationPath);
 		schema.migrate().onComplete(context.succeeding(v -> {
 			context.verify(() -> {
 				var sv = schema.getCurrentVersion();
@@ -138,9 +138,9 @@ public class VersionedSchemaTests {
 	@Test
 	@Order(3)
 	void testMigrateWithSchemaBar(Vertx vertx, VertxTestContext context) {
-		Path schemaPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
+		Path migrationPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
 
-		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "bar", schemaPath);
+		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "bar", migrationPath);
 		schema.migrate().onComplete(context.succeeding(v -> {
 			context.verify(() -> {
 				var sv = schema.getCurrentVersion();

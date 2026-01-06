@@ -54,8 +54,8 @@ import io.bosonnetwork.utils.Hex;
  * <p>This component applies versioned SQL migrations located in a directory,
  * records applied versions in a {@code schema_versions} table, and ensures
  * migration integrity via SHA-256 checksum validation.</p>
- *
- * <p>Features:
+ * <p>
+ * Features:
  * <ul>
  *   <li>Versioned migrations using {@code &lt;version&gt;_&lt;description&gt;.sql} naming</li>
  *   <li>Transactional execution of migrations</li>
@@ -63,23 +63,22 @@ import io.bosonnetwork.utils.Hex;
  *   <li>Optional PostgreSQL schema isolation via {@code SET search_path}</li>
  *   <li>Compatible with PostgreSQL and SQLite (Vert.x SQL clients)</li>
  * </ul>
- *
- * <p>This class is designed for application-managed schema migrations and
- * intentionally avoids external JDBC-based migration frameworks.</p>
- *
- * <p>Future extensions:
+ * <p>
+ * This class is designed for application-managed schema migrations and
+ * intentionally avoids external JDBC-based migration frameworks.
+ * <p>
+ * Future extensions:
  * <ul>
  *   <li>Baseline support for existing schemas</li>
  *   <li>Repair support for checksum mismatch recovery</li>
  * </ul>
- * </p>
  */
 public class VersionedSchema implements VertxDatabase {
 	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "",  null,"", 0, 0, true);
 	private final Vertx vertx;
 	private final SqlClient client;
 	private final String schema;
-	private final Path schemaPath;
+	private final Path migrationPath;
 	private String databaseProductName;
 	private SchemaVersion currentVersion;
 
@@ -139,11 +138,11 @@ public class VersionedSchema implements VertxDatabase {
 		*/
 	}
 
-	private VersionedSchema(Vertx vertx, SqlClient client, String schema, Path schemaPath) {
+	private VersionedSchema(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
 		this.vertx = vertx;
 		this.client = client;
 		this.schema = schema;
-		this.schemaPath = schemaPath;
+		this.migrationPath = migrationPath;
 		this.currentVersion = EMPTY_VERSION;
 	}
 
@@ -155,11 +154,11 @@ public class VersionedSchema implements VertxDatabase {
 	 *
 	 * @param vertx      Vert.x instance
 	 * @param client     Vert.x SQL client
-	 * @param schemaPath directory containing migration SQL files
+	 * @param migrationPath directory containing migration SQL files
 	 * @return a new {@link VersionedSchema} instance
 	 */
-	public static VersionedSchema init(Vertx vertx, SqlClient client, Path schemaPath) {
-		return new VersionedSchema(vertx, client, null, schemaPath);
+	public static VersionedSchema init(Vertx vertx, SqlClient client, Path migrationPath) {
+		return new VersionedSchema(vertx, client, null, migrationPath);
 	}
 
 	/**
@@ -168,14 +167,14 @@ public class VersionedSchema implements VertxDatabase {
 	 * @param vertx      the Vert.x instance used for database operations and event loops
 	 * @param client     the SQL client used for executing migrations
 	 * @param schema     the schema name where migrations will be applied
-	 * @param schemaPath the path to the directory containing migration SQL files
+	 * @param migrationPath the path to the directory containing migration SQL files
 	 * @return a new {@link VersionedSchema} instance configured for the provided parameters
 	 */
-	public static VersionedSchema init(Vertx vertx, SqlClient client, String schema, Path schemaPath) {
+	public static VersionedSchema init(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
 		if (schema != null && !schema.matches("[a-z][a-z0-9_]{0,31}"))
 			throw new IllegalArgumentException("Invalid schema name");
 
-		return new VersionedSchema(vertx, client, schema, schemaPath);
+		return new VersionedSchema(vertx, client, schema, migrationPath);
 	}
 
 	/**
@@ -327,7 +326,7 @@ public class VersionedSchema implements VertxDatabase {
 		if (schema == null)
 			return Future.succeededFuture();
 		else
-			return client.query("SET search_path TO " + schema/* + ", public" */)
+			return client.query("SET search_path TO " + schema)
 					.execute()
 					.mapEmpty();
 	}
@@ -344,15 +343,15 @@ public class VersionedSchema implements VertxDatabase {
 	 *         or an empty list if none are found
 	 */
 	private Future<List<Migration>> getMigrations() {
-		if (schemaPath == null) {
+		if (migrationPath == null) {
 			log.warn("Migration check: skipping, no schema migration path set");
 			return Future.succeededFuture(List.of());
 		}
 
-		log.info("Migration check: checking for new migrations from {} ...", schemaPath);
+		log.info("Migration check: checking for new migrations from {} ...", migrationPath);
 
 		FileSystem fs = vertx.fileSystem();
-		return fs.readDir(schemaPath.toString()).compose(files -> {
+		return fs.readDir(migrationPath.toString()).compose(files -> {
 			List<Migration> migrations = new ArrayList<>();
 			Future<Void> future = Future.succeededFuture();
 

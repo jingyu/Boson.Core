@@ -38,13 +38,19 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 	protected static final String STORAGE_URI_PREFIX = "jdbc:sqlite:";
 
 	private final String connectionUri;
+	private final int poolSize;
 	private Pool client;
 	private SqlDialect sqlDialect;
 
 	private static final Logger log = LoggerFactory.getLogger(SQLiteStorage.class);
 
-	protected SQLiteStorage(String connectionUri) {
+	protected SQLiteStorage(String connectionUri, int poolSize) {
 		this.connectionUri = connectionUri;
+		this.poolSize = poolSize > 0 ? poolSize : 1;
+	}
+
+	protected SQLiteStorage(String connectionUri) {
+		this(connectionUri, 0);
 	}
 
 	@Override
@@ -60,7 +66,7 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 		dataSource.setFullSync(true);
 
 		// Single connection recommended for SQLite
-		PoolOptions poolOptions = new PoolOptions().setMaxSize(1);
+		PoolOptions poolOptions = new PoolOptions().setMaxSize(poolSize);
 		client = JDBCPool.pool(vertx, dataSource, poolOptions);
 		sqlDialect = new SqlDialect() {};
 
@@ -73,12 +79,12 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 	}
 
 	@Override
-	protected Path getSchemaPath() {
-		URL schemaPath = getClass().getResource("/db/kadnode/sqlite");
-		if (schemaPath == null || schemaPath.getPath() == null)
+	protected Path getMigrationPath() {
+		URL migrationResource = getClass().getResource("/db/kadnode/sqlite");
+		if (migrationResource == null || migrationResource.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
-		return Path.of(schemaPath.getPath());
+		return Path.of(migrationResource.getPath());
 	}
 
 	@Override
