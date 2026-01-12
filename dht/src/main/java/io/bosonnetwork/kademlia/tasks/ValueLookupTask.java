@@ -48,7 +48,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
  * It extends {@link LookupTask} to leverage its candidate management and RPC handling
  * in a single-threaded Vert.x event loop.
  */
-public class ValueLookupTask extends LookupTask<Value, ValueLookupTask> {
+public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> {
 	/** The expected sequence number for filtering outdated values; -1 disables the check. */
 	private final int expectedSequenceNumber;
 
@@ -60,10 +60,12 @@ public class ValueLookupTask extends LookupTask<Value, ValueLookupTask> {
 	 * @param context               the Kademlia context, must not be null
 	 * @param target                the target ID (e.g., key hash) to look up
 	 * @param expectedSequenceNumber the minimum sequence number for valid values; -1 to disable
+	 * @param doneOnEligibleResult true if the lookup is complete when a result is eligible, false continue
 	 */
-	public ValueLookupTask(KadContext context, Id target, int expectedSequenceNumber) {
-		super(context, target);
+	public ValueLookupTask(KadContext context, Id target, int expectedSequenceNumber, boolean doneOnEligibleResult) {
+		super(context, target, doneOnEligibleResult);
 		this.expectedSequenceNumber = expectedSequenceNumber;
+		setResult(new EligibleValue(target, expectedSequenceNumber));
 	}
 
 	/**
@@ -122,34 +124,19 @@ public class ValueLookupTask extends LookupTask<Value, ValueLookupTask> {
 		Message<FindValueResponse> response = call.getResponse();
 		if (response.getBody().hasValue()) {
 			Value value = response.getBody().getValue();
-			if (!value.getId().equals(getTarget())) {
-				log.warn("{}#{} dropping response from {} due to value ID mismatch: got {}, expected {}",
-						getName(), getId(), call.getTargetId(), value.getId(), getTarget());
+			if (!result.update(value)) {
+				log.warn("{}#{} dropping response from {} due to ineligible value(id | sequenceNumber | signature mismatch)",
+						getName(), getId(), call.getTargetId());
 				return;
 			}
 
-			if (!value.isValid()) {
-				log.warn("{}#{} dropping response from {} due to invalid value (signature mismatch): {}",
-						getName(), getId(), call.getTargetId(), value.getId());
-				return;
-			}
-
-			if (expectedSequenceNumber >= 0 && value.getSequenceNumber() < expectedSequenceNumber) {
-				log.warn("{}#{} dropping response from {} due to outdated value: sequence {}, expected {}",
-						getName(), getId(), call.getTargetId(), value.getSequenceNumber(), expectedSequenceNumber);
-				return;
-			}
-
-			if (resultFilter != null) {
-				ResultFilter.Action action = resultFilter.apply(getResult(), value);
-				log.debug("{}#{} filtered value {}: action={}", getName(), getId(), value.getId(), action);
-				if (action.isAccept())
-					setResult(value);
-				if (action.isDone())
+			if (!result.isEmpty()) {
+				if (doneOnEligibleResult) {
+					log.debug("{}#{} value is eligible, done on result", getName(), getId());
 					lookupDone = true;
-			} else {
-				if (getResult() == null || value.getSequenceNumber() > getResult().getSequenceNumber())
-					setResult(value);
+				} else {
+					log.trace("{}#{} value is eligible, continuing iteration for precise result", getName(), getId());
+				}
 			}
 		} else {
 			List<NodeInfo> nodes = response.getBody().getNodes(getContext().getNetwork());

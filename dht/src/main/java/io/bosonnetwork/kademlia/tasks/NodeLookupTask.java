@@ -54,16 +54,37 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 	/** Whether to request tokens in FIND_NODE RPCs for subsequent operations. */
 	private boolean wantToken = false;
 
+	/**
+	 * Indicates whether the task should filter the target node during the lookup process.
+	 * <p>
+	 * This flag determines if the task explicitly focuses on reaching the target node or resource
+	 * as part of the distributed lookup operation. When set to {@code true}, the task treats the
+	 * target as a priority for the lookup. When set to {@code false}, the lookup may operate
+	 * more generally without a direct focus on the specific target.
+	 */
+	private boolean wantTarget = false;
+
 	private static final Logger log = LoggerFactory.getLogger(NodeLookupTask.class);
 
 	/**
 	 * Constructs a new node lookup task for the given target ID.
 	 *
-	 * @param context the Kademlia context, must not be null
-	 * @param target  the target ID to look up
+	 * @param context the Kademlia context providing access to the local node's state and operations, must not be null
+	 * @param target the target ID to look up within the DHT, must not be null
+	 * @param doneOnEligibleResult true if the lookup is complete when a result is eligible, false continue
+	 */
+	public NodeLookupTask(KadContext context, Id target, boolean doneOnEligibleResult) {
+		super(context, target, doneOnEligibleResult);
+	}
+
+	/**
+	 * Constructs a new node lookup task for the given target ID.
+	 *
+	 * @param context the Kademlia context providing access to the local node's state and operations, must not be null
+	 * @param target the target ID to look up within the DHT, must not be null
 	 */
 	public NodeLookupTask(KadContext context, Id target) {
-		super(context, target);
+		super(context, target, false);
 	}
 
 	/**
@@ -104,6 +125,26 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 	 */
 	public boolean doesWantToken() {
 		return wantToken;
+	}
+
+	/**
+	 * Configures the task to determine whether a specific target is desired in the lookup process.
+	 *
+	 * @param wantTarget true if the task should aim for a specific target, false otherwise
+	 * @return this task for method chaining
+	 */
+	public NodeLookupTask setWantTarget(boolean wantTarget) {
+		this.wantTarget = wantTarget;
+		return this;
+	}
+
+	/**
+	 * Indicates whether the task aims to target a specific node during the lookup process.
+	 *
+	 * @return true if a specific target is desired, false otherwise
+	 */
+	public boolean doesWantTarget() {
+		return wantTarget;
 	}
 
 	/**
@@ -196,16 +237,21 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 		log.debug("{}#{} adding {} candidates from response by {}", getName(), getId(), nodes.size(), call.getTargetId());
 		addCandidates(nodes);
 
-		if (resultFilter != null) {
-			// Check for nodes matching the target ID
+		if (wantTarget) {
+			// Check for nodes matching the target Id
 			for (NodeInfo node : nodes) {
 				if (node.getId().equals(getTarget())) {
-					ResultFilter.Action action = resultFilter.apply(getResult(), node);
-					log.debug("{}#{} filtered node {}: action={}", getName(), getId(), node.getId(), action);
-					if (action.isAccept())
-						setResult(node);
-					if (action.isDone())
-						lookupDone = true;
+					result = node;
+					break;
+				}
+			}
+
+			if (result != null) {
+				if (doneOnEligibleResult) {
+					log.debug("{}#{} node info is eligible, done on result", getName(), getId());
+					lookupDone = true;
+				} else {
+					log.trace("{}#{} continuing iteration for full/deep node lookup", getName(), getId());
 				}
 			}
 		}

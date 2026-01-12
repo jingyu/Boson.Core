@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.json;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,7 +33,7 @@ import com.fasterxml.jackson.databind.cfg.ContextAttributes;
  * This class extends {@link Impl} and provides a convenient, immutable,
  * and type-safe way to manage shared (global) and per-call (thread-local) attributes for Jackson operations.
  * <p>
- * Use static factory methods such as {@link #empty()}, {@link #perCall()}, and {@link #shared(Object, Object)}
+ * Use static factory methods such as {@link #empty()} and {@link #shared(Object, Object)}
  * to construct a context instance with the desired attributes. Use instance methods to query or derive
  * new contexts with added/removed attributes.
  * <p>
@@ -69,16 +68,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return an empty context
 	 */
 	public static JsonContext empty() {
-		return new JsonContext(Collections.emptyMap(), Collections.emptyMap());
-	}
-
-	/**
-	 * Returns a new {@code JsonContext} with no shared or per-call attributes, for use as a per-call context.
-	 *
-	 * @return a per-call context with no attributes
-	 */
-	public static JsonContext perCall() {
-		return new JsonContext(Collections.emptyMap(), Collections.emptyMap());
+		return new JsonContext(Map.of());
 	}
 
 	/**
@@ -92,7 +82,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	public static JsonContext perCall(Object key, Object value) {
 		Map<Object, Object> m = new HashMap<>();
 		m.put(key, value);
-		return new JsonContext(Collections.emptyMap(), m);
+		return new JsonContext(Map.of(), m);
 	}
 
 	/**
@@ -108,7 +98,7 @@ public class JsonContext extends ContextAttributes.Impl {
 		Map<Object, Object> m = new HashMap<>();
 		m.put(key1, value1);
 		m.put(key2, value2);
-		return new JsonContext(Collections.emptyMap(), m);
+		return new JsonContext(Map.of(), m);
 	}
 
 	/**
@@ -127,7 +117,7 @@ public class JsonContext extends ContextAttributes.Impl {
 		m.put(key1, value1);
 		m.put(key2, value2);
 		m.put(key3, value3);
-		return new JsonContext(Collections.emptyMap(), m);
+		return new JsonContext(Map.of(), m);
 	}
 
 	/**
@@ -139,7 +129,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return a context with the specified shared attribute
 	 */
 	public static JsonContext shared(Object key, Object value) {
-		return new JsonContext(Map.of(key, value), Collections.emptyMap());
+		return new JsonContext(Map.of(key, value));
 	}
 
 	/**
@@ -152,7 +142,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return a context with the specified shared attributes
 	 */
 	public static JsonContext shared(Object key1, Object value1, Object key2, Object value2) {
-		return new JsonContext(Map.of(key1, value1, key2, value2), Collections.emptyMap());
+		return new JsonContext(Map.of(key1, value1, key2, value2));
 	}
 
 	/**
@@ -167,7 +157,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return a context with the specified shared attributes
 	 */
 	public static JsonContext shared(Object key1, Object value1, Object key2, Object value2, Object key3, Object value3) {
-		return new JsonContext(Map.of(key1, value1, key2, value2, key3, value3), Collections.emptyMap());
+		return new JsonContext(Map.of(key1, value1, key2, value2, key3, value3));
 	}
 
 	/**
@@ -222,7 +212,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 */
 	@Override
 	public JsonContext withSharedAttributes(Map<?, ?> attributes) {
-		return new JsonContext(attributes == null || attributes.isEmpty() ? Collections.emptyMap() : attributes);
+		return new JsonContext(attributes == null || attributes.isEmpty() ? Map.of() : attributes);
 	}
 
 	/**
@@ -243,42 +233,5 @@ public class JsonContext extends ContextAttributes.Impl {
 		Map<Object, Object> newShared = new HashMap<>(_shared);
 		newShared.remove(key);
 		return new JsonContext(newShared);
-	}
-
-	/**
-	 * Returns a new {@code JsonContext} with the given per-call (non-shared) attribute key and value.
-	 * Per-call attributes are visible only to a single serialization/deserialization operation.
-	 * <p>
-	 * If {@code value} is {@code null}, and the key exists in shared attributes,
-	 * a special null surrogate is used to mask the shared value. If the key does not exist in shared or per-call attributes,
-	 * the context is returned unchanged.
-	 *
-	 * @param key   the per-call attribute key
-	 * @param value the per-call attribute value (maybe {@code null}, see behavior above)
-	 * @return a new context with the updated per-call attribute
-	 */
-	@Override
-	public JsonContext withPerCallAttribute(Object key, Object value) {
-		// First: null value may need masking
-		if (value == null) {
-			// need to mask nulls to ensure default values won't be showing
-			if (_shared.containsKey(key)) {
-				value = NULL_SURROGATE;
-			} else if ((_nonShared == null) || !_nonShared.containsKey(key)) {
-				// except if an immutable shared list has no entry, we don't care
-				return this;
-			} else {
-				//noinspection RedundantCollectionOperation
-				if (_nonShared.containsKey(key)) // avoid exception on immutable map
-					_nonShared.remove(key);
-				return this;
-			}
-		}
-
-		if (_nonShared == Collections.emptyMap())
-			_nonShared = new HashMap<>();
-
-		_nonShared.put(key, value);
-		return this;
 	}
 }

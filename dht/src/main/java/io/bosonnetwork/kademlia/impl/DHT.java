@@ -63,7 +63,6 @@ import io.bosonnetwork.kademlia.tasks.NodeLookupTask;
 import io.bosonnetwork.kademlia.tasks.PeerAnnounceTask;
 import io.bosonnetwork.kademlia.tasks.PeerLookupTask;
 import io.bosonnetwork.kademlia.tasks.PingRefreshTask;
-import io.bosonnetwork.kademlia.tasks.ResultFilter;
 import io.bosonnetwork.kademlia.tasks.Task;
 import io.bosonnetwork.kademlia.tasks.TaskManager;
 import io.bosonnetwork.kademlia.tasks.ValueAnnounceTask;
@@ -1055,14 +1054,10 @@ public class DHT extends BosonVerticle {
 				return;
 			}
 
-			NodeLookupTask task = new NodeLookupTask(kadContext, id)
+			NodeLookupTask task = new NodeLookupTask(kadContext, id, option != LookupOption.CONSERVATIVE)
 					.setName("Lookup node: " + id)
-					.setResultFilter((previous, next) -> {
-						if (option == LookupOption.CONSERVATIVE)
-							return ResultFilter.Action.ACCEPT_CONTINUE;
-						else
-							return ResultFilter.Action.ACCEPT_DONE;
-					}).addListener(t ->
+					.setWantTarget(true)
+					.addListener(t ->
 							promise.complete(t.getResult())
 					);
 
@@ -1076,25 +1071,11 @@ public class DHT extends BosonVerticle {
 		Promise<Value> promise = Promise.promise();
 
 		runOnContext(v -> {
-			ValueLookupTask task = new ValueLookupTask(kadContext, id, expectedSequenceNumber)
+			ValueLookupTask task = new ValueLookupTask(kadContext, id, expectedSequenceNumber,
+					option != LookupOption.CONSERVATIVE)
 					.setName("Lookup value: " + id)
-					.setResultFilter((previous, next) -> {
-						if (!next.isMutable())
-							return ResultFilter.Action.ACCEPT_DONE;
-
-						if ((expectedSequenceNumber < 0 || next.getSequenceNumber() >= expectedSequenceNumber) &&
-								option != LookupOption.CONSERVATIVE)
-							return ResultFilter.Action.ACCEPT_DONE;
-
-						if (previous == null)
-							return ResultFilter.Action.ACCEPT_CONTINUE;
-
-						if (next.getSequenceNumber() > previous.getSequenceNumber())
-							return ResultFilter.Action.ACCEPT_CONTINUE;
-						else
-							return ResultFilter.Action.REJECT_CONTINUE;
-					}).addListener(t ->
-							promise.complete(t.getResult())
+					.addListener(t ->
+							promise.complete(t.getResult().getValue())
 					);
 
 			taskManager.add(task);
@@ -1120,7 +1101,7 @@ public class DHT extends BosonVerticle {
 							return;
 
 						ClosestSet closest = t.getClosestSet();
-						if (closest == null || closest.size() == 0) {
+						if (closest == null || closest.isEmpty()) {
 							// this should never happen
 							log.error("!!!INTERNAL ERROR: Value announce task not started because the node lookup task got the empty closest nodes.");
 							announceTask.cancel();
@@ -1142,16 +1123,10 @@ public class DHT extends BosonVerticle {
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
 		runOnContext(v -> {
-			PeerLookupTask task = new PeerLookupTask(kadContext, id, expectedSequenceNumber, expectedCount)
+			PeerLookupTask task = new PeerLookupTask(kadContext, id, expectedSequenceNumber, expectedCount,
+					option != LookupOption.CONSERVATIVE)
 					.setName("Lookup peer: " + id)
-					.setResultFilter((previous, next) -> {
-						if (expectedCount >= 0 && next.size() >= expectedCount)
-							return ResultFilter.Action.ACCEPT_DONE;
-						else
-							return ResultFilter.Action.ACCEPT_CONTINUE;
-					}).addListener(t ->
-							promise.complete(t.getResult())
-					);
+					.addListener(t -> promise.complete(t.getResult().getPeers()));
 
 			taskManager.add(task);
 		});
@@ -1176,7 +1151,7 @@ public class DHT extends BosonVerticle {
 							return;
 
 						ClosestSet closest = t.getClosestSet();
-						if (closest == null || closest.size() == 0) {
+						if (closest == null || closest.isEmpty()) {
 							// this should never happen
 							log.error("!!!INTERNAL ERROR: Peer announce task not started because the node lookup task got the empty closest nodes.");
 							announceTask.cancel();

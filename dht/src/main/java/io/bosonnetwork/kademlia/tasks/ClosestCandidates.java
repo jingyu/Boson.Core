@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.tasks;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -153,16 +154,18 @@ public class ClosestCandidates {
 		}
 
 		if (reachedCapacity()) {
-			closest.values().stream()
+			List<CandidateNode> toRemove = closest.values().stream()
 					.filter(cn -> !cn.isInFlight())
 					.sorted(this::candidateOrder)
 					.skip(capacity)
-					.forEach(cn -> {
-						closest.remove(cn.getId());
-						dedup.remove(cn.getId());
-						Object addr = developerMode ? cn.getAddress() : cn.getAddress().getAddress();
-						dedup.remove(addr);
-					});
+					.toList();
+
+			for (CandidateNode cn : toRemove) {
+				closest.remove(cn.getId());
+				dedup.remove(cn.getId());
+				Object addr = developerMode ? cn.getAddress() : cn.getAddress().getAddress();
+				dedup.remove(addr);
+			}
 		}
 	}
 

@@ -63,9 +63,9 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	private int iterationCount = 0;
 
 	/** The result of the lookup, set by subclasses. */
-	private R result;
-	/** Filter for validating and processing lookup results, set by subclasses. */
-	protected ResultFilter<R> resultFilter;
+	protected R result;
+	/** Indicates whether the lookup task should be considered complete when an eligible result is found. */
+	protected boolean doneOnEligibleResult;
 	/** Flag indicating if the lookup is complete (e.g., value found). */
 	protected boolean lookupDone = false;
 
@@ -74,10 +74,12 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 *
 	 * @param context the Kademlia context, must not be null
 	 * @param target  the target ID to look up
+	 * @param doneOnEligibleResult true if the lookup is complete when a result is eligible, false continue
 	 */
-	protected LookupTask(KadContext context, Id target) {
+	protected LookupTask(KadContext context, Id target, boolean doneOnEligibleResult) {
 		super(context);
 		this.target = target;
+		this.doneOnEligibleResult = doneOnEligibleResult;
 
 		this.closest = new ClosestSet(target, KBucket.MAX_ENTRIES);
 		this.candidates = new ClosestCandidates(target, KBucket.MAX_ENTRIES * 3, context.isDeveloperMode());
@@ -214,18 +216,6 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 */
 	public R getResult() {
 		return result;
-	}
-
-	/**
-	 * Sets the filter for validating and processing lookup results.
-	 *
-	 * @param resultFilter the result filter
-	 * @return this task for method chaining
-	 */
-	@SuppressWarnings("unchecked")
-	public S setResultFilter(ResultFilter<R> resultFilter) {
-		this.resultFilter = resultFilter;
-		return (S) this;
 	}
 
 	/**

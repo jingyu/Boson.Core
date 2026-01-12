@@ -109,7 +109,7 @@ public interface SqlDialect {
 				SELECT *
 				FROM peers
 				WHERE id = #{id} and sequence_number >= #{expectedSequenceNumber}
-				ORDER BY updated DESC, fingerprint
+				ORDER BY sequence_number DESC, updated DESC, fingerprint
 				LIMIT #{limit}
 				""";
 	}

@@ -5,15 +5,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import io.vertx.core.CompositeFuture;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -47,6 +43,8 @@ import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.storage.DataStorage;
+import io.bosonnetwork.kademlia.tasks.EligiblePeers;
+import io.bosonnetwork.kademlia.tasks.EligibleValue;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
 import io.bosonnetwork.vertx.VertxCaffeine;
@@ -424,7 +422,7 @@ public class KadNode extends BosonVerticle implements Node {
 			Future<NodeInfo> future4 = dht4.findNode(id, option);
 			Future<NodeInfo> future6 = dht6.findNode(id, option);
 
-			if (option == LookupOption.LOCAL || option == LookupOption.CONSERVATIVE)
+			if (option == LookupOption.CONSERVATIVE)
 				return Future.all(future4, future6).map(cf ->
 						Result.of(cf.resultAt(0), cf.resultAt(1))
 				);
@@ -451,76 +449,65 @@ public class KadNode extends BosonVerticle implements Node {
 		Promise<Value> promise = Promise.promise();
 
 		runOnContext(v -> {
-			Variable<Value> localValue = Variable.empty();
+			EligibleValue eligible = new EligibleValue(id, expectedSequenceNumber);
+			Variable<Value> local = Variable.empty();
 
-			storage.getValue(id).compose(local -> {
-				if (local != null) {
-					if (!local.isMutable())
-						return Future.succeededFuture(local);
+			storage.getValue(id).compose(value -> {
+				if (value != null) {
+					eligible.update(value);
 
-					if (expectedSequenceNumber >= 0 && local.getSequenceNumber() >= expectedSequenceNumber) {
-						if (lookupOption == LookupOption.LOCAL)
-							return Future.succeededFuture(local);
+					if (!value.isMutable())
+						return Future.succeededFuture(eligible);
 
-						localValue.set(local);
-					}
+					if (lookupOption != LookupOption.CONSERVATIVE && !eligible.isEmpty())
+						return Future.succeededFuture(eligible);
 
-					if (lookupOption != LookupOption.CONSERVATIVE)
-						return Future.succeededFuture(local);
+					local.set(value);
 				}
 
-				return doFindValue(id, expectedSequenceNumber, lookupOption).map(value -> {
-					if (value == null && local == null)
-						return null;
+				return doFindValue(id, expectedSequenceNumber, lookupOption, eligible).map(eligible);
+			}).compose(vv -> {
+				if (eligible.isEmpty() || (local.isPresent() && eligible.getValue().equals(local.get())))
+					return Future.succeededFuture(eligible.getValue());
 
-					if (value == null || local == null)
-						return value == null ? local : value;
-
-					return value.getSequenceNumber() > local.getSequenceNumber() ? value : local;
-				});
-			}).compose(value -> {
-				if (value != null && value != localValue.orElse(null))
-					return storage.putValue(value);
-
-				return Future.succeededFuture(value);
+				return storage.putValue(eligible.getValue());
 			}).onComplete(promise);
 		});
 
 		return VertxFuture.of(promise.future());
 	}
 
-	private Value valueSelector(CompositeFuture future) {
-		Value value4 = future.isComplete(0) ? future.resultAt(0) : null;
-		Value value6 = future.isComplete(1) ? future.resultAt(1) : null;
-
-		if (value4 == null && value6 == null)
-			return null;
-
-		if (value4 == null || value6 == null)
-			return value4 == null ? value6 : value4;
-
-		return value4.getSequenceNumber() > value6.getSequenceNumber() ? value4 : value6;
-	}
-
-	private Future<Value> doFindValue(Id id, int expectedSequenceNumber, LookupOption option) {
+	private Future<Void> doFindValue(Id id, int expectedSequenceNumber, LookupOption option, EligibleValue result) {
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.findValue(id, expectedSequenceNumber, option);
+			return dht.findValue(id, expectedSequenceNumber, option).map(v -> {
+				if (v != null)
+					result.update(v);
+				return null;
+			});
 		} else {
-			Future<Value> future4 = dht4.findValue(id, expectedSequenceNumber, option);
-			Future<Value> future6 = dht6.findValue(id, expectedSequenceNumber, option);
+			Future<Void> future4 = dht4.findValue(id, expectedSequenceNumber, option).map(v -> {
+				if (v != null)
+					result.update(v);
+				return null;
+			});
+			Future<Void> future6 = dht6.findValue(id, expectedSequenceNumber, option).map(v -> {
+				if (v != null)
+					result.update(v);
+				return null;
+			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).map(this::valueSelector);
+				return Future.all(future4, future6).mapEmpty();
 
 			return Future.any(future4, future6).compose(cf -> {
-				if (future4.isComplete() && future4.result() == null)
+				if (future4.isComplete() && result.isEmpty())
 					return future6;
 
-				if (future6.isComplete() && future6.result() == null)
+				if (future6.isComplete() && result.isEmpty())
 					return future4;
 
-				return Future.succeededFuture(valueSelector(cf));
+				return Future.succeededFuture();
 			});
 		}
 	}
@@ -598,81 +585,67 @@ public class KadNode extends BosonVerticle implements Node {
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
 		runOnContext(v -> {
-			Variable<List<PeerInfo>> localPeers = Variable.empty();
+			EligiblePeers eligible = new EligiblePeers(id, expectedSequenceNumber, expectedCount);
 
-			storage.getPeers(id).compose(local -> {
-				if (!local.isEmpty() && expectedSequenceNumber >= 0)
-					local.removeIf(p -> p.getSequenceNumber() < expectedSequenceNumber);
+			storage.getPeers(id, expectedSequenceNumber, expectedCount).compose(peers -> {
+				eligible.add(peers);
 
-				if (!local.isEmpty()) {
+				if (!eligible.isEmpty()) {
 					if (lookupOption == LookupOption.LOCAL)
-						return Future.succeededFuture(local);
+						return Future.succeededFuture(eligible);
 
-					if (lookupOption != LookupOption.CONSERVATIVE && expectedCount > 0 && local.size() >= expectedCount)
-						return Future.succeededFuture(local);
-
-					localPeers.set(local);
+					if (lookupOption != LookupOption.CONSERVATIVE && expectedCount > 0 && eligible.reachedCapacity())
+						return Future.succeededFuture(eligible);
 				}
 
-				return doFindPeer(id, expectedSequenceNumber, expectedCount, lookupOption).map(peers -> {
-					if (local.isEmpty() && peers.isEmpty())
-						return Collections.<PeerInfo>emptyList();
+				return doFindPeer(id, expectedSequenceNumber, expectedCount, lookupOption, eligible)
+						.map(eligible);
+			}).compose(el -> {
+				if (eligible.isEmpty())
+					return Future.succeededFuture(List.<PeerInfo>of());
 
-					if (local.isEmpty() || peers.isEmpty())
-						return local.isEmpty() ? peers : local;
-
-					Map<Id, PeerInfo> dedup = new HashMap<>(16);
-					local.forEach(peer -> dedup.put(peer.getNodeId(), peer));
-					peers.forEach(peer -> dedup.put(peer.getNodeId(), peer));
-					return new ArrayList<>(dedup.values());
+				return storage.putPeers(eligible.getPeers()).map(l -> {
+					eligible.prune();
+					return eligible.getPeers();
 				});
-			}).compose(peers -> {
-				// TODO:
-				if (!peers.isEmpty() && peers != localPeers.orElse(null))
-					return storage.putPeers(peers);
-
-				return Future.succeededFuture(peers.isEmpty() ? Collections.emptyList() : peers);
 			}).onComplete(promise);
 		});
 
 		return VertxFuture.of(promise.future());
 	}
 
-	// TODO:
-	private List<PeerInfo> mergePeers(CompositeFuture future) {
-		Map<Id, PeerInfo> dedup = new HashMap<>(16);
-		if (future.isComplete(0)) {
-			List<PeerInfo> peers = future.resultAt(0);
-			peers.forEach(peer -> dedup.put(peer.getNodeId(), peer));
-		}
-
-		if (future.isComplete(1)) {
-			List<PeerInfo> peers = future.resultAt(1);
-			peers.forEach(peer -> dedup.put(peer.getNodeId(), peer));
-		}
-
-		return new ArrayList<>(dedup.values());
-	}
-
-	private Future<List<PeerInfo>> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
+	private Future<Void> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount,
+											  LookupOption option, EligiblePeers result) {
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.findPeer(id, expectedSequenceNumber, expectedCount, option);
+			return dht.findPeer(id, expectedSequenceNumber, expectedCount, option).map(peers -> {
+				if (!peers.isEmpty())
+					result.add(peers);
+				return null;
+			});
 		} else {
-			Future<List<PeerInfo>> future4 = dht4.findPeer(id, expectedSequenceNumber, expectedCount, option);
-			Future<List<PeerInfo>> future6 = dht6.findPeer(id, expectedSequenceNumber, expectedCount, option);
+			Future<Void> future4 = dht4.findPeer(id, expectedSequenceNumber, expectedCount, option).map(peers -> {
+				if (!peers.isEmpty())
+					result.add(peers);
+				return null;
+			});
+			Future<Void> future6 = dht6.findPeer(id, expectedSequenceNumber, expectedCount, option).map(peers -> {
+				if (!peers.isEmpty())
+					result.add(peers);
+				return null;
+			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).map(this::mergePeers);
+				return Future.all(future4, future6).mapEmpty();
 
 			return Future.any(future4, future6).compose(cf -> {
-				if (future4.isComplete() && future4.result().size() < expectedCount)
-					return Future.all(future4, future6).map(this::mergePeers);
+				if (future4.isComplete() && !result.reachedCapacity())
+					return future6;
 
-				if (future6.isComplete() && future6.result().size() < expectedCount)
-					return Future.all(future4, future6).map(this::mergePeers);
+				if (future6.isComplete() && !result.reachedCapacity())
+					return future4;
 
-				return Future.succeededFuture(mergePeers(cf));
+				return Future.succeededFuture();
 			});
 		}
 	}

@@ -23,11 +23,7 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +48,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
  * It extends {@link LookupTask} to leverage its candidate management and RPC handling
  * in a single-threaded Vert.x event loop.
  */
-public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
+public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 	private static final Logger log = LoggerFactory.getLogger(PeerLookupTask.class);
 
 	/** The expected sequence number for filtering outdated peers; -1 disables the check. */
@@ -67,12 +63,13 @@ public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 	 * @param target  the target ID (e.g., content hash) to look up
 	 * @param expectedSequenceNumber the minimum sequence number for valid peers; -1 to disable
 	 * @param expectedCount the expected number of peers; 0 to disable filtering
+	 * @param doneOnEligibleResult true if the lookup is complete when a result is eligible, false continue
 	 */
-	public PeerLookupTask(KadContext context, Id target, int expectedSequenceNumber, int expectedCount) {
-		super(context, target);
+	public PeerLookupTask(KadContext context, Id target, int expectedSequenceNumber, int expectedCount, boolean doneOnEligibleResult) {
+		super(context, target, doneOnEligibleResult);
 		this.expectedSequenceNumber = expectedSequenceNumber;
 		this.expectedCount = expectedCount;
-		setResult(Collections.emptyList());
+		setResult(new EligiblePeers(getTarget(), expectedSequenceNumber, expectedCount));
 	}
 
 	/**
@@ -112,22 +109,6 @@ public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 	}
 
 	/**
-	 * Merges two lists of peers, deduplicating by node ID to ensure uniqueness.
-	 * Peers share the same peer ID (e.g., content hash) but differ in node ID.
-	 *
-	 * @param existing the existing peer list, or null if none
-	 * @param next     the new peer list to merge
-	 * @return a deduplicated list of peers
-	 */
-	private List<PeerInfo> mergeList(List<PeerInfo> existing, List<PeerInfo> next) {
-		Map<Id, PeerInfo> dedup = new HashMap<>(next.size() + (existing != null ? existing.size() : 0));
-		if (existing != null && !existing.isEmpty())
-			existing.forEach(p -> dedup.put(p.getNodeId(), p));
-		next.forEach(p -> dedup.put(p.getNodeId(), p));
-		return new ArrayList<>(dedup.values());
-	}
-
-	/**
 	 * Handles a FIND_PEER response, processing peers or nodes and updating the result.
 	 * Assumes the RPC server provides a valid response. Drops the entire response if any peer is invalid,
 	 * as the node is considered unqualified.
@@ -146,25 +127,21 @@ public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 		Message<FindPeerResponse> response = call.getResponse();
 		if (response.getBody().hasPeers()) {
 			List<PeerInfo> peers = response.getBody().getPeers();
-			for (PeerInfo peer : peers) {
-				if (!peer.isValid()) {
-					log.warn("{}#{} Dropping response from {} due to invalid peer (signature mismatch): {}",
-							getName(), getId(), call.getTargetId(), peer.getNodeId());
-					return;
-				}
+			if (!result.add(peers)) {
+				log.warn("{}#{} Dropping response from {} due to ineligible peer(id | sequenceNumber | signature mismatch)",
+						getName(), getId(), call.getTargetId());
+				return;
 			}
 
-			List<PeerInfo> merged = mergeList(getResult(), peers);
-			log.debug("{}#{} merged {} peers from response by {}", getName(), getId(), peers.size(), call.getTargetId());
-			if (resultFilter != null) {
-				ResultFilter.Action action = resultFilter.apply(getResult(), merged);
-				log.debug("{}#{} filtered peer list: action={}", getName(), getId(), action);
-				if (action.isAccept())
-					setResult(merged);
-				if (action.isDone())
+			if (result.reachedCapacity()) {
+				if (doneOnEligibleResult) {
+					log.debug("{}#{} peer list is eligible, done on result", getName(), getId());
 					lookupDone = true;
-			} else {
-				setResult(merged);
+				} else {
+					log.trace("{}#{} peer list is eligible, continuing iteration for precise result", getName(), getId());
+				}
+
+				result.prune();
 			}
 		} else {
 			List<NodeInfo> nodes = response.getBody().getNodes(getContext().getNetwork());

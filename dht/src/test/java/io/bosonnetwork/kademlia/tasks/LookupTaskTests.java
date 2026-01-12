@@ -39,7 +39,7 @@ class LookupTaskTests {
 		private static final Logger log = LoggerFactory.getLogger(TestLookupTask.class);
 
 		public TestLookupTask(KadContext context, Id target) {
-			super(context, target);
+			super(context, target, false);
 		}
 
 		@Override
