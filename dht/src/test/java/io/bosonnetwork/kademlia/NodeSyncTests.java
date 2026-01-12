@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import net.datafaker.Faker;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -218,7 +219,10 @@ public class NodeSyncTests {
 
 	@Test
 	@Timeout(value = TEST_NODES, unit = TimeUnit.MINUTES)
-	void testAnnounceAndFindPeer() throws Exception {
+	void testUpdateAndFindPeer() throws Exception {
+		var peers = new ArrayList<PeerInfo>(TEST_NODES);
+
+		// initial announcement
 		for (int i = 0; i < TEST_NODES; i++) {
 			Thread.sleep(1000);
 			var announcer = testNodes.get(i);
@@ -227,6 +231,7 @@ public class NodeSyncTests {
 					.fingerprint(Random.random().nextLong())
 					.endpoint("tcp://" + localAddr.getHostAddress() + ":8888")
 					.build();
+			peers.add(p);
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			announcer.announcePeer(p).get();
@@ -237,6 +242,28 @@ public class NodeSyncTests {
 				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 				var result = node.findPeer(p.getId(), 0).get();
 				System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
+
+				assertNotNull(result);
+				assertEquals(p, result);
+			}
+		}
+
+		// update announcement
+		Faker faker = new Faker();
+		for (int i = 0; i < TEST_NODES; i++) {
+			var announcer = testNodes.get(i);
+			var p = peers.get(i);
+			p = p.update(announcer, faker.internet().url());
+
+			System.out.format("\n\n\007🟢 %s update peer %s ...\n", announcer.getId(), p.getId());
+			announcer.announcePeer(p).get();
+
+			System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+			for (int j = 0; j < TEST_NODES; j++) {
+				var node = testNodes.get(j);
+				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+				var result = node.findPeer(p.getId()).get();
+				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
 				assertEquals(p, result);

@@ -22,6 +22,7 @@ import java.util.function.Function;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import net.datafaker.Faker;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -281,13 +282,17 @@ public class NodeAsyncTests {
 
 	@Test
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
-	void testAnnounceAndFindPeer(VertxTestContext context) {
+	void testUpdateAndFindPeer(VertxTestContext context) {
+		var peers = new ArrayList<PeerInfo>(TEST_NODES);
+
+		// initial announcement
 		executeSequentially(testNodes, announcer -> {
 			var p = PeerInfo.builder()
 					.node(announcer)
 					.fingerprint(Random.random().nextLong())
 					.endpoint("tcp://" + localAddr.getHostAddress() + ":8888")
 					.build();
+			peers.add(p);
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			return ((VertxFuture<Void>)announcer.announcePeer(p)).thenCompose(v -> {
@@ -301,6 +306,29 @@ public class NodeAsyncTests {
 						context.verify(() -> {
 							assertNotNull(result);
 							assertEquals(p, result);
+						});
+					});
+				});
+			});
+		}).thenCompose(unused -> {
+			Faker faker = new Faker();
+			return executeSequentially(testNodes.size(), index -> {
+				KadNode announcer = testNodes.get(index);
+				final PeerInfo p = peers.get(index).update(announcer, faker.internet().url());
+
+				System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
+				return ((VertxFuture<Void>) announcer.announcePeer(p)).thenCompose(v -> {
+					System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+
+					return executeSequentially(testNodes, node -> {
+						System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+						var future = (VertxFuture<PeerInfo>) node.findPeer(p.getId());
+						return future.thenAccept(result -> {
+							System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
+							context.verify(() -> {
+								assertNotNull(result);
+								assertEquals(p, result);
+							});
 						});
 					});
 				});
