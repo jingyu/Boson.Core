@@ -35,7 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * A file system-based implementation of {@link ResolverCache} that provides persistent storage

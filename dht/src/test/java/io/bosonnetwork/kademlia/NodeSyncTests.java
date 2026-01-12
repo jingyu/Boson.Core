@@ -28,11 +28,12 @@ import org.junit.jupiter.api.Timeout;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
+import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.CryptoBox.Nonce;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
@@ -94,6 +95,10 @@ public class NodeSyncTests {
 					future.complete(null);
 				}
 			});
+			// NOTE: We intentionally use the CONSERVATIVE lookup mode here.
+			//       NodeAsyncTests use the default lookup mode instead, so keeping this different
+			//       helps improve overall test coverage across lookup strategies.
+			node.setDefaultLookupOption(LookupOption.CONSERVATIVE);
 			node.start().get();
 			testNodes.add(node);
 
@@ -217,7 +222,11 @@ public class NodeSyncTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			Thread.sleep(1000);
 			var announcer = testNodes.get(i);
-			var p = PeerInfo.create(announcer.getId(), 8888);
+			var p = PeerInfo.builder()
+					.node(announcer)
+					.fingerprint(Random.random().nextLong())
+					.endpoint("tcp://" + localAddr.getHostAddress() + ":8888")
+					.build();
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			announcer.announcePeer(p).get();
@@ -230,9 +239,7 @@ public class NodeSyncTests {
 				System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
-				assertFalse(result.isEmpty());
-				assertEquals(1, result.size());
-				assertEquals(p, result.get(0));
+				assertEquals(p, result);
 			}
 		}
 	}
@@ -242,7 +249,7 @@ public class NodeSyncTests {
 	void testStoreAndFindValue() throws Exception {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
-			var v = Value.createValue(("Hello from " + announcer.getId()).getBytes());
+			var v = Value.builder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
@@ -268,9 +275,8 @@ public class NodeSyncTests {
 		// initial announcement
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
-			var peerKeyPair = KeyPair.random();
-			var nonce = Nonce.random();
-			var v = Value.createSignedValue(peerKeyPair, nonce, ("Hello from " + announcer.getId()).getBytes());
+			var keyPair = KeyPair.random();
+			var v = Value.builder().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).buildSigned();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -284,8 +290,7 @@ public class NodeSyncTests {
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
-				assertArrayEquals(nonce.bytes(), v.getNonce());
-				assertArrayEquals(peerKeyPair.publicKey().bytes(), v.getPublicKey().bytes());
+				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
 				assertTrue(v.isMutable());
 				assertTrue(v.isValid());
 				assertEquals(v, result);
@@ -329,10 +334,9 @@ public class NodeSyncTests {
 			var recipient = KeyPair.random();
 			recipients.add(recipient);
 
-			var peerKeyPair = KeyPair.random();
-			var nonce = Nonce.random();
+			var keyPair = KeyPair.random();
 			var data = ("Hello from " + announcer.getId()).getBytes();
-			var v = Value.createEncryptedValue(peerKeyPair, Id.of(recipient.publicKey().bytes()), nonce, data);
+			var v = Value.builder().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).buildEncrypted();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -346,8 +350,7 @@ public class NodeSyncTests {
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
-				assertArrayEquals(nonce.bytes(), v.getNonce());
-				assertArrayEquals(peerKeyPair.publicKey().bytes(), v.getPublicKey().bytes());
+				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
 				assertTrue(v.isMutable());
 				assertTrue(v.isEncrypted());
 				assertTrue(v.isValid());

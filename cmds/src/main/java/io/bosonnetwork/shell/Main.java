@@ -58,7 +58,7 @@ import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.utils.ApplicationLock;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * @hidden

@@ -14,7 +14,6 @@ import io.vertx.micrometer.VertxPrometheusOptions;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.kademlia.storage.InMemoryStorage;
 
 public class SimpleNodeConfiguration implements NodeConfiguration {
 	private final Vertx vertx;
@@ -39,7 +38,7 @@ public class SimpleNodeConfiguration implements NodeConfiguration {
 		this.privateKey = config.privateKey();
 		this.dataDir = config.dataDir() != null ? config.dataDir().toAbsolutePath() :
 				Path.of(System.getProperty("user.dir")).resolve("node");
-		this.databaseUri = config.databaseUri() != null ? config.databaseUri() : InMemoryStorage.STORAGE_URI;
+		this.databaseUri = config.databaseUri();
 		this.databasePoolSize = config.databasePoolSize();
 		this.databaseSchemaName = config.databaseSchemaName();
 		this.bootstrapNodes = new ArrayList<>(config.bootstrapNodes() != null ? config.bootstrapNodes() : Collections.emptyList());

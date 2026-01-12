@@ -39,29 +39,39 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.crypto.CryptoIdentity;
+import io.bosonnetwork.crypto.Signature;
 
 public class FindPeerTests extends MessageTests {
 	private static Stream<Arguments> requestParameters() {
 		return Stream.of(
-				Arguments.of("v4", true, false),
-				Arguments.of("v6", false, true),
-				Arguments.of("v4+v6", true, true)
+				Arguments.of("v4-default", true, false, -1, 1, 66),
+				Arguments.of("v6-default", false, true, -1, 1, 66),
+				Arguments.of("v4+v6-default", true, true, -1, 1, 66),
+				Arguments.of("v4-all", true, false, -1, 0, 63),
+				Arguments.of("v6-all", false, true, -1, 0, 63),
+				Arguments.of("v4+v6-all", true, true, -1, 0, 63),
+				Arguments.of("v4-exp", true, false, -1, 2, 66),
+				Arguments.of("v6-exp", false, true, -1, 3, 66),
+				Arguments.of("v4+v6-exp", true, true, -1, 4, 66),
+				Arguments.of("v4-seq-exp", true, false, 8, 5, 71),
+				Arguments.of("v6-seq-exp", false, true, 9, 6, 71),
+				Arguments.of("v4+v6-seq-exp", true, true, 10, 7, 71)
 		);
 	}
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("requestParameters")
-	void testRequest(String name, boolean want4, boolean want6) throws Exception {
+	void testRequest(String name, boolean want4, boolean want6, int expectedSequenceNumber, int expectedCount, int size) throws Exception {
 		var nodeId = Id.random();
 		var target = Id.random();
-		var msg = Message.findPeerRequest(target, want4, want6);
+		var msg = Message.findPeerRequest(target, want4, want6, expectedSequenceNumber, expectedCount);
 		msg.setId(nodeId);
 		byte[] bin = msg.toBytes();
 
 		printMessage(msg);
 
-		assertEquals(63, bin.length);
+		assertEquals(size, bin.length);
 
 		assertEquals(Message.Type.REQUEST, msg.getType());
 		assertEquals(Message.Method.FIND_PEER, msg.getMethod());
@@ -70,6 +80,8 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(target, msg.getBody().getTarget());
 		assertEquals(want4, msg.getBody().doesWant4());
 		assertEquals(want6, msg.getBody().doesWant6());
+		assertEquals(expectedSequenceNumber, msg.getBody().getExpectedSequenceNumber());
+		assertEquals(expectedCount, msg.getBody().getExpectedCount());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
@@ -103,23 +115,22 @@ public class FindPeerTests extends MessageTests {
 		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
 		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
 
-		var peerId = Id.random();
-		var sig = Random.randomBytes(64);
+		var peerKey = Signature.KeyPair.random();
 		var peers = new ArrayList<PeerInfo>();
-		peers.add(PeerInfo.of(peerId, Id.random(), port--, sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, "http://abc.example.com/", sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), port--, "https://foo.example.com/", sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), port, "http://bar.example.com/", sig));
+		peers.add(PeerInfo.builder().key(peerKey).fingerprint(0x1234).endpoint("tcp://203.0.113.10:" + port--).build());
+		peers.add(PeerInfo.builder().key(peerKey).fingerprint(0x1235).endpoint("tcp://203.0.113.11:" + port--).build());
+		peers.add(PeerInfo.builder().key(peerKey).fingerprint(0x1236).endpoint("http://abc.example.com/").build());
+		peers.add(PeerInfo.builder().key(peerKey).fingerprint(0x1237).endpoint("http://foo.example.com/").build());
+		peers.add(PeerInfo.builder().key(peerKey).fingerprint(0x1238).node(new CryptoIdentity()).endpoint("http://bar.example.com/").build());
 
 		return Stream.of(
 				Arguments.of("v4", nodes4, null, null, 380),
-				Arguments.of("v4+peers", nodes4, null, peers, 1093),
+				Arguments.of("v4+peers", nodes4, null, peers, 1332),
 				Arguments.of("v6", null, nodes6, null, 476),
-				Arguments.of("v6+peers", null, nodes6, peers, 1189),
+				Arguments.of("v6+peers", null, nodes6, peers, 1428),
 				Arguments.of("v4+v6", nodes4, nodes6, null, 832),
-				Arguments.of("v4+v6+peers", nodes4, nodes6, peers, 1545),
-				Arguments.of("peers", null, null, peers, 737)
+				Arguments.of("v4+v6+peers", nodes4, nodes6, peers, 1784),
+				Arguments.of("peers", null, null, peers, 976)
 		);
 	}
 
@@ -170,14 +181,14 @@ public class FindPeerTests extends MessageTests {
 		var target = Id.random();
 
 		// warmup
-		var msg = Message.findPeerRequest(target, true, false);
+		var msg = Message.findPeerRequest(target, true, false, 9, 2);
 		msg.setId(nodeId);
 		var bin = msg.toBytes();
 		Message.parse(bin);
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			msg = Message.findPeerRequest(target, true, false);
+			msg = Message.findPeerRequest(target, true, false, 9, 2);
 			msg.setId(nodeId);
 			bin = msg.toBytes();
 			Message.parse(bin);
@@ -193,14 +204,13 @@ public class FindPeerTests extends MessageTests {
 
 		int port = 65535;
 
-		var peerId = Id.random();
-		var sig = Random.randomBytes(64);
+		var peerKey = Signature.KeyPair.random();
 		var peers = new ArrayList<PeerInfo>();
-		peers.add(PeerInfo.of(peerId, Id.random(), port--, sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), Id.random(), port--, "http://abc.example.com/", sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), port--, "https://foo.example.com/", sig));
-		peers.add(PeerInfo.of(peerId, Id.random(), port, "http://bar.example.com/", sig));
+		peers.add(PeerInfo.builder().key(peerKey).endpoint("tcp://203.0.113.10:" + port--).build());
+		peers.add(PeerInfo.builder().key(peerKey).endpoint("tcp://203.0.113.11:" + port--).build());
+		peers.add(PeerInfo.builder().key(peerKey).endpoint("http://abc.example.com/").build());
+		peers.add(PeerInfo.builder().key(peerKey).endpoint("http://foo.example.com/").build());
+		peers.add(PeerInfo.builder().key(peerKey).node(new CryptoIdentity()).endpoint("http://bar.example.com/").build());
 
 		// warmup
 		var msg = Message.findPeerResponse(txid, null, null, peers);

@@ -42,17 +42,9 @@ import io.bosonnetwork.crypto.CryptoException;
  * </ul>
  */
 public interface Node extends Identity {
-	/**
-	 * A constant representing the maximum age for a peer, expressed in milliseconds.
-	 * This value is used to define the threshold after which a peer entity is
-	 * considered outdated or expired. The value is set to 2 hours (120 minutes).
-	 */
+	/** The maximum age for a peer (2 hours). */
 	static final int MAX_PEER_AGE = 120 * 60 * 1000;             // 2 hours in milliseconds
-	/**
-	 * A constant representing the maximum age for a value, expressed in milliseconds.
-	 * This value is used to define the threshold after which a value entity is
-	 * considered outdated or expired. The value is set to 2 hours (120 minutes).
-	 */
+	/** The maximum age for a value (2 hours). */
 	static final int MAX_VALUE_AGE = 120 * 60 * 1000;            // 2 hours in milliseconds
 
 	/**
@@ -174,11 +166,12 @@ public interface Node extends Identity {
 	}
 
 	/**
-	 *  Finds a value by its ID with the expected sequence number and default lookup option.
+	 * Finds a value by its ID with the expected sequence number and default lookup option.
 	 *
 	 * @param id the unique identifier for the value to be retrieved
-	 * @param expectedSequenceNumber the expected sequence number to match for the value
-	 * @return a CompletableFuture containing the result value if found, otherwise may resolve to null
+	 * @param expectedSequenceNumber the expected sequence number to match for the value,
+	 *                               use -1 if no specific sequence number is expected
+	 * @return a CompletableFuture containing the result value if found, or null if not found
 	 */
 	default CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber) {
 		return findValue(id, expectedSequenceNumber, null);
@@ -188,8 +181,8 @@ public interface Node extends Identity {
 	 * Finds a value by its ID without the expected sequence number and the specified lookup option.
 	 *
 	 * @param id the identifier for which the value is to be looked up
-	 * @param option the lookup option to use during the search
-	 * @return a CompletableFuture that completes with the found value or an appropriate result based on the lookup
+	 * @param option the {@link LookupOption} to use
+	 * @return a {@link CompletableFuture} that completes with the found value or null if not found
 	 */
 	default CompletableFuture<Value> findValue(Id id, LookupOption option) {
 		return findValue(id, -1, option);
@@ -206,10 +199,10 @@ public interface Node extends Identity {
 	CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option);
 
 	/**
-	 * Stores a value in the network without persistency.
+	 * Stores a value in the network without persistence.
 	 *
-	 * @param value the value to store.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param value the {@link Value} to store.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
 	default CompletableFuture<Void> storeValue(Value value) {
 		return storeValue(value, -1, false);
@@ -227,23 +220,24 @@ public interface Node extends Identity {
 	}
 
 	/**
-	 * Stores a value in the network.
+	 * Stores a value in the network with optional persistence.
 	 *
-	 * @param value       the value to store.
+	 * @param value       the {@link Value} to store.
 	 * @param persistent  {@code true} if the value should be stored persistently, {@code false} otherwise.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
 	default CompletableFuture<Void> storeValue(Value value, boolean persistent) {
 		return storeValue(value, -1, persistent);
 	}
 
 	/**
-	 * Stores a value in the network.
+	 * Stores a value in the network with optional persistence and expected sequence number.
 	 *
-	 * @param value the value to be stored
-	 * @param expectedSequenceNumber the expected sequence number for the value
-	 * @param persistent determines whether the value should be stored persistently
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param value                  the {@link Value} to be stored
+	 * @param expectedSequenceNumber the expected sequence number for the value,
+	 *                               use -1 if no specific sequence number is expected
+	 * @param persistent             determines whether the value should be stored persistently
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
 	CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent);
 
@@ -253,108 +247,172 @@ public interface Node extends Identity {
 	 * @param id the {@link Id} to find peers for
 	 * @return a {@link CompletableFuture} containing the list of {@link PeerInfo}
 	 */
-	default CompletableFuture<List<PeerInfo>> findPeer(Id id) {
-		return findPeer(id, 0, null);
+	default CompletableFuture<PeerInfo> findPeer(Id id) {
+		return findPeer(id, -1, 1, null)
+				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
+	}
+
+
+	/**
+	 * Finds a peer in the network by ID with the expected sequence number.
+	 *
+	 * @param id                     the {@link Id} to find peers for
+	 * @param expectedSequenceNumber the expected sequence number for consistency,
+	 *                               use -1 if no specific sequence number is expected
+	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
+	 */
+	default CompletableFuture<PeerInfo> findPeer(Id id, int expectedSequenceNumber) {
+		return findPeer(id, expectedSequenceNumber, 1,null)
+				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
 	}
 
 	/**
-	 * Finds peers in the network by ID, with expected number of peers.
+	 * Finds a peer in the network by ID using the specified lookup option.
 	 *
-	 * @param id the unique identifier to search for.
-	 * @param expected the number of peers expected to be found.
-	 * @return a {@code CompletableFuture} containing a list of PeerInfo objects representing the found peers.
+	 * @param id     the {@link Id} to find peers for
+	 * @param option the {@link LookupOption} to use
+	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
 	 */
-	default CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected) {
-		return findPeer(id, expected, null);
+	default CompletableFuture<PeerInfo> findPeer(Id id, LookupOption option) {
+		return findPeer(id, -1, 1, option)
+				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
 	}
 
 	/**
-	 * Finds peers in the network by ID using the specified lookup option.
+	 * Finds a peer in the network by ID with the given expected sequence number and lookup option.
 	 *
-	 * @param id the unique identifier for which peers are being searched
-	 * @param option the lookup option specifying how the search should be conducted
-	 * @return a {@code CompletableFuture} containing a list of PeerInfo objects representing the peers found
+	 * @param id                     the {@link Id} to find peers for
+	 * @param expectedSequenceNumber the expected sequence number for consistency,
+	 *                               use -1 if no specific sequence number is expected
+	 * @param option                 the {@link LookupOption} to use
+	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
 	 */
-	default CompletableFuture<List<PeerInfo>> findPeer(Id id, LookupOption option) {
-		return findPeer(id, 0, option);
+	default CompletableFuture<PeerInfo> findPeer(Id id, int expectedSequenceNumber, LookupOption option) {
+		return findPeer(id, expectedSequenceNumber, 1, option)
+				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
 	}
 
 	/**
-	 * Lookup peers in the network with the given ID.
+	 * Finds multiple peers in the network associated with the given identifier.
 	 *
-	 * @param id the ID to find peers for.
-	 * @param expected the expected number of peers to lookup.
-	 * @param option lookup option to use.
-	 * @return a {@code CompletableFuture} object to retrieve the list of peers found.
+	 * @param id                     the {@link Id} of the peers to find
+	 * @param expectedSequenceNumber the expected sequence number for consistency,
+	 *                               use -1 if no specific sequence number is expected
+	 * @param expectedCount          the maximum number of peers to retrieve
+	 * @param option                 the {@link LookupOption} to use
+	 * @return a {@link CompletableFuture} that will complete with a list of {@link PeerInfo} objects
 	 */
-	CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option);
+	CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option);
 
 	/**
 	 * Announces a peer to the network without persistence.
 	 *
 	 * @param peer the {@link PeerInfo} to announce
-	 * @return a {@link CompletableFuture} representing completion
+	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
 	default CompletableFuture<Void> announcePeer(PeerInfo peer) {
-		return announcePeer(peer, false);
+		return announcePeer(peer, -1, false);
+	}
+
+	/**
+	 * Announces a peer to the network with the given expected sequence number and without persistence.
+	 *
+	 * @param peer                   the {@link PeerInfo} to announce
+	 * @param expectedSequenceNumber the expected sequence number for consistency,
+	 *                               use -1 if no specific sequence number is expected
+	 * @return a {@link CompletableFuture} representing the completion of the operation
+	 */
+	default CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
+		return announcePeer(peer, expectedSequenceNumber, false);
 	}
 
 	/**
 	 * Announces a peer to the network with optional persistence.
 	 *
-	 * @param peer the {@link PeerInfo} to announce
+	 * @param peer       the {@link PeerInfo} to announce
 	 * @param persistent whether to announce persistently
-	 * @return a {@link CompletableFuture} representing completion
+	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
-	CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent);
+	default CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent) {
+		return announcePeer(peer, -1, persistent);
+	}
+
+	/**
+	 * Announces a peer to the network with optional persistence and expected sequence number.
+	 *
+	 * @param peer                   the {@link PeerInfo} to announce
+	 * @param expectedSequenceNumber the expected sequence number for consistency,
+	 *                               use -1 if no specific sequence number is expected
+	 * @param persistent             whether to announce persistently
+	 * @return a {@link CompletableFuture} representing the completion of the operation
+	 */
+	CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent);
 
 	/**
 	 * Gets the value associated with the given ID from the node's local storage.
 	 *
-	 * @param valueId the ID of the value to retrieve.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param valueId the {@link Id} of the value to retrieve.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
 	CompletableFuture<Value> getValue(Id valueId);
 
 	/**
 	 * Removes the value with the given ID from the node's local storage.
 	 *
-	 * @param valueId the ID of the value to remove.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param valueId the {@link Id} of the value to remove.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
 	CompletableFuture<Boolean> removeValue(Id valueId);
 
 	/**
-	 * Gets the peer information with the given ID from the node's local storage.
+	 * Gets all peer information with the given ID from the node's local storage.
 	 *
-	 * @param peerId the ID of the peer to retrieve information for.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param peerId the {@link Id} of the peers to retrieve information for.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	CompletableFuture<PeerInfo> getPeer(Id peerId);
+	CompletableFuture<List<PeerInfo>> getPeers(Id peerId);
 
 	/**
-	 * Removes the peer entry with the given ID from the node's local storage.
+	 * Removes all peer entries with the given ID from the node's local storage.
 	 *
-	 * @param peerId the ID of the peer to remove.
-	 * @return a {@code CompletableFuture} representing the completion of the operation.
+	 * @param peerId the {@link Id} of the peers to remove.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	CompletableFuture<Boolean> removePeer(Id peerId);
+	CompletableFuture<Boolean> removePeers(Id peerId);
 
 	/**
-	 * Signs the given data.
+	 * Gets the peer information with the given ID and fingerprint from the node's local storage.
 	 *
-	 * @param data the data to sign.
-	 * @return the signature.
+	 * @param peerId      the {@link Id} of the peer to retrieve information for.
+	 * @param fingerprint the fingerprint of the peer to retrieve information for.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
+	 */
+	CompletableFuture<PeerInfo> getPeer(Id peerId, long fingerprint);
+
+	/**
+	 * Removes the peer entry with the given ID and fingerprint from the node's local storage.
+	 *
+	 * @param peerId      the {@link Id} of the peer to remove.
+	 * @param fingerprint the fingerprint of the peer to remove.
+	 * @return a {@link CompletableFuture} representing the completion of the operation.
+	 */
+	CompletableFuture<Boolean> removePeer(Id peerId, long fingerprint);
+
+	/**
+	 * Signs the given data using the node's private key.
+	 *
+	 * @param data the data to sign
+	 * @return the signature
 	 */
 	@Override
 	byte[] sign(byte[] data);
 
 	/**
-	 * Verifies the signature of the given data.
+	 * Verifies the signature of the given data using the node's public key.
 	 *
-	 * @param data the data to verify.
-	 * @param signature the signature to verify.
-	 * @return {@code true} if the signature is valid, {@code false} otherwise.
+	 * @param data      the data to verify
+	 * @param signature the signature to verify
+	 * @return {@code true} if the signature is valid, {@code false} otherwise
 	 */
 	@Override
 	boolean verify(byte[] data, byte[] signature);
@@ -362,9 +420,10 @@ public interface Node extends Identity {
 	/**
 	 * Encrypts the given data for a specific recipient.
 	 *
-	 * @param recipient the ID of the recipient.
-	 * @param data the data to encrypt.
-	 * @return the encrypted data.
+	 * @param recipient the {@link Id} of the recipient
+	 * @param data      the data to encrypt
+	 * @return the encrypted data
+	 * @throws CryptoException if encryption fails
 	 */
 	@Override
 	byte[] encrypt(Id recipient, byte[] data) throws CryptoException;
@@ -372,19 +431,20 @@ public interface Node extends Identity {
 	/**
 	 * Decrypts the given data from a specific sender.
 	 *
-	 * @param sender the ID of the sender.
-	 * @param data the data to decrypt.
-	 * @return the decrypted data.
-	 * @throws CryptoException if an error occurs during decryption.
+	 * @param sender the {@link Id} of the sender
+	 * @param data   the data to decrypt
+	 * @return the decrypted data
+	 * @throws CryptoException if decryption fails
 	 */
 	@Override
 	byte[] decrypt(Id sender, byte[] data) throws CryptoException;
 
 	/**
-	 * Create {@code CryptoContext} object for the target Id.
+	 * Creates a {@link CryptoContext} object for the target ID.
 	 *
-	 * @param id the target id
-	 * @return the {@code CryptoContext} object for id
+	 * @param id the target {@link Id}
+	 * @return the {@link CryptoContext} object for the ID
+	 * @throws CryptoException if context creation fails
 	 */
 	@Override
 	CryptoContext createCryptoContext(Id id) throws CryptoException;
@@ -392,9 +452,9 @@ public interface Node extends Identity {
 	/**
 	 * Creates and initializes a new KadNode instance using the provided configuration.
 	 *
-	 * @param config the configuration object used to initialize the KadNode.
-	 * @return an initialized instance of a {@code Node} representing the KadNode.
-	 * @throws BosonException if the KadNode class is not found or an error occurs during instantiation.
+	 * @param config the node configuration
+	 * @return an initialized {@link Node} instance
+	 * @throws BosonException if the KadNode cannot be initialized
 	 */
 	static Node kadNode(NodeConfiguration config) throws BosonException {
 		try {

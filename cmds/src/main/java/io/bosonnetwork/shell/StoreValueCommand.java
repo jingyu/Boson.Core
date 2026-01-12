@@ -63,14 +63,15 @@ public class StoreValueCommand implements Callable<Integer> {
 		Node node = Main.getBosonNode();
 		Value value = null;
 
-		if (recipient != null)
-			mutable = true;
-
 		if (target == null) {
-			if (mutable) {
+			Value.Builder vb = Value.builder().data(text.getBytes());
+
+			if (!mutable) {
+				value = vb.build();
+			} else {
 				if (recipient == null) {
-					value = Value.createSignedValue(text.getBytes());
- 				} else {
+					value = vb.buildSigned();
+				} else {
  					Id recipientId = null;
  					try {
  						recipientId = Id.of(recipient);
@@ -79,10 +80,8 @@ public class StoreValueCommand implements Callable<Integer> {
  						return -1;
  					}
 
- 					value = Value.createEncryptedValue(recipientId, text.getBytes());
+ 					value = vb.recipient(recipientId).buildEncrypted();
  				}
-			} else {
-				value = Value.createValue(text.getBytes());
 			}
 		} else {
 			Id id = null;

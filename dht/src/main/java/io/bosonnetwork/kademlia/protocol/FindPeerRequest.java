@@ -23,29 +23,68 @@
 package io.bosonnetwork.kademlia.protocol;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.Id;
 
-// @JsonDeserialize(using = FindPeerRequest.Deserializer.class)
+@JsonPropertyOrder({"t", "w", "cas", "e"})
 public class FindPeerRequest extends LookupRequest {
+	private final int expectedSequenceNumber;
+	private final int expectedCount;
+
 	@JsonCreator
 	protected FindPeerRequest(@JsonProperty(value = "t", required = true) Id target,
-							  @JsonProperty(value = "w", required = true) int want) {
+							  @JsonProperty(value = "w", required = true) int want,
+							  @JsonProperty(value = "cas") Integer expectedSequenceNumber,
+							  @JsonProperty(value = "e") Integer expectedCount) {
 		super(target, want);
+		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
+		this.expectedCount = expectedCount != null ? expectedCount : 0;
 	}
 
-	public FindPeerRequest(Id target, boolean want4, boolean want6) {
+	public FindPeerRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber, int expectedCount) {
 		super(target, want4, want6, false);
+		this.expectedSequenceNumber = expectedSequenceNumber;
+		this.expectedCount = expectedCount;
+	}
+
+	public int getExpectedSequenceNumber() {
+		return expectedSequenceNumber;
+	}
+
+	@JsonProperty("cas")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private Integer getCas() {
+		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
+	}
+
+	public int getExpectedCount() {
+		return expectedCount;
+	}
+
+	@JsonProperty("e")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private Integer getExceptedPeers() {
+		return expectedCount > 0 ? expectedCount : null;
 	}
 
 	@Override
 	public int hashCode() {
-		return 0xF1AD9EE2 + super.hashCode();
+		return 0xF1AD9EE2 + super.hashCode() + Integer.hashCode(expectedSequenceNumber) + Integer.hashCode(expectedCount);
 	}
 
 	@Override
 	public boolean equals(Object obj) {
-		return obj instanceof FindPeerRequest && super.equals(obj);
+		if (this == obj)
+			return true;
+
+		if (obj instanceof FindPeerRequest that)
+			return expectedSequenceNumber == that.expectedSequenceNumber &&
+					expectedCount == that.expectedCount &&
+					super.equals(obj);
+
+		return false;
 	}
 }

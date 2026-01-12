@@ -56,6 +56,7 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 	@Override
 	protected void init(Vertx vertx) {
 		// Vert.x 5.x style
+		// noinspection DuplicatedCode
 		SQLiteDataSource dataSource = new SQLiteDataSource();
 		dataSource.setUrl(connectionUri);
 		dataSource.setJournalMode("WAL");

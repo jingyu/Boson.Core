@@ -31,7 +31,7 @@ import java.util.Objects;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * Helper class for generating Compact Web Tokens (CWT) signed by an Identity.

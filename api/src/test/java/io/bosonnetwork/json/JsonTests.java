@@ -1,10 +1,8 @@
-package io.bosonnetwork.utils;
+package io.bosonnetwork.json;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -18,44 +16,14 @@ import java.util.TimeZone;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.json.internal.DateFormat;
+import io.bosonnetwork.utils.Hex;
 
-// Functional tests for io.bosonnetwork.utils.Json
-// Extra:
-//   - performance benchmarks: DataBind/ObjectMapper vs. streaming API
 public class JsonTests {
-	private static final int TIMING_ITERATIONS = 1_000_000;
-
-	@Test
-	void idTest() {
-		var id = Id.random();
-
-		var str = Json.toString(id);
-		System.out.println(str);
-		assertEquals("\"" +id.toBase58String() + "\"", str);
-
-		var id2 = Json.parse(str, Id.class);
-		assertEquals(id, id2);
-
-		var bytes = Json.toBytes(id);
-		System.out.println(Hex.encode(bytes));
-		assertEquals(Id.BYTES + 2, bytes.length);
-		assertArrayEquals(id.bytes(), Arrays.copyOfRange(bytes, 2, bytes.length));
-
-		id2 = Json.parse(bytes, Id.class);
-		assertEquals(id, id2);
-	}
-
 	@Test
 	void inetAddressV4Test() throws Exception {
 		var addr = InetAddress.getByName("192.168.8.8");
@@ -263,7 +231,7 @@ public class JsonTests {
 		assertEquals(map.size(), map2.size());
 
 		assertEquals(Base64.getUrlEncoder().withoutPadding().encodeToString(bytes), map2.get("bytes"));
-		assertEquals(Json.getDateFormat().format(now), map2.get("date"));
+		assertEquals(DateFormat.getDefault().format(now), map2.get("date"));
 		assertEquals(id.toString(), map2.get("id"));
 		assertEquals(ip4.getHostAddress(), map2.get("ip4"));
 		assertEquals(ip6.getHostAddress(), map2.get("ip6"));
@@ -282,93 +250,5 @@ public class JsonTests {
 		assertArrayEquals(ip6.getAddress(), (byte[])map3.get("ip6"));
 		assertEquals(true, map3.get("bool"));
 		assertEquals(Arrays.asList(1, 2, 3), map3.get("array"));
-	}
-
-	@Test
-	void nodeInfoTest() throws Exception {
-		var ni = new NodeInfo(Id.random(), "10.0.8.8", 2345);
-		var s = Json.toString(ni);
-		System.out.println(s);
-		System.out.println(Json.toPrettyString(ni));
-
-		var ni2 = Json.parse(s, NodeInfo.class);
-		assertEquals(ni, ni2);
-
-		var b = Json.toBytes(ni);
-		System.out.println(Hex.encode(b));
-
-		ni2 = Json.parse(b, NodeInfo.class);
-		assertEquals(ni, ni2);
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = {"simple", "simple+omitted", "simple+url", "simple+url+omitted",
-			"delegated", "delegated+omitted", "delegated+url", "delegated+url+omitted"})
-	void peerInfoTest(String mode) throws Exception {
-		var keypair = Signature.KeyPair.random();
-		var peerId = Id.of(keypair.publicKey().bytes());
-		var pi = switch (mode) {
-			case "simple", "simple+omitted" -> PeerInfo.create(keypair, Id.random(), 3456);
-			case "simple+url", "simple+url+omitted" -> PeerInfo.create(keypair, Id.random(), 3456, "https://echo.bns.io/");
-			case "delegated", "delegated+omitted" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456);
-			case "delegated+url", "delegated+url+omitted" -> PeerInfo.create(keypair, Id.random(), Id.random(), 3456, "https://echo.bns.io/");
-			default -> throw new AssertionError("Unknown mode: " + mode);
-		};
-
-		var omitted = mode.endsWith("+omitted");
-		var serializeContext = omitted ? Json.JsonContext.perCall(PeerInfo.ATTRIBUTE_OMIT_PEER_ID, true) : null;
-		var deserializeContext = omitted ? Json.JsonContext.perCall(PeerInfo.ATTRIBUTE_PEER_ID, peerId) : null;
-
-		var s = Json.toString(pi, serializeContext);
-		System.out.println(s);
-		System.out.println(Json.toPrettyString(pi, serializeContext));
-
-		var pi2 = Json.parse(s, PeerInfo.class, deserializeContext);
-		assertEquals(pi, pi2);
-
-		if (omitted) {
-			var e = assertThrows(MismatchedInputException.class, () -> {
-				Json.objectMapper().readValue(s, PeerInfo.class);
-			});
-			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
-		}
-
-		var b = Json.toBytes(pi, serializeContext);
-		System.out.println(Hex.encode(b));
-
-		pi2 = Json.parse(b, PeerInfo.class, deserializeContext);
-		assertEquals(pi, pi2);
-
-		if (omitted) {
-			var e = assertThrows(MismatchedInputException.class, () -> {
-				Json.cborMapper().readValue(b, PeerInfo.class);
-			});
-			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
-		}
-	}
-
-	@ParameterizedTest
-	@ValueSource(strings = {"immutable", "signed", "encrypted"})
-	void valueTest(String mode) throws Exception {
-		var v = switch (mode) {
-			case "immutable" -> Value.createValue("Hello from bosonnetwork!\n".repeat(10).getBytes());
-			case "signed" -> Value.createSignedValue("Hello from bosonnetwork!\n".repeat(10).getBytes());
-			case "encrypted" -> Value.createEncryptedValue(Id.of(Signature.KeyPair.random().publicKey().bytes()),
-					"Hello from bosonnetwork!\n".repeat(10).getBytes());
-			default -> throw new AssertionError("Unknown mode: " + mode);
-		};
-
-		var s = Json.toString(v);
-		System.out.println(s);
-		System.out.println(Json.toPrettyString(v));
-
-		var v2 = Json.parse(s, Value.class);
-		assertEquals(v, v2);
-
-		var b = Json.toBytes(v);
-		System.out.println(Hex.encode(b));
-
-		v2 = Json.parse(b, Value.class);
-		assertEquals(v, v2);
 	}
 }

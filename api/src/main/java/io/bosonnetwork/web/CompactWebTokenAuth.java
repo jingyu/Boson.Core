@@ -44,7 +44,7 @@ import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.service.FederatedNode;
 import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Pair;
 
 /**

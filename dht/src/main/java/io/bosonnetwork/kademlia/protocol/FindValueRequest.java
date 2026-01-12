@@ -25,9 +25,11 @@ package io.bosonnetwork.kademlia.protocol;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.Id;
 
+@JsonPropertyOrder({"t", "w", "cas"})
 public class FindValueRequest extends LookupRequest {
 	// Only send the value if the real sequence number greater than this.
 	private final int expectedSequenceNumber;

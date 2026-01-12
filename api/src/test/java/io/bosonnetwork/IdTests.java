@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
+import io.bosonnetwork.json.Json;
 
 public class IdTests {
 	@Test
@@ -522,5 +523,30 @@ public class IdTests {
 			for (int i = 0; i < loops; i++)
 				id.toBase58String();
 		});
+	}
+
+	@Test
+	void testJson() {
+		Id id = Id.random();
+		String jsonValue = Json.toString(id);
+		assertEquals("\"" + id.toBase58String() + "\"", jsonValue);
+
+		Id id1 = Json.parse(jsonValue, Id.class);
+		assertEquals(id, id1);
+	}
+
+	@Test
+	void testCbor() {
+		Id id = Id.random();
+		byte[] cborValue = Json.toBytes(id);
+		assertEquals(34, cborValue.length);
+		// byte string with a length defined by the subsequent 1-byte unsigned integer
+		assertEquals(0x58, cborValue[0]);
+		// length of the byte string
+		assertEquals(32, cborValue[1]);
+		assertArrayEquals(id.bytes(), Arrays.copyOfRange(cborValue, 2, 34));
+
+		Id id1 = Json.parse(cborValue, Id.class);
+		assertEquals(id, id1);
 	}
 }

@@ -44,7 +44,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * Compact representation of a DID Document for the Boson project.

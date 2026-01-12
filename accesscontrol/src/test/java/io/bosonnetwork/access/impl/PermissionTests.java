@@ -34,7 +34,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class PermissionTests {
 	@Test

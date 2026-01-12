@@ -95,12 +95,8 @@ public class NodeInfo {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
-		// TODO: not try to do the name resolution if the host is an host name
-		this.addr = new InetSocketAddress(host, port);
-		if (addr.isUnresolved())
-			throw new IllegalArgumentException("Unknown host");
-
 		this.id = id;
+		this.addr = new InetSocketAddress(host, port);
 	}
 
 	/**

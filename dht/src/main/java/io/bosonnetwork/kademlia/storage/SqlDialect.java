@@ -4,11 +4,11 @@ public interface SqlDialect {
 	default String upsertValue() {
 		return """
 				INSERT INTO valores (
-					id, public_key, private_key, recipient, nonce, signature,
-					sequence_number, data, persistent, created, updated
+					id, public_key, private_key, recipient, nonce, sequence_number,
+					signature, data, persistent, created, updated
 				) VALUES (
-					#{id}, #{publicKey}, #{privateKey}, #{recipient}, #{nonce}, #{signature},
-					#{sequenceNumber}, #{data}, #{persistent}, #{created}, #{updated}
+					#{id}, #{publicKey}, #{privateKey}, #{recipient}, #{nonce}, #{sequenceNumber},
+					#{signature}, #{data}, #{persistent}, #{created}, #{updated}
 				) ON CONFLICT(id) DO UPDATE SET
 					public_key = excluded.public_key,
 					private_key = CASE
@@ -18,15 +18,16 @@ public interface SqlDialect {
 					END,
 					recipient = excluded.recipient,
 					nonce = excluded.nonce,
-					signature = excluded.signature,
 					sequence_number = excluded.sequence_number,
+					signature = excluded.signature,
 					data = excluded.data,
 					persistent = excluded.persistent,
 					updated = excluded.updated
+				WHERE valores.sequence_number < excluded.sequence_number
 				""";
 	}
 
-	default String selectValueById() {
+	default String selectValue() {
 		return "SELECT * FROM valores WHERE id = #{id}";
 	}
 
@@ -56,11 +57,11 @@ public interface SqlDialect {
 		return "SELECT * FROM valores ORDER BY updated DESC, id LIMIT #{limit} OFFSET #{offset}";
 	}
 
-	default String updateValueAnnouncedById() {
+	default String updateValueAnnounced() {
 		return "UPDATE valores SET updated = #{updated} WHERE id = #{id}";
 	}
 
-	default String deleteValueById() {
+	default String deleteValue() {
 		return "DELETE FROM valores WHERE id = #{id}";
 	}
 
@@ -71,39 +72,62 @@ public interface SqlDialect {
 	default String upsertPeer() {
 		return """
 				INSERT INTO peers (
-					id, node_id, private_key, origin, port, alternative_uri, signature,
-					persistent, created, updated
+					id, fingerprint, private_key, nonce, sequence_number, node_id, node_signature,
+					signature, endpoint, extra, persistent, created, updated
 				) VALUES (
-					#{id}, #{nodeId}, #{privateKey}, #{origin}, #{port}, #{alternativeUri}, #{signature},
-					#{persistent}, #{created}, #{updated}
-				) ON CONFLICT(id, node_id) DO UPDATE SET
+					#{id}, #{fingerprint}, #{privateKey}, #{nonce}, #{sequenceNumber}, #{nodeId}, #{nodeSignature},
+					#{signature}, #{endpoint}, #{extra}, #{persistent}, #{created}, #{updated}
+				) ON CONFLICT(id, fingerprint) DO UPDATE SET
 					private_key = CASE
 						WHEN excluded.private_key IS NOT NULL
 						THEN excluded.private_key
 						ELSE peers.private_key
 					END,
-					origin = excluded.origin,
-					port = excluded.port,
-					alternative_uri = excluded.alternative_uri,
+					nonce = excluded.nonce,
+					sequence_number = excluded.sequence_number,
+					node_id = excluded.node_id,
+					node_signature = excluded.node_signature,
 					signature = excluded.signature,
+					endpoint = excluded.endpoint,
+					extra = excluded.extra,
 					persistent = excluded.persistent,
 					updated = excluded.updated
+				WHERE peers.sequence_number < excluded.sequence_number
 				""";
 	}
 
-	default String selectPeerByIdAndNodeId() {
-		return "SELECT * FROM peers WHERE id = #{id} AND node_id = #{nodeId}";
+	default String selectPeer() {
+		return "SELECT * FROM peers WHERE id = #{id} AND fingerprint = #{fingerprint}";
 	}
 
 	default String selectPeersById() {
-		return "SELECT * FROM peers WHERE id = #{id} ORDER BY updated DESC, node_id";
+		return "SELECT * FROM peers WHERE id = #{id} ORDER BY updated DESC, fingerprint";
+	}
+
+	default String selectPeersByIdAndSequenceNumberWithLimit() {
+		return """
+				SELECT *
+				FROM peers
+				WHERE id = #{id} and sequence_number >= #{expectedSequenceNumber}
+				ORDER BY updated DESC, fingerprint
+				LIMIT #{limit}
+				""";
+	}
+
+	default String selectPeersByIdAndNodeId() {
+		return """
+				SELECT *
+				FROM peers
+				WHERE id = #{id} AND node_id = #{nodeId}
+				ORDER BY updated DESC, fingerprint
+				""";
 	}
 
 	default String selectPeersByPersistentAndAnnouncedBefore() {
 		return """
 				SELECT * FROM peers
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id, node_id
+					ORDER BY updated DESC, id, fingerprint
 				""";
 	}
 
@@ -111,25 +135,25 @@ public interface SqlDialect {
 		return """
 				SELECT * FROM peers
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id, node_id
+					ORDER BY updated DESC, id, fingerprint
 					LIMIT #{limit} OFFSET #{offset}
 				""";
 	}
 
 	default String selectAllPeers() {
-		return "SELECT * FROM peers ORDER BY updated DESC, id, node_id";
+		return "SELECT * FROM peers ORDER BY updated DESC, id, fingerprint";
 	}
 
 	default String selectAllPeersPaginated() {
 		return "SELECT * FROM peers ORDER BY updated DESC, id, node_id LIMIT #{limit} OFFSET #{offset}";
 	}
 
-	default String updatePeerAnnouncedByIdAndNodeId() {
-		return "UPDATE peers SET updated = #{updated} WHERE id = #{id} AND node_id = #{nodeId}";
+	default String updatePeerAnnounced() {
+		return "UPDATE peers SET updated = #{updated} WHERE id = #{id} AND fingerprint = #{fingerprint}";
 	}
 
-	default String deletePeerByIdAndNodeId() {
-		return "DELETE FROM peers WHERE id = #{id} AND node_id = #{nodeId}";
+	default String deletePeer() {
+		return "DELETE FROM peers WHERE id = #{id} AND fingerprint = #{fingerprint}";
 	}
 
 	default String deletePeersById() {

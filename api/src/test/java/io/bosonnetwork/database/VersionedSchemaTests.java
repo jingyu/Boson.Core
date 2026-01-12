@@ -121,6 +121,16 @@ public class VersionedSchemaTests {
 	@Test
 	@Order(2)
 	void testMigrateWithSchemaFoo(Vertx vertx, VertxTestContext context) {
+		if (pgServer == null) {
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			System.err.println("Check your Docker installation.");
+			System.err.println("Skipping Postgres tests.");
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+			context.completeNow();
+			return;
+		}
+
 		Path migrationPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
 
 		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "foo", migrationPath);
@@ -138,6 +148,16 @@ public class VersionedSchemaTests {
 	@Test
 	@Order(3)
 	void testMigrateWithSchemaBar(Vertx vertx, VertxTestContext context) {
+		if (pgServer == null) {
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			System.err.println("Check your Docker installation.");
+			System.err.println("Skipping Postgres tests.");
+			System.err.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+			context.completeNow();
+			return;
+		}
+
 		Path migrationPath = Path.of(getClass().getResource("/db/schema_test/postgres").getPath());
 
 		VersionedSchema schema = VersionedSchema.init(vertx, postgres, "bar", migrationPath);

@@ -37,7 +37,7 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.internal.DataFormat;
 
 @JsonPropertyOrder({"tok", "cas", "k", "rec", "n", "seq", "sig", "v"})
 @JsonDeserialize(using = StoreValueRequest.Deserializer.class)
@@ -47,12 +47,6 @@ public class StoreValueRequest implements Request {
 	private final Value value;
 
 	protected StoreValueRequest(Value value, int token, int expectedSequenceNumber) {
-		this.token = token;
-		this.expectedSequenceNumber = expectedSequenceNumber;
-		this.value = value;
-	}
-
-	public StoreValueRequest(int token, int expectedSequenceNumber, Value value) {
 		this.token = token;
 		this.expectedSequenceNumber = expectedSequenceNumber;
 		this.value = value;
@@ -148,7 +142,7 @@ public class StoreValueRequest implements Request {
 				throw ctxt.wrongTokenException(p, StoreValueRequest.class, JsonToken.START_OBJECT,
 						"Invalid StoreValueRequest: should be an object");
 
-			final boolean binaryFormat = Json.isBinaryFormat(p);
+			final boolean binaryFormat = DataFormat.isBinary(p);
 
 			int tok = 0;
 			int cas = -1;

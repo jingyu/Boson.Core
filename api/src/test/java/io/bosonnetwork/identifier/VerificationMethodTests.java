@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class VerificationMethodTests {
 	@Test

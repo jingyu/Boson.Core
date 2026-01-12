@@ -31,10 +31,13 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
 import io.bosonnetwork.kademlia.exceptions.InvalidPeer;
 import io.bosonnetwork.kademlia.exceptions.InvalidToken;
 import io.bosonnetwork.kademlia.exceptions.InvalidValue;
 import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.protocol.Error;
@@ -69,13 +72,13 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.vertx.BosonVerticle;
 
 public class DHT extends BosonVerticle {
-	public static final	int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;				// 4 minutes
-	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000; 				// 30 minutes
-	public static final int ROUTING_TABLE_PERSIST_INTERVAL =  10 * 60 * 1000; 	// 10 minutes
-	public static final	int ROUTING_TABLE_MAINTENANCE_INTERVAL = 4 * 60 * 1000;	// 4 minutes
-	public static final int	RANDOM_LOOKUP_INTERVAL = 10 * 60 * 1000;			// 10 minutes
-	public static final int	RANDOM_PING_INTERVAL = 10 * 1000;					// 10 seconds
-	public static final int	BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
+	public static final int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;                // 4 minutes
+	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000;                // 30 minutes
+	public static final int ROUTING_TABLE_PERSIST_INTERVAL = 10 * 60 * 1000;    // 10 minutes
+	public static final int ROUTING_TABLE_MAINTENANCE_INTERVAL = 4 * 60 * 1000;    // 4 minutes
+	public static final int RANDOM_LOOKUP_INTERVAL = 10 * 60 * 1000;            // 10 minutes
+	public static final int RANDOM_PING_INTERVAL = 10 * 1000;                    // 10 seconds
+	public static final int BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
 	public static final int USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES = 8;
 
 	private final Identity identity;
@@ -371,8 +374,8 @@ public class DHT extends BosonVerticle {
 		lastMaintenance = now;
 
 		routingTable.maintenance(bootstrapIds, bucket ->
-			tryPingMaintenance(bucket, false, false, true,
-					"RoutingTable maintenance: refreshing bucket - " + bucket.prefix())
+				tryPingMaintenance(bucket, false, false, true,
+						"RoutingTable maintenance: refreshing bucket - " + bucket.prefix())
 		);
 	}
 
@@ -675,7 +678,7 @@ public class DHT extends BosonVerticle {
 			case FIND_NODE -> onFindNode((Message<FindNodeRequest>) message);
 			case FIND_VALUE -> onFindValue((Message<FindValueRequest>) message);
 			case STORE_VALUE -> onStoreValue((Message<StoreValueRequest>) message);
-			case FIND_PEER -> onFindPeers((Message<FindPeerRequest>) message);
+			case FIND_PEER -> onFindPeer((Message<FindPeerRequest>) message);
 			case ANNOUNCE_PEER -> onAnnouncePeer((Message<AnnouncePeerRequest>) message);
 			default -> onUnknownMethod(message);
 		}
@@ -683,7 +686,7 @@ public class DHT extends BosonVerticle {
 
 	private void onPing(Message<Void> request) {
 		Message<Void> response = Message.pingResponse(request.getTxid())
-						.setRemote(request.getRemoteId(), request.getRemoteAddress());
+				.setRemote(request.getRemoteId(), request.getRemoteAddress());
 		rpcServer.sendMessage(response);
 	}
 
@@ -740,7 +743,37 @@ public class DHT extends BosonVerticle {
 				throw new InvalidValue("Invalid value for STORE VALUE request");
 
 			return value;
-		}).compose(storage::putValue).transform(ar -> {
+		}).compose(value -> {
+			return storage.getValue(value.getId()).compose(existing -> {
+				if (existing != null) {
+					// Immutable check
+					if (existing.isMutable() != value.isMutable()) {
+						log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
+						return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
+					}
+
+					if (value.getSequenceNumber() < existing.getSequenceNumber()) {
+						log.warn("Rejecting value {}: sequence number not monotonic", value.getId());
+						return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
+					}
+
+					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
+						log.warn("Rejecting value {}: sequence number not expected", value.getId());
+						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+					}
+
+					if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
+						// Skip update if the existing value is owned by this node and the new value is not.
+						// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
+						log.info("Skipping to update value for id {}: owned by this node", value.getId());
+						return Future.succeededFuture(existing);
+					}
+				}
+
+				return storage.putValue(value);
+			});
+		}).transform(ar -> {
 			Message<?> response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
@@ -748,16 +781,14 @@ public class DHT extends BosonVerticle {
 		});
 	}
 
-	private void onFindPeers(Message<FindPeerRequest> request) {
+	private void onFindPeer(Message<FindPeerRequest> request) {
 		Id target = request.getBody().getTarget();
-		storage.getPeers(target).map(peers -> {
+		int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+		int expectedCount = request.getBody().getExpectedCount() > 0 ? request.getBody().getExpectedCount() : 16;
+		storage.getPeers(target, expectedSequenceNumber, expectedCount).map(peers -> {
 			Message<FindPeerResponse> response;
 
 			if (!peers.isEmpty()) {
-				if (peers.size() > 8) {
-					Collections.shuffle(peers);
-					peers = peers.subList(0, 8);
-				}
 				response = Message.findPeerResponse(request.getTxid(), peers);
 			} else {
 				int want4 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
@@ -798,7 +829,31 @@ public class DHT extends BosonVerticle {
 				throw new InvalidPeer("Invalid value for ANNOUNCE PEER request");
 
 			return peer;
-		}).compose(storage::putPeer).transform(ar -> {
+		}).compose(peer -> {
+			return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
+				if (existing != null) {
+					if (peer.getSequenceNumber() < existing.getSequenceNumber()) {
+						log.warn("Rejecting peer {}: sequence number not monotonic", peer.getId());
+						return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
+					}
+
+					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
+						log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
+						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+					}
+
+					if (existing.hasPrivateKey() && !peer.hasPrivateKey()) {
+						// Skip update if the existing peer is owned by this node and the new peer is not.
+						// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
+						log.info("Skipping to update peer for id {}: owned by this node", peer.getId());
+						return Future.succeededFuture(existing);
+					}
+				}
+
+				return storage.putPeer(peer);
+			});
+		}).transform(ar -> {
 			Message<?> response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
@@ -978,7 +1033,7 @@ public class DHT extends BosonVerticle {
 						.nodes();
 				// Add self to the list if needed
 				if (nodes6.size() < v6)
-				 	nodes6.add(nodeInfo);
+					nodes6.add(nodeInfo);
 			}
 		}
 
@@ -1083,14 +1138,14 @@ public class DHT extends BosonVerticle {
 	}
 
 	@SuppressWarnings("unused")
-	public Future<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option) {
+	public Future<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
 		runOnContext(v -> {
-			PeerLookupTask task = new PeerLookupTask(kadContext, id)
+			PeerLookupTask task = new PeerLookupTask(kadContext, id, expectedSequenceNumber, expectedCount)
 					.setName("Lookup peer: " + id)
 					.setResultFilter((previous, next) -> {
-						if (expected >= 0 && next.size() >= expected)
+						if (expectedCount >= 0 && next.size() >= expectedCount)
 							return ResultFilter.Action.ACCEPT_DONE;
 						else
 							return ResultFilter.Action.ACCEPT_CONTINUE;
@@ -1104,11 +1159,11 @@ public class DHT extends BosonVerticle {
 		return promise.future();
 	}
 
-	public Future<Void> announcePeer(PeerInfo peer) {
+	public Future<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
 		Promise<Void> promise = Promise.promise();
 
 		runOnContext(v -> {
-			PeerAnnounceTask announceTask = new PeerAnnounceTask(kadContext, peer)
+			PeerAnnounceTask announceTask = new PeerAnnounceTask(kadContext, peer, expectedSequenceNumber)
 					.setName("Announce peer: " + peer.getId())
 					.addListener(t -> promise.complete());
 

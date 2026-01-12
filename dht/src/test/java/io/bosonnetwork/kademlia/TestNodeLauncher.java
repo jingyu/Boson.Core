@@ -16,7 +16,7 @@ import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.AddressUtils;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class TestNodeLauncher {
 	private static final Path dataPath = Path.of(System.getProperty("java.io.tmpdir"), "boson", "KademliaNode");

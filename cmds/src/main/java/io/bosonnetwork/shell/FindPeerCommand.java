@@ -42,8 +42,11 @@ public class FindPeerCommand implements Callable<Integer> {
 	@Option(names = { "-m", "--mode" }, description = "lookup mode: arbitrary, optimistic, conservative.")
 	private String mode = "conservative";
 
+	@Option(names = { "-s", "--expected-sequence-number" }, description = "expected sequence number of peers")
+	private int expectedSequenceNumber = -1;
+
 	@Option(names = { "-x", "--expected-count" }, description = "expected number of peers")
-	private int expected = -1;
+	private int expectedCount = 1;
 
 	@Parameters(paramLabel = "ID", index = "0", description = "The peer id to be find.")
 	private String id;
@@ -59,7 +62,7 @@ public class FindPeerCommand implements Callable<Integer> {
 		}
 
 		Id peerId = Id.of(id);
-		Main.getBosonNode().findPeer(peerId, expected, option).thenAccept(peers -> {
+		Main.getBosonNode().findPeer(peerId, expectedSequenceNumber, expectedCount, option).thenAccept(peers -> {
 			if (!peers.isEmpty()) {
 				for (PeerInfo p : peers)
 					System.out.println(p);

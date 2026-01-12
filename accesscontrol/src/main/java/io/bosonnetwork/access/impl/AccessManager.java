@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.access.Permission;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * @hidden

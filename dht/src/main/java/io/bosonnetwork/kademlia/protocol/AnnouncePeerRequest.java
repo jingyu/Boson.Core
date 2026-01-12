@@ -39,21 +39,27 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.internal.DataFormat;
 
 @JsonSerialize(using = AnnouncePeerRequest.Serializer.class)
 @JsonDeserialize(using = AnnouncePeerRequest.Deserializer.class)
 public class AnnouncePeerRequest implements Request {
 	private final int token;
+	private final int expectedSequenceNumber;
 	private final PeerInfo peer;
 
-	public AnnouncePeerRequest(PeerInfo peer, int token) {
+	public AnnouncePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
 		this.token = token;
+		this.expectedSequenceNumber = expectedSequenceNumber;
 		this.peer = peer;
 	}
 
 	public int getToken() {
 		return token;
+	}
+
+	public int getExpectedSequenceNumber() {
+		return expectedSequenceNumber;
 	}
 
 	public PeerInfo getPeer() {
@@ -89,35 +95,55 @@ public class AnnouncePeerRequest implements Request {
 
 		@Override
 		public void serialize(AnnouncePeerRequest value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			boolean binaryFormat = Json.isBinaryFormat(gen);
+			boolean binaryFormat = DataFormat.isBinary(gen);
 
 			gen.writeStartObject();
 			gen.writeNumberField("tok", value.token);
 
+			if (value.expectedSequenceNumber >= 0)
+				gen.writeNumberField("cas", value.expectedSequenceNumber);
+
+			PeerInfo peer = value.peer;
+
 			if (binaryFormat) {
 				gen.writeFieldName("t");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.peer.getId().bytes(), 0, Id.BYTES);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peer.getId().bytes(), 0, Id.BYTES);
 			} else {
-				gen.writeStringField("t", value.peer.getId().toBase58String());
+				gen.writeStringField("t", peer.getId().toBase58String());
 			}
 
-			if (value.peer.isDelegated()) {
+			byte[] nonce = peer.getNonce();
+			gen.writeFieldName("n");
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, nonce, 0, nonce.length);
+
+			if (peer.getSequenceNumber() > 0)
+				gen.writeNumberField("seq", peer.getSequenceNumber());
+
+			if (peer.isAuthenticated()) {
 				if (binaryFormat) {
 					gen.writeFieldName("o");
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.peer.getOrigin().bytes(), 0, Id.BYTES);
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peer.getNodeId().bytes(), 0, Id.BYTES);
 				} else {
-					gen.writeStringField("o", value.peer.getOrigin().toBase58String());
+					gen.writeStringField("o", value.peer.getNodeId().toBase58String());
 				}
+
+				byte[] sig = peer.getNodeSignature();
+				gen.writeFieldName("os");
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
 			}
 
-			gen.writeNumberField("p", value.peer.getPort());
-
-			if (value.peer.getAlternativeURI() != null)
-				gen.writeStringField("alt", value.peer.getAlternativeURI());
-
-			byte[] sig = value.peer.getSignature();
+			byte[] sig = peer.getSignature();
 			gen.writeFieldName("sig");
 			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
+
+			gen.writeNumberField("f", peer.getFingerprint());
+			gen.writeStringField("e", peer.getEndpoint());
+
+			if (peer.hasExtra()) {
+				byte[] extra = peer.getExtraData();
+				gen.writeFieldName("ex");
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, extra, 0, extra.length);
+			}
 
 			gen.writeEndObject();
 		}
@@ -140,18 +166,19 @@ public class AnnouncePeerRequest implements Request {
 				throw ctxt.wrongTokenException(p, AnnouncePeerRequest.class, JsonToken.START_OBJECT,
 						"Invalid AnnouncePeerRequest: should be an object");
 
-			final boolean binaryFormat = Json.isBinaryFormat(p);
+			final boolean binaryFormat = DataFormat.isBinary(p);
 
 			int tok = 0;
+			int cas = -1;
 			Id peerId = null;
-			Id origin = null;
-			int port = 0;
-			String alternativeURI = null;
+			byte[] nonce = null;
+			int sequenceNumber = 0;
+			Id nodeId = null;
+			byte[] nodeSig = null;
 			byte[] signature = null;
-
-			Id nodeId = (Id) ctxt.getAttribute(Message.ATTR_NODE_ID);
-			if (nodeId == null)
-				ctxt.reportInputMismatch(AnnouncePeerRequest.class, "Missing nodeId attribute in the deserialization context");
+			long fingerprint = 0;
+			String endpoint = null;
+			byte[] extraData = null;
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
 				final String fieldName = p.currentName();
@@ -160,29 +187,45 @@ public class AnnouncePeerRequest implements Request {
 				case "tok":
 					tok = p.getIntValue();
 					break;
+				case "cas":
+					cas = p.getIntValue();
+					break;
 				case "t":
 					peerId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
+				case "n":
+					nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				case "seq":
+					sequenceNumber = p.getIntValue();
+					break;
 				case "o":
 					if (token != JsonToken.VALUE_NULL)
-						origin = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						nodeId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
-				case "p":
-					port = p.getIntValue();
-					break;
-				case "alt":
+				case "os":
 					if (token != JsonToken.VALUE_NULL)
-						alternativeURI = p.getText();
+						nodeSig = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 					break;
 				case "sig":
 					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
+					break;
+				case "f":
+					fingerprint = p.getLongValue();
+					break;
+				case "e":
+					endpoint = p.getText();
+					break;
+				case "ex":
+					if (token != JsonToken.VALUE_NULL)
+						extraData = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 					break;
 				default:
 					p.skipChildren();
 				}
 			}
 
-			return new AnnouncePeerRequest(PeerInfo.of(peerId, nodeId, origin, port, alternativeURI, signature), tok);
+			return new AnnouncePeerRequest(PeerInfo.of(peerId, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData), tok, cas);
 		}
 	}
 }

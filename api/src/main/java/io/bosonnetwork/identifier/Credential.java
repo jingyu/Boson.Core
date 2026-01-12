@@ -45,7 +45,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * A compact representation of a Verifiable Credential (VC) using Boson's compact format.

@@ -44,7 +44,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * A thread-safe file based blacklist for managing banned hosts and IDs using a copy-on-write strategy.

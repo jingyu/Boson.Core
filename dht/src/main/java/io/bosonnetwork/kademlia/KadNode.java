@@ -37,6 +37,10 @@ import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
+import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.SimpleNodeConfiguration;
 import io.bosonnetwork.kademlia.impl.TokenManager;
@@ -449,24 +453,21 @@ public class KadNode extends BosonVerticle implements Node {
 		runOnContext(v -> {
 			Variable<Value> localValue = Variable.empty();
 
-			storage.getValue(id).map(local -> {
-				if (local == null)
-					return null;
+			storage.getValue(id).compose(local -> {
+				if (local != null) {
+					if (!local.isMutable())
+						return Future.succeededFuture(local);
 
-				localValue.set(local);
-				if (!local.isMutable())
-					return local;
+					if (expectedSequenceNumber >= 0 && local.getSequenceNumber() >= expectedSequenceNumber) {
+						if (lookupOption == LookupOption.LOCAL)
+							return Future.succeededFuture(local);
 
-				if (expectedSequenceNumber >= 0 && local.getSequenceNumber() >= expectedSequenceNumber)
-					return local;
+						localValue.set(local);
+					}
 
-				return null;
-			}).compose(local -> {
-				if (lookupOption == LookupOption.LOCAL)
-					return Future.succeededFuture(local);
-
-				if (local != null && (!local.isMutable() || lookupOption != LookupOption.CONSERVATIVE))
-					return Future.succeededFuture(local);
+					if (lookupOption != LookupOption.CONSERVATIVE)
+						return Future.succeededFuture(local);
+				}
 
 				return doFindValue(id, expectedSequenceNumber, lookupOption).map(value -> {
 					if (value == null && local == null)
@@ -524,6 +525,36 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 	}
 
+	private Future<Void> checkValue(Value value, int expectedSequenceNumber) {
+		return storage.getValue(value.getId()).compose(existing -> {
+			if (existing == null)
+				return Future.succeededFuture();
+
+			// Immutable check
+			if (existing.isMutable() != value.isMutable()) {
+				log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
+				return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
+			}
+
+			if (value.getSequenceNumber() < existing.getSequenceNumber()) {
+				log.warn("Rejecting value {}: sequence number not monotonic", value.getId());
+				return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
+			}
+
+			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
+				log.warn("Rejecting value {}: sequence number not expected", value.getId());
+				return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+			}
+
+			if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
+				log.warn("Rejecting value {}: new value not owned by this node", value.getId());
+				return Future.failedFuture(new NotOwnerException("new value no private key"));
+			}
+
+			return Future.succeededFuture();
+		});
+	}
+
 	@Override
 	public VertxFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(value, "Invalid value");
@@ -531,12 +562,12 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		runOnContext(na ->
-				storage.putValue(value, persistent, expectedSequenceNumber).compose(v ->
-						doStoreValue(value, expectedSequenceNumber)
-				).compose(v ->
-						storage.updateValueAnnouncedTime(value.getId()).map((Void) null)
-				).onComplete(promise)
+		runOnContext(na -> checkValue(value, expectedSequenceNumber)
+				.compose(v -> storage.putValue(value, persistent))
+				.compose(v -> doStoreValue(value, expectedSequenceNumber))
+				.compose(v -> storage.updateValueAnnouncedTime(value.getId()))
+				.<Void>mapEmpty()
+				.onComplete(promise)
 		);
 
 		return VertxFuture.of(promise.future());
@@ -554,8 +585,12 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option) {
+	public VertxFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
 		Objects.requireNonNull(id, "Invalid peer id");
+		if (expectedSequenceNumber < -1)
+			throw new IllegalArgumentException("Invalid sequence number");
+		if (expectedCount < 0)
+			throw new IllegalArgumentException("Invalid expected number of peers");
 		if (!running)
 			throw new IllegalStateException("Node is not running");
 
@@ -566,15 +601,20 @@ public class KadNode extends BosonVerticle implements Node {
 			Variable<List<PeerInfo>> localPeers = Variable.empty();
 
 			storage.getPeers(id).compose(local -> {
-				localPeers.set(local);
+				if (!local.isEmpty() && expectedSequenceNumber >= 0)
+					local.removeIf(p -> p.getSequenceNumber() < expectedSequenceNumber);
 
-				if (lookupOption == LookupOption.LOCAL)
-					return Future.succeededFuture(local);
+				if (!local.isEmpty()) {
+					if (lookupOption == LookupOption.LOCAL)
+						return Future.succeededFuture(local);
 
-				if (local.size() >= expected && lookupOption != LookupOption.CONSERVATIVE)
-					return Future.succeededFuture(local);
+					if (lookupOption != LookupOption.CONSERVATIVE && expectedCount > 0 && local.size() >= expectedCount)
+						return Future.succeededFuture(local);
 
-				return doFindPeer(id, expected, lookupOption).map(peers -> {
+					localPeers.set(local);
+				}
+
+				return doFindPeer(id, expectedSequenceNumber, expectedCount, lookupOption).map(peers -> {
 					if (local.isEmpty() && peers.isEmpty())
 						return Collections.<PeerInfo>emptyList();
 
@@ -587,6 +627,7 @@ public class KadNode extends BosonVerticle implements Node {
 					return new ArrayList<>(dedup.values());
 				});
 			}).compose(peers -> {
+				// TODO:
 				if (!peers.isEmpty() && peers != localPeers.orElse(null))
 					return storage.putPeers(peers);
 
@@ -597,6 +638,7 @@ public class KadNode extends BosonVerticle implements Node {
 		return VertxFuture.of(promise.future());
 	}
 
+	// TODO:
 	private List<PeerInfo> mergePeers(CompositeFuture future) {
 		Map<Id, PeerInfo> dedup = new HashMap<>(16);
 		if (future.isComplete(0)) {
@@ -612,22 +654,22 @@ public class KadNode extends BosonVerticle implements Node {
 		return new ArrayList<>(dedup.values());
 	}
 
-	private Future<List<PeerInfo>> doFindPeer(Id id, int expected, LookupOption option) {
+	private Future<List<PeerInfo>> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.findPeer(id, expected, option);
+			return dht.findPeer(id, expectedSequenceNumber, expectedCount, option);
 		} else {
-			Future<List<PeerInfo>> future4 = dht4.findPeer(id, expected, option);
-			Future<List<PeerInfo>> future6 = dht6.findPeer(id, expected, option);
+			Future<List<PeerInfo>> future4 = dht4.findPeer(id, expectedSequenceNumber, expectedCount, option);
+			Future<List<PeerInfo>> future6 = dht6.findPeer(id, expectedSequenceNumber, expectedCount, option);
 
 			if (option == LookupOption.CONSERVATIVE)
 				return Future.all(future4, future6).map(this::mergePeers);
 
 			return Future.any(future4, future6).compose(cf -> {
-				if (future4.isComplete() && future4.result().size() < expected)
+				if (future4.isComplete() && future4.result().size() < expectedCount)
 					return Future.all(future4, future6).map(this::mergePeers);
 
-				if (future6.isComplete() && future6.result().size() < expected)
+				if (future6.isComplete() && future6.result().size() < expectedCount)
 					return Future.all(future4, future6).map(this::mergePeers);
 
 				return Future.succeededFuture(mergePeers(cf));
@@ -635,31 +677,55 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 	}
 
+	private Future<Void> checkPeer(PeerInfo peer, int expectedSequenceNumber) {
+		return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
+			if (existing == null)
+				return Future.succeededFuture();
+
+			if (peer.getSequenceNumber() < existing.getSequenceNumber()) {
+				log.warn("Rejecting peer {}: sequence number not monotonic", peer.getId());
+				return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
+			}
+
+			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
+				log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
+				return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+			}
+
+			if (existing.hasPrivateKey() && !peer.hasPrivateKey()) {
+				log.warn("Rejecting peer {}: new peer not owned by this node", peer.getId());
+				return Future.failedFuture(new NotOwnerException("new peer no private key"));
+			}
+
+			return Future.succeededFuture();
+		});
+	}
+
 	@Override
-	public VertxFuture<Void> announcePeer(PeerInfo peer, boolean persistent) {
+	public VertxFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(peer, "Invalid value");
 		checkRunning();
 
 		Promise<Void> promise = Promise.promise();
 
-		runOnContext(na ->
-				storage.putPeer(peer, persistent).compose(v ->
-						doAnnouncePeer(peer)
-				).compose(v ->
-						storage.updatePeerAnnouncedTime(peer.getId(), identity.getId()).map((Void) null)
-				).onComplete(promise)
+		runOnContext(na -> checkPeer(peer, expectedSequenceNumber)
+				.compose(v -> storage.putPeer(peer, persistent))
+				.compose(v -> doAnnouncePeer(peer, expectedSequenceNumber))
+				.compose(v -> storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint()))
+				.<Void>mapEmpty()
+				.onComplete(promise)
 		);
 
 		return VertxFuture.of(promise.future());
 	}
 
-	private Future<Void> doAnnouncePeer(PeerInfo peer) {
+	private Future<Void> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.announcePeer(peer);
+			return dht.announcePeer(peer, expectedSequenceNumber);
 		} else {
-			Future<Void> future4 = dht4.announcePeer(peer);
-			Future<Void> future6 = dht6.announcePeer(peer);
+			Future<Void> future4 = dht4.announcePeer(peer, expectedSequenceNumber);
+			Future<Void> future6 = dht6.announcePeer(peer, expectedSequenceNumber);
 			return Future.all(future4, future6).mapEmpty();
 		}
 	}
@@ -711,8 +777,8 @@ public class KadNode extends BosonVerticle implements Node {
 		storage.getPeers(true, before).map(peers -> {
 			for (PeerInfo peer : peers) {
 				log.debug("Re-announce the peer: {}", peer.getId());
-				doAnnouncePeer(peer).compose(v ->
-						storage.updatePeerAnnouncedTime(peer.getId(), identity.getId())
+				doAnnouncePeer(peer, -1).compose(v ->
+						storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint())
 				).andThen(ar -> {
 					if (ar.succeeded())
 						log.debug("Re-announce the peer {} success", peer.getId());
@@ -744,18 +810,34 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<PeerInfo> getPeer(Id peerId) {
+	public VertxFuture<List<PeerInfo>> getPeers(Id peerId) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
-		Future<PeerInfo> future = storage.getPeer(peerId, this.getId());
+		Future<List<PeerInfo>> future = storage.getPeers(peerId);
 		return VertxFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<Boolean> removePeer(Id peerId) {
+	public VertxFuture<Boolean> removePeers(Id peerId) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
-		Future<Boolean> future = storage.removePeer(peerId, this.getId());
+		Future<Boolean> future = storage.removePeers(peerId);
+		return VertxFuture.of(future);
+	}
+
+	@Override
+	public VertxFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
+		Objects.requireNonNull(peerId, "peerId");
+		checkRunning();
+		Future<PeerInfo> future = storage.getPeer(peerId, fingerprint);
+		return VertxFuture.of(future);
+	}
+
+	@Override
+	public VertxFuture<Boolean> removePeer(Id peerId, long fingerprint) {
+		Objects.requireNonNull(peerId, "peerId");
+		checkRunning();
+		Future<Boolean> future = storage.removePeer(peerId, fingerprint);
 		return VertxFuture.of(future);
 	}
 

@@ -28,7 +28,7 @@ import java.io.IOException;
 import org.junit.jupiter.api.BeforeAll;
 
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public abstract class MessageTests {
 	protected static int TIMING_ITERATIONS = 1_000_000;

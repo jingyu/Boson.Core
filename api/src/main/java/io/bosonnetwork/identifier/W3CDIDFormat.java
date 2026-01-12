@@ -27,7 +27,7 @@ import java.io.IOException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.cfg.ContextAttributes;
 
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * Abstract base class providing common JSON and CBOR serialization and deserialization

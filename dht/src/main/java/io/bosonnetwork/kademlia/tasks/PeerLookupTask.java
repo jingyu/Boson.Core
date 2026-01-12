@@ -55,14 +55,23 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
 public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 	private static final Logger log = LoggerFactory.getLogger(PeerLookupTask.class);
 
+	/** The expected sequence number for filtering outdated peers; -1 disables the check. */
+	private final int expectedSequenceNumber;
+	/** The expected number of peers; 0 to disable filtering. */
+	private final int expectedCount;
+
 	/**
 	 * Constructs a new peer lookup task for the given target ID, initializing an empty result list.
 	 *
 	 * @param context the Kademlia context, must not be null
 	 * @param target  the target ID (e.g., content hash) to look up
+	 * @param expectedSequenceNumber the minimum sequence number for valid peers; -1 to disable
+	 * @param expectedCount the expected number of peers; 0 to disable filtering
 	 */
-	public PeerLookupTask(KadContext context, Id target) {
+	public PeerLookupTask(KadContext context, Id target, int expectedSequenceNumber, int expectedCount) {
 		super(context, target);
+		this.expectedSequenceNumber = expectedSequenceNumber;
+		this.expectedCount = expectedCount;
 		setResult(Collections.emptyList());
 	}
 
@@ -97,7 +106,7 @@ public class PeerLookupTask extends LookupTask<List<PeerInfo>, PeerLookupTask> {
 
 			log.debug("{}#{} sending FIND_PEER RPC to {}", getName(), getId(), cn.getId());
 			Network network = getContext().getNetwork();
-			Message<FindPeerRequest> request = Message.findPeerRequest(getTarget(), network.isIPv4(), network.isIPv6());
+			Message<FindPeerRequest> request = Message.findPeerRequest(getTarget(), network.isIPv4(), network.isIPv6(), expectedSequenceNumber, expectedCount);
 			sendCall(cn, request, c -> cn.setSent());
 		}
 	}

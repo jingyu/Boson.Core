@@ -25,6 +25,7 @@ package io.bosonnetwork.database;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import io.vertx.core.Future;
 import io.vertx.sqlclient.Pool;
@@ -266,7 +267,7 @@ public interface VertxDatabase {
 	 * @return list of mapped values (possibly empty)
 	 */
 	default <T> List<T> findMany(RowSet<Row> rowSet, Function<Row, T> mapper) {
-		return rowSet.stream().map(mapper).toList();
+		return rowSet.stream().map(mapper).collect(Collectors.toList());
 	}
 
 	/**

@@ -87,17 +87,7 @@ public interface DataStorage {
 	Future<Value> putValue(Value value, boolean persistent);
 
 	/**
-	 * Stores a value in the storage with the specified identifier, sequence number, and persistence flag.
-	 *
-	 * @param value               the value to store
-	 * @param persistent          true if the value should be stored persistently, false otherwise
-	 * @param expectedSequenceNumber the expected sequence number for the value, -1 disable the check
-	 * @return a {@link Future} containing the stored {@link Value}
-	 */
-	Future<Value> putValue(Value value, boolean persistent, int expectedSequenceNumber);
-
-	/**
-	 * Retrieves a value from the DHT by its identifier.
+	 * Retrieves a value from the local storage by its identifier.
 	 *
 	 * @param id the identifier of the value
 	 * @return a {@link Future} containing the {@link Value} or null if not found
@@ -151,10 +141,10 @@ public interface DataStorage {
 	Future<Long> updateValueAnnouncedTime(Id id);
 
 	/**
-	 * Removes a value from the DHT by its identifier.
+	 * Removes a value from the storage by its identifier.
 	 *
 	 * @param id the identifier of the value to remove
-	 * @return a {@link Future Future<Boolean>} that completes with {@code true} if the value was successfully removed,
+	 * @return a {@link Future}{@code <Boolean>} that completes with {@code true} if the value was successfully removed,
 	 *         or {@code false} if no matching value was found
 	 */
 	Future<Boolean> removeValue(Id id);
@@ -184,14 +174,15 @@ public interface DataStorage {
 	 */
 	Future<List<PeerInfo>> putPeers(List<PeerInfo> peerInfos);
 
-	/**
-	 * Retrieves peer information by peer and node identifiers.
 
-	 * @param id     the peer identifier
-	 * @param nodeId the node identifier
-	 * @return a {@link Future} containing the {@link PeerInfo} or null if not found
+	/**
+	 * Retrieves information about a peer based on the provided identifier and serial number.
+	 *
+	 * @param id the unique identifier of the peer
+	 * @param fingerprint the serial number associated with the peer
+	 * @return a Future containing the peer information as a PeerInfo object
 	 */
-	Future<PeerInfo> getPeer(Id id, Id nodeId);
+	Future<PeerInfo> getPeer(Id id, long fingerprint);
 
 	/**
 	 * Retrieves all peer information associated with a peer identifier.
@@ -200,6 +191,26 @@ public interface DataStorage {
 	 * @return a {@link Future} containing a list of {@link PeerInfo}s
 	 */
 	Future<List<PeerInfo>> getPeers(Id id);
+
+	/**
+	 * Retrieves peer information associated with a peer identifier, filtered by sequence number.
+	 *
+	 * @param id                     the peer identifier
+	 * @param expectedSequenceNumber the minimum sequence number to include
+	 * @param limit                  the maximum number of results to return (positive)
+	 * @return a {@link Future} containing a list of matching {@link PeerInfo}s
+	 * @throws IllegalArgumentException if limit is non-positive
+	 */
+	Future<List<PeerInfo>> getPeers(Id id, int expectedSequenceNumber, int limit);
+
+	/**
+	 * Retrieves peer information by peer and node identifiers.
+	 *
+	 * @param id     the peer identifier
+	 * @param nodeId the node identifier
+	 * @return a {@link Future} containing a list of matching {@link PeerInfo}s
+	 */
+	Future<List<PeerInfo>> getPeers(Id id, Id nodeId);
 
 	/**
 	 * Retrieves all peer information stored in the storage.
@@ -214,6 +225,7 @@ public interface DataStorage {
 	 * @param offset the starting index (non-negative)
 	 * @param limit  the maximum number of peers to return (positive)
 	 * @return a {@link Future} containing a list of {@link PeerInfo}s
+	 * @throws IllegalArgumentException if offset is negative or limit is non-positive
 	 */
 	Future<List<PeerInfo>> getPeers(int offset, int limit);
 
@@ -242,46 +254,58 @@ public interface DataStorage {
 	 * Updates the announcement timestamp for a peer.
 	 *
 	 * @param id     the peer identifier
-	 * @param nodeId the node identifier
+	 * @param fingerprint the serial number associated with the peer
 	 * @return a {@link Future} containing the updated timestamp (in milliseconds)
 	 */
-	Future<Long> updatePeerAnnouncedTime(Id id, Id nodeId);
+	Future<Long> updatePeerAnnouncedTime(Id id, long fingerprint);
 
 	/**
 	 * Removes peer information by peer and node identifiers.
 	 *
 	 * @param id     the peer identifier
-	 * @param nodeId the node identifier
-	 * @return a {@link Future Future<Boolean>} that completes with {@code true} if the peer was successfully removed,
+	 * @param fingerprint the serial number associated with the peer
+	 * @return a {@link Future}{@code <Boolean>} that completes with {@code true} if the peer was successfully removed,
 	 *         or {@code false} if no matching peer was found
 	 */
-	Future<Boolean> removePeer(Id id, Id nodeId);
+	Future<Boolean> removePeer(Id id, long fingerprint);
 
 	/**
 	 * Removes all peer information associated with a peer identifier.
 	 *
 	 * @param id the peer identifier
-	 * @return a {@link Future Future<Boolean>} that completes with {@code true} if the peers was successfully removed,
+	 * @return a {@link Future}{@code <Boolean>} that completes with {@code true} if the peers was successfully removed,
 	 *         or {@code false} if no matching peer was found
 	 */
 	Future<Boolean> removePeers(Id id);
 
+	/**
+	 * Checks if the provided storage URI is supported by this implementation.
+	 *
+	 * @param uri the storage URI to check
+	 * @return true if the URI is supported, false otherwise
+	 */
 	static boolean supports(String uri) {
-		// now only support in-memory, sqlite and postgres
-		return uri.equals(InMemoryStorage.STORAGE_URI) || uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX) ||
-				uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX);
+		// now only support sqlite and postgres
+		return uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX) || uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX);
 	}
 
+	/**
+	 * Creates a new DataStorage instance based on the provided URI.
+	 *
+	 * @param uri      the storage connection URI
+	 * @param poolSize the connection pool size
+	 * @param schema   the database schema name (if applicable, e.g., for PostgreSQL)
+	 * @return a new DataStorage instance
+	 * @throws IllegalArgumentException if the URI is unsupported
+	 */
 	static DataStorage create(String uri, int poolSize, String schema) {
 		Objects.requireNonNull(uri, "url");
 
-		if (uri.equals(InMemoryStorage.STORAGE_URI))
-			return new InMemoryStorage();
 		if (uri.startsWith(SQLiteStorage.STORAGE_URI_PREFIX))
 			return new SQLiteStorage(uri, poolSize);
-		if (uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX))
+		else if (uri.startsWith(PostgresStorage.STORAGE_URI_PREFIX))
 			return new PostgresStorage(uri, poolSize, schema);
-
-		throw new IllegalArgumentException("Unsupported storage: " + uri);
+		else
+			throw new IllegalArgumentException("Unsupported storage: " + uri);
 	}
 }

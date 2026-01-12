@@ -135,10 +135,12 @@ public class FindValueTests extends MessageTests {
 		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
 		nodes6.add(new NodeInfo(Id.random(), ip6, port));
 
-		Value immutable = Value.createValue("This is a immutable value".getBytes());
-		Value signedValue = Value.createSignedValue("This is a signed value".getBytes());
-		Value encryptedValue = Value.createEncryptedValue(Id.of(Signature.KeyPair.random().publicKey().bytes()),
-				"This is a encrypted value".getBytes());
+		Value immutable = Value.builder().data("This is a immutable value".getBytes()).build();
+		Value signedValue = Value.builder().data("This is a signed value".getBytes()).buildSigned();
+		Value encryptedValue = Value.builder()
+				.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+				.data("This is a encrypted value".getBytes())
+				.buildEncrypted();
 
 		return Stream.of(
 				Arguments.of("v4", nodes4, null, null, 380),
@@ -223,7 +225,10 @@ public class FindValueTests extends MessageTests {
 		var nodeId = Id.random();
 		var txid = 0x76543210;
 
-		Value value = Value.createEncryptedValue(Id.of(Signature.KeyPair.random().publicKey().bytes()), Random.randomBytes(512));
+		Value value = Value.builder()
+				.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+				.data(Random.randomBytes(512))
+				.buildEncrypted();
 
 		// warmup
 		var msg = Message.findValueResponse(txid, null, null, value);

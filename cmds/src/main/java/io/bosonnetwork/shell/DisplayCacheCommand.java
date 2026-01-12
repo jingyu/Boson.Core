@@ -17,7 +17,7 @@ import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * @hidden

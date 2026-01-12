@@ -40,7 +40,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.CryptoBox.Nonce;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
@@ -283,7 +283,11 @@ public class NodeAsyncTests {
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testAnnounceAndFindPeer(VertxTestContext context) {
 		executeSequentially(testNodes, announcer -> {
-			var p = PeerInfo.create(announcer.getId(), 8888);
+			var p = PeerInfo.builder()
+					.node(announcer)
+					.fingerprint(Random.random().nextLong())
+					.endpoint("tcp://" + localAddr.getHostAddress() + ":8888")
+					.build();
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			return ((VertxFuture<Void>)announcer.announcePeer(p)).thenCompose(v -> {
@@ -291,14 +295,12 @@ public class NodeAsyncTests {
 
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
-					var future = (VertxFuture<List<PeerInfo>>) node.findPeer(p.getId(), 0);
+					var future = (VertxFuture<PeerInfo>) node.findPeer(p.getId());
 					return future.thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 						context.verify(() -> {
 							assertNotNull(result);
-							assertFalse(result.isEmpty());
-							assertEquals(1, result.size());
-							assertEquals(p, result.get(0));
+							assertEquals(p, result);
 						});
 					});
 				});
@@ -310,7 +312,7 @@ public class NodeAsyncTests {
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testStoreAndFindValue(VertxTestContext context) {
 		executeSequentially(testNodes, announcer -> {
-			var v = Value.createValue(("Hello from " + announcer.getId()).getBytes());
+			var v = Value.builder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 
@@ -338,16 +340,9 @@ public class NodeAsyncTests {
 
 		// initial announcement
 		executeSequentially(testNodes, announcer -> {
-			var peerKeyPair = KeyPair.random();
-			var nonce = Nonce.random();
-			final Value v;
-			try {
-				v = Value.createSignedValue(peerKeyPair, nonce, ("Hello from " + announcer.getId()).getBytes());
-				values.add(v);
-			} catch (Exception e) {
-				context.failNow(e);
-				return VertxFuture.failedFuture(e); // make compiler happy
-			}
+			var keyPair = KeyPair.random();
+			final Value v = Value.builder().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).buildSigned();
+			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((VertxFuture<Void>)announcer.storeValue(v)).thenCompose(na -> {
@@ -359,8 +354,7 @@ public class NodeAsyncTests {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
-							assertArrayEquals(nonce.bytes(), v.getNonce());
-							assertArrayEquals(peerKeyPair.publicKey().bytes(), v.getPublicKey().bytes());
+							assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
 							assertTrue(v.isMutable());
 							assertTrue(v.isValid());
 							assertEquals(v, result);
@@ -412,17 +406,10 @@ public class NodeAsyncTests {
 			var recipient = KeyPair.random();
 			recipients.add(recipient);
 
-			var peerKeyPair = KeyPair.random();
-			var nonce = Nonce.random();
+			var keyPair = KeyPair.random();
 			var data = ("Hello from " + announcer.getId()).getBytes();
-			final Value v;
-			try {
-				v = Value.createEncryptedValue(peerKeyPair, Id.of(recipient.publicKey().bytes()), nonce, data);
-				values.add(v);
-			} catch (Exception e) {
-				context.failNow(e);
-				return VertxFuture.failedFuture(e);
-			}
+			final Value v  = Value.builder().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).buildEncrypted();
+			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((VertxFuture<Void>) announcer.storeValue(v)).thenCompose(unused -> {
@@ -433,8 +420,7 @@ public class NodeAsyncTests {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
-							assertArrayEquals(nonce.bytes(), v.getNonce());
-							assertArrayEquals(peerKeyPair.publicKey().bytes(), v.getPublicKey().bytes());
+							assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
 							assertTrue(v.isMutable());
 							assertTrue(v.isEncrypted());
 							assertTrue(v.isValid());

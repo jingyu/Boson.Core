@@ -55,7 +55,7 @@ import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.access.Permission.Access;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 @Disabled("TODO: enable later")
 public class AccessManagerTests {

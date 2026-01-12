@@ -8,7 +8,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class FilterTests {
 	@Test

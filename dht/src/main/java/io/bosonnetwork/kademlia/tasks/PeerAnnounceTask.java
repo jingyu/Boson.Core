@@ -48,6 +48,8 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 	private final Deque<CandidateNode> todo;
 	/** The peer information to announce. */
 	private final PeerInfo peer;
+	/** The expected sequence number for peer; -1 disables the check. */
+	private final int expectedSequenceNumber;
 
 	private static final Logger log = LoggerFactory.getLogger(PeerAnnounceTask.class);
 
@@ -56,11 +58,13 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 	 *
 	 * @param context the Kademlia context, must not be null
 	 * @param peer    the peer information to announce, must be valid
+	 * @param expectedSequenceNumber the expected sequence number for the peer; -1 to disable
 	 * @throws IllegalArgumentException if the peer is invalid
 	 */
-	public PeerAnnounceTask(KadContext context, PeerInfo peer) {
+	public PeerAnnounceTask(KadContext context, PeerInfo peer, int expectedSequenceNumber) {
 		super(context);
 		this.peer = peer;
+		this.expectedSequenceNumber = expectedSequenceNumber;
 		this.todo = new ArrayDeque<>();
 	}
 
@@ -97,7 +101,7 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 			}
 
 			log.debug("{}#{} sending ANNOUNCE_PEER RPC to {}", getName(), getId(), cn.getId());
-			Message<AnnouncePeerRequest> request = Message.announcePeerRequest(peer, cn.getToken());
+			Message<AnnouncePeerRequest> request = Message.announcePeerRequest(peer, cn.getToken(), expectedSequenceNumber);
 			sendCall(cn, request, c -> todo.remove(cn));
 		}
 	}

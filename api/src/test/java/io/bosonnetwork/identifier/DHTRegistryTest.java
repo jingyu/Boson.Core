@@ -35,6 +35,7 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
+import io.bosonnetwork.vertx.VertxFuture;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DHTRegistryTest {
@@ -85,12 +86,12 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Void> start() {
-				return CompletableFuture.completedFuture(null);
+				return VertxFuture.succeededFuture();
 			}
 
 			@Override
 			public CompletableFuture<Void> stop() {
-				return CompletableFuture.completedFuture(null);
+				return VertxFuture.succeededFuture();
 			}
 
 			@Override
@@ -130,7 +131,7 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
-				return values.get(id) == null ? CompletableFuture.completedFuture(null) : CompletableFuture.completedFuture(values.get(id));
+				return VertxFuture.succeededFuture(values.get(id));
 			}
 
 			@Override
@@ -150,33 +151,43 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expected, LookupOption option) {
-				return null;
+			public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
+				return VertxFuture.succeededFuture(List.of());
 			}
 
 			@Override
-			public CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent) {
-				return null;
+			public CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
+				return VertxFuture.failedFuture(new UnsupportedOperationException());
 			}
 
 			@Override
-			public CompletableFuture<Value> getValue(Id valueId) {
-				return null;
+			public CompletableFuture<Value> getValue(Id id) {
+				return VertxFuture.succeededFuture(values.get(id));
 			}
 
 			@Override
 			public CompletableFuture<Boolean> removeValue(Id valueId) {
+				return VertxFuture.succeededFuture(values.remove(valueId) != null);
+			}
+
+			@Override
+			public CompletableFuture<List<PeerInfo>> getPeers(Id peerId) {
 				return null;
 			}
 
 			@Override
-			public CompletableFuture<PeerInfo> getPeer(Id peerId) {
-				return null;
+			public CompletableFuture<Boolean> removePeers(Id peerId) {
+				return VertxFuture.succeededFuture(false);
 			}
 
 			@Override
-			public CompletableFuture<Boolean> removePeer(Id peerId) {
-				return null;
+			public CompletableFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
+				return VertxFuture.succeededFuture(null);
+			}
+
+			@Override
+			public CompletableFuture<Boolean> removePeer(Id peerId, long fingerprint) {
+				return VertxFuture.succeededFuture(false);
 			}
 
 			@Override

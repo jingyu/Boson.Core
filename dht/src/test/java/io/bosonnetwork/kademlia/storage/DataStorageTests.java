@@ -1,8 +1,8 @@
 package io.bosonnetwork.kademlia.storage;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,16 +11,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import net.datafaker.Faker;
 
@@ -38,13 +40,12 @@ import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.Identity;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.CryptoBox;
+import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 import io.bosonnetwork.utils.FileUtils;
 
 @ExtendWith(VertxExtension.class)
@@ -71,9 +72,10 @@ public class DataStorageTests {
 	private static List<PeerInfo> peerInfos;
 	private static List<PeerInfo> persistentPeerInfos;
 	private static Map<Id, List<PeerInfo>> multiPeers;
+	private static Map<Id, CryptoIdentity> nodeIdentities;
 
-	private static long announced1;
-	private static long announced2;
+	private static long announceTime1;
+	private static long announceTime2;
 
 	private static PostgresqlServer pgServer;
 	private static final List<Arguments> dataStorages = new ArrayList<>();
@@ -117,15 +119,11 @@ public class DataStorageTests {
 		}));
 		futures.add(future2);
 
-		inMemoryStorage = new InMemoryStorage();
-		var future3 = inMemoryStorage.initialize(vertx, valueExpiration, peerInfoExpiration).onComplete(context.succeeding(version -> {
-			context.verify(() -> assertEquals(CURRENT_SCHEMA_VERSION, version));
-			dataStorages.add(Arguments.of("InMemoryStorage", inMemoryStorage));
-		}));
-		futures.add(future3);
-
 		Future.all(futures).onSuccess(unused -> {
 			try {
+				nodeIdentities = IntStream.range(0, 32).mapToObj(i -> new CryptoIdentity())
+						.collect(Collectors.toMap(Identity::getId, identity -> identity));
+
 				values = generateValues(Random.random().nextInt(32, 64));
 				persistentValues = generateValues(Random.random().nextInt(32, 64));
 
@@ -161,18 +159,33 @@ public class DataStorageTests {
 		for (int i = 0; i < count; i++) {
 			var type = i % 6;
 			var value = switch (type) {
-				case 0 -> Value.createValue(faker.lorem().paragraph().getBytes());
-				case 1 -> Value.createSignedValue(Signature.KeyPair.random(), CryptoBox.Nonce.random(),
-						faker.number().numberBetween(2, 100), faker.lorem().paragraph().getBytes());
-				case 2 -> Value.createEncryptedValue(Signature.KeyPair.random(),
-						Id.of(Signature.KeyPair.random().publicKey().bytes()), CryptoBox.Nonce.random(),
-						faker.number().numberBetween(2, 100), faker.lorem().paragraph().getBytes());
-				case 3 -> Value.createValue(faker.lorem().paragraph().getBytes()).withoutPrivateKey();
-				case 4 -> Value.createSignedValue(Signature.KeyPair.random(), CryptoBox.Nonce.random(),
-						faker.number().numberBetween(2, 100), faker.lorem().paragraph().getBytes()).withoutPrivateKey();
-				case 5 -> Value.createEncryptedValue(Signature.KeyPair.random(),
-						Id.of(Signature.KeyPair.random().publicKey().bytes()), CryptoBox.Nonce.random(),
-						faker.number().numberBetween(2, 100), faker.lorem().paragraph().getBytes()).withoutPrivateKey();
+				case 0 -> Value.builder()
+						.data(faker.lorem().paragraph().getBytes())
+						.build();
+				case 1 -> Value.builder()
+						.sequenceNumber(faker.number().numberBetween(2, 100))
+						.data(faker.lorem().paragraph().getBytes())
+						.buildSigned();
+				case 2 -> Value.builder()
+						.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+						.sequenceNumber(faker.number().numberBetween(2, 100))
+						.data(faker.lorem().paragraph().getBytes())
+						.buildEncrypted();
+				case 3 -> Value.builder()
+						.data(faker.lorem().paragraph().getBytes())
+						.build()
+						.withoutPrivateKey();
+				case 4 -> Value.builder()
+						.sequenceNumber(faker.number().numberBetween(2, 100))
+						.data(faker.lorem().paragraph().getBytes())
+						.buildSigned()
+						.withoutPrivateKey();
+				case 5 -> Value.builder()
+						.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+						.sequenceNumber(faker.number().numberBetween(2, 100))
+						.data(faker.lorem().paragraph().getBytes())
+						.buildEncrypted()
+						.withoutPrivateKey();
 				default -> throw new IllegalStateException();
 			};
 
@@ -187,14 +200,42 @@ public class DataStorageTests {
 		for (int i = 0; i < count; i++) {
 			var type = i % 8;
 			var peerInfo = switch (type) {
-				case 0 -> PeerInfo.create(Id.random(), faker.number().numberBetween(39001, 65535));
-				case 1 -> PeerInfo.create(Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url());
-				case 2 -> PeerInfo.create(Id.random(), Id.random(), faker.number().numberBetween(39001, 65535));
-				case 3 -> PeerInfo.create(Id.random(), Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url());
-				case 4 -> PeerInfo.create(Id.random(), faker.number().numberBetween(39001, 65535)).withoutPrivateKey();
-				case 5 -> PeerInfo.create(Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url()).withoutPrivateKey();
-				case 6 -> PeerInfo.create(Id.random(), Id.random(), faker.number().numberBetween(39001, 65535)).withoutPrivateKey();
-				case 7 -> PeerInfo.create(Id.random(), Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url()).withoutPrivateKey();
+				case 0 -> PeerInfo.builder()
+						.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+						.build();
+				case 1 -> PeerInfo.builder()
+						.endpoint(faker.internet().url())
+						.extra(Map.of("foo", 1234, "bar", "baz"))
+						.build();
+				case 2 -> PeerInfo.builder()
+						.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+						.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+						.build();
+				case 3 -> PeerInfo.builder()
+						.endpoint(faker.internet().url())
+						.extra(Map.of("foo", 1234, "bar", "baz"))
+						.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+						.build();
+				case 4 -> PeerInfo.builder()
+						.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+						.build()
+						.withoutPrivateKey();
+				case 5 -> PeerInfo.builder()
+						.endpoint(faker.internet().url())
+						.extra(Map.of("foo", 1234, "bar", "baz"))
+						.build()
+						.withoutPrivateKey();
+				case 6 -> PeerInfo.builder()
+						.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+						.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+						.build()
+						.withoutPrivateKey();
+				case 7 -> PeerInfo.builder()
+						.endpoint(faker.internet().url())
+						.extra(Map.of("foo", 1234, "bar", "baz"))
+						.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+						.build()
+						.withoutPrivateKey();
 				default -> throw new IllegalStateException();
 			};
 
@@ -212,14 +253,58 @@ public class DataStorageTests {
 			count = Random.random().nextInt(8, 20);
 			for (int i = 0; i < size; i++) {
 				var peerInfo = switch (i % 8) {
-					case 0 -> PeerInfo.create(keyPair, Id.random(), faker.number().numberBetween(39001, 65535));
-					case 1 -> PeerInfo.create(keyPair, Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url());
-					case 2 -> PeerInfo.create(keyPair, Id.random(), Id.random(), faker.number().numberBetween(39001, 65535));
-					case 3 -> PeerInfo.create(keyPair, Id.random(), Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url());
-					case 4 -> PeerInfo.create(keyPair, Id.random(), faker.number().numberBetween(39001, 65535)).withoutPrivateKey();
-					case 5 -> PeerInfo.create(keyPair, Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url()).withoutPrivateKey();
-					case 6 -> PeerInfo.create(keyPair, Id.random(), Id.random(), faker.number().numberBetween(39001, 65535)).withoutPrivateKey();
-					case 7 -> PeerInfo.create(keyPair, Id.random(), Id.random(), faker.number().numberBetween(39001, 65535), faker.internet().url()).withoutPrivateKey();
+					case 0 -> PeerInfo.builder()
+							.fingerprint(Random.random().nextLong())
+							.key(keyPair)
+							.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+							.build();
+					case 1 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint(faker.internet().url())
+							.extra(Map.of("foo", 1234, "bar", "baz"))
+							.build();
+					case 2 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+							.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+							.build();
+					case 3 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint(faker.internet().url())
+							.extra(Map.of("foo", 1234, "bar", "baz"))
+							.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+							.build();
+					case 4 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+							.build()
+							.withoutPrivateKey();
+					case 5 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint(faker.internet().url())
+							.extra(Map.of("foo", 1234, "bar", "baz"))
+							.build()
+							.withoutPrivateKey();
+					case 6 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint("tcp://" + faker.internet().ipV4Address() + ":" + faker.internet().port())
+							.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+							.build()
+							.withoutPrivateKey();
+					case 7 -> PeerInfo.builder()
+							.key(keyPair)
+							.fingerprint(Random.random().nextLong())
+							.endpoint(faker.internet().url())
+							.extra(Map.of("foo", 1234, "bar", "baz"))
+							.node(nodeIdentities.values().stream().toList().get(Random.random().nextInt(nodeIdentities.size())))
+							.build()
+							.withoutPrivateKey();
 					default -> throw new IllegalStateException();
 				};
 
@@ -243,36 +328,34 @@ public class DataStorageTests {
 		assertEquals(CURRENT_SCHEMA_VERSION, storage.getSchemaVersion());
 	}
 
-	private static <T> Future<Void> executeSequentially(List<T> inputs, Function<T, Future<T>> action, int index) {
-		if (index >= inputs.size())
-			return Future.succeededFuture();
-
-		return action.apply(inputs.get(index))
-				.compose(result -> executeSequentially(inputs, action, index + 1));
-	}
-
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(1)
 	void testPutValue(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		executeSequentially(values, value -> {
-			return storage.putValue(value)
-						.onComplete(context.succeeding(result -> {
-							context.verify(() -> assertEquals(value, result));
-						}));
-			}, 0).onComplete(context.succeedingThenComplete());
+		Future<Value> chain = Future.succeededFuture();
+		for (var value : values) {
+			chain = chain.compose(v -> storage.putValue(value)
+					.onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(value, result));
+					}))
+			);
+		}
+		chain.onComplete(context.succeedingThenComplete());
 	}
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(2)
 	void testPutPersistentValue(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		executeSequentially(persistentValues, value -> {
-			return storage.putValue(value, true)
+		Future<Value> chain = Future.succeededFuture();
+		for (var value : persistentValues) {
+			chain = chain.compose(v -> storage.putValue(value, true)
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(value, result));
-					}));
-		}, 0).onComplete(context.succeedingThenComplete());
+					}))
+			);
+		}
+		chain.onComplete(context.succeedingThenComplete());
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -359,7 +442,7 @@ public class DataStorageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(6)
-	void testGetPersistentValues(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	void testGetPersistentValuesUpdatedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		storage.getValues(true, System.currentTimeMillis()).onComplete(context.succeeding(result -> {
 			context.verify(() -> {
 				var expected = new ArrayList<>(persistentValues);
@@ -388,7 +471,7 @@ public class DataStorageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(7)
-	void testGetPersistentValuesPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	void testGetPersistentValuesUpdatedBeforePaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		List<Value> allValues = new ArrayList<>();
 		fetchValues(storage, true, System.currentTimeMillis(), 0, 8, allValues)
 				.onComplete(context.succeeding(result -> {
@@ -407,7 +490,7 @@ public class DataStorageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(8)
-	void testGetNonPersistentValues(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	void testGetNonPersistentValuesUpdatedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		storage.getValues(false, System.currentTimeMillis()).onComplete(context.succeeding(result -> {
 			context.verify(() -> {
 				var expected = new ArrayList<>(values);
@@ -424,7 +507,7 @@ public class DataStorageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(9)
-	void testGetNonPersistentValuesPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	void testGetNonPersistentValuesUpdatedBeforePaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		List<Value> allValues = new ArrayList<>();
 		fetchValues(storage, false, System.currentTimeMillis(), 0, 8, allValues)
 				.onComplete(context.succeeding(result -> {
@@ -460,48 +543,21 @@ public class DataStorageTests {
 					continue;
 
 				Value updated = value.update(faker.lorem().paragraph().getBytes());
-				var future = storage.putValue(updated).compose(result -> {
+				var future = storage.putValue(updated).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
-
 					values.set(index, updated);
-
-					return storage.putValue(value, false).andThen(ar -> {
+				})).compose(v -> {
+					Value updated2 = updated.withoutPrivateKey();
+					return storage.putValue(updated2).onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(updated, result));
+					}));
+				}).compose(v -> {
+					return storage.getValue(value.getId()).andThen(context.succeeding(result -> {
+						// the private key should be kept.
 						context.verify(() -> {
-							assertFalse(ar.succeeded());
-							assertInstanceOf(DataStorageException.class, ar.cause());
-							Throwable nested = ar.cause().getCause();
-							assertNotNull(nested);
-							assertInstanceOf(SequenceNotMonotonic.class, nested);
+							assertTrue(result.hasPrivateKey());
+							assertEquals(updated, result);
 						});
-					}).otherwise(updated);
-				}).compose(result -> {
-					Value updated2;
-					try {
-						updated2 = updated.update(faker.lorem().paragraph().getBytes());
-					} catch (Exception e) {
-						throw new CompletionException(e);
-					}
-
-					return storage.putValue(updated2, false, value.getSequenceNumber() - 1)
-							.andThen(ar -> {
-								context.verify(() -> {
-									assertFalse(ar.succeeded());
-									assertInstanceOf(DataStorageException.class, ar.cause());
-									Throwable nested = ar.cause().getCause();
-									assertNotNull(nested);
-									assertInstanceOf(SequenceNotExpected.class, nested);
-								});
-							}).otherwise(updated);
-				}).compose(result -> {
-					Value updated2;
-					try {
-						updated2 = updated.update(faker.lorem().paragraph().getBytes()).withoutPrivateKey();
-					} catch (Exception e) {
-						throw new CompletionException(e);
-					}
-
-					return storage.putValue(updated2, false).onComplete(context.succeeding(result2 -> {
-						context.verify(() -> assertEquals(updated, result2));
 					}));
 				});
 
@@ -523,48 +579,21 @@ public class DataStorageTests {
 					continue;
 
 				Value updated = value.update(faker.lorem().paragraph().getBytes());
-				var future = storage.putValue(updated, true).compose(result -> {
+				var future = storage.putValue(updated, true).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
-
 					persistentValues.set(index, updated);
-
-					return storage.putValue(value, true).andThen(ar -> {
+				})).compose(v -> {
+					Value updated2 = updated.withoutPrivateKey();
+					return storage.putValue(updated2, true).onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(updated, result));
+					}));
+				}).compose(v -> {
+					return storage.getValue(value.getId()).andThen(context.succeeding(result -> {
+						// the private key should be kept.
 						context.verify(() -> {
-							assertFalse(ar.succeeded());
-							assertInstanceOf(DataStorageException.class, ar.cause());
-							Throwable nested = ar.cause().getCause();
-							assertNotNull(nested);
-							assertInstanceOf(SequenceNotMonotonic.class, nested);
+							assertTrue(result.hasPrivateKey());
+							assertEquals(updated, result);
 						});
-					}).otherwise(updated);
-				}).compose(result -> {
-					Value updated2;
-					try {
-						updated2 = updated.update(faker.lorem().paragraph().getBytes());
-					} catch (Exception e) {
-						throw new CompletionException(e);
-					}
-
-					return storage.putValue(updated2, true, value.getSequenceNumber() - 1)
-							.andThen(ar -> {
-								context.verify(() -> {
-									assertFalse(ar.succeeded());
-									assertInstanceOf(DataStorageException.class, ar.cause());
-									Throwable nested = ar.cause().getCause();
-									assertNotNull(nested);
-									assertInstanceOf(SequenceNotExpected.class, nested);
-								});
-							}).otherwise(updated);
-				}).compose(result -> {
-					Value updated2;
-					try {
-						updated2 = updated.update(faker.lorem().paragraph().getBytes()).withoutPrivateKey();
-					} catch (Exception e) {
-						throw new CompletionException(e);
-					}
-
-					return storage.putValue(updated2, true).onComplete(context.succeeding(result2 -> {
-						context.verify(() -> assertEquals(updated, result2));
 					}));
 				});
 
@@ -610,11 +639,12 @@ public class DataStorageTests {
 		futures.add(future);
 
 		Future.all(futures).onComplete(context.succeeding(unused -> {
-			announced1 = System.currentTimeMillis();
+			announceTime1 = System.currentTimeMillis();
 			context.completeNow();
 		}));
 	}
 
+	// designed for multiple storages
 	private static boolean firstTestUpdateValueAnnouncedTime2Call = true;
 
 	@ParameterizedTest(name = "{0}")
@@ -659,7 +689,7 @@ public class DataStorageTests {
 			futures.add(future);
 
 			Future.all(futures).onComplete(context.succeeding(unused -> {
-				announced2 = System.currentTimeMillis();
+				announceTime2 = System.currentTimeMillis();
 				context.completeNow();
 			}));
 		});
@@ -671,45 +701,49 @@ public class DataStorageTests {
 	void testGetValuesAnnouncedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<List<Value>>>();
 
-		var future = storage.getValues(false, announced1).onComplete(context.succeeding(result -> {
+		// getValues announced before announceTime1
+		var future = storage.getValues(false, announceTime1).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(values.size() / 2, result.size()));
 		}));
 		futures.add(future);
 
-		future = storage.getValues(true, announced1).onComplete(context.succeeding(result -> {
+		future = storage.getValues(true, announceTime1).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(persistentValues.size() / 2, result.size()));
 		}));
 		futures.add(future);
 
-		future = fetchValues(storage, false, announced1, 0, 8, new ArrayList<>())
+		// getValues announced before announceTime1 paginated
+		future = fetchValues(storage, false, announceTime1, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(values.size() / 2, result.size()));
 				}));
 		futures.add(future);
 
-		future = fetchValues(storage, true, announced1, 0, 8, new ArrayList<>())
+		future = fetchValues(storage, true, announceTime1, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(persistentValues.size() / 2, result.size()));
 				}));
 		futures.add(future);
 
-		future = storage.getValues(false, announced2).onComplete(context.succeeding(result -> {
+		// getValues announced before announceTime2
+		future = storage.getValues(false, announceTime2).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(values.size(), result.size()));
 		}));
 		futures.add(future);
 
-		future = storage.getValues(true, announced2).onComplete(context.succeeding(result -> {
+		future = storage.getValues(true, announceTime2).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(persistentValues.size(), result.size()));
 		}));
 		futures.add(future);
 
-		future = fetchValues(storage, false, announced2, 0, 8, new ArrayList<>())
+		// getValues announced before announceTime2 paginated
+		future = fetchValues(storage, false, announceTime2, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(values.size(), result.size()));
 				}));
 		futures.add(future);
 
-		future = fetchValues(storage, true, announced2, 0, 8, new ArrayList<>())
+		future = fetchValues(storage, true, announceTime2, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(persistentValues.size(), result.size()));
 				}));
@@ -718,6 +752,7 @@ public class DataStorageTests {
 		Future.all(futures).onComplete(context.succeedingThenComplete());
 	}
 
+	// designed for multiple storages
 	private static boolean firstTestPurgeCall = true;
 
 	@ParameterizedTest(name = "{0}")
@@ -767,24 +802,30 @@ public class DataStorageTests {
 	@MethodSource("testStoragesProvider")
 	@Order(101)
 	void testPutPeer(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		executeSequentially(peerInfos, peerInfo -> {
-			return storage.putPeer(peerInfo)
+		Future<PeerInfo> chain = Future.succeededFuture();
+		for (var peerInfo : peerInfos) {
+			chain = chain.compose(v -> storage.putPeer(peerInfo)
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(peerInfo, result));
-					}));
-		}, 0).onComplete(context.succeedingThenComplete());
+					}))
+			);
+		}
+		chain.onComplete(context.succeedingThenComplete());
 	}
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(102)
 	void testPutPersistentPeer(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		executeSequentially(persistentPeerInfos, peerInfo -> {
-			return storage.putPeer(peerInfo, true)
+		Future<PeerInfo> chain = Future.succeededFuture();
+		for (var peerInfo : persistentPeerInfos) {
+			chain = chain.compose(v -> storage.putPeer(peerInfo, true)
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(peerInfo, result));
-					}));
-		}, 0).onComplete(context.succeedingThenComplete());
+					}))
+			);
+		}
+		chain.onComplete(context.succeedingThenComplete());
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -794,7 +835,7 @@ public class DataStorageTests {
 		var futures = new ArrayList<Future<PeerInfo>>();
 
 		for (var peerInfo : peerInfos) {
-			var future = storage.getPeer(peerInfo.getId(), peerInfo.getNodeId())
+			var future = storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(peerInfo, result));
 					}));
@@ -802,14 +843,14 @@ public class DataStorageTests {
 		}
 
 		for (var peerInfo : persistentPeerInfos) {
-			var future =  storage.getPeer(peerInfo.getId(), peerInfo.getNodeId())
+			var future =  storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(peerInfo, result));
 					}));
 			futures.add(future);
 		}
 
-		var future = storage.getPeer(Id.random(), Id.random())
+		var future = storage.getPeer(Id.random(), Random.random().nextLong())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertNull(result));
 				}));
@@ -860,6 +901,45 @@ public class DataStorageTests {
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
 	@Order(105)
+	void testGetPeerByIdAndFingerprint1(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+		var futures = new ArrayList<Future<PeerInfo>>();
+
+		for (var peerInfo : peerInfos) {
+			var future = storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint()).onComplete(context.succeeding(result -> {
+				context.verify(() -> {
+					assertNotNull(result);
+					assertEquals(peerInfo, result);
+				});
+			}));
+
+			futures.add(future);
+		}
+
+		for (var peerInfo : persistentPeerInfos) {
+			var future = storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint()).onComplete(context.succeeding(result -> {
+				context.verify(() -> {
+					assertNotNull(result);
+					assertEquals(peerInfo, result);
+				});
+			}));
+
+			futures.add(future);
+		}
+
+		var future = storage.getPeer(Id.random(), Random.random().nextLong()).onComplete(context.succeeding(result -> {
+			context.verify(() -> {
+				assertNull(result);
+			});
+		}));
+
+		futures.add(future);
+
+		Future.all(futures).onComplete(context.succeedingThenComplete());
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("testStoragesProvider")
+	@Order(106)
 	void testGetPeers(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		storage.getPeers().onComplete(context.succeeding(result -> {
 			context.verify(() -> {
@@ -890,8 +970,8 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(106)
-	void testGetPeerPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	@Order(107)
+	void testGetPeersPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		fetchPeers(storage, 0, 8, new ArrayList<>()).onComplete(context.succeeding(result -> {
 			context.verify(() -> {
 				List<PeerInfo> expected = new ArrayList<>();
@@ -910,8 +990,8 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(107)
-	void testGetPersistentPeers(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	@Order(108)
+	void testGetPersistentPeersUpdatedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		storage.getPeers(true, System.currentTimeMillis()).onComplete(context.succeeding(result -> {
 			context.verify(() -> {
 				var expected = new ArrayList<>(persistentPeerInfos);
@@ -940,8 +1020,8 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(108)
-	void testGetPersistentPeersPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	@Order(109)
+	void testGetPersistentPeersUpdatedBeforePaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		fetchPeers(storage, true, System.currentTimeMillis(), 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> {
@@ -959,8 +1039,8 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(109)
-	void testGetNonPersistentPeers(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	@Order(110)
+	void testGetNonPersistentPeersUpdatedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		storage.getPeers(false, System.currentTimeMillis()).onComplete(context.succeeding(result -> {
 			context.verify(() -> {
 				var expected = new ArrayList<>(peerInfos);
@@ -977,8 +1057,8 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(110)
-	void testGetNonPersistentPeersPaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+	@Order(111)
+	void testGetNonPersistentPeersUpdatedBeforePaginated(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		fetchPeers(storage, false, System.currentTimeMillis(), 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> {
@@ -996,7 +1076,7 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(111)
+	@Order(112)
 	void testPutPeers(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<List<PeerInfo>>>();
 
@@ -1014,7 +1094,7 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(112)
+	@Order(113)
 	void testGetPeersById2(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<List<PeerInfo>>>();
 
@@ -1025,7 +1105,7 @@ public class DataStorageTests {
 					assertEquals(expected.size(), result.size());
 
 					var copy = new ArrayList<>(result);
-					var comparator = Comparator.comparing(PeerInfo::getId).thenComparing(PeerInfo::getNodeId);
+					var comparator = Comparator.comparing(PeerInfo::getId).thenComparing(PeerInfo::getFingerprint);
 					copy.sort(comparator);
 					expected.sort(comparator);
 					assertEquals(expected, copy);
@@ -1056,7 +1136,28 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(113)
+	@Order(114)
+	void testGetPeersByIdAndFingerprint2(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+		List<PeerInfo> all = multiPeers.values().stream().flatMap(List::stream).toList();
+
+		var futures = new ArrayList<Future<PeerInfo>>();
+		for (var peerInfo : all) {
+			var future = storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint()).onComplete(context.succeeding(result -> {
+				context.verify(() -> {
+					assertNotNull(result);
+					assertEquals(peerInfo, result);
+				});
+			}));
+
+			futures.add(future);
+		}
+
+		Future.all(futures).onComplete(context.succeedingThenComplete());
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("testStoragesProvider")
+	@Order(115)
 	void testRemovePeersById(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<Boolean>>();
 
@@ -1085,38 +1186,74 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(114)
-	void testUpdatePeer(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
-		var futures = new ArrayList<Future<PeerInfo>>();
+	@Order(116)
+	void testUpdatePeer(String name, DataStorage storage, Vertx vertx, VertxTestContext context) throws Exception {
+		List<Future<PeerInfo>> futures = new ArrayList<>();
 
-		for (var peerInfo : peerInfos) {
-			if (peerInfo.hasPrivateKey()) {
-				var updated = peerInfo.withoutPrivateKey();
-				var future = storage.putPeer(updated).onComplete(context.succeeding(result -> {
-					context.verify(() -> assertEquals(updated, result));
-				}));
+		for (int i = 0; i < peerInfos.size(); i++) {
+			final var peerInfo = peerInfos.get(i);
+			final int index = i;
 
-				futures.add(future);
-			} else {
+			if (!peerInfo.hasPrivateKey()) {
 				var future = storage.putPeer(peerInfo).onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(peerInfo, result));
 				}));
 				futures.add(future);
+			} else {
+				CryptoIdentity node = peerInfo.isAuthenticated() ? nodeIdentities.get(peerInfo.getNodeId()) : null;
+				PeerInfo updated = peerInfo.update(node, faker.internet().url());
+				var future = storage.putPeer(updated).andThen(context.succeeding(result -> {
+					context.verify(() -> assertEquals(updated, result));
+					peerInfos.set(index, updated);
+				})).compose(v -> {
+					PeerInfo updated2 = updated.withoutPrivateKey();
+					return storage.putPeer(updated2).onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(updated, result));
+					}));
+				}).compose(v -> {
+					return storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint()).andThen(context.succeeding(result -> {
+						// the private key should be kept.
+						context.verify(() -> {
+							assertTrue(result.hasPrivateKey());
+							assertEquals(updated, result);
+						});
+					}));
+				});
+
+				futures.add(future);
 			}
 		}
 
-		for (var peerInfo : persistentPeerInfos) {
-			if (peerInfo.hasPrivateKey()) {
-				var updated = peerInfo.withoutPrivateKey();
-				var future = storage.putPeer(updated, true).onComplete(context.succeeding(result -> {
-					context.verify(() -> assertEquals(peerInfo, result));
-				}));
+		for (int i = 0; i < persistentPeerInfos.size(); i++) {
+			final var peerInfo = persistentPeerInfos.get(i);
+			final int index = i;
 
-				futures.add(future);
-			} else {
+			if (!peerInfo.hasPrivateKey()) {
 				var future = storage.putPeer(peerInfo, true).onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(peerInfo, result));
 				}));
+				futures.add(future);
+			} else {
+				CryptoIdentity node = peerInfo.isAuthenticated() ? nodeIdentities.get(peerInfo.getNodeId()) : null;
+				PeerInfo updated = peerInfo.update(node, faker.internet().url());
+				var future = storage.putPeer(updated, true).andThen(context.succeeding(result -> {
+					context.verify(() -> assertEquals(updated, result));
+					persistentPeerInfos.set(index, updated);
+				})).compose(v -> {
+					PeerInfo updated2 = updated.withoutPrivateKey();
+					return storage.putPeer(updated2, true).onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(updated, result));
+					}));
+				}).compose(v -> {
+					return storage.getPeer(peerInfo.getId(), peerInfo.getFingerprint()).andThen(context.succeeding(result -> {
+						// the private key should be kept.
+						context.verify(() -> {
+							assertTrue(result.hasPrivateKey());
+							assertEquals(updated, result);
+						});
+					}));
+				});
+
 				futures.add(future);
 			}
 		}
@@ -1126,14 +1263,14 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(115)
+	@Order(117)
 	void testUpdatePeerAnnouncedTime1(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var now = System.currentTimeMillis();
 		var futures = new ArrayList<Future<Long>>();
 
 		for (var i = 0; i < peerInfos.size() / 2; i++) {
 			var peerInfo = peerInfos.get(i);
-			var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getNodeId())
+			var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getFingerprint())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertTrue(result >= now));
 					}));
@@ -1143,7 +1280,7 @@ public class DataStorageTests {
 
 		for (var i = 0; i < persistentPeerInfos.size() / 2; i++) {
 			var peerInfo = persistentPeerInfos.get(i);
-			var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getNodeId())
+			var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getFingerprint())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertTrue(result >= now));
 					}));
@@ -1151,14 +1288,14 @@ public class DataStorageTests {
 			futures.add(future);
 		}
 
-		var future = storage.updatePeerAnnouncedTime(Id.random(), Id.random())
+		var future = storage.updatePeerAnnouncedTime(Id.random(), Random.random().nextLong())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(0L, result));
 				}));
 		futures.add(future);
 
 		Future.all(futures).onComplete(context.succeeding(unused -> {
-			announced1 = System.currentTimeMillis();
+			announceTime1 = System.currentTimeMillis();
 			context.completeNow();
 		}));
 	}
@@ -1167,7 +1304,7 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(116)
+	@Order(118)
 	@Timeout(value = 40, timeUnit = TimeUnit.SECONDS)
 	void testUpdatePeerAnnouncedTime2(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		System.out.println("Waiting for 30 seconds to update announced time again...");
@@ -1181,7 +1318,7 @@ public class DataStorageTests {
 
 			for (var i = peerInfos.size() / 2; i < peerInfos.size(); i++) {
 				var peerInfo = peerInfos.get(i);
-				var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getNodeId())
+				var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getFingerprint())
 						.onComplete(context.succeeding(result -> {
 							context.verify(() -> assertTrue(result >= now));
 						}));
@@ -1191,7 +1328,7 @@ public class DataStorageTests {
 
 			for (var i = persistentPeerInfos.size() / 2; i < persistentPeerInfos.size(); i++) {
 				var peerInfo = persistentPeerInfos.get(i);
-				var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getNodeId())
+				var future = storage.updatePeerAnnouncedTime(peerInfo.getId(), peerInfo.getFingerprint())
 						.onComplete(context.succeeding(result -> {
 							context.verify(() -> assertTrue(result >= now));
 						}));
@@ -1199,14 +1336,14 @@ public class DataStorageTests {
 				futures.add(future);
 			}
 
-			var future = storage.updatePeerAnnouncedTime(Id.random(), Id.random())
+			var future = storage.updatePeerAnnouncedTime(Id.random(), Random.random().nextLong())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertEquals(0L, result));
 					}));
 			futures.add(future);
 
 			Future.all(futures).onComplete(context.succeeding(unused -> {
-				announced2 = System.currentTimeMillis();
+				announceTime2 = System.currentTimeMillis();
 				context.completeNow();
 			}));
 		});
@@ -1214,49 +1351,49 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(117)
+	@Order(119)
 	void testGetPeersAnnouncedBefore(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<List<PeerInfo>>>();
 
-		var future = storage.getPeers(false, announced1).onComplete(context.succeeding(result -> {
+		var future = storage.getPeers(false, announceTime1).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(peerInfos.size() / 2, result.size()));
 		}));
 		futures.add(future);
 
-		future = storage.getPeers(true, announced1).onComplete(context.succeeding(result -> {
+		future = storage.getPeers(true, announceTime1).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(persistentPeerInfos.size() / 2, result.size()));
 		}));
 		futures.add(future);
 
-		future = fetchPeers(storage, false, announced1, 0, 8, new ArrayList<>())
+		future = fetchPeers(storage, false, announceTime1, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(peerInfos.size() / 2, result.size()));
 				}));
 		futures.add(future);
 
-		future = fetchPeers(storage, true, announced1, 0, 8, new ArrayList<>())
+		future = fetchPeers(storage, true, announceTime1, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(persistentPeerInfos.size() / 2, result.size()));
 				}));
 		futures.add(future);
 
-		future = storage.getPeers(false, announced2).onComplete(context.succeeding(result -> {
+		future = storage.getPeers(false, announceTime2).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(peerInfos.size(), result.size()));
 		}));
 		futures.add(future);
 
-		future = storage.getPeers(true, announced2).onComplete(context.succeeding(result -> {
+		future = storage.getPeers(true, announceTime2).onComplete(context.succeeding(result -> {
 			context.verify(() -> assertEquals(persistentPeerInfos.size(), result.size()));
 		}));
 		futures.add(future);
 
-		future = fetchPeers(storage, false, announced2, 0, 8, new ArrayList<>())
+		future = fetchPeers(storage, false, announceTime2, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(peerInfos.size(), result.size()));
 				}));
 		futures.add(future);
 
-		future = fetchPeers(storage, true, announced2, 0, 8, new ArrayList<>())
+		future = fetchPeers(storage, true, announceTime2, 0, 8, new ArrayList<>())
 				.onComplete(context.succeeding(result -> {
 					context.verify(() -> assertEquals(persistentPeerInfos.size(), result.size()));
 				}));
@@ -1269,7 +1406,7 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(118)
+	@Order(120)
 	@Timeout(value = 40, timeUnit = TimeUnit.SECONDS)
 	void testPurge2(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		System.out.println("Waiting for 30 seconds to purge...");
@@ -1297,13 +1434,13 @@ public class DataStorageTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testStoragesProvider")
-	@Order(119)
+	@Order(121)
 	void testRemovePeer(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
 		var futures = new ArrayList<Future<Boolean>>();
 
 		for (var i = 0; i < persistentPeerInfos.size() / 2; i++) {
 			var peerInfo = persistentPeerInfos.get(i);
-			var future = storage.removePeer(peerInfo.getId(), peerInfo.getNodeId())
+			var future = storage.removePeer(peerInfo.getId(), peerInfo.getFingerprint())
 					.onComplete(context.succeeding(result -> {
 						context.verify(() -> assertTrue(result));
 					}));
@@ -1316,5 +1453,49 @@ public class DataStorageTests {
 				context.verify(() -> assertEquals(remaining, result.size()));
 			}));
 		})).onComplete(context.succeedingThenComplete());
+	}
+
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("testStoragesProvider")
+	@Timeout(value = 1, timeUnit = TimeUnit.MINUTES)
+	@Order(122)
+	void testGetPeersByIdAndExpectedSequenceNumberWithLimit(String name, DataStorage storage, Vertx vertx, VertxTestContext context) {
+		Map<Id, List<PeerInfo>> map = generateMultiPeerInfos(1, 20);
+
+		Id peerId = map.keySet().iterator().next();
+		List<PeerInfo> infos = map.get(peerId);
+		Future<PeerInfo> chain = Future.succeededFuture();
+		for (PeerInfo peerInfo : infos) {
+			chain = chain.compose(v -> {
+				Promise<PeerInfo> promise = Promise.promise();
+				vertx.setTimer(100, (tid) -> {
+					storage.putPeer(peerInfo).onComplete(context.succeeding(result -> {
+						context.verify(() -> assertEquals(peerInfo, result));
+						promise.complete(peerInfo);
+					}));
+				});
+
+				return promise.future();
+			});
+		}
+
+		chain.compose(v -> {
+			return storage.getPeers(peerId, 0, 1).onComplete(context.succeeding(result -> {
+				context.verify(() -> {
+					assertEquals(1, result.size());
+					assertEquals(infos.get(infos.size() - 1), result.get(0));
+				});
+			}));
+		}).compose(v -> {
+			return storage.getPeers(peerId, 0, 5).onComplete(context.succeeding(result -> {
+				context.verify(() -> {
+					assertEquals(5, result.size());
+					List<PeerInfo> expected = infos.subList(infos.size() - 5, infos.size());
+					Collections.reverse(expected);
+					assertArrayEquals(expected.toArray(), result.toArray());
+				});
+			}));
+		}).onComplete(context.succeedingThenComplete());
 	}
 }

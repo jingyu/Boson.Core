@@ -47,7 +47,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * Represents a lock-free, non-thread-safe routing table used in the Kademlia Distributed Hash Table (DHT) implementation.

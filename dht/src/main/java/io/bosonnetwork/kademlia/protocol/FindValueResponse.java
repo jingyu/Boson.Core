@@ -42,7 +42,8 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
+import io.bosonnetwork.json.internal.DataFormat;
 
 @JsonPropertyOrder({"n4", "n6", "k", "rec", "n", "seq", "sig", "v"})
 @JsonDeserialize(using = FindValueResponse.Deserializer.class)
@@ -144,7 +145,7 @@ public class FindValueResponse extends LookupResponse {
 				throw ctxt.wrongTokenException(p, FindValueResponse.class, JsonToken.START_OBJECT,
 						"Invalid FindValueResponse: should be an object");
 
-			final boolean binaryFormat = Json.isBinaryFormat(p);
+			final boolean binaryFormat = DataFormat.isBinary(p);
 
 			List<NodeInfo> nodes4 = null;
 			List<NodeInfo> nodes6 = null;

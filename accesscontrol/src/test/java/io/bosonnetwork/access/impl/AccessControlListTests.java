@@ -39,7 +39,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.google.common.collect.Maps;
 
 import io.bosonnetwork.access.Permission.Access;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class AccessControlListTests {
 	@Test

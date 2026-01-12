@@ -37,17 +37,27 @@ import org.junit.jupiter.params.provider.MethodSource;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.crypto.Signature;
 
 public class StoreValueTests extends MessageTests {
 	private static Stream<Arguments> requestParameters() throws Exception {
-		Value immutable = Value.createValue("This is a immutable value".getBytes());
-		Value signedValue = Value.of(Id.random(), Random.randomBytes(24), 3, Random.randomBytes(64), "This is a signed value".getBytes());
-		Value encryptedValue = Value.of(Id.random(), Id.random(), Random.randomBytes(24), 9, Random.randomBytes(64), "This is a encrypted value".getBytes());
+		Value immutable = Value.builder()
+				.data("This is a immutable value".getBytes())
+				.build();
+		Value signedValue = Value.builder()
+				.sequenceNumber(3)
+				.data("This is a signed value".getBytes())
+				.buildSigned();
+		Value encryptedValue = Value.builder()
+				.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+				.sequenceNumber(9)
+				.data("This is a encrypted value".getBytes())
+				.buildEncrypted();
 
 		return Stream.of(
 			Arguments.of("immutable", immutable, 62),
 			Arguments.of("signed", signedValue, 202),
-			Arguments.of("encrypted", encryptedValue, 244)
+			Arguments.of("encrypted", encryptedValue, 260)
 		);
 	}
 

@@ -51,9 +51,10 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.json.JsonContext;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 @JsonDeserialize(using = Message.Deserializer.class)
 @JsonSerialize(using = Message.Serializer.class)
@@ -305,14 +306,9 @@ public class Message<T> {
 	// ndodeId -Source node ID, required to correctly deserialize inbound messages
 	public static Message<?> parse(byte[] bytes, Id nodeId) {
 		try {
-			/*
-			return nodeId == null ?
-					Json.cborMapper().readValue(bytes, Message2.class) :
-					Json.cborMapper().reader(Json.JsonContext.shared(ATTR_NODE_ID, nodeId)).readValue(bytes, Message2.class);
-			 */
 			return nodeId == null ?
 					cborReader.readValue(bytes) :
-					cborReader.with(Json.JsonContext.perCall(ATTR_NODE_ID, nodeId)).readValue(bytes);
+					cborReader.with(JsonContext.perCall(ATTR_NODE_ID, nodeId)).readValue(bytes);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("Invalid CBOR data for Message", e);
 		}
@@ -325,14 +321,9 @@ public class Message<T> {
 	// nodeId -Source node ID, required to correctly deserialize inbound messages
 	public static Message<?> parse(String json, Id nodeId) {
 		try {
-			/*
-			return nodeId == null ?
-					Json.objectMapper().readValue(json, Message2.class) :
-					Json.objectMapper().reader(Json.JsonContext.shared(ATTR_NODE_ID, nodeId)).readValue(json, Message2.class);
-			 */
 			return nodeId == null ?
 					jsonReader.readValue(json) :
-					jsonReader.with(Json.JsonContext.perCall(ATTR_NODE_ID, nodeId)).readValue(json);
+					jsonReader.with(JsonContext.perCall(ATTR_NODE_ID, nodeId)).readValue(json);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("Invalid JSON data for Message", e);
 		}
@@ -414,8 +405,8 @@ public class Message<T> {
 		return new Message<>(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 
-	public static Message<FindPeerRequest> findPeerRequest(Id target, boolean want4, boolean want6) {
-		return new Message<>(Type.REQUEST, Method.FIND_PEER, nextTxid(), new FindPeerRequest(target, want4, want6));
+	public static Message<FindPeerRequest> findPeerRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber, int expectedCount) {
+		return new Message<>(Type.REQUEST, Method.FIND_PEER, nextTxid(), new FindPeerRequest(target, want4, want6, expectedSequenceNumber, expectedCount));
 	}
 
 	public static Message<FindPeerResponse> findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
@@ -430,8 +421,8 @@ public class Message<T> {
 		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
 	}
 
-	public static Message<AnnouncePeerRequest> announcePeerRequest(PeerInfo peer, int token) {
-		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, nextTxid(), new AnnouncePeerRequest(peer, token));
+	public static Message<AnnouncePeerRequest> announcePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
+		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, nextTxid(), new AnnouncePeerRequest(peer, token, expectedSequenceNumber));
 	}
 
 	public static Message<Void> announcePeerResponse(long txid) {

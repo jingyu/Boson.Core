@@ -54,7 +54,7 @@ import io.bosonnetwork.service.DefaultServiceContext;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.ServiceContext;
 import io.bosonnetwork.utils.ApplicationLock;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * @hidden

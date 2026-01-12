@@ -29,9 +29,9 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.vertx.VertxFuture;
 
@@ -50,14 +50,15 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 	@Option(names = {"-k", "--private-key"}, description = "The private key.")
 	private String privateKey = null;
 
-   	@Option(names = {"-n", "--node-id"}, description = "The node id.")
-	private String nodeId = null;
+   	@Option(names = {"-a", "--authenticated"}, description = "Authenticated peer info.")
+	private boolean authenticated = false;
 
-	@Option(names = {"-a", "--alternative-url"}, description = "The alternative URL.")
-	private String alt = null;
+	@Option(names = {"-e", "--extra"}, description = "The extra information(json format is prefered).")
+	private String extra = null;
 
-	@Parameters(paramLabel = "PORT", index = "0", description = "The peer port to be announce.")
-	private int port = 0;
+	@Parameters(paramLabel = "ENDPOINT", index = "0", description = "The peer endpoint URI/URL.")
+	private String endpoint = null;
+
 
 	@Override
 	public Integer call() throws Exception {
@@ -70,21 +71,30 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 			return -1;
 		}
 
-		Id peerNodeId = Main.getBosonNode().getId();
-		try {
-			if (nodeId != null)
-				peerNodeId = Id.of(nodeId);
-		} catch (Exception e) {
-			System.out.println("Invalid node id: " + nodeId + ", " + e.getMessage());
+		if (endpoint == null) {
+			System.out.println("Endpoint is required.");
 			return -1;
 		}
 
-		if (port <= 0) {
-			System.out.println("Invalid port: " + port);
-			return -1;
+		byte[] extraData = null;
+		if (extra != null) {
+			try {
+				extraData = Json.toBytes(Json.parse(extra));
+			} catch (Exception e) {
+				System.out.println("Extra data is not json, treat as byte string");
+				extraData = extra.getBytes();
+			}
 		}
 
-		PeerInfo peer = PeerInfo.create(keypair, peerNodeId, Main.getBosonNode().getId(), port, alt);
+		PeerInfo.Builder pb = PeerInfo.builder().endpoint(endpoint);
+		if (keypair != null)
+			pb.key(keypair);
+		if (authenticated)
+			pb.node(Main.getBosonNode());
+		if (extraData != null)
+			pb.extra(extraData);
+		PeerInfo peer = pb.build();
+
 		if (localOnly)
 			VertxFuture.of(Main.getBosonNode().getStorage().putPeer(peer)).get();
 		else

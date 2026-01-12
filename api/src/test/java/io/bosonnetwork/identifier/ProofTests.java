@@ -28,7 +28,7 @@ import java.util.Date;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 public class ProofTests {
 	@Test

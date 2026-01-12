@@ -28,7 +28,7 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 @ExtendWith(VertxExtension.class)
 public class CompactWebTokenAuthTest {

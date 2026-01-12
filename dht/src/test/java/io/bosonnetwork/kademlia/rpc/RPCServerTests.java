@@ -295,10 +295,10 @@ public class RPCServerTests {
 
 	protected static PeerInfo createPeerInfo() {
 		PeerInfo peer = switch (Random.random().nextInt(0, 5)) {
-			case 1 -> PeerInfo.create(Id.random(), Random.random().nextInt(4096, 65535), faker.internet().url());
-			case 2 -> PeerInfo.create(Id.random(), Id.random(), Random.random().nextInt(4096, 65535));
-			case 3 -> PeerInfo.create(Id.random(), Id.random(), Random.random().nextInt(4096, 65535), faker.internet().url());
-			default -> PeerInfo.create(Id.random(), Random.random().nextInt(4096, 65535));
+			case 1 -> PeerInfo.builder().endpoint(faker.internet().url()).build();
+			case 2 -> PeerInfo.builder().node(new CryptoIdentity()).endpoint("tcp:///203.0.113.10:" +  + faker.internet().port()).build();
+			case 3 -> PeerInfo.builder().node(new CryptoIdentity()).endpoint(faker.internet().url()).build();
+			default -> PeerInfo.builder().endpoint("tcp:///203.0.113.10:" + faker.internet().port()).build();
 		};
 
 		peers.put(peer.getId(), List.of(peer));
@@ -312,10 +312,10 @@ public class RPCServerTests {
 		List<PeerInfo> infos = new ArrayList<>();
 		for (int i = 0; i < count; i++) {
 			PeerInfo peer = switch (Random.random().nextInt(0, 5)) {
-				case 1 -> PeerInfo.create(keyPair, Id.random(), Random.random().nextInt(4096, 65535), faker.internet().url());
-				case 2 -> PeerInfo.create(keyPair, Id.random(), Id.random(), Random.random().nextInt(4096, 65535));
-				case 3 -> PeerInfo.create(keyPair, Id.random(), Id.random(), Random.random().nextInt(4096, 65535), faker.internet().url());
-				default -> PeerInfo.create(keyPair, Id.random(), Random.random().nextInt(4096, 65535));
+				case 1 -> PeerInfo.builder().key(keyPair).endpoint("http://foo.example.com/").build();
+				case 2 -> PeerInfo.builder().key(keyPair).endpoint("tcp://203.0.113.10:1234").build();
+				case 3 -> PeerInfo.builder().key(keyPair).node(new CryptoIdentity()).endpoint("http://bar.example.com/").build();
+				default -> PeerInfo.builder().key(keyPair).node(new CryptoIdentity()).endpoint("http://abc.example.com/").build();
 			};
 
 			infos.add(peer);
@@ -328,10 +328,11 @@ public class RPCServerTests {
 	protected static Value createValue() {
 		try {
 			Value value = switch (Random.random().nextInt(0, 3)) {
-				// case 0 -> Value.createValue(faker.lorem().paragraph().getBytes());
-				case 1 -> Value.createSignedValue(faker.lorem().paragraph().getBytes());
-				case 2 -> Value.createEncryptedValue(Id.of(Signature.KeyPair.random().publicKey().bytes()), faker.lorem().paragraph().getBytes());
-				default -> Value.createValue(faker.lorem().paragraph().getBytes());
+				case 0 -> Value.builder().data(faker.lorem().paragraph().getBytes()).build();
+				case 1 -> Value.builder().data(faker.lorem().paragraph().getBytes()).buildSigned();
+				case 2 -> Value.builder().recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+						.data(faker.lorem().paragraph().getBytes()).buildEncrypted();
+				default -> Value.builder().sequenceNumber(2).data(faker.lorem().paragraph().getBytes()).build();
 			};
 
 			values.put(value.getId(), value);
@@ -372,8 +373,8 @@ public class RPCServerTests {
 				Message<?> request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
-					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE));
-					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false);
+					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), -1);
+					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false, -1, 2);
 					case 5 -> Message.storeValueRequest(createValue(), Random.random().nextInt(1, Integer.MAX_VALUE), Random.random().nextInt(1, 100));
 					case 6 -> Message.findValueRequest(createValue().getId(), true, false, 0);
 					default -> Message.message(Message.Type.REQUEST, Message.Method.UNKNOWN, 0x7FFF0123, null);
@@ -478,8 +479,8 @@ public class RPCServerTests {
 				Message<?> request = switch (i % 7) {
 					case 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
-					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE));
-					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false);
+					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), 3);
+					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false, 2, 1);
 					case 5 -> Message.storeValueRequest(createValue(), Random.random().nextInt(1, Integer.MAX_VALUE), Random.random().nextInt(1, 100));
 					case 6 -> Message.findValueRequest(createValue().getId(), true, false, 0);
 					default -> Message.message(Message.Type.REQUEST, Message.Method.UNKNOWN, 0x7FFF0123, null);
@@ -586,8 +587,8 @@ public class RPCServerTests {
 				Message<?> request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
-					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE));
-					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false);
+					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), -1);
+					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false, 0, 1);
 					case 5 -> Message.storeValueRequest(createValue(), Random.random().nextInt(1, Integer.MAX_VALUE), Random.random().nextInt(1, 100));
 					case 6 -> Message.findValueRequest(createValue().getId(), true, false, 0);
 					default -> Message.message(Message.Type.REQUEST, Message.Method.UNKNOWN, 0x7FFF0123, null);
@@ -680,8 +681,8 @@ public class RPCServerTests {
 				Message<?> request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
-					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE));
-					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false);
+					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), 2);
+					case 4 -> Message.findPeerRequest(createPeerInfo(Random.random().nextInt(2, 8)), true, false, 2, 0);
 					case 5 -> Message.storeValueRequest(createValue(), Random.random().nextInt(1, Integer.MAX_VALUE), Random.random().nextInt(1, 100));
 					case 6 -> Message.findValueRequest(createValue().getId(), true, false, 0);
 					default -> Message.message(Message.Type.REQUEST, Message.Method.UNKNOWN, 0x7FFF0123, null);

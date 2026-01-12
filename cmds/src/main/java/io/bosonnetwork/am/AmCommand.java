@@ -32,7 +32,7 @@ import picocli.CommandLine.Option;
 import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.access.impl.AccessManager;
-import io.bosonnetwork.utils.Json;
+import io.bosonnetwork.json.Json;
 
 /**
  * @hidden

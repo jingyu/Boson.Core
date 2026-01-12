@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.Map;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 
 public class AnnouncePeerTests extends MessageTests {
@@ -44,10 +46,28 @@ public class AnnouncePeerTests extends MessageTests {
 		int port = 65516;
 
 		return Stream.of(
-				Arguments.of("peer", PeerInfo.of(Id.random(), Id.random(), port, sig), 144),
-				Arguments.of("peerWithAltURL", PeerInfo.of(Id.random(), Id.random(), port, "http://abc.example.com/", sig), 172),
-				Arguments.of("delegatedPeer", PeerInfo.of(Id.random(), Id.random(), Id.random(), port, sig), 180),
-				Arguments.of("delegatedPeerWithAltURL", PeerInfo.of(Id.random(), Id.random(), Id.random(), port, "http://abc.example.com/", sig), 208)
+				Arguments.of("simple", PeerInfo.builder()
+						.sequenceNumber(6)
+						.fingerprint(1000)
+						.endpoint("tcp://203.0.113.10:3456")
+						.build(), 208),
+				Arguments.of("simple+extra", PeerInfo.builder()
+						.sequenceNumber(7)
+						.endpoint("tcp://203.0.113.10:3456")
+						.extra(Map.of("foo", "bar", "buz", true))
+						.build(), 233),
+				Arguments.of("authenticated", PeerInfo.builder()
+						.node(new CryptoIdentity())
+						.sequenceNumber(8)
+						.endpoint("tcp://203.0.113.10:3456")
+						.build(), 319),
+				Arguments.of("authenticated+extra", PeerInfo.builder()
+						.node(new CryptoIdentity())
+						.fingerprint(-1234)
+						.sequenceNumber(9)
+						.endpoint("tcp://203.0.113.10:3456")
+						.extra(Map.of("foo", "bar", "buz", true))
+						.build(), 332)
 		);
 	}
 
@@ -55,7 +75,7 @@ public class AnnouncePeerTests extends MessageTests {
 	@MethodSource("requestParameters")
 	void testRequest(String name, PeerInfo peer, int expectedSize) throws Exception {
 		var token = 0x76543210;
-		var msg = Message.announcePeerRequest(peer, token);
+		var msg = Message.announcePeerRequest(peer, token, peer.getSequenceNumber() - 1);
 		msg.setId(peer.getNodeId());
 
 		var bin = msg.toBytes();
@@ -101,17 +121,21 @@ public class AnnouncePeerTests extends MessageTests {
 	@Test
 	void timingRequest() {
 		byte[] sig = Random.randomBytes(64);
-		PeerInfo peer = PeerInfo.of(Id.random(), Id.random(), 65535, sig);
+		PeerInfo peer = PeerInfo.builder()
+				.sequenceNumber(6)
+				.fingerprint(1000)
+				.endpoint("tcp://203.0.113.10:3456")
+				.build();
 		var token = 0x76543210;
 
-		var msg = Message.announcePeerRequest(peer, token);
+		var msg = Message.announcePeerRequest(peer, token, peer.getSequenceNumber() - 1);
 		msg.setId(peer.getNodeId());
 		var bin = msg.toBytes();
 		Message.parse(bin, peer.getNodeId());
 
 		var start = System.currentTimeMillis();
 		for (var i = 0; i < TIMING_ITERATIONS; i++) {
-			var msg2 = Message.announcePeerRequest(peer, token);
+			var msg2 = Message.announcePeerRequest(peer, token, peer.getSequenceNumber() - 1);
 			msg2.setId(peer.getNodeId());
 			var bin2 = msg2.toBytes();
 			Message.parse(bin2, peer.getNodeId());
