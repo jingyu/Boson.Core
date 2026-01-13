@@ -42,7 +42,7 @@ The `Id` is a 256-bit identifier used to uniquely identify nodes, values, peers,
 
 ## PeerInfo
 
-`PeerInfo` describes a service published over the Boson DHT. It can be **Authenticated** (includes node signature) or **Regular**.
+`PeerInfo` describes a service published over the Boson DHT. It can be **Authenticated** (includes node signature) or **Regular**. A `PeerInfo` record is uniquely identified by the combination of its Peer ID (`id`) and Fingerprint (`f`).
 
 ### Serialization Format
 
