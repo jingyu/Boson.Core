@@ -106,10 +106,10 @@ public class AnnouncePeerRequest implements Request {
 			PeerInfo peer = value.peer;
 
 			if (binaryFormat) {
-				gen.writeFieldName("t");
+				gen.writeFieldName("k");
 				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peer.getId().bytes(), 0, Id.BYTES);
 			} else {
-				gen.writeStringField("t", peer.getId().toBase58String());
+				gen.writeStringField("k", peer.getId().toBase58String());
 			}
 
 			byte[] nonce = peer.getNonce();
@@ -190,7 +190,7 @@ public class AnnouncePeerRequest implements Request {
 				case "cas":
 					cas = p.getIntValue();
 					break;
-				case "t":
+				case "k":
 					peerId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "n":
