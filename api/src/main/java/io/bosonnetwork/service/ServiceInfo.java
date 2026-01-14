@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.service;
 
+import java.util.Map;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -39,6 +41,13 @@ public interface ServiceInfo {
 	Id getPeerId();
 
 	/**
+	 * Retrieves a unique fingerprint representing the service instance.
+	 *
+	 * @return a long value uniquely identifying the service instance
+	 */
+	long getFingerprint();
+
+	/**
 	 * Gets the unique identifier of the node hosting the service.
 	 *
 	 * @return the node {@link Id}
@@ -46,32 +55,32 @@ public interface ServiceInfo {
 	Id getNodeId();
 
 	/**
-	 * Gets the origin identifier, typically representing the entity responsible for the service.
+	 * Gets the endpoint URL or URI for accessing the service.
 	 *
-	 * @return the origin {@link Id}
+	 * @return the endpoint string, never be {@code null}
 	 */
-	Id getOriginId();
+	String getEndpoint();
 
 	/**
-	 * Gets the hostname or IP address where the service is accessible.
+	 * Checks if the extra data is present.
 	 *
-	 * @return the host string
+	 * @return {@code true} if the extra data is present, {@code false} otherwise.
 	 */
-	String getHost();
+	boolean hasExtra();
 
 	/**
-	 * Gets the network port number where the service is listening.
+	 * Gets the extra data.
 	 *
-	 * @return the port number
+	 * @return the extra data
 	 */
-	int getPort();
+	byte[] getExtraData();
 
 	/**
-	 * Gets an alternative endpoint URL or URI for accessing the service.
+	 * Gets the extra data as a map.
 	 *
-	 * @return the alternative endpoint string, or {@code null} if not available
+	 * @return the extra data map
 	 */
-	String getAlternativeEndpoint();
+	Map<String, Object> getExtra();
 
 	/**
 	 * Gets the unique identifier string for the specific service type.

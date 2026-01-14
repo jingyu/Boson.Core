@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.service;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -71,8 +72,8 @@ public interface Federation {
 	 *
 	 * @param nodeId the unique identifier of the node hosting the service
 	 * @param peerId the unique identifier of the service peer
-	 * @return a {@link CompletableFuture} that completes with the {@link ServiceInfo} object if found,
+	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo} if found,
 	 *         or completes exceptionally/with null if the service cannot be located
 	 */
-	public CompletableFuture<? extends ServiceInfo> getService(Id nodeId, Id peerId);
+	public CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId, Id nodeId);
 }

@@ -26,6 +26,7 @@ package io.bosonnetwork.service;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.PeerInfo;
 
 /**
  * Interface BosonService is the basic abstraction for the extensible service on top of
@@ -70,13 +71,19 @@ public interface BosonService {
 	int getPort();
 
 	/**
-	 * Retrieves an alternative endpoint for the service.
+	 * Retrieves the endpoint URL associated with the service.
 	 *
-	 * @return a string representing the alternative endpoint.
+	 * @return a string representing the service endpoint.
 	 */
-	default String getAlternativeEndpoint() {
-		return null;
-	}
+	String getEndpoint();
+
+	/**
+	 * Retrieves detailed information about the peer associated with the service.
+	 *
+	 * @return a {@link PeerInfo} object containing peer-related information, such as
+	 *         host, port, and other metadata.
+	 */
+	PeerInfo getPeerInfo();
 
 	/**
 	 * Checks whether the federation feature is enabled for the service.
