@@ -76,4 +76,14 @@ public interface Federation {
 	 *         or completes exceptionally/with null if the service cannot be located
 	 */
 	public CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId, Id nodeId);
+
+	/**
+	 * Retrieves a list of services associated with a specific peer identified by its ID.
+	 *
+	 * @param peerId the unique identifier of the peer whose services are to be queried
+	 * @return a {@link CompletableFuture} that completes with a list of {@link ServiceInfo} objects
+	 *         representing the services associated with the specified peer, or completes exceptionally
+	 *         if an error occurs while retrieving the services
+	 */
+	public CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId);
 }
