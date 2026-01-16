@@ -191,7 +191,8 @@ public class AnnouncePeerRequest implements Request {
 					cas = p.getIntValue();
 					break;
 				case "k":
-					peerId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+					peerId = binaryFormat || token != JsonToken.VALUE_STRING ?
+							Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "n":
 					nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
@@ -201,7 +202,8 @@ public class AnnouncePeerRequest implements Request {
 					break;
 				case "o":
 					if (token != JsonToken.VALUE_NULL)
-						nodeId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						nodeId = binaryFormat || token != JsonToken.VALUE_STRING ?
+								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "os":
 					if (token != JsonToken.VALUE_NULL)

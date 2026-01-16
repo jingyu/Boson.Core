@@ -27,6 +27,7 @@ import java.net.InetAddress;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
@@ -65,7 +66,8 @@ public class InetAddressDeserializer extends StdDeserializer<InetAddress> {
 	 */
 	@Override
 	public InetAddress deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
-		return DataFormat.isBinary(p) ? InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
+		return DataFormat.isBinary(p) || p.currentToken() != JsonToken.VALUE_STRING ?
+				InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
 				InetAddress.getByName(p.getText());
 	}
 }

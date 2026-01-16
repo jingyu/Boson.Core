@@ -165,11 +165,13 @@ public class StoreValueRequest implements Request {
 					break;
 				case "k":
 					if (token != JsonToken.VALUE_NULL)
-						publicKey = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						publicKey = binaryFormat || token != JsonToken.VALUE_STRING ?
+								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "rec":
 					if (token != JsonToken.VALUE_NULL)
-						recipient = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						recipient = binaryFormat || token != JsonToken.VALUE_STRING ?
+								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "n":
 					if (token != JsonToken.VALUE_NULL)

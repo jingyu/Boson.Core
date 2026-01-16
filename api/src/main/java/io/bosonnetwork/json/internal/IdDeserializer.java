@@ -26,6 +26,7 @@ import java.io.IOException;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
@@ -66,6 +67,7 @@ public class IdDeserializer extends StdDeserializer<Id> {
 	 */
 	@Override
 	public Id deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
-		return DataFormat.isBinary(p) ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+		return DataFormat.isBinary(p) || p.currentToken() != JsonToken.VALUE_STRING ?
+				Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 	}
 }

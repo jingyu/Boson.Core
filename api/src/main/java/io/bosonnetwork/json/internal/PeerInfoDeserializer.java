@@ -92,7 +92,8 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 			switch (fieldName) {
 				case "id":
 					if (token != JsonToken.VALUE_NULL)
-						publicKey = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						publicKey = binaryFormat || token != JsonToken.VALUE_STRING ?
+								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "n":
 					if (token != JsonToken.VALUE_NULL)
@@ -104,7 +105,8 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 					break;
 				case "o":
 					if (token != JsonToken.VALUE_NULL)
-						nodeId = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+						nodeId = binaryFormat || token != JsonToken.VALUE_STRING ?
+								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 					break;
 				case "os":
 					if (token != JsonToken.VALUE_NULL)

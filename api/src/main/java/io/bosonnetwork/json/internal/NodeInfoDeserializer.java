@@ -82,13 +82,15 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		int port = 0;
 
 		// id
-		if (p.nextToken() != JsonToken.VALUE_NULL)
-			id = binaryFormat ? Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
+		JsonToken token = p.nextToken();
+		if (token != JsonToken.VALUE_NULL)
+			id = binaryFormat || token != JsonToken.VALUE_STRING ?
+					Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 
 		// address
 		// text format: IP address string or hostname string
 		// binary format: binary ip address or host name string
-		JsonToken token = p.nextToken();
+		token = p.nextToken();
 		if (token == JsonToken.VALUE_STRING)
 			host = p.getText();
 		else if (token == JsonToken.VALUE_EMBEDDED_OBJECT)
