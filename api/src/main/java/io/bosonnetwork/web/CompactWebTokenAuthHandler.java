@@ -106,7 +106,7 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 
 			return authProvider.authenticate(credentials)
 					.andThen(op -> audit.audit(Marker.AUTHENTICATION, op.succeeded()))
-					.recover(err -> Future.failedFuture(new HttpException(401, err)));
+					.recover(err -> Future.failedFuture(new HttpException(401, err.getMessage())));
 		});
 	}
 

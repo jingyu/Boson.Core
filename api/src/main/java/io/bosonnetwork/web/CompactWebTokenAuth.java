@@ -23,7 +23,6 @@
 package io.bosonnetwork.web;
 
 import java.io.IOException;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -39,12 +38,12 @@ import io.vertx.ext.auth.authentication.TokenCredentials;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.service.ClientAuthenticator;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.service.FederatedNode;
 import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Pair;
 
 /**
@@ -82,11 +81,6 @@ import io.bosonnetwork.utils.Pair;
  * </ul>
  */
 public class CompactWebTokenAuth implements AuthenticationProvider {
-	/** Base64 URL encoder without padding. */
-	protected static final Base64.Encoder B64encoder = Base64.getUrlEncoder().withoutPadding();
-	/** Base64 URL decoder. */
-	protected static final Base64.Decoder B64decoder = Base64.getUrlDecoder();
-
 	private static final long MAX_SERVER_ISSUED_TOKEN_LIFETIME = 14 * 24 * 60 * 60;	// 14 days in seconds
 	private static final long MAX_CLIENT_ISSUED_TOKEN_LIFETIME = 30 * 60; 			// 30 minutes in seconds
 	private static final int DEFAULT_LEEWAY = 5 * 60; // 5 minutes in seconds
@@ -122,7 +116,7 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 		 * by leveraging the given authenticator for security purposes.
 		 *
 		 * @param authenticator the {@code ClientAuthenticator} instance used to validate client authentication
-		 * @return a {@code UserRepository} implementation that utilizes the given {@code ClientAuthenticator}
+		 * @return a {@code UserRepository} implementation that uses the given {@code ClientAuthenticator}
 		 */
 		static UserRepository fromClientAuthenticator(ClientAuthenticator authenticator) {
 			return new AuthenticatorUserRepo(authenticator);
@@ -272,7 +266,7 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 	 * Creates a new instance of CompactWebTokenAuth.
 	 *
 	 * @param identity the identity of the current server node (used for signing and verification)
-	 * @param userRepository the repository to lookup token subjects and associated entities
+	 * @param userRepository the repository to look up token subjects and associated entities
 	 * @param maxServerIssuedTokenLifetime maximum lifetime for tokens issued by this server (seconds)
 	 * @param maxClientIssuedTokenLifetime maximum lifetime for tokens issued by clients (seconds)
 	 * @param leeway allowed clock skew (seconds)
@@ -333,8 +327,8 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 		final JsonObject claims;
 
 		try {
-			payload = B64decoder.decode(token.substring(0, index));
-			sig = B64decoder.decode(token.substring(index + 1));
+			payload = Json.BASE64_DECODER.decode(token.substring(0, index));
+			sig = Json.BASE64_DECODER.decode(token.substring(index + 1));
 			claims = new JsonObject(Json.cborMapper().readValue(payload, Json.mapType()));
 		} catch (IllegalArgumentException | IOException e) {
 			return Future.failedFuture("Invalid authorization token: format error");
@@ -444,7 +438,7 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 					return Future.failedFuture("Invalid authorization token: wrong issuer");
 			}
 			*/
-			if (!issuer.equals(Objects.requireNonNullElse(associated, subject)))
+			if (!Objects.equals(issuer, subject) && !Objects.equals(issuer, associated))
 				return Future.failedFuture("Invalid authorization token: wrong issuer");
 
 			if (audience == null)
@@ -463,9 +457,9 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 				return Future.failedFuture("Invalid authorization token: life time too long");
 		}
 
-		// verify the signature
-		if (!issuer.toSignatureKey().verify(payload, sig))
+		if (!issuer.toSignatureKey().verify(payload, sig)) {
 			return Future.failedFuture("Invalid authorization token: signature verification failed");
+		}
 
 		final String scope = claims.containsKey("scp") ?  claims.getString("scp") : null;
 
@@ -536,6 +530,18 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 		});
 	}
 
+	private String encodeToken(Map<String, Object> claims) {
+		final byte[] payload;
+		try {
+			payload = Json.cborMapper().writeValueAsBytes(claims);
+		} catch (IOException e) {
+			throw new RuntimeException("INTERNAL ERROR: JSON serialization");
+		}
+
+		final byte[] sig = identity.sign(payload);
+		return Json.BASE64_ENCODER.encodeToString(payload) + "." + Json.BASE64_ENCODER.encodeToString(sig);
+	}
+
 	/**
 	 * Generates a new token with specific claims.
 	 * 
@@ -544,30 +550,29 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
 	public String generateToken(Map<String, Object> claims) {
-		Map<String, Object> _claims;
+		Map<String, Object> _claims = null;
 
 		long now = System.currentTimeMillis() / 1000;
 		if (claims.containsKey("exp") && claims.get("exp") != null) {
 			long expiration = (Long) claims.get("exp");
 			if (expiration <= 0 || expiration > now + maxServerIssuedTokenLifetime)
 				throw new IllegalArgumentException("Invalid expiration");
-
-			_claims = claims;
 		} else {
 			_claims = new LinkedHashMap<>(claims);
 			_claims.put("exp", now + maxServerIssuedTokenLifetime);
 		}
 
-		final byte[] payload;
-		try {
-			payload = Json.cborMapper().writeValueAsBytes(_claims);
-		} catch (IOException e) {
-			throw new RuntimeException("INTERNAL ERROR: JSON serialization");
+		if (!claims.containsKey("jti")) {
+			if (_claims == null)
+				_claims = new LinkedHashMap<>(claims);
+
+			_claims.put("jti", Random.randomBytes(24));
 		}
 
-		final byte[] sig = identity.sign(payload);
+		if (_claims == null)
+			_claims = claims;
 
-		return B64encoder.encodeToString(payload) + "." + B64encoder.encodeToString(sig);
+		return encodeToken(_claims);
 	}
 
 	/**
@@ -576,17 +581,16 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 	 * @param subject the subject ID
 	 * @param associated the associated entity ID (optional, can be null)
 	 * @param scope the scope string (optional, can be null)
-	 * @param expiration the expiration time in seconds (0 for default server lifetime)
+	 * @param ttl the time-to-live in seconds (0 for default server lifetime)
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
-	public String generateToken(Id subject, Id associated, String scope, long expiration) {
+	public String generateToken(Id subject, Id associated, String scope, long ttl) {
 		Objects.requireNonNull(subject);
-		if (expiration < 0 || expiration > maxServerIssuedTokenLifetime)
+		if (ttl < 0 || ttl > maxServerIssuedTokenLifetime)
 			throw new IllegalArgumentException("Invalid expiration");
 
-		if (expiration == 0)
-			expiration = System.currentTimeMillis() / 1000 + maxServerIssuedTokenLifetime;
+		long expiration = System.currentTimeMillis() / 1000 + (ttl == 0 ? maxServerIssuedTokenLifetime : ttl);
 
 		Map<String, Object> claims = new LinkedHashMap<>(5);
 		claims.put("jti", Random.randomBytes(24));
@@ -596,7 +600,7 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 		if (scope != null && !scope.isEmpty())
 			claims.put("scp", scope);
 		claims.put("exp", expiration);
-		return generateToken(claims);
+		return encodeToken(claims);
 	}
 
 	/**

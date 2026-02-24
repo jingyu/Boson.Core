@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.web.CompactWebTokenAuth;
 
 /**
  * Federation manager (read-only) interface for the Boson Super Node services.
@@ -36,6 +37,22 @@ import io.bosonnetwork.Id;
  */
 public interface Federation {
 	/**
+	 * Represents the type of incident that can occur within the federation.
+	 * This enumeration is used to classify and report issues related to
+	 * federated nodes or services.
+	 */
+	enum IncidentType {
+		/** Indicates a complete failure or unavailability of a service. */
+		SERVICE_OUTAGE,
+		/** Indicates a service encountering an operation failure or error. */
+		SERVICE_ERROR,
+		/** Indicates a poorly formed or invalid request received. */
+		MALFORMED_REQUEST,
+		/** Indicates an invalid or improperly constructed response sent. */
+		MALFORMED_RESPONSE
+	}
+
+	/**
 	 * Retrieves a federated node by its ID.
 	 *
 	 * @param nodeId              the unique identifier of the node to retrieve
@@ -43,7 +60,7 @@ public interface Federation {
 	 * @return a {@link CompletableFuture} that completes with the {@link FederatedNode} object if found,
 	 *         or completes exceptionally/with null if the node cannot be found or federated
 	 */
-	public CompletableFuture<? extends FederatedNode> getNode(Id nodeId, boolean federateIfNotExists);
+	CompletableFuture<? extends FederatedNode> getNode(Id nodeId, boolean federateIfNotExists);
 
 	/**
 	 * Retrieves a federated node by its ID.
@@ -65,7 +82,7 @@ public interface Federation {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the node exists,
 	 *         or {@code false} otherwise
 	 */
-	public CompletableFuture<Boolean> existsNode(Id nodeId);
+	CompletableFuture<Boolean> existsNode(Id nodeId);
 
 	/**
 	 * Retrieves information about a specific service hosted by a federated node.
@@ -75,7 +92,7 @@ public interface Federation {
 	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo} if found,
 	 *         or completes exceptionally/with null if the service cannot be located
 	 */
-	public CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId, Id nodeId);
+	CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId, Id nodeId);
 
 	/**
 	 * Retrieves a list of services associated with a specific peer identified by its ID.
@@ -85,5 +102,34 @@ public interface Federation {
 	 *         representing the services associated with the specified peer, or completes exceptionally
 	 *         if an error occurs while retrieving the services
 	 */
-	public CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId);
+	CompletableFuture<List<? extends ServiceInfo>> getServices(Id peerId);
+
+	/**
+	 * Reports an incident associated with a specific federated node and peer.
+	 *
+	 * @param nodeId   the unique identifier of the federated node where the incident occurred
+	 * @param peerId   the unique identifier of the peer involved in the incident
+	 * @param incident the type of incident being reported
+	 * @param details  a detailed description of the incident
+	 * @return a {@link CompletableFuture} that completes when the incident has been reported successfully,
+	 *         or completes exceptionally if an error occurs during the reporting process
+	 */
+	CompletableFuture<Void> reportIncident(Id nodeId, Id peerId, IncidentType incident, String details);
+
+	/**
+	 * Retrieves the instance of {@link FederationAuthenticator} associated with this federation.
+	 *
+	 * @return the {@link FederationAuthenticator} responsible for managing authentication
+	 *         within the federation context.
+	 */
+	FederationAuthenticator getAuthenticator();
+
+	/**
+	 * Retrieves the instance of {@link CompactWebTokenAuth} used for handling
+	 * web token authentication within the federation.
+	 *
+	 * @return the {@link CompactWebTokenAuth} instance responsible for managing
+	 *         web token authentication.
+	 */
+	CompactWebTokenAuth getWebTokenAuthenticator();
 }

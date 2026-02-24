@@ -82,7 +82,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 *
 	 * @return the Vert.x context
 	 */
-	public final Context vertxContext() {
+	protected final Context vertxContext() {
 		return vertxContext;
 	}
 
@@ -103,7 +103,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 *
 	 * @return the configuration as a {@link JsonObject}
 	 */
-	public final JsonObject vertxConfig() {
+	protected final JsonObject vertxConfig() {
 		return vertxContext.config();
 	}
 
@@ -131,7 +131,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 * @param vertx   the Vert.x instance
 	 * @param context the Vert.x context
 	 */
-	public void prepare(Vertx vertx, Context context) {
+	protected void prepare(Vertx vertx, Context context) {
 		this.vertx = vertx;
 		this.vertxContext = context;
 	}
@@ -172,7 +172,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 *
 	 * @return a future that completes when setup is finished
 	 */
-	public abstract Future<Void> deploy();
+	protected abstract Future<Void> deploy();
 
 	/**
 	 * Called during shutdown to perform asynchronous cleanup logic.
@@ -182,7 +182,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 *
 	 * @return a future that completes when teardown is finished
 	 */
-	public abstract Future<Void> undeploy();
+	protected abstract Future<Void> undeploy();
 
 	/**
 	 * Internal helper method to simulate deployment under Vert.x 5.x’s {@code Deployable} interface.
@@ -236,7 +236,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 *
 	 * @param action the handler to run
 	 */
-	public void runOnContext(Handler<Void> action) {
+	protected void runOnContext(Handler<Void> action) {
 		vertxContext.runOnContext(action);
 	}
 
@@ -249,7 +249,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 * @param <T> the result type
 	 * @return a future representing the blocking operation result
 	 */
-	public <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler) {
+	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler) {
 		return vertxContext.executeBlocking(blockingCodeHandler);
 	}
 
@@ -262,7 +262,7 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	 * @param <T> the result type
 	 * @return a future representing the blocking operation result
 	 */
-	public <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler, boolean ordered) {
+	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler, boolean ordered) {
 		return vertxContext.executeBlocking(blockingCodeHandler, ordered);
 	}
 }

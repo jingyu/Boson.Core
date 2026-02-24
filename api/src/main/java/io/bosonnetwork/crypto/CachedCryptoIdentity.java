@@ -77,12 +77,12 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 
 	/**
 	 * Clears the cached {@link CryptoContext} instances.
-	 *
+	 * <p>
 	 * This method invalidates all entries in the cache, ensuring that any
 	 * cached cryptographic contexts are removed. Subsequent operations
 	 * will no longer utilize the invalidated contexts and may trigger
 	 * re-creation of new contexts as needed.
-	 *
+	 * <p>
 	 * If the cache is uninitialized or null, this method has no effect.
 	 */
 	public void clearCache() {
@@ -95,22 +95,22 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	}
 
 	/**
-	 * Performs one-shot encryption of the given data for the specified recipient.
+	 * Performs one-shot encryption of the given data for the specified receiver.
 	 * <p>
-	 * This operation leverages a cached {@link CryptoContext} instance associated with the recipient,
+	 * This operation leverages a cached {@link CryptoContext} instance associated with the receiver,
 	 * reducing the overhead of repeatedly computing cryptographic contexts.
 	 *
-	 * @param recipient the recipient's {@link Id}; must not be {@code null}
+	 * @param receiver the receiver's {@link Id}; must not be {@code null}
 	 * @param data the plaintext data to encrypt; must not be {@code null}
 	 * @return the encrypted data including the nonce prepended
-	 * @throws NullPointerException if {@code recipient} or {@code data} is {@code null}
+	 * @throws NullPointerException if {@code receiver} or {@code data} is {@code null}
 	 * @throws CryptoException if an error occurs during encryption
 	 */
 	@Override
-	public byte[] encrypt(Id recipient, byte[] data) throws CryptoException {
-		Objects.requireNonNull(recipient, "recipient");
+	public byte[] encrypt(Id receiver, byte[] data) throws CryptoException {
+		Objects.requireNonNull(receiver, "receiver");
 		Objects.requireNonNull(data, "data");
-		return getContext(recipient).encrypt(data);
+		return getContext(receiver).encrypt(data);
 	}
 
 	/**

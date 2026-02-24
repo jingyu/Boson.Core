@@ -85,23 +85,23 @@ public class CryptoIdentity implements Identity {
 	}
 
 	/**
-	 * Performs one-shot encryption of the given data for the specified recipient.
+	 * Performs one-shot encryption of the given data for the specified receiver.
 	 *
-	 * @param recipient the recipient's {@link Id}; must not be {@code null}
+	 * @param receiver the receiver's {@link Id}; must not be {@code null}
 	 * @param data the plaintext data to encrypt; must not be {@code null}
 	 * @return the encrypted data including the nonce prepended
-	 * @throws NullPointerException if {@code recipient} or {@code data} is {@code null}
+	 * @throws NullPointerException if {@code receiver} or {@code data} is {@code null}
 	 * @throws CryptoException if an error occurs during encryption
 	 */
 	@Override
-	public byte[] encrypt(Id recipient, byte[] data) throws CryptoException {
-		Objects.requireNonNull(recipient, "recipient");
+	public byte[] encrypt(Id receiver, byte[] data) throws CryptoException {
+		Objects.requireNonNull(receiver, "receiver");
 		Objects.requireNonNull(data, "data");
 
 		try {
 			// TODO: how to avoid the memory copy?!
 			CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
-			CryptoBox.PublicKey pk = recipient.toEncryptionKey();
+			CryptoBox.PublicKey pk = receiver.toEncryptionKey();
 			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
 			byte[] cipher = CryptoBox.encrypt(data, pk, sk, nonce);
 
