@@ -123,7 +123,7 @@ public class RPCServerTests {
 		}
 
 		@Override
-		public void prepare(Vertx vertx, Context context) {
+		protected void prepare(Vertx vertx, Context context) {
 			super.prepare(vertx, context);
 
 			kadContext = new KadContext(vertx, context, identity, getNetwork(), null);
@@ -133,12 +133,12 @@ public class RPCServerTests {
 		}
 
 		@Override
-		public Future<Void> deploy() {
+		protected Future<Void> deploy() {
 			return rpcServer.start();
 		}
 
 		@Override
-		public Future<Void> undeploy() {
+		protected Future<Void> undeploy() {
 			if (rpcServer != null)
 				return rpcServer.stop().andThen(ar -> rpcServer = null);
 			else

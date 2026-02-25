@@ -201,13 +201,13 @@ public class DHT extends BosonVerticle {
 	}
 
 	@Override
-	public void prepare(Vertx vertx, Context context) {
+	protected void prepare(Vertx vertx, Context context) {
 		super.prepare(vertx, context);
 		this.kadContext = new KadContext(vertx, context, identity, network, this, enableDeveloperMode);
 	}
 
 	@Override
-	public Future<Void> deploy() {
+	protected Future<Void> deploy() {
 		if (running)
 			return Future.succeededFuture();
 
@@ -279,7 +279,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	@Override
-	public Future<Void> undeploy() {
+	protected Future<Void> undeploy() {
 		if (!running)
 			return Future.succeededFuture();
 

@@ -57,7 +57,7 @@ import io.vertx.core.json.JsonObject;
  * {@link #undeploy()}. This ensures forward compatibility with Vert.x 5’s {@code VerticleBase}.
  * </p>
  */
-public abstract class BosonVerticle implements /* Verticle, */ Deployable {
+public abstract class BosonVerticle implements Deployable {
 	/**
 	 * Reference to the Vert.x instance that deployed this verticle
 	 */
@@ -108,23 +108,9 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	}
 
 	/**
-	 * Initializes the Verticle.
+	 * Prepares this verticle for deployment.
 	 * <p>
-	 * This method is called by Vert.x when the Verticle instance is deployed.
-	 * User code should not call this directly.
-	 * </p>
-	 *
-	 * @param vertx   the Vert.x instance
-	 * @param context the context associated with this Verticle
-	 */
-	public final void init(Vertx vertx, Context context) {
-		prepare(vertx, context);
-	}
-
-	/**
-	 * Prepares this verticle for execution.
-	 * <p>
-	 * This method is invoked internally by {@link #init(Vertx, Context)} and can be overridden
+	 * This method is invoked internally by {@link #deploy(Context)} and can be overridden
 	 * if additional setup is needed before deployment.
 	 * </p>
 	 *
@@ -137,37 +123,9 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	}
 
 	/**
-	 * Called when the Verticle is started.
+	 * Called during deployment to perform asynchronous initialization logic.
 	 * <p>
-	 * This implementation delegates to {@link #deploy()}, which should return a {@link Future}
-	 * that completes when startup is done.
-	 * </p>
-	 *
-	 * @param startPromise a promise that should be completed when startup is done
-	 * @throws Exception if startup fails
-	 */
-	public final void start(Promise<Void> startPromise) throws Exception {
-		deploy().onComplete(startPromise);
-	}
-
-	/**
-	 * Called when the Verticle is stopped.
-	 * <p>
-	 * This implementation delegates to {@link #undeploy()}, which should return a {@link Future}
-	 * that completes when shutdown is done.
-	 * </p>
-	 *
-	 * @param stopPromise a promise that should be completed when shutdown is done
-	 * @throws Exception if shutdown fails
-	 */
-	public final void stop(Promise<Void> stopPromise) throws Exception {
-		undeploy().onComplete(stopPromise);
-	}
-
-	/**
-	 * Called during startup to perform asynchronous initialization logic.
-	 * <p>
-	 * This method is invoked by {@link #start(Promise)}.
+	 * This method is invoked by {@link #deploy(Context)}.
 	 * </p>
 	 *
 	 * @return a future that completes when setup is finished
@@ -175,9 +133,9 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	protected abstract Future<Void> deploy();
 
 	/**
-	 * Called during shutdown to perform asynchronous cleanup logic.
+	 * Called during undeployment to perform asynchronous cleanup logic.
 	 * <p>
-	 * This method is invoked by {@link #stop(Promise)}.
+	 * This method is invoked by {@link #undeploy(Context)}.
 	 * </p>
 	 *
 	 * @return a future that completes when teardown is finished
@@ -185,14 +143,12 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	protected abstract Future<Void> undeploy();
 
 	/**
-	 * Internal helper method to simulate deployment under Vert.x 5.x’s {@code Deployable} interface.
+	 * Start the deployable.
 	 * <p>
-	 * This should not be called directly by user code. It is used by Vert.x internals or
-	 * integration layers that work with Vert.x 5.x’s deployment model.
-	 * </p>
+	 * Vert.x calls this method when deploying this deployable. You do not call it yourself.
 	 *
-	 * @param context the Vert.x context
-	 * @return a future that completes when deployment is finished
+	 * @param context the Vert.x context assigned to this deployable
+	 * @return a future signaling the start-up completion
 	 * @throws Exception if deployment fails
 	 */
 	public final Future<?> deploy(Context context) throws Exception {
@@ -209,14 +165,12 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	}
 
 	/**
-	 * Internal helper method to simulate undeployment under Vert.x 5.x’s {@code Deployable} interface.
+	 * Stop the deployable.
 	 * <p>
-	 * User code should not call this directly. It is used by Vert.x internals or
-	 * integration layers that work with Vert.x 5.x’s deployment model.
-	 * </p>
+	 * Vert.x calls this method when undeploying this deployable. You do not call it yourself.
 	 *
-	 * @param context the Vert.x context
-	 * @return a future that completes when undeployment is finished
+	 * @param context the Vert.x context assigned to this deployable
+	 * @return a future signaling the clean-up completion
 	 * @throws Exception if undeployment fails
 	 */
 	public final Future<?> undeploy(Context context) throws Exception {
@@ -239,7 +193,6 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 	protected void runOnContext(Handler<Void> action) {
 		vertxContext.runOnContext(action);
 	}
-
 
 	/**
 	 * Executes blocking code asynchronously, returning a {@link Future} that completes
@@ -266,3 +219,164 @@ public abstract class BosonVerticle implements /* Verticle, */ Deployable {
 		return vertxContext.executeBlocking(blockingCodeHandler, ordered);
 	}
 }
+
+// BosonVerticle for Vert.x 4.5.x
+// public abstract class BosonVerticle implements Verticle {
+//	/**
+//	 * Reference to the Vert.x instance that deployed this verticle
+//	 */
+//	protected Vertx vertx;
+//
+//	/**
+//	 * Reference to the context of the verticle
+//	 */
+//	protected Context vertxContext;
+//
+//	/**
+//	 * Returns the Vert.x instance that deployed this Verticle.
+//	 *
+//	 * @return the Vert.x instance
+//	 */
+//	public final Vertx getVertx() {
+//		return vertx;
+//	}
+//
+//	/**
+//	 * Returns the Vert.x context associated with this Verticle.
+//	 *
+//	 * @return the Vert.x context
+//	 */
+//	protected final Context vertxContext() {
+//		return vertxContext;
+//	}
+//
+//	/**
+//	 * Returns the deployment ID of this Verticle deployment.
+//	 *
+//	 * @return the deployment ID
+//	 */
+//	public final String deploymentID() {
+//		return vertxContext.deploymentID();
+//	}
+//
+//	/**
+//	 * Returns the configuration object of this Verticle deployment.
+//	 * <p>
+//	 * This configuration can be specified when the Verticle is deployed.
+//	 * </p>
+//	 *
+//	 * @return the configuration as a {@link JsonObject}
+//	 */
+//	protected final JsonObject vertxConfig() {
+//		return vertxContext.config();
+//	}
+//
+//	/**
+//	 * Prepares this verticle for deployment.
+//	 * <p>
+//	 * This method is invoked internally by {@link #init(Vertx, Context)} and can be overridden
+//	 * if additional setup is needed before deployment.
+//	 * </p>
+//	 *
+//	 * @param vertx   the Vert.x instance
+//	 * @param context the Vert.x context
+//	 */
+//	protected void prepare(Vertx vertx, Context context) {
+//		this.vertx = vertx;
+//		this.vertxContext = context;
+//	}
+//
+//	/**
+//	 * Called during startup to perform asynchronous initialization logic.
+//	 * <p>
+//	 * This method is invoked by {@link #start(Promise)}.
+//	 * </p>
+//	 *
+//	 * @return a future that completes when setup is finished
+//	 */
+//	protected abstract Future<Void> deploy();
+//
+//	/**
+//	 * Called during shutdown to perform asynchronous cleanup logic.
+//	 * <p>
+//	 * This method is invoked by {@link #stop(Promise)}.
+//	 * </p>
+//	 *
+//	 * @return a future that completes when teardown is finished
+//	 */
+//	protected abstract Future<Void> undeploy();
+//
+//	/**
+//	 * Initialise the verticle with the Vert.x instance and the context.
+//	 * <p>
+//	 * This method is called by Vert.x when the instance is deployed. You do not call it yourself.
+//	 *
+//	 * @param vertx  the Vert.x instance
+//	 * @param context the context
+//	 */
+//	public final void init(Vertx vertx, Context context) {
+//		prepare(vertx, context);
+//	}
+//
+//	/**
+//	 * Start the verticle instance.
+//	 * <p>
+//	 * Vert.x calls this method when deploying the instance. You do not call it yourself.
+//	 * <p>
+//	 * A promise is passed into the method, and when deployment is complete the verticle should either call
+//	 * {@link io.vertx.core.Promise#complete} or {@link io.vertx.core.Promise#fail} the future.
+//	 *
+//	 * @param startPromise  the future
+//	 */
+//	public final void start(Promise<Void> startPromise) throws Exception {
+//		deploy().onComplete(startPromise);
+//	}
+//
+//	/**
+//	 * Stop the verticle instance.
+//	 * <p>
+//	 * Vert.x calls this method when un-deploying the instance. You do not call it yourself.
+//	 * <p>
+//	 * A promise is passed into the method, and when un-deployment is complete the verticle should either call
+//	 * {@link io.vertx.core.Promise#complete} or {@link io.vertx.core.Promise#fail} the future.
+//	 *
+//	 * @param stopPromise  the future
+//	 */
+//	public final void stop(Promise<Void> stopPromise) throws Exception {
+//		undeploy().onComplete(stopPromise);
+//	}
+//
+//	/**
+//	 * Executes the given handler on this verticle's context.
+//	 *
+//	 * @param action the handler to run
+//	 */
+//	protected void runOnContext(Handler<Void> action) {
+//		vertxContext.runOnContext(action);
+//	}
+//
+//	/**
+//	 * Executes blocking code asynchronously, returning a {@link Future} that completes
+//	 * when the blocking operation is done.
+//	 *
+//	 * @param blockingCodeHandler the blocking code to execute
+//	 * @param <T> the result type
+//	 * @return a future representing the blocking operation result
+//	 */
+//	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler) {
+//		return vertxContext.executeBlocking(blockingCodeHandler);
+//	}
+//
+//	/**
+//	 * Executes blocking code asynchronously, optionally ordering execution relative
+//	 * to other blocking operations in the same context.
+//	 *
+//	 * @param blockingCodeHandler the blocking code to execute
+//	 * @param ordered             whether execution should be ordered
+//	 * @param <T> the result type
+//	 * @return a future representing the blocking operation result
+//	 */
+//	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler, boolean ordered) {
+//		return vertxContext.executeBlocking(blockingCodeHandler, ordered);
+//	}
+//}

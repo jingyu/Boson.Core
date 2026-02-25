@@ -221,14 +221,14 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public void prepare(Vertx vertx, Context context) {
+	protected void prepare(Vertx vertx, Context context) {
 		super.prepare(vertx, context);
 		identity.initCache(VertxCaffeine.newBuilder(vertx)
 				.expireAfterAccess(KBucketEntry.OLD_AND_STALE_TIME, TimeUnit.MILLISECONDS));
 	}
 
 	@Override
-	public Future<Void> deploy() {
+	protected Future<Void> deploy() {
 		tokenManager = new TokenManager();
 
 		String storageURI = config.databaseUri();
@@ -326,7 +326,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public Future<Void> undeploy() {
+	protected Future<Void> undeploy() {
 		running = false;
 
 		return Future.succeededFuture().andThen(ar -> {
