@@ -22,8 +22,6 @@
 
 package io.bosonnetwork.service;
 
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -83,64 +81,5 @@ public interface ClientAuthenticator {
 	 */
 	default CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, String address) {
 		return authenticateDevice(userId, deviceId, null, null, address);
-	}
-
-	/**
-	 * Returns a `ClientAuthenticator` instance that allows all authentication attempts.
-	 * The returned authenticator verifies the provided signature against the corresponding
-	 * signature key derived from the user or device ID, enabling universal authentication
-	 * acceptance when the signature is valid.
-	 *
-	 * @return a `ClientAuthenticator` instance that performs signature validation for user
-	 *         and device authentication and always allows access if the signature is valid
-	 */
-	static ClientAuthenticator allowAll() {
-		return new ClientAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
-				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
-				return CompletableFuture.completedFuture(isValid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
-				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
-				return CompletableFuture.completedFuture(isValid);
-			}
-		};
-	}
-
-	/**
-	 * Creates a `ClientAuthenticator` instance that validates authentication
-	 * attempts based on a provided mapping of users and their associated devices.
-	 * The returned authenticator verifies the provided signature and ensures
-	 * that the user ID and device ID exist in the given map, granting access
-	 * if all checks are satisfied.
-	 *
-	 * @param userDeviceMap a mapping where the keys represent user IDs and the values
-	 *                      are lists of device IDs associated with each user
-	 * @return a `ClientAuthenticator` instance that performs authentication based
-	 *         on the provided user-device mapping and cryptographic signature verification
-	 */
-	static ClientAuthenticator allow(Map<Id, List<Id>> userDeviceMap) {
-		return new ClientAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
-				if (!userDeviceMap.containsKey(userId))
-					return CompletableFuture.completedFuture(false);
-
-				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
-				return CompletableFuture.completedFuture(isValid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
-				if (!userDeviceMap.containsKey(userId) || !userDeviceMap.get(userId).contains(deviceId))
-					return CompletableFuture.completedFuture(false);
-
-				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
-				return CompletableFuture.completedFuture(isValid);
-			}
-		};
 	}
 }

@@ -73,32 +73,25 @@ public class FileUtils {
 	}
 
 	/**
-	 * Normalizes and resolves a file system path.
-	 * <p>
-	 * This method performs the following operations:
-	 * <ul>
-	 *   <li>Normalizes the path (removes redundant elements like "." and "..")</li>
-	 *   <li>Returns absolute paths unchanged (after normalization)</li>
-	 *   <li>Expands tilde (~) prefix to the user's home directory</li>
-	 *   <li>Returns relative paths unchanged (after normalization)</li>
-	 * </ul>
+	 * Normalizes the provided {@link Path} by resolving any user home reference (~) and
+	 * simplifying unnecessary path components (e.g., redundant ".." or "." segments).
 	 *
-	 * @param path the path to normalize, may be null
-	 * @return the normalized path, or null if the input path is null
+	 * If the path starts with the tilde character (~), it will be replaced with the user's
+	 * home directory as determined by the "user.home" system property. The resulting path
+	 * is then normalized to remove redundant elements.
+	 *
+	 * @param path the {@link Path} to be normalized; can be null.
+	 * @return the normalized {@link Path}, or null if the input path is null.
 	 */
 	public static Path normalizePath(Path path) {
 		if (path != null) {
-			path = path.normalize();
-			if (path.isAbsolute())
-				return path;
-
-			if (path.startsWith("~")) {
+			if (path.startsWith("~"))
 				path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
-				return path;
-			}
+
+			return path.normalize();
 		}
 
-		return path == null ? null : path.toAbsolutePath();
+		return null;
 	}
 
 	/**

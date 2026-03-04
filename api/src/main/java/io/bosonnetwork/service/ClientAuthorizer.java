@@ -44,17 +44,4 @@ public interface ClientAuthorizer {
 	 *         (e.g., tokens, permissions) if successful, or completes exceptionally if authorization fails
 	 */
 	CompletableFuture<Map<String, Object>> authorize(Id userId, Id deviceId, String serviceId);
-
-	/**
-	 * Returns a no-operation implementation of {@link ClientAuthorizer}.
-	 *
-	 * This implementation provides an authorization mechanism that always completes
-	 * successfully without performing any checks or validations. It returns an
-	 * empty map to indicate no authorization details are provided.
-	 *
-	 * @return a no-op {@link ClientAuthorizer} instance
-	 */
-	static ClientAuthorizer noop() {
-		return (userId, deviceId, serviceId) -> CompletableFuture.completedFuture(Map.of());
-	}
 }

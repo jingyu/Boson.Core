@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.vertx.VertxFuture;
 
 /**
  * Interface for authenticating nodes and peers within a federation.
@@ -36,7 +37,6 @@ import io.bosonnetwork.Id;
  * in the federation using cryptographic challenges and signatures.
  */
 public interface FederationAuthenticator {
-
 	/**
 	 * Authenticates a node in the federation.
 	 *
@@ -47,6 +47,17 @@ public interface FederationAuthenticator {
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature);
+
+	/**
+	 * Authenticates a node in the federation.
+	 *
+	 * @param nodeId    the unique identifier of the node to be authenticated
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is successfully authenticated,
+	 *         or {@code false} otherwise
+	 */
+	default CompletableFuture<Boolean> authenticateNode(Id nodeId) {
+		return authenticateNode(nodeId, null, null);
+	}
 
 	/**
 	 * Authenticates a peer associated with a node in the federation.
@@ -61,6 +72,18 @@ public interface FederationAuthenticator {
 	CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature);
 
 	/**
+	 * Authenticates a peer associated with a node in the federation.
+	 *
+	 * @param nodeId    the unique identifier of the node managing the peer
+	 * @param peerId    the unique identifier of the peer to be authenticated
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is successfully authenticated,
+	 *         or {@code false} otherwise
+	 */
+	default CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId) {
+		return authenticatePeer(nodeId, peerId, null, null);
+	}
+
+	/**
 	 * Provides a FederationAuthenticator implementation that allows all authentication attempts.
 	 * The returned authenticator verifies the provided signature against the corresponding
 	 * signature key derived from the node or peer ID, enabling universal authentication
@@ -73,24 +96,18 @@ public interface FederationAuthenticator {
 			@Override
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
 				Objects.requireNonNull(nodeId, "nodeId");
-				Objects.requireNonNull(nonce, "nonce");
-				Objects.requireNonNull(signature, "signature");
 
-				return nodeId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				return VertxFuture.succeededFuture(valid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
 				Objects.requireNonNull(nodeId, "nodeId");
 				Objects.requireNonNull(peerId, "peerId");
-				Objects.requireNonNull(nonce, "nonce");
-				Objects.requireNonNull(signature, "signature");
 
-				return peerId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				return VertxFuture.succeededFuture(valid);
 			}
 		};
 	}
@@ -116,30 +133,24 @@ public interface FederationAuthenticator {
 			@Override
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
 				Objects.requireNonNull(nodeId, "nodeId");
-				Objects.requireNonNull(nonce, "nonce");
-				Objects.requireNonNull(signature, "signature");
 
 				if (!nodeServicesMap.containsKey(nodeId))
-					return CompletableFuture.completedFuture(false);
+					return VertxFuture.succeededFuture(false);
 
-				return nodeId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				return VertxFuture.succeededFuture(valid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
 				Objects.requireNonNull(nodeId, "nodeId");
 				Objects.requireNonNull(peerId, "peerId");
-				Objects.requireNonNull(nonce, "nonce");
-				Objects.requireNonNull(signature, "signature");
 
 				if (!nodeServicesMap.containsKey(nodeId) || !nodeServicesMap.get(nodeId).contains(peerId))
-					return CompletableFuture.completedFuture(false);
+					return VertxFuture.succeededFuture(false);
 
-				return nodeId.toSignatureKey().verify(nonce, signature) ?
-						CompletableFuture.completedFuture(true) :
-						CompletableFuture.completedFuture(false);
+				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				return VertxFuture.succeededFuture(valid);
 			}
 		};
 	}

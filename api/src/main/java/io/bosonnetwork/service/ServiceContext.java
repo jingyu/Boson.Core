@@ -64,40 +64,20 @@ public interface ServiceContext {
 	Path getDataDir();
 
 	/**
-	 * Gets the client authenticator instance.
-	 *
-	 * @return the {@link ClientAuthenticator} used for authenticating clients.
-	 */
-	ClientAuthenticator getClientAuthenticator();
-
-	/**
-	 * Gets the client authorizer instance.
-	 *
-	 * @return the {@link ClientAuthorizer} used for authorizing client requests.
-	 */
-	ClientAuthorizer getClientAuthorizer();
-
-	/**
-	 * Gets the federation authenticator instance.
-	 *
-	 * @return the {@link FederationAuthenticator} used for authenticating federation requests.
-	 */
-	FederationAuthenticator getFederationAuthenticator();
-
-	/**
-	 * Retrieves the {@link Clients} instance, which provides access to client management functionalities such as
+	 * Retrieves the {@link ClientContext} instance, which provides access to client management functionalities such as
 	 * querying user information, checking for user or device existence, and retrieving associated devices.
 	 *
-	 * @return the {@link Clients} instance used for accessing client-related operations within the service context.
+	 * @return the {@link ClientContext} instance used for accessing client-related operations within the service context.
 	 */
-	Clients getClients();
+	ClientContext getClientContext();
 
 	/**
-	 * Gets the federation instance.
+	 * Retrieves the instance of {@link FederationContext} associated with the service.
 	 *
-	 * @return the {@link Federation} object.
+	 * @return the {@link FederationContext} providing read-only access to federation-related
+	 *         functionalities, such as querying other nodes and their services.
 	 */
-	Federation getFederation();
+	FederationContext getFederationContext();
 
 	/**
 	 * Gets the service configuration data.

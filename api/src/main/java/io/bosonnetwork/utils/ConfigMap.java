@@ -295,7 +295,7 @@ public class ConfigMap implements Map<String, Object> {
 				Path path = Path.of(s);
 				if (path.startsWith("~"))
 					path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
-				return path;
+				return FileUtils.normalizePath(path);
 			} catch (InvalidPathException e) {
 				throw new IllegalArgumentException("Invalid path value - " + key + ": " + s, e);
 			}
@@ -314,7 +314,7 @@ public class ConfigMap implements Map<String, Object> {
 	 */
 	public Path getPath(String key, Path def) {
 		Objects.requireNonNull(key);
-		return map.containsKey(key) ? getPath(key) : def;
+		return map.containsKey(key) ? getPath(key) : FileUtils.normalizePath(def);
 	}
 
 	/**

@@ -42,11 +42,8 @@ import io.bosonnetwork.Node;
 public class DefaultServiceContext implements ServiceContext {
 	private final Vertx vertx;
 	private final Node node;
-	private final ClientAuthenticator clientAuthenticator;
-	private final ClientAuthorizer clientAuthorizer;
-	private final FederationAuthenticator federationAuthenticator;
-	private final Clients clients;
-	private final Federation federation;
+	private final ClientContext clientContext;
+	private final FederationContext federationContext;
 	private final Map<String, Object> configuration;
 	private final Path dataDir;
 	private Map<Object, Object> properties;
@@ -54,26 +51,19 @@ public class DefaultServiceContext implements ServiceContext {
 	/**
 	 * Creates a new {@link ServiceContext} instance.
 	 *
-	 * @param vertx                   the Vert.x instance to be used
-	 * @param node                    the host Boson node
-	 * @param clientAuthenticator     the authenticator for client connections
-	 * @param clientAuthorizer        the authorizer for client requests
-	 * @param federationAuthenticator the authenticator for federation communications
-	 * @param clients                 the clients management component
-	 * @param federation              the federation instance
-	 * @param configuration           the configuration data for the service
-	 * @param dataDir                 the path to the persistence data directory, or {@code null} if not available
+	 * @param vertx             the Vert.x instance to be used
+	 * @param node              the host Boson node
+	 * @param clientContext     the clients context instance
+	 * @param federationContext the federation context instance
+	 * @param configuration     the configuration data for the service
+	 * @param dataDir           the path to the persistence data directory, or {@code null} if not available
 	 */
-	public DefaultServiceContext(Vertx vertx, Node node, ClientAuthenticator clientAuthenticator, ClientAuthorizer clientAuthorizer,
-								 FederationAuthenticator federationAuthenticator, Clients clients, Federation federation,
-								 Map<String, Object> configuration, Path dataDir) {
+	public DefaultServiceContext(Vertx vertx, Node node, ClientContext clientContext,
+								 FederationContext federationContext, Map<String, Object> configuration, Path dataDir) {
 		this.vertx = vertx;
 		this.node = node;
-		this.clientAuthenticator = clientAuthenticator;
-		this.clientAuthorizer = clientAuthorizer;
-		this.federationAuthenticator = federationAuthenticator;
-		this.clients = clients;
-		this.federation = federation;
+		this.clientContext = clientContext;
+		this.federationContext = federationContext;
 		this.configuration = configuration;
 		this.dataDir = dataDir;
 	}
@@ -114,40 +104,16 @@ public class DefaultServiceContext implements ServiceContext {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public ClientAuthenticator getClientAuthenticator() {
-		return clientAuthenticator;
+	public ClientContext getClientContext() {
+		return clientContext;
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	public ClientAuthorizer getClientAuthorizer() {
-		return clientAuthorizer;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public FederationAuthenticator getFederationAuthenticator() {
-		return federationAuthenticator;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public Clients getClients() {
-		return clients;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public Federation getFederation() {
-		return federation;
+	public FederationContext getFederationContext() {
+		return federationContext;
 	}
 
 	/**
