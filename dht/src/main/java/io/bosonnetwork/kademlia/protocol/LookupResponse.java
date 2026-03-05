@@ -24,16 +24,13 @@ package io.bosonnetwork.kademlia.protocol;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 
-@JsonPropertyOrder({"n4", "n6", "tok"})
 public abstract class LookupResponse implements Response {
 	@JsonProperty("n4")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -41,14 +38,10 @@ public abstract class LookupResponse implements Response {
 	@JsonProperty("n6")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	protected final List<NodeInfo> nodes6;
-	@JsonProperty("tok")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
-	protected final int token;
 
-	protected LookupResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6, int token) {
+	protected LookupResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {
 		this.nodes4 = nodes4 == null || nodes4.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes4);
 		this.nodes6 = nodes6 == null || nodes6.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(nodes6);
-		this.token = token;
 	}
 
 	public List<NodeInfo> getNodes4() {
@@ -70,27 +63,5 @@ public abstract class LookupResponse implements Response {
 	public List<NodeInfo> getNodes() {
 		// nodes4 is preferred
 		return !nodes4.isEmpty() ? nodes4 : nodes6;
-	}
-
-	public int getToken() {
-		return token;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(nodes4, nodes6, token);
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-
-		if (obj instanceof LookupResponse that)
-			return Objects.equals(nodes4, that.nodes4) &&
-					Objects.equals(nodes6, that.nodes6) &&
-					token == that.token;
-
-		return false;
 	}
 }

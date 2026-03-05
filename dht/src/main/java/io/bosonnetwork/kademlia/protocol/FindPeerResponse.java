@@ -34,7 +34,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 
-@JsonPropertyOrder({"n4", "n6", "tok", "p"})
+@JsonPropertyOrder({"n4", "n6", "p"})
 public class FindPeerResponse extends LookupResponse {
 	@JsonProperty("p")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -45,7 +45,7 @@ public class FindPeerResponse extends LookupResponse {
 			@JsonProperty("n4") List<? extends NodeInfo> nodes4,
 			@JsonProperty("n6") List<? extends NodeInfo> nodes6,
 			@JsonProperty("p") List<PeerInfo> peers) {
-		super(nodes4, nodes6, 0);
+		super(nodes4, nodes6);
 		this.peers = peers == null || peers.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(peers);
 	}
 
@@ -67,7 +67,7 @@ public class FindPeerResponse extends LookupResponse {
 
 	@Override
 	public int hashCode() {
-		return 0xF1AD9EE2 + super.hashCode() + Objects.hashCode(peers);
+		return Objects.hash(nodes4, nodes6, peers);
 	}
 
 	@Override
@@ -76,7 +76,9 @@ public class FindPeerResponse extends LookupResponse {
 			return true;
 
 		if (obj instanceof FindPeerResponse that)
-			return Objects.equals(peers, that.peers) && super.equals(obj);
+			return Objects.equals(nodes4, that.nodes4) &&
+					Objects.equals(nodes6, that.nodes6) &&
+					Objects.equals(peers, that.peers);
 
 		return false;
 	}

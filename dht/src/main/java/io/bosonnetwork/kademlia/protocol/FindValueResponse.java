@@ -51,17 +51,17 @@ public class FindValueResponse extends LookupResponse {
 	private final Value value;
 
 	protected FindValueResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6, Value value) {
-		super(nodes4, nodes6, 0);
+		super(nodes4, nodes6);
 		this.value = value;
 	}
 
 	protected FindValueResponse(Value value) {
-		super(null, null, 0);
+		super(null, null);
 		this.value = value;
 	}
 
 	protected FindValueResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {
-		super(nodes4, nodes6, 0);
+		super(nodes4, nodes6);
 		this.value = null;
 	}
 
@@ -111,7 +111,7 @@ public class FindValueResponse extends LookupResponse {
 
 	@Override
 	public int hashCode() {
-		return 0xF1AD5A1E + super.hashCode() + Objects.hashCode(value);
+		return Objects.hash(nodes4, nodes6, value);
 	}
 
 	@Override
@@ -120,7 +120,9 @@ public class FindValueResponse extends LookupResponse {
 			return true;
 
 		if (obj instanceof FindValueResponse that)
-			return Objects.equals(value, that.value) && super.equals(obj);
+			return Objects.equals(nodes4, that.nodes4) &&
+					Objects.equals(nodes6, that.nodes6) &&
+					Objects.equals(value, that.value);
 
 		return false;
 	}

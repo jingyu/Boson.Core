@@ -23,27 +23,48 @@
 package io.bosonnetwork.kademlia.protocol;
 
 import java.util.List;
+import java.util.Objects;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.NodeInfo;
 
+@JsonPropertyOrder({"n4", "n6", "tok"})
 public class FindNodeResponse extends LookupResponse {
+	@JsonProperty("tok")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+	private final int token;
+
 	@JsonCreator
 	public FindNodeResponse(@JsonProperty("n4") List<? extends NodeInfo> nodes4,
 							@JsonProperty("n6") List<? extends NodeInfo> nodes6,
 							@JsonProperty("tok") int token) {
-		super(nodes4, nodes6, token);
+		super(nodes4, nodes6);
+		this.token = token;
+	}
+
+	public int getToken() {
+		return token;
 	}
 
 	@Override
 	public int hashCode() {
-		return 0xF1ADA00D + super.hashCode();
+		return Objects.hash(nodes4, nodes6, token);
 	}
 
 	@Override
 	public boolean equals(Object obj) {
-		return obj instanceof FindNodeResponse && super.equals(obj);
+		if (this == obj)
+			return true;
+
+		if (obj instanceof FindNodeResponse that)
+			return Objects.equals(nodes4, that.nodes4) &&
+					Objects.equals(nodes6, that.nodes6) &&
+					token == that.token;
+
+		return false;
 	}
 }

@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.LookupResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -324,7 +325,8 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 			cn.setReplied();
 			Message<LookupResponse> response = call.getResponse();
 			getLogger().debug("{}#{} received response for candidate {}, add it to closest", getName(), getId(), cn.getId());
-			cn.setToken(response.getBody().getToken());
+			if (response.getBody() instanceof FindNodeResponse fnr)
+				cn.setToken(fnr.getToken());
 			addClosest(cn);
 		}
 	}
