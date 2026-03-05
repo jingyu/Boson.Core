@@ -1,12 +1,18 @@
 package io.bosonnetwork.service.impl;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
@@ -69,6 +75,9 @@ public class StaticFederationContextTests {
 			assertEquals(nodeId, si.getNodeId());
 			assertTrue(Set.of(123L, 456L).contains(si.getFingerprint()));
 		}
+
+		services = context.getServices(peerId).get();
+		assertEquals(3, services.size());
 	}
 
 	@Test

@@ -106,7 +106,6 @@ public interface FederationContext {
 	 *         representing the services associated with the specified peer, or completes exceptionally
 	 *         if an error occurs while retrieving the services
 	 */
-	@Deprecated
 	CompletableFuture<List<ServiceInfo>> getServices(Id peerId);
 
 	/**

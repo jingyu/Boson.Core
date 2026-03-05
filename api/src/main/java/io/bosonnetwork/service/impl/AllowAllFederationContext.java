@@ -76,8 +76,7 @@ public class AllowAllFederationContext implements FederationContext {
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
-		throw new UnsupportedOperationException("getServices is not supported");
-		// return VertxFuture.succeededFuture(List.of());
+		return VertxFuture.succeededFuture(List.of());
 	}
 
 	@Override

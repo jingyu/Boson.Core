@@ -78,19 +78,37 @@ public class StaticClientContext implements ClientContext {
 	 */
 	public boolean addUser(Id userId, String name, String passphrase) {
 		Objects.requireNonNull(userId);
-		if (_existsUser(userId))
+		if (existsUserSync(userId))
 			return false;
 
 		userDevicesRegistry.computeIfAbsent(userId, k -> Pair.of(new PlainUser(userId, name, passphrase), List.of()));
 		return true;
 	}
 
-	private ClientUser _getUser(Id userId) {
+	/**
+	 * Retrieves the {@code ClientUser} instance associated with the given unique user identifier.
+	 * If the user does not exist in the registry, this method will return {@code null}.
+	 *
+	 * @param userId The unique identifier of the user to retrieve. Must not be {@code null}.
+	 * @return The {@code ClientUser} instance associated with the given user identifier,
+	 *         or {@code null} if the user is not found.
+	 * @throws NullPointerException if {@code userId} is {@code null}.
+	 */
+	public ClientUser getUserSync(Id userId) {
+		Objects.requireNonNull(userId);
 		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
 		return pair == null ? null : pair.a();
 	}
 
-	private boolean _existsUser(Id userId) {
+	/**
+	 * Checks if a user with the specified unique identifier exists in the user registry.
+	 *
+	 * @param userId The unique identifier of the user to check. Must not be null.
+	 * @return true if the user exists in the registry, false otherwise.
+	 * @throws NullPointerException if the provided {@code userId} is null.
+	 */
+	public boolean existsUserSync(Id userId) {
+		Objects.requireNonNull(userId);
 		return userDevicesRegistry.containsKey(userId);
 	}
 
@@ -123,11 +141,11 @@ public class StaticClientContext implements ClientContext {
 	public boolean addDevice(Id userId, Id deviceId, String deviceName, String app) {
 		Objects.requireNonNull(userId);
 		Objects.requireNonNull(deviceId);
-		if (!_existsUser(userId))
+		if (!existsUserSync(userId))
 			throw new IllegalArgumentException("User does not exist");
 
 		// device id should be global unique
-		if (_existsDevice(deviceId))
+		if (existsDeviceSync(deviceId))
 			return false;
 
 		userDevicesRegistry.compute(userId, (k, v) -> {
@@ -147,7 +165,17 @@ public class StaticClientContext implements ClientContext {
 		return true;
 	}
 
-	private ClientDevice _getDevice(Id deviceId) {
+	/**
+	 * Retrieves a {@code ClientDevice} instance with the specified unique device identifier.
+	 * The device is searched across all registered user devices.
+	 * If no matching device is found, this method returns {@code null}.
+	 *
+	 * @param deviceId The unique identifier of the device to retrieve. Must not be null.
+	 * @return The {@code ClientDevice} instance matching the given device identifier,
+	 *         or {@code null} if no such device is found.
+	 * @throws NullPointerException if {@code deviceId} is null.
+	 */
+	private ClientDevice getDeviceSync(Id deviceId) {
 		return userDevicesRegistry.values().stream()
 				.map(Pair::b)
 				.flatMap(List::stream)
@@ -156,16 +184,45 @@ public class StaticClientContext implements ClientContext {
 				.orElse(null);
 	}
 
-	private boolean _existsDevice(Id deviceId) {
-		return _getDevice(deviceId) != null;
+	/**
+	 * Checks whether a device with the specified unique identifier exists in the device registry.
+	 *
+	 * @param deviceId The unique identifier of the device to check. Must not be null.
+	 * @return true if a device with the given identifier exists; false otherwise.
+	 * @throws NullPointerException if the provided {@code deviceId} is null.
+	 */
+	private boolean existsDeviceSync(Id deviceId) {
+		return getDeviceSync(deviceId) != null;
 	}
 
-	private List<ClientDevice> _getDevices(Id userId) {
+	/**
+	 * Retrieves a list of devices associated with the specified user identifier. If the user does not have
+	 * any registered devices or if the user identifier is not found, an empty list is returned.
+	 *
+	 * @param userId The unique identifier of the user whose devices are to be retrieved. Must not be null.
+	 * @return A list of {@code ClientDevice} instances associated with the specified user, or an empty list
+	 *         if the user has no devices or the user does not exist.
+	 * @throws NullPointerException if the provided {@code userId} is null.
+	 */
+	public List<ClientDevice> getDevicesSync(Id userId) {
+		Objects.requireNonNull(userId);
 		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
 		return pair == null ? List.of() : pair.b();
 	}
 
-	private ClientDevice _getDevice(Id userId, Id deviceId) {
+	/**
+	 * Retrieves the {@code ClientDevice} associated with the specified user and device identifiers.
+	 * If the user or device does not exist in the registry, this method returns {@code null}.
+	 *
+	 * @param userId The unique identifier of the user whose device is to be retrieved. Must not be {@code null}.
+	 * @param deviceId The unique identifier of the device to be retrieved. Must not be {@code null}.
+	 * @return The {@code ClientDevice} instance matching the specified user and device identifiers,
+	 *         or {@code null} if no matching device is found.
+	 * @throws NullPointerException if {@code userId} or {@code deviceId} is {@code null}.
+	 */
+	public ClientDevice getDeviceSync(Id userId, Id deviceId) {
+		Objects.requireNonNull(userId);
+		Objects.requireNonNull(deviceId);
 		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
 		return pair == null ? null : pair.b().stream()
 				.filter(d -> d.getId().equals(deviceId))
@@ -173,8 +230,20 @@ public class StaticClientContext implements ClientContext {
 				.orElse(null);
 	}
 
-	private boolean _existsDevice(Id userId, Id deviceId) {
-		return _getDevice(userId, deviceId) != null;
+	/**
+	 * Checks whether a device with the specified unique device identifier exists for a given user.
+	 * The method ensures that both the user ID and device ID are not null. It returns {@code true}
+	 * if the device associated with the specified user exists, and {@code false} otherwise.
+	 *
+	 * @param userId   The unique identifier of the user whose device is to be checked. Must not be null.
+	 * @param deviceId The unique identifier of the device to be checked. Must not be null.
+	 * @return {@code true} if the device exists for the specified user; {@code false} otherwise.
+	 * @throws NullPointerException If {@code userId} or {@code deviceId} is null.
+	 */
+	public boolean existsDeviceSync(Id userId, Id deviceId) {
+		Objects.requireNonNull(userId);
+		Objects.requireNonNull(deviceId);
+		return getDeviceSync(userId, deviceId) != null;
 	}
 
 	/**
@@ -211,12 +280,12 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public CompletableFuture<ClientUser> getUser(Id userId) {
-		return VertxFuture.succeededFuture(_getUser(userId));
+		return VertxFuture.succeededFuture(getUserSync(userId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsUser(Id userId) {
-		return VertxFuture.succeededFuture(_existsUser(userId));
+		return VertxFuture.succeededFuture(existsUserSync(userId));
 	}
 
 	@Override
@@ -239,7 +308,7 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public CompletableFuture<Boolean> existsDevice(Id userId, Id deviceId) {
-		return VertxFuture.completedFuture(_existsDevice(userId, deviceId));
+		return VertxFuture.completedFuture(existsDeviceSync(userId, deviceId));
 	}
 
 	@Override
@@ -247,7 +316,7 @@ public class StaticClientContext implements ClientContext {
 		return new ClientAuthenticator() {
 			@Override
 			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
-				if (!_existsUser(userId))
+				if (!existsUserSync(userId))
 					return CompletableFuture.completedFuture(false);
 
 				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
@@ -256,7 +325,7 @@ public class StaticClientContext implements ClientContext {
 
 			@Override
 			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
-				if (!_existsDevice(userId, deviceId))
+				if (!existsDeviceSync(userId, deviceId))
 					return CompletableFuture.completedFuture(false);
 
 				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
@@ -278,12 +347,12 @@ public class StaticClientContext implements ClientContext {
 		return CompactWebTokenAuth.create(nodeIdentity, new CompactWebTokenAuth.UserRepository() {
 			@Override
 			public Future<ClientUser> getSubject(Id subject) {
-				return Future.succeededFuture(_getUser(subject));
+				return Future.succeededFuture(getUserSync(subject));
 			}
 
 			@Override
 			public Future<ClientDevice> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture(_getDevice(subject, associated));
+				return Future.succeededFuture(getDeviceSync(subject, associated));
 			}
 		});
 	}

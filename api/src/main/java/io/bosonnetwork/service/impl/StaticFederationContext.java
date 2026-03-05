@@ -89,7 +89,7 @@ public class StaticFederationContext implements FederationContext {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port");
 
-		if (_existsNode(nodeId))
+		if (existsNodeSync(nodeId))
 			return false;
 
 		nodeServicesRegistry.computeIfAbsent(nodeId, k ->
@@ -112,11 +112,28 @@ public class StaticFederationContext implements FederationContext {
 		return addNode(nodeId, host, port, null);
 	}
 
-	private FederatedNode _getNode(Id nodeId) {
+	/**
+	 * Retrieves a federated node from the registry synchronously based on the specified node identifier.
+	 * If the node is not found in the registry, this method returns null.
+	 *
+	 * @param nodeId the unique identifier of the node to retrieve; cannot be null
+	 * @return the {@link FederatedNode} associated with the specified node ID, or null if no such node exists
+	 * @throws NullPointerException if nodeId is null
+	 */
+	public FederatedNode getNodeSync(Id nodeId) {
+		Objects.requireNonNull(nodeId);
 		return nodeServicesRegistry.getOrDefault(nodeId, Pair.empty()).a();
 	}
 
-	private boolean _existsNode(Id nodeId) {
+	/**
+	 * Checks if a node with the specified identifier exists in the federation context registry.
+	 *
+	 * @param nodeId the unique identifier of the node to check for existence; cannot be null
+	 * @return true if the node exists in the registry, false otherwise
+	 * @throws NullPointerException if nodeId is null
+	 */
+	public boolean existsNodeSync(Id nodeId) {
+		Objects.requireNonNull(nodeId);
 		return nodeServicesRegistry.containsKey(nodeId);
 	}
 
@@ -149,10 +166,10 @@ public class StaticFederationContext implements FederationContext {
 	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, String serviceId, String serviceName) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
-		if (!_existsNode(nodeId))
+		if (!existsNodeSync(nodeId))
 			throw new IllegalArgumentException("Node does not exist");
 
-		if (_existsService(peerId, fingerprint, nodeId))
+		if (existsServiceSync(peerId, fingerprint, nodeId))
 			return false;
 
 		nodeServicesRegistry.compute(nodeId, (k, v) -> {
@@ -188,7 +205,22 @@ public class StaticFederationContext implements FederationContext {
 		return addService(nodeId, peerId, fingerprint, endpoint, null, null);
 	}
 
-	private ServiceInfo _getService(Id peerId, long fingerprint, Id nodeId) {
+	/**
+	 * Retrieves a {@link ServiceInfo} object associated with the specified peer, fingerprint,
+	 * and node synchronously. This method searches for a service in the registry identified
+	 * by the given parameters and returns the corresponding service information if found.
+	 *
+	 * @param peerId the unique identifier of the peer providing the service; cannot be null
+	 * @param fingerprint the fingerprint of the service to ensure uniqueness
+	 * @param nodeId the unique identifier of the node where the service is registered; cannot be null
+	 * @return the {@link ServiceInfo} object matching the given peer, fingerprint, and node,
+	 *         or null if no such service exists
+	 * @throws NullPointerException if peerId or nodeId is null
+	 */
+	public ServiceInfo getServiceSync(Id peerId, long fingerprint, Id nodeId) {
+		Objects.requireNonNull(nodeId);
+		Objects.requireNonNull(peerId);
+
 		Pair<FederatedNode, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
 		return pair == null ? null : pair.b().stream()
 				.filter(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint)
@@ -196,22 +228,59 @@ public class StaticFederationContext implements FederationContext {
 				.orElse(null);
 	}
 
-	private boolean _existsService(Id peerId, long fingerprint, Id nodeId) {
-		return _getService(peerId, fingerprint, nodeId) != null;
+	/**
+	 * Checks if a service exists synchronously for the given peer, fingerprint, and node identifier.
+	 *
+	 * @param peerId The identifier of the peer. Must not be null.
+	 * @param fingerprint The fingerprint associated with the service.
+	 * @param nodeId The identifier of the node. Must not be null.
+	 * @return {@code true} if the service exists; {@code false} otherwise.
+	 */
+	public boolean existsServiceSync(Id peerId, long fingerprint, Id nodeId) {
+		Objects.requireNonNull(peerId);
+		Objects.requireNonNull(nodeId);
+		return getServiceSync(peerId, fingerprint, nodeId) != null;
 	}
 
-	private List<ServiceInfo> _getService(Id peerId, Id nodeId) {
+	/**
+	 * Retrieves the list of services associated with a specified peer ID under a given node ID.
+	 * This method performs the search synchronously.
+	 *
+	 * @param peerId the unique identifier of the peer whose services are to be retrieved; must not be null
+	 * @param nodeId the unique identifier of the node where the peer's services are registered; must not be null
+	 * @return a list of {@code ServiceInfo} objects corresponding to the services associated with the specified peer ID,
+	 * or an empty list if no matching services are found
+	 */
+	public List<ServiceInfo> getServicesSync(Id peerId, Id nodeId) {
+		Objects.requireNonNull(peerId);
+		Objects.requireNonNull(nodeId);
 		Pair<FederatedNode, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
 		return pair == null ? List.of() : pair.b().stream()
 				.filter(s -> s.getPeerId().equals(peerId))
 				.toList();
 	}
 
-	private boolean _existsService(Id peerId, Id nodeId) {
-		return !_getService(peerId, nodeId).isEmpty();
+	/**
+	 * Determines if a service exists synchronously for the specified peer and node identifiers.
+	 *
+	 * @param peerId the unique identifier of the peer; must not be null.
+	 * @param nodeId the unique identifier of the node; must not be null.
+	 * @return true if at least one service exists for the specified peer and node identifiers, false otherwise.
+	 */
+	public boolean existsServiceSync(Id peerId, Id nodeId) {
+		Objects.requireNonNull(peerId);
+		Objects.requireNonNull(nodeId);
+		return !getServicesSync(peerId, nodeId).isEmpty();
 	}
 
-	private List<ServiceInfo> _getService(Id peerId) {
+	/**
+	 * Retrieves a list of ServiceInfo objects associated with the specified peer ID.
+	 *
+	 * @param peerId the unique identifier of the peer whose services are to be retrieved; must not be null
+	 * @return a list of ServiceInfo objects that belong to the given peer ID
+	 */
+	public List<ServiceInfo> getServicesSync(Id peerId) {
+		Objects.requireNonNull(peerId);
 		return nodeServicesRegistry.values().stream()
 				.flatMap(p -> p.b().stream())
 				.filter(s -> s.getPeerId().equals(peerId))
@@ -277,23 +346,22 @@ public class StaticFederationContext implements FederationContext {
 
 	@Override
 	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean federateIfNotExists) {
-		return VertxFuture.succeededFuture(_getNode(nodeId));
+		return VertxFuture.succeededFuture(getNodeSync(nodeId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsNode(Id nodeId) {
-		return VertxFuture.succeededFuture(_existsNode(nodeId));
+		return VertxFuture.succeededFuture(existsNodeSync(nodeId));
 	}
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId) {
-		return VertxFuture.succeededFuture(_getService(peerId, nodeId));
+		return VertxFuture.succeededFuture(getServicesSync(peerId, nodeId));
 	}
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
-		throw new UnsupportedOperationException("getServices is not supported");
-		// return VertxFuture.succeededFuture(_getService(peerId));
+		return VertxFuture.succeededFuture(getServicesSync(peerId));
 	}
 
 	@Override
@@ -306,7 +374,7 @@ public class StaticFederationContext implements FederationContext {
 		return new FederationAuthenticator() {
 			@Override
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
-				if (!_existsNode(nodeId))
+				if (!existsNodeSync(nodeId))
 					return VertxFuture.succeededFuture(false);
 
 				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
@@ -315,7 +383,7 @@ public class StaticFederationContext implements FederationContext {
 
 			@Override
 			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
-				if (!_existsService(peerId, nodeId))
+				if (!existsServiceSync(peerId, nodeId))
 					return VertxFuture.succeededFuture(false);
 
 				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
@@ -332,12 +400,12 @@ public class StaticFederationContext implements FederationContext {
 		return CompactWebTokenAuth.create(nodeIdentity, new CompactWebTokenAuth.UserRepository() {
 			@Override
 			public Future<FederatedNode> getSubject(Id subject) {
-				return Future.succeededFuture(_getNode(subject));
+				return Future.succeededFuture(getNodeSync(subject));
 			}
 
 			@Override
 			public Future<ServiceInfo> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture(_getService(associated, subject).stream().findFirst().orElse(null));
+				return Future.succeededFuture(getServicesSync(associated, subject).stream().findFirst().orElse(null));
 			}
 		});
 	}
