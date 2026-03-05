@@ -26,7 +26,9 @@ package io.bosonnetwork.service;
 import io.bosonnetwork.BosonException;
 
 /**
- * An exception that is thrown when an error occurs in the Boson services.
+ * Base exception thrown when an error occurs within the Boson service layer.
+ * This includes errors during service lifecycle (init, start, stop) or
+ * during service-specific operations.
  */
 public class BosonServiceException extends BosonException {
 	private static final long serialVersionUID = 3891117673443389144L;

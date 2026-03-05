@@ -29,10 +29,10 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 
 /**
- * Interface BosonService is the basic abstraction for the extensible service on top of
- * the Boson super node. This interface describes the basic information about the service
- * itself and the life-cycle management methods. All super node services should implement
- * this interface.
+ * Interface BosonService is the basic abstraction for extensible services on top of
+ * the Boson super node. This interface defines the core service attributes and
+ * lifecycle management methods. All services intended to run on a Boson super node
+ * MUST implement this interface.
  */
 public interface BosonService {
 	/**

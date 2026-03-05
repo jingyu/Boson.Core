@@ -33,6 +33,8 @@ import java.util.function.Function;
  * @param <B> type for value b.
  */
 public class Pair<A, B> {
+	private static final Pair<?, ?> EMPTY = new Pair<>(null, null);
+
 	private final A a;
 	private final B b;
 
@@ -58,6 +60,18 @@ public class Pair<A, B> {
 	 */
 	public static <A1, B1> Pair<A1, B1> of(A1 a, B1 b) {
 		return new Pair<>(a, b);
+	}
+
+	/**
+	 * Returns an immutable, empty Pair instance in which both values are null.
+	 *
+	 * @param <A1> the type of the first value in the pair.
+	 * @param <B1> the type of the second value in the pair.
+	 * @return an empty Pair instance with null values.
+	 */
+	@SuppressWarnings("unchecked")
+	public static <A1, B1> Pair<A1, B1> empty() {
+		return (Pair<A1, B1>) EMPTY;
 	}
 
 	/**

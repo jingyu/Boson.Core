@@ -23,7 +23,6 @@
 package io.bosonnetwork.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -64,6 +63,7 @@ public interface ClientContext {
 	 * @param userId the unique identifier of the user whose devices are to be retrieved
 	 * @return a {@link CompletableFuture} that completes with a list of {@link ClientDevice} objects belonging to the user
 	 */
+	@Deprecated
 	CompletableFuture<List<ClientDevice>> getDevices(Id userId);
 
 	/**
@@ -73,6 +73,7 @@ public interface ClientContext {
 	 * @return a {@link CompletableFuture} that completes with the {@link ClientDevice} object if found,
 	 *         or completes with {@code null} if the device does not exist
 	 */
+	@Deprecated
 	CompletableFuture<ClientDevice> getDevice(Id deviceId);
 
 	/**
@@ -82,6 +83,7 @@ public interface ClientContext {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the device exists,
 	 *         or {@code false} otherwise
 	 */
+	@Deprecated
 	CompletableFuture<Boolean> existsDevice(Id deviceId);
 
 	/**
@@ -155,23 +157,7 @@ public interface ClientContext {
 	 * @return a {@link ClientContext} instance using an in-memory map store for simulation purposes.
 	 */
 	static ClientContext staticContext() {
-		return new StaticClientContext(null, null);
-	}
-
-	/**
-	 * Returns a new in-memory client context suitable for testing with pre-set device mappings.
-	 * <p>
-	 * Similar to {@link #staticContext()}, but allows initialization
-	 * of the internal map with specific user-to-device associations. Useful for setting up
-	 * deterministic test scenarios.
-	 * </p>
-	 *
-	 * @param presetUserDevices a map where keys are User IDs and values are Lists of Device IDs,
-	 *                          used to pre-populate the in-memory state for simulation.
-	 * @return a {@link ClientContext} instance configured with the provided preset data.
-	 */
-	static ClientContext staticContextWithoutCompactWebTokenAuth(Map<Id, List<Id>> presetUserDevices) {
-		return new StaticClientContext(null, presetUserDevices);
+		return new StaticClientContext(null);
 	}
 
 	/**
@@ -185,23 +171,6 @@ public interface ClientContext {
 	 * @return a {@link ClientContext} instance using an in-memory map store for simulation purposes.
 	 */
 	static ClientContext staticContext(Identity nodeIdentity) {
-		return new StaticClientContext(nodeIdentity, null);
-	}
-
-	/**
-	 * Returns a new in-memory client context suitable for testing with Node Identity and pre-set devices.
-	 * <p>
-	 * Combines the benefits of {@link #allowAll} configuration (identity aware) with internal state
-	 * management via maps for unit tests. Supports basic user/device operations within the scope
-	 * of the static implementation context.
-	 * </p>
-	 *
-	 * @param nodeIdentity the identity of the node to associate with this static context
-	 * @param presetUserDevices a map where keys are User IDs and values are Lists of Device IDs,
-	 *                          used to pre-populate the internal state for simulation.
-	 * @return a {@link ClientContext} instance configured with identity and preset device mappings.
-	 */
-	static ClientContext staticContext(Identity nodeIdentity, Map<Id, List<Id>> presetUserDevices) {
-		return new StaticClientContext(nodeIdentity, presetUserDevices);
+		return new StaticClientContext(nodeIdentity);
 	}
 }

@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.service.impl;
 
 import java.util.List;
@@ -19,12 +41,12 @@ import io.bosonnetwork.web.CompactWebTokenAuth;
  * in scenarios where federation functionalities are disabled or not required. This
  * implementation returns default, non-functional values for all operations.
  * <p>
- * All methods in this class are implemented to return default responses such as:
+ * All methods in this class are implemented to return default responses such as
  * - Null values for objects
  * - False for boolean results
  * - Empty lists for collections
  * <p>
- * This class is useful when a FederationContext is required by the system but federation
+ * This class is useful when a FederationContext is required by the system, but federation
  * interactions are explicitly disabled or not supported.
  */
 public class DisabledFederationContext implements FederationContext {
@@ -45,7 +67,8 @@ public class DisabledFederationContext implements FederationContext {
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
-		return VertxFuture.succeededFuture(List.of());
+		throw new UnsupportedOperationException("getServices is not supported");
+		// return VertxFuture.succeededFuture(List.of());
 	}
 
 	@Override

@@ -23,7 +23,6 @@
 package io.bosonnetwork.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -107,6 +106,7 @@ public interface FederationContext {
 	 *         representing the services associated with the specified peer, or completes exceptionally
 	 *         if an error occurs while retrieving the services
 	 */
+	@Deprecated
 	CompletableFuture<List<ServiceInfo>> getServices(Id peerId);
 
 	/**
@@ -181,22 +181,7 @@ public interface FederationContext {
 	 * @return a {@link FederationContext} instance configured to bypass web token authentication
 	 */
 	static FederationContext staticContext() {
-		return new StaticFederationContext(null, null);
-	}
-
-	/**
-	 * Creates and returns a static {@link FederationContext} instance that bypasses
-	 * web token authentication. This method is suitable for scenarios requiring a
-	 * predefined static federation configuration where no authentication tokens are used.
-	 *
-	 * @param presetNodeServices a map where the keys are node IDs and the values are lists
-	 *                           of service IDs associated with those nodes. This map represents
-	 *                           the preset configuration of services for static federation.
-	 * @return a {@link FederationContext} instance configured to bypass web token authentication
-	 *         and based on the provided preset node-service mappings.
-	 */
-	static FederationContext staticContext(Map<Id, List<Id>> presetNodeServices) {
-		return new StaticFederationContext(null, presetNodeServices);
+		return new StaticFederationContext(null);
 	}
 
 	/**
@@ -211,26 +196,6 @@ public interface FederationContext {
 	 *         node identity and operate with a static federation configuration.
 	 */
 	static FederationContext staticContext(Identity nodeIdentity) {
-		return new StaticFederationContext(nodeIdentity, null);
-	}
-
-	/**
-	 * Creates and returns a static {@link FederationContext} instance that is based
-	 * on a specific node identity and a predefined map of node-service associations.
-	 * This method is suitable for scenarios requiring static federation configuration
-	 * for a specific node, along with preset node-service mappings, without the need
-	 * for token-based authentication mechanisms.
-	 *
-	 * @param nodeIdentity        the {@link Identity} representing the identity of the node
-	 *                            within the federation context.
-	 * @param presetNodeServices  a map where the keys are node IDs and the values are lists
-	 *                            of service IDs associated with those nodes. This map
-	 *                            represents the preset configuration of services for static federation.
-	 * @return a {@link FederationContext} instance configured to use the specified
-	 *         node identity and the provided preset node-service mappings, operating
-	 *         with a static federation configuration.
-	 */
-	static FederationContext staticContext(Identity nodeIdentity, Map<Id, List<Id>> presetNodeServices) {
-		return new StaticFederationContext(nodeIdentity, presetNodeServices);
+		return new StaticFederationContext(nodeIdentity);
 	}
 }

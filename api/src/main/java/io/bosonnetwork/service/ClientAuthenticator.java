@@ -27,10 +27,10 @@ import java.util.concurrent.CompletableFuture;
 import io.bosonnetwork.Id;
 
 /**
- * Interface for authenticating clients (users and devices).
+ * Interface for authenticating clients (users and devices) within the Boson network.
  * <p>
- * Implementations of this interface provide mechanisms to verify the identity of users and devices
- * using cryptographic signatures and other credentials.
+ * Implementations provide mechanisms to verify the identity of users and devices
+ * typically using cryptographic challenges and signatures (e.g., Ed25519).
  */
 public interface ClientAuthenticator {
 
