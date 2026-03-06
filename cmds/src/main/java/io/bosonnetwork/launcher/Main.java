@@ -45,16 +45,15 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.access.AccessManager;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.service.BosonService;
 import io.bosonnetwork.service.BosonServiceException;
-import io.bosonnetwork.service.ClientAuthenticator;
-import io.bosonnetwork.service.ClientAuthorizer;
+import io.bosonnetwork.service.ClientContext;
 import io.bosonnetwork.service.DefaultServiceContext;
-import io.bosonnetwork.service.FederationAuthenticator;
+import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceContext;
 import io.bosonnetwork.utils.ApplicationLock;
-import io.bosonnetwork.json.Json;
 
 /**
  * @hidden
@@ -136,8 +135,7 @@ public class Main {
 
 			Path dataPath = config.dataDir() == null ? null : config.dataDir().resolve(svc.getId()).toAbsolutePath();
 			ServiceContext ctx = new DefaultServiceContext(vertx, node,
-					ClientAuthenticator.allowAll(), ClientAuthorizer.noop(),
-					FederationAuthenticator.allowAll(), null, null, serviceConfig.configuration, dataPath);
+					ClientContext.allowAll(), FederationContext.disabled(), serviceConfig.configuration, dataPath);
 			svc.init(ctx);
 			System.out.format("Service %s[%s] is loaded.\n", svc.getName(), serviceConfig.className);
 

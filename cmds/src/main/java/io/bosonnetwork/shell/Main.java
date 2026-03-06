@@ -147,7 +147,7 @@ public class Main implements Callable<Integer> {
 			terminal = buildTerminal(false);
 			Path workDir = Path.of(System.getProperty("user.home"));
 			// set up JLine built-in commands
-			Builtins builtins = new Builtins(() -> workDir, new ConfigurationPath(null, null), null);
+			Builtins builtins = new Builtins(() -> workDir, new ConfigurationPath((Path) null, (Path) null), null);
 			// builtins.rename(Builtins.Command.HELP, "builtin-help");
 
 			Main commands = new Main();
