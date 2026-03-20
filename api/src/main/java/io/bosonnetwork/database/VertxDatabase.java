@@ -165,6 +165,7 @@ public interface VertxDatabase {
 
 	private boolean getBoolean(Row row, int column) {
 		Object value = row.getValue(column);
+		if (value == null) return false;
 		return value instanceof Boolean b ? b :
 				(value instanceof Number n ? n.intValue() != 0 :
 						(value instanceof String s && Boolean.parseBoolean(s)));
@@ -178,7 +179,9 @@ public interface VertxDatabase {
 	 * @return the found boolean or the default
 	 */
 	default boolean findBoolean(RowSet<Row> rowSet, boolean defaultValue) {
-		return rowSet.size() != 0 ? getBoolean(rowSet.iterator().next(),0) : defaultValue;
+		if (rowSet == null || rowSet.size() == 0)
+			return defaultValue;
+		return getBoolean(rowSet.iterator().next(), 0);
 	}
 
 	/**
@@ -199,7 +202,12 @@ public interface VertxDatabase {
 	 * @return the found integer or the default
 	 */
 	default int findInteger(RowSet<Row> rowSet, int defaultValue) {
-		return rowSet.size() != 0 ? rowSet.iterator().next().getInteger(0) : defaultValue;
+		if (rowSet == null || rowSet.size() == 0)
+			return defaultValue;
+		Object val = rowSet.iterator().next().getValue(0);
+		if (val instanceof Number n)
+			return n.intValue();
+		return defaultValue;
 	}
 
 	/**
@@ -220,7 +228,12 @@ public interface VertxDatabase {
 	 * @return the found long or the default
 	 */
 	default long findLong(RowSet<Row> rowSet, long defaultValue) {
-		return rowSet.size() != 0 ? rowSet.iterator().next().getLong(0) : defaultValue;
+		if (rowSet == null || rowSet.size() == 0)
+			return defaultValue;
+		Object val = rowSet.iterator().next().getValue(0);
+		if (val instanceof Number n)
+			return n.longValue();
+		return defaultValue;
 	}
 
 	/**
