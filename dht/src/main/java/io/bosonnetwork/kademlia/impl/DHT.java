@@ -37,7 +37,6 @@ import io.bosonnetwork.kademlia.exceptions.InvalidToken;
 import io.bosonnetwork.kademlia.exceptions.InvalidValue;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.protocol.Error;
@@ -751,11 +750,6 @@ public class DHT extends BosonVerticle {
 						return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
 					}
 
-					if (value.getSequenceNumber() < existing.getSequenceNumber()) {
-						log.warn("Rejecting value {}: sequence number not monotonic", value.getId());
-						return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
-					}
-
 					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
 					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 						log.warn("Rejecting value {}: sequence number not expected", value.getId());
@@ -831,11 +825,6 @@ public class DHT extends BosonVerticle {
 		}).compose(peer -> {
 			return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
 				if (existing != null) {
-					if (peer.getSequenceNumber() < existing.getSequenceNumber()) {
-						log.warn("Rejecting peer {}: sequence number not monotonic", peer.getId());
-						return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
-					}
-
 					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
 					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 						log.warn("Rejecting peer {}: sequence number not expected", peer.getId());

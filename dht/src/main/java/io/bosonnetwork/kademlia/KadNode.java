@@ -36,7 +36,6 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.SimpleNodeConfiguration;
 import io.bosonnetwork.kademlia.impl.TokenManager;
@@ -523,11 +522,6 @@ public class KadNode extends BosonVerticle implements Node {
 				return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
 			}
 
-			if (value.getSequenceNumber() < existing.getSequenceNumber()) {
-				log.warn("Rejecting value {}: sequence number not monotonic", value.getId());
-				return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
-			}
-
 			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 				log.warn("Rejecting value {}: sequence number not expected", value.getId());
 				return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
@@ -654,11 +648,6 @@ public class KadNode extends BosonVerticle implements Node {
 		return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
 			if (existing == null)
 				return Future.succeededFuture();
-
-			if (peer.getSequenceNumber() < existing.getSequenceNumber()) {
-				log.warn("Rejecting peer {}: sequence number not monotonic", peer.getId());
-				return Future.failedFuture(new SequenceNotMonotonic("Sequence number less than current"));
-			}
 
 			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 				log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
