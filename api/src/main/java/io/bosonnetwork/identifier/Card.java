@@ -268,17 +268,28 @@ public class Card {
 	}
 
 	/**
+	 * Retrieves a service from the list of services that matches the specified id and type.
+	 *
+	 * @param id   the unique identifier of the service to find
+	 * @param type the type of the service to find
+	 * @return the service matching the specified id and type, or null if no such service exists
+	 */
+	public Service getService(String id, String type) {
+		return services.stream()
+				.filter(s -> s.getId().equals(id) &&
+						s.getType().equals(type))
+				.findFirst()
+				.orElse(null);
+	}
+
+	/**
 	 * Returns the home node service, if present.
 	 * The home node service is identified by id "homeNode" and type "BosonHomeNode".
 	 *
 	 * @return the home node service, or null if not found
 	 */
 	public Service getHomeNodeService() {
-		return services.stream()
-				.filter(s -> s.getId().equals(DEFAULT_HOME_NODE_SERVICE_ID) &&
-						s.getType().equals(DEFAULT_HOME_NODE_SERVICE_TYPE))
-				.findFirst()
-				.orElse(null);
+		return getService(DEFAULT_HOME_NODE_SERVICE_ID, DEFAULT_HOME_NODE_SERVICE_TYPE);
 	}
 
 	/**
