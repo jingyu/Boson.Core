@@ -47,6 +47,14 @@ import io.bosonnetwork.web.CompactWebTokenAuth;
 public class AllowAllFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
 
+	/**
+	 * Constructs an instance of the {@code AllowAllFederationContext} class using the specified node identity.
+	 * This implementation assumes a permissive federation context without any restrictions on nodes,
+	 * services, or interactions.
+	 *
+	 * @param nodeIdentity the {@link Identity} of the node for which this federation context is created;
+	 *                     used for authentication and identifying the node in the federation.
+	 */
 	public AllowAllFederationContext(Identity nodeIdentity) {
 		this.nodeIdentity = nodeIdentity;
 	}

@@ -56,6 +56,14 @@ import io.bosonnetwork.web.CompactWebTokenAuth;
 public class AllowAllClientContext implements ClientContext {
 	private final Identity nodeIdentity;
 
+	/**
+	 * Constructs an instance of {@code AllowAllClientContext} with the provided node identity.
+	 *
+	 * @param nodeIdentity the {@link Identity} associated with this client context.
+	 *                      This identity represents the cryptographic entity
+	 *                      used within the context, enabling signing, verification,
+	 *                      encryption, and decryption operations.
+	 */
 	public AllowAllClientContext(Identity nodeIdentity) {
 		this.nodeIdentity = nodeIdentity;
 	}

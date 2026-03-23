@@ -22,15 +22,12 @@
 
 package io.bosonnetwork.identifier;
 
-import java.util.Date;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoBox;
@@ -47,8 +44,6 @@ class DHTRegistry implements Registry {
 	private Vertx vertx;
 	/** Local DHT node used for storing and finding values */
 	private Node node;
-	/** Optional persistent cache for resolved Cards */
-	private ResolverCache persistentCache;
 	/** Resolver instance for resolving Cards via DHT */
 	private Resolver resolver;
 	/** Singleton instance of the registry */
@@ -98,16 +93,18 @@ class DHTRegistry implements Registry {
 		else
 			return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments: args[1] is not a Node instance"));
 
+		// Optional persistent cache for resolved Cards
+		ResolverCache persistentCache;
 		if (args.length == 3) {
 			if (args[2] instanceof ResolverCache c)
-				this.persistentCache = c;
+				persistentCache = c;
 			else
 				return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments: args[2] is not a ResolverCache instance"));
 		} else {
-			this.persistentCache = null;
+			persistentCache = null;
 		}
 
-		this.resolver = new DHTResolver();
+		this.resolver = new CachedResolver(new DHTResolver(node), vertx, persistentCache);
 
 		return VertxFuture.succeededFuture();
 	}
@@ -142,59 +139,5 @@ class DHTRegistry implements Registry {
 	@Override
 	public Resolver getResolver() {
 		return resolver;
-	}
-
-	/**
-	 * Resolver implementation that resolves Cards from the DHT.
-	 * <p>
-	 * Uses the outer class's Node instance and optional persistent cache to fetch Card data asynchronously.
-	 * Performs signature verification and validation before returning results.
-	 */
-	class DHTResolver extends AbstractResolver {
-		public DHTResolver() {
-			super(vertx, persistentCache);
-		}
-
-		@Override
-		protected CompletableFuture<ResolutionResult<Card>> resolveId(Id id) {
-			// Ensure the id is not null
-			Objects.requireNonNull(id, "id");
-
-			log.debug("Resolving {} ...", id);
-			return node.findValue(id).thenApply(value -> {
-				// If no value found in DHT, return not found result
-				if (value == null)
-					return ResolutionResult.notfound();
-
-				// Check that the id matches the public key in the retrieved value
-				if (!Objects.equals(id, value.getPublicKey()))
-					return ResolutionResult.invalid();
-
-				Card card;
-				try {
-					// Attempt to parse the Card from the value's data bytes
-					card = Card.parse(value.getData());
-				} catch (Exception e) {
-					// Parsing failed, return invalid result
-					return ResolutionResult.invalid();
-				}
-
-				// Verify the Card's signature and integrity
-				if (!card.isGenuine())
-					return ResolutionResult.invalid();
-
-				// Retrieve the version (sequence number) from the value
-				int version = value.getSequenceNumber();
-
-				// Return a successful resolution result with metadata including signature timestamps and version
-				return new ResolutionResult<>(card, new ResolutionResultMetadata(
-						card.getSignedAt(), card.getSignedAt(), new Date(), false, version));
-			});
-		}
-
-		@Override
-		protected Logger log() {
-			return log;
-		}
 	}
 }
