@@ -23,6 +23,7 @@
 
 package io.bosonnetwork;
 
+import java.io.Closeable;
 import java.util.Arrays;
 
 import io.bosonnetwork.crypto.CryptoBox;
@@ -43,7 +44,7 @@ import io.bosonnetwork.crypto.CryptoException;
  * for other operations.
  * </p>
  */
-public class CryptoContext implements AutoCloseable {
+public class CryptoContext implements Closeable {
 	private final Id id;
 	private final CryptoBox box;
 
