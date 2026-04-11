@@ -93,6 +93,24 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	/**
+	 * Converts a {@link CompletableFuture} into a {@link VertxFuture}.
+	 * If the provided {@link CompletableFuture} is already an instance of {@link VertxFuture},
+	 * it is directly returned after being cast to the appropriate type.
+	 * Otherwise, a new {@link VertxFuture} is created.
+	 *
+	 * @param <T> the type of the result in the future
+	 * @param future the {@link CompletableFuture} to be converted
+	 * @return a {@link VertxFuture} representing the same computation or result as the provided {@link CompletableFuture}
+	 */
+	@SuppressWarnings("unchecked")
+	public static <T> VertxFuture<T> of(CompletableFuture<T> future) {
+		if (future instanceof VertxFuture<?> vf)
+			return (VertxFuture<T>) vf;
+
+		return new VertxFuture<>(Future.fromCompletionStage(future));
+	}
+
+	/**
 	 * Creates a failed VertxFuture from a Throwable.
 	 *
 	 * @param cause the cause of the failure

@@ -26,6 +26,7 @@ import java.util.concurrent.Executor;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
+import io.vertx.core.Context;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
@@ -58,18 +59,76 @@ public class VertxCaffeine {
 			return null;
 		});
 
-		/**
+		/*
 		 * Custom Caffeine Scheduler that schedules tasks using Vert.x timers.
-		 * <p>
+		 *
 		 * The scheduled task is executed on the provided executor after the specified delay.
 		 * Completion is signaled via a {@link VertxFuture}, which is completed when the task finishes
 		 * or completed exceptionally if an error occurs.
-		 * </p>
 		 */
 		Scheduler vertxScheduler = (executor, runnable, delay, unit) -> {
 			Promise<?> promise = Promise.promise();
 
 			vertx.setTimer(unit.toMillis(delay), (tid) -> {
+				// When the timer fires, execute the scheduled task on the provided executor.
+				// Complete the future when done, or complete exceptionally if an error occurs.
+				executor.execute(() -> {
+					try {
+						runnable.run();
+						promise.complete(null);
+					} catch (Exception e) {
+						promise.fail(e);
+					}
+				});
+			});
+
+			return VertxFuture.of(promise.future());
+		};
+
+		return Caffeine.newBuilder()
+				.executor(vertxExecutor)
+				.scheduler(vertxScheduler);
+	}
+
+	/**
+	 * Returns a Caffeine builder configured to use the current Vert.x context for cache operations.
+	 * <p>
+	 * This method retrieves the current Vert.x context and sets a custom {@link Executor}
+	 * that delegates execution to that context. It also sets a custom {@link Scheduler}
+	 * that uses the context's owner (Vert.x instance) timers for scheduling.
+	 * </p>
+	 *
+	 * @return a Caffeine builder using Vert.x-friendly executor and scheduler
+	 * @throws IllegalStateException if no Vert.x context is available
+	 */
+	public static Caffeine<Object, Object> newBuilder() {
+		// We use executeBlocking to ensure the cache operation runs outside the event loop,
+		// which is safer for potentially blocking or long-running tasks.
+		Executor vertxExecutor = (r) -> {
+			Context context = Vertx.currentContext();
+			if (context == null)
+				throw new IllegalStateException("No Vert.x context available");
+
+			context.executeBlocking(() -> {
+				r.run();
+				return null;
+			});
+		};
+
+		/*
+		 * Custom Caffeine Scheduler that schedules tasks using Vert.x timers from the current context.
+		 *
+		 * The scheduled task is executed on the provided executor after the specified delay.
+		 * Completion is signaled via a {@link VertxFuture}, which is completed when the task finishes
+		 * or completed exceptionally if an error occurs.
+		 */
+		Scheduler vertxScheduler = (executor, runnable, delay, unit) -> {
+			Context context = Vertx.currentContext();
+			if (context == null)
+				throw new IllegalStateException("No Vert.x context available");
+
+			Promise<?> promise = Promise.promise();
+			context.owner().setTimer(unit.toMillis(delay), (tid) -> {
 				// When the timer fires, execute the scheduled task on the provided executor.
 				// Complete the future when done, or complete exceptionally if an error occurs.
 				executor.execute(() -> {

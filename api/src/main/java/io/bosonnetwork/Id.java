@@ -64,8 +64,8 @@ public class Id implements Comparable<Id> {
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private final byte[] bytes;
-	private volatile String b58;	// Cached base58 string representation
-	private volatile int hashCode;	// Cache hash code
+	private transient String b58;	// Cached base58 string representation
+	private transient int hashCode;	// Cache hash code
 
 	/**
 	 * 3-way comparator. For sorting {@code Id} instances based on their

@@ -22,7 +22,9 @@
 
 package io.bosonnetwork.json;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.net.InetAddress;
 import java.util.Base64;
 import java.util.Date;
@@ -35,6 +37,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -181,6 +184,7 @@ public class Json {
 					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
 					// .defaultDateFormat(getDateFormat())
 					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
 					.addModule(bosonJsonModule())
@@ -208,6 +212,7 @@ public class Json {
 					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
 					// .defaultDateFormat(getDateFormat())
 					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
 					.addModule(bosonJsonModule())
@@ -239,6 +244,7 @@ public class Json {
 					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
 					.disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
 					.enable(YAMLGenerator.Feature.INDENT_ARRAYS)
 					.enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
@@ -466,6 +472,44 @@ public class Json {
 	}
 
 	/**
+	 * Parses a JSON string into an object of the specified type using the provided {@link JsonContext}.
+	 *
+	 * @param json    the JSON string to parse
+	 * @param type    the type reference describing the type to return
+	 * @param context the deserialization context, or {@code null} for default context
+	 * @param <T>     the type of the desired object
+	 * @return the parsed object
+	 * @throws IllegalArgumentException if the JSON cannot be parsed
+	 */
+	public static <T> T parse(String json, JavaType type, JsonContext context) {
+		try {
+			if (context == null || context.isEmpty())
+				return objectMapper().readValue(json, type);
+			else
+				return objectMapper().reader(context).forType(type).readValue(json);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("json can not be parsed", e);
+		}
+	}
+
+	/**
+	 * Parses a JSON string into an object of the specified type using the default context.
+	 *
+	 * @param json the JSON string to parse
+	 * @param type the type reference describing the type to return
+	 * @param <T>  the type of the desired object
+	 * @return the parsed object
+	 * @throws IllegalArgumentException if the JSON cannot be parsed
+	 */
+	public static <T> T parse(String json, JavaType type) {
+		try {
+			return objectMapper().readValue(json, type);
+		} catch (JsonProcessingException e) {
+			throw new IllegalArgumentException("json can not be parsed", e);
+		}
+	}
+
+	/**
 	 * Parses a CBOR-encoded byte array into a {@code Map<String, Object>} using the provided {@link JsonContext}.
 	 *
 	 * @param cbor    the CBOR-encoded byte array to parse
@@ -561,6 +605,88 @@ public class Json {
 			return cborMapper().readValue(cbor, type);
 		} catch (IOException e) {
 			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
+	}
+
+	/**
+	 * Parses a CBOR-encoded byte array into an object of the specified type using the provided {@link JsonContext}.
+	 *
+	 * @param cbor    the CBOR-encoded byte array to parse
+	 * @param type    the type reference describing the type to return
+	 * @param context the deserialization context, or {@code null} for default context
+	 * @param <T>     the type of the desired object
+	 * @return the parsed object
+	 * @throws IllegalArgumentException if the CBOR cannot be parsed
+	 */
+	public static <T> T parse(byte[] cbor, JavaType type, JsonContext context) {
+		try {
+			if (context == null || context.isEmpty())
+				return cborMapper().readValue(cbor, type);
+			else
+				return cborMapper().reader(context).forType(type).readValue(cbor);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
+	}
+
+	/**
+	 * Parses a CBOR-encoded byte array into an object of the specified type using the default context.
+	 *
+	 * @param cbor the CBOR-encoded byte array to parse
+	 * @param type the type reference describing the type to return
+	 * @param <T>  the type of the desired object
+	 * @return the parsed object
+	 * @throws IllegalArgumentException if the CBOR cannot be parsed
+	 */
+	public static <T> T parse(byte[] cbor, JavaType type) {
+		try {
+			return cborMapper().readValue(cbor, type);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("cbor can not be parsed", e);
+		}
+	}
+
+	/**
+	 * Converts a byte array containing CBOR-encoded data into its equivalent JSON string representation.
+	 *
+	 * @param cbor the byte array containing CBOR-encoded data
+	 * @return a JSON string representation of the provided CBOR data
+	 * @throws IllegalArgumentException if the input data cannot be parsed or an error occurs during conversion
+	 */
+	public static String cborToJson(byte[] cbor) {
+		try (JsonParser parser = Json.cborFactory().createParser(cbor);
+		     StringWriter out = new StringWriter();
+		     JsonGenerator generator = Json.jsonFactory().createGenerator(out)
+		) {
+			while (parser.nextToken() != null)
+				generator.copyCurrentEvent(parser);
+
+			generator.flush();
+			return out.toString();
+		} catch (Exception e) {
+			throw new IllegalArgumentException("cbor", e);
+		}
+	}
+
+	/**
+	 * Converts a JSON string to its CBOR (Concise Binary Object Representation) byte array representation.
+	 *
+	 * @param json the JSON string to be converted to CBOR format; must not be null
+	 * @return a byte array containing the CBOR encoded representation of the provided JSON string
+	 * @throws IllegalArgumentException if an error occurs during the conversion process
+	 */
+	public static byte[] jsonToCbor(String json) {
+		try (JsonParser parser = Json.jsonFactory().createParser(json);
+		     ByteArrayOutputStream out = new ByteArrayOutputStream();
+		     JsonGenerator generator = Json.cborFactory().createGenerator(out)
+		) {
+			while (parser.nextToken() != null)
+				generator.copyCurrentEvent(parser);
+
+			generator.flush();
+			return out.toByteArray();
+		} catch (Exception e) {
+			throw new IllegalArgumentException("json", e);
 		}
 	}
 

@@ -251,4 +251,30 @@ public class JsonTests {
 		assertEquals(true, map3.get("bool"));
 		assertEquals(Arrays.asList(1, 2, 3), map3.get("array"));
 	}
+
+	@Test
+	void cborAndJsonConvert() {
+		var map = Map.of("foo", 1,
+				"bar", "baz",
+				"date", "2025-05-15T08:21:16Z",
+				"id", Id.random().toString(),
+				"ip", "108.178.25.111",
+				"ip6", "2001:db8:85a2:0:0:8a2e:2370:7339",
+				"bool", true,
+				"array", Arrays.asList(1, 2, 3),
+				"nested", Map.of("foo", 1, "bar", "baz"),
+				"nestedArray", Arrays.asList(Map.of("foo", 2, "bar", "baz"), Map.of("foo", 3, "bar", "baz")));
+
+		String json = Json.toString(map);
+		byte[] cbor = Json.toBytes(map);
+
+		String convertedJson = Json.cborToJson(cbor);
+		assertEquals(json, convertedJson);
+
+		// CBOR may use different container styles (fixed-length vs. indefinite-length).
+		// Therefore, the raw binary representation is not guaranteed to be identical even for the same logical data.
+		byte[] convertedCbor = Json.jsonToCbor(json);
+		convertedJson = Json.cborToJson(convertedCbor);
+		assertEquals(json, convertedJson);
+	}
 }
