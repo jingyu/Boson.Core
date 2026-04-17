@@ -23,11 +23,18 @@
 package io.bosonnetwork.utils;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Map;
 
 /**
  * Utility class for common file and directory operations.
@@ -236,6 +243,38 @@ public class FileUtils {
 		} else {
 			// Unix like OS
 			return Path.of(System.getProperty("user.home"), ".local/share");
+		}
+	}
+
+	/**
+	 * Converts a {@link URL} to a {@link Path}.
+	 * This method handles URLs with "jar" schemes and properly retrieves the corresponding
+	 * filesystem path for entries within JAR files.
+	 *
+	 * @param url the {@link URL} to be converted to a {@link Path}, must not be null
+	 * @return the {@link Path} corresponding to the given {@link URL}
+	 * @throws IOException if an I/O error occurs while accessing the filesystem
+	 * @throws IllegalArgumentException if the provided {@link URL} is invalid
+	 */
+	public static Path pathOf(URL url) throws IOException {
+		final URI uri;
+		try {
+			uri = url.toURI();
+		} catch (URISyntaxException e) {
+			throw new IllegalArgumentException("Invalid URL: " + url, e);
+		}
+
+		if ("jar".equals(uri.getScheme())) {
+			String ssp = uri.getSchemeSpecificPart();
+			String subPath = ssp.substring(ssp.indexOf("!/") + 1);
+			try {
+				// NOTICE: the newly created FileSystem object will be keep opened until the JVM exits.
+				return FileSystems.newFileSystem(uri, Map.of()).getPath(subPath);
+			} catch (FileSystemAlreadyExistsException e) {
+				return FileSystems.getFileSystem(uri).getPath(subPath);
+			}
+		} else {
+			return Paths.get(uri);
 		}
 	}
 }

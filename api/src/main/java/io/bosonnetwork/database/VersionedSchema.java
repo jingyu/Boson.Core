@@ -23,21 +23,21 @@
 package io.bosonnetwork.database;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.file.FileProps;
-import io.vertx.core.file.FileSystem;
-import io.vertx.core.file.OpenOptions;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
@@ -98,7 +98,7 @@ public class VersionedSchema implements VertxDatabase {
 	public record SchemaVersion(int version, String description, String hash, String appliedBy, long appliedAt,
 								   long consumedTime, boolean success) {}
 
-	private static class Migration {
+	private static class Migration implements Comparable<Migration> {
 		private final int version;
 		private String description;
 		private final String hash;
@@ -109,7 +109,7 @@ public class VersionedSchema implements VertxDatabase {
 		 *
 		 * @param version     numeric version
 		 * @param description textual description
-		 * @param hash        SHA-256 hash of the migration script
+		 * @param hash        SHA-256 hash digest of the migration script
 		 * @param path        file path to the SQL script
 		 */
 		public Migration(int version, String description, String hash, Path path) {
@@ -127,15 +127,20 @@ public class VersionedSchema implements VertxDatabase {
 			return path.getFileName().toString();
 		}
 
-		public File file() {
-			return path.toFile();
-		}
-
-		/*/
 		public Path path() {
 			return path;
 		}
-		*/
+
+		@Override
+		public int compareTo(Migration that) {
+			if (this.version == that.version) {
+				log.error("Migration check: Migration file version must be unique. File names: {} and {}",
+						this.fileName(), that.fileName());
+				throw new IllegalStateException("Migration file version must be unique");
+			}
+
+			return Integer.compare(this.version, that.version);
+		}
 	}
 
 	private VersionedSchema(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
@@ -241,9 +246,13 @@ public class VersionedSchema implements VertxDatabase {
 							})
 			);
 
-			Future<List<Migration>> migrationsFuture = getMigrations().andThen(ar -> {
-				if (ar.failed())
-					log.warn("Migration check: error reading migrations - {}", ar.cause().getMessage());
+			Future<List<Migration>> migrationsFuture = vertx.executeBlocking(() -> {
+				try {
+					return getMigrations();
+				} catch (Exception e) {
+					log.warn("Migration check: error reading migrations - {}", e.getMessage());
+					throw e;
+				}
 			});
 
 			return Future.all(versionsFuture, migrationsFuture);
@@ -331,102 +340,99 @@ public class VersionedSchema implements VertxDatabase {
 					.mapEmpty();
 	}
 
-
 	/**
-	 * Scans the migration directory and parses all migration scripts.
+	 * Discovers and retrieves the list of schema migrations from the configured migration file path.
+	 * <p>
+	 * This method scans the directory specified by the migrationPath field for SQL files
+	 * matching the expected naming convention. It performs the following steps:
+	 * 1. Verifies the presence of the migrationPath.
+	 * 2. Lists all regular files in the directory and filters for `.sql` files only.
+	 * 3. Attempts to parse each valid file into a {@link Migration} object.
+	 * 4. Sorts the migrations based on their version order.
+	 * <p>
+	 * If the migrationPath is not set, or if no valid migrations are found,
+	 * the method returns an empty list.
 	 *
-	 * <p>Migration files must follow the naming convention
-	 * {@code &lt;version&gt;_&lt;description&gt;.sql}. Files are sorted by
-	 * version in ascending order, and each file is checksummed using SHA-256.</p>
-	 *
-	 * @return a future containing the ordered list of migrations,
-	 *         or an empty list if none are found
+	 * @return a sorted list of {@link Migration} objects representing the available migrations.
+	 *         Returns an empty list if no migrations are found or the migrationPath is not set.
+	 * @throws IllegalStateException if an error occurs while parsing a migration file.
+	 * @throws IOException if an I/O error occurs while accessing the migration files.
 	 */
-	private Future<List<Migration>> getMigrations() {
+	private List<Migration> getMigrations() throws IllegalStateException, IOException {
 		if (migrationPath == null) {
 			log.warn("Migration check: skipping, no schema migration path set");
-			return Future.succeededFuture(List.of());
+			return List.of();
 		}
 
 		log.info("Migration check: checking for new migrations from {} ...", migrationPath);
 
-		FileSystem fs = vertx.fileSystem();
-		return fs.readDir(migrationPath.toString()).compose(files -> {
-			List<Migration> migrations = new ArrayList<>();
-			Future<Void> future = Future.succeededFuture();
-
-			for (String f : files) {
-				FileProps props = fs.propsBlocking(f);
-				if (!props.isRegularFile()) {
-					log.warn("Migration check: ignore non-regular file {}", f);
-					continue;
+		try (Stream<Path> files = Files.list(migrationPath)) {
+			List<Migration> migrations = files.filter(path -> {
+				if (!Files.isRegularFile(path)) {
+					log.warn("Migration check: ignore non-regular file {}", path);
+					return false;
 				}
 
-				Path file = Path.of(f);
-				String name = file.getFileName().toString();
+				String name = path.getFileName().toString();
 				if (!name.endsWith(".sql")) {
 					log.warn("Migration check: ignore non-SQL file {}", name);
-					continue;
+					return false;
 				}
 
-				future = future.compose(v -> buildMigration(file).andThen(ar -> {
-					if (ar.succeeded())
-						migrations.add(ar.result());
-					else
-						log.warn("Migration check: error build migration from {} - {}", name, ar.cause().getMessage());
-				}).mapEmpty());
-			}
+				return true;
+			}).map(path -> {
+				try {
+					return buildMigration(path);
+				} catch (Exception e) {
+					throw new IllegalStateException("Error parsing migration file " + path, e);
+				}
+			}).collect(Collectors.toList());
 
-			return future.map(migrations);
-		}).map(migrations -> {
 			if (migrations.isEmpty()) {
 				log.warn("Migration check: no any migrations found");
 				return List.of();
 			}
 
-			migrations.sort((m1, m2) -> {
-				if (m1.version == m2.version) {
-					log.error("Migration check: Migration file version must be unique. File names: {} and {}",
-							m1.fileName(), m2.fileName());
-					throw new IllegalStateException("Migration file version must be unique");
-				}
-
-				// noinspection ComparatorMethodParameterNotUsed
-				return Integer.compare(m1.version, m2.version);
-			});
-
+			Collections.sort(migrations);
 			return migrations;
-		});
+		}
 	}
 
 	/**
-	 * Parses a migration file name and computes its checksum.
+	 * Builds a {@link Migration} object by parsing a migration file name and computing its hash digest.
+	 * <p>
+	 * Migration files must follow the naming convention {@code <version>_<description>.sql}.
+	 * The version must be a numeric value, and the description part must not be empty.
+	 * File names are split into the version and description using the underscore ("_") delimiter.
+	 * The description can include spaces, which are derived from underscores in the file name.
+	 * The hash digest of the file is calculated using the SHA-256 algorithm.
 	 *
-	 * <p>Expected file name format: {@code &lt;version&gt;_&lt;description&gt;.sql}</p>
-	 *
-	 * @param file path to the migration SQL file
-	 * @return a future containing the parsed {@link Migration}
+	 * @param file the path to the migration SQL file to be parsed
+	 * @return a {@link Migration} object containing the parsed version, description, hash digest, and file path
+	 * @throws IllegalStateException if the file name is not in the expected format or if parsing fails
+	 * @throws IOException if reading the file or calculating its hash digest fails
 	 */
-	private Future<Migration> buildMigration(Path file) {
+	private Migration buildMigration(Path file) throws IllegalStateException, IOException {
 		String fileName = file.getFileName().toString();
 		String[] parts = fileName.split("_", 2);
 		if (parts.length != 2)
-			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
+			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
 
 		int version;
 		try {
 			version = Integer.parseInt(parts[0]);
 		} catch (NumberFormatException e) {
-			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
+			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
 		}
 
 		int dotIndex = parts[1].lastIndexOf('.');
 		String baseName = (dotIndex == -1) ? parts[1] : parts[1].substring(0, dotIndex);
 		if (baseName.isEmpty())
-			return Future.failedFuture(new IllegalStateException("Migration file name must be in format <version>_<description>.sql"));
+			throw new IllegalStateException("Migration file name must be in format <version>_<description>.sql");
 
 		String description = baseName.replace('_', ' ');
-		return sha256(file).map(hash -> new Migration(version, description, hash, file));
+		String hashDigest = sha256(file);
+		return new Migration(version, description, hashDigest, file);
 	}
 
 	/**
@@ -606,7 +612,7 @@ public class VersionedSchema implements VertxDatabase {
 		return withSchemaTransaction(connection -> {
 			Promise<SchemaVersion> promise = Promise.promise();
 			Future<Void> chain = Future.succeededFuture();
-			try (BufferedReader reader = new BufferedReader(new FileReader(migration.file()))) {
+			try (BufferedReader reader = Files.newBufferedReader(migration.path())) {
 				String longDescription = readDescriptionComment(reader);
 				if (longDescription != null)
 					migration.setDescription(longDescription);
@@ -683,30 +689,24 @@ public class VersionedSchema implements VertxDatabase {
 						(value instanceof String s && Boolean.parseBoolean(s)));
 	}
 
-	private Future<String> sha256(Path path) {
+	private String sha256(Path path) throws IOException {
 		MessageDigest digest;
 		try {
 			digest = MessageDigest.getInstance("SHA-256");
 		} catch (Exception e) {
-			return Future.failedFuture(e);
+			throw new RuntimeException("SHA-256 is not supported", e);
 		}
 
-		return vertx.fileSystem().open(path.toString(), new OpenOptions().setRead(true).setWrite(false)).compose(file -> {
-			Promise<String> promise = Promise.promise();
+		try (InputStream in = Files.newInputStream(path)) {
+			byte[] buffer = new byte[8192];
+			int read;
 
-			file.handler(buffer -> digest.update(buffer.getBytes()))
-					.exceptionHandler(e -> {
-						file.close();
-						promise.fail(e);
-					})
-					.endHandler(v -> {
-						String hash = Hex.encode(digest.digest());
-						file.close();
-						promise.complete(hash);
-					});
+			while ((read = in.read(buffer)) != -1) {
+				digest.update(buffer, 0, read);
+			}
+		}
 
-			return promise.future();
-		});
+		return Hex.encode(digest.digest());
 	}
 
 	/**

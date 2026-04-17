@@ -34,6 +34,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sqlite.SQLiteDataSource;
 
+import io.bosonnetwork.utils.FileUtils;
+
 public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 	protected static final String STORAGE_URI_PREFIX = "jdbc:sqlite:";
 
@@ -85,7 +87,11 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 		if (migrationResource == null || migrationResource.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
-		return Path.of(migrationResource.getPath());
+		try {
+			return FileUtils.pathOf(migrationResource);
+		} catch (Exception e) {
+			throw new IllegalStateException("Migration path error", e);
+		}
 	}
 
 	@Override

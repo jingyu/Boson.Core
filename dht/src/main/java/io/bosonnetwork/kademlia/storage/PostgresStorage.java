@@ -36,6 +36,8 @@ import io.vertx.sqlclient.SqlConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.utils.FileUtils;
+
 public class PostgresStorage extends DatabaseStorage implements DataStorage {
 	protected static final String STORAGE_URI_PREFIX = "postgresql://";
 
@@ -76,7 +78,11 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 		if (migrationResource == null || migrationResource.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
-		return Path.of(migrationResource.getPath());
+		try {
+			return FileUtils.pathOf(migrationResource);
+		} catch (Exception e) {
+			throw new IllegalStateException("Migration path error", e);
+		}
 	}
 
 	@Override
