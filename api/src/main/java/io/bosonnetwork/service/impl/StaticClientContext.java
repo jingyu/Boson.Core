@@ -278,6 +278,15 @@ public class StaticClientContext implements ClientContext {
 		return removed.get();
 	}
 
+	/**
+	 * Clears all entries from the user device registry.
+	 * This method removes all registered devices associated with users,
+	 * effectively resetting the registry to an empty state.
+	 */
+	public void clear() {
+		userDevicesRegistry.clear();
+	}
+
 	@Override
 	public CompletableFuture<ClientUser> getUser(Id userId) {
 		return VertxFuture.succeededFuture(getUserSync(userId));
