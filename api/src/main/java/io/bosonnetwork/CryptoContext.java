@@ -48,7 +48,7 @@ public class CryptoContext {
 	private final CryptoBox box;
 
 	private Nonce nextNonce;
-	private Nonce lastPeerNonce;
+	private volatile Nonce lastPeerNonce;
 
     /**
      * Constructs a CryptoContext with the given Id and CryptoBox.
@@ -162,6 +162,19 @@ public class CryptoContext {
 
 		byte[] cipher = Arrays.copyOfRange(data, Nonce.BYTES, data.length);
 		return box.decrypt(cipher, nonce);
+	}
+
+	/**
+	 * Resets the last peer nonce within this CryptoContext.
+	 * <p>
+	 * This method clears the stored nonce received from the peer by setting it
+	 * to {@code null}. It is typically used to reset nonce state, ensuring that
+	 * subsequent operations do not reference or validate against previously
+	 * stored nonce. This can be important to prevent conflicts or errors related
+	 * to nonce reuse in cryptographic operations.
+	 */
+	public void resetNonce() {
+		lastPeerNonce = null;
 	}
 
     /**
