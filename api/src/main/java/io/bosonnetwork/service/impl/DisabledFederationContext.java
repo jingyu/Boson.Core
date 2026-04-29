@@ -51,7 +51,7 @@ import io.bosonnetwork.web.CompactWebTokenAuth;
  */
 public class DisabledFederationContext implements FederationContext {
 	@Override
-	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean federateIfNotExists) {
+	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(null);
 	}
 
@@ -66,7 +66,7 @@ public class DisabledFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
+	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(List.of());
 	}
 

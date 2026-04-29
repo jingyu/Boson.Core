@@ -59,12 +59,12 @@ public interface FederationContext {
 	/**
 	 * Retrieves a federated node by its ID.
 	 *
-	 * @param nodeId              the unique identifier of the node to retrieve
-	 * @param federateIfNotExists if {@code true}, attempts to add the node to the federation if it is not already known
+	 * @param nodeId                 the unique identifier of the node to retrieve
+	 * @param tryFederateIfNotExists if {@code true}, attempts to add the node to the federation if it is not already known
 	 * @return a {@link CompletableFuture} that completes with the {@link FederatedNode} object if found,
 	 *         or completes exceptionally/with null if the node cannot be found or federated
 	 */
-	CompletableFuture<FederatedNode> getNode(Id nodeId, boolean federateIfNotExists);
+	CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists);
 
 	/**
 	 * Retrieves a federated node by its ID.
@@ -100,13 +100,29 @@ public interface FederationContext {
 
 	/**
 	 * Retrieves a list of services associated with a specific peer identified by its ID.
+	 * If the peer does not exist, this method attempts to look up and create a federation
+	 * with the super node that hosts the peer, if specified by the caller.
+	 *
+	 * @param peerId                 the unique identifier of the peer whose services are to be queried
+	 * @param tryFederateIfNotExists a flag indicating whether to attempt federating with the super node
+	 *                               hosting the peer if the peer does not already exist
+	 * @return a {@link CompletableFuture} that completes with a list of {@link ServiceInfo} objects
+	 *         representing the services associated with the specified peer, or completes exceptionally
+	 *         if an error occurs while retrieving the services
+	 */
+	CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists);
+
+	/**
+	 * Retrieves a list of services associated with a specific peer identified by its ID.
 	 *
 	 * @param peerId the unique identifier of the peer whose services are to be queried
 	 * @return a {@link CompletableFuture} that completes with a list of {@link ServiceInfo} objects
 	 *         representing the services associated with the specified peer, or completes exceptionally
 	 *         if an error occurs while retrieving the services
 	 */
-	CompletableFuture<List<ServiceInfo>> getServices(Id peerId);
+	default CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
+		return getServices(peerId, false);
+	}
 
 	/**
 	 * Reports an incident associated with a specific federated node and peer.

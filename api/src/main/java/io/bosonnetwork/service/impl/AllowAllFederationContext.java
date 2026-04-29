@@ -68,7 +68,7 @@ public class AllowAllFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean federateIfNotExists) {
+	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(_getNode(nodeId));
 	}
 
@@ -83,7 +83,7 @@ public class AllowAllFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
+	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(List.of());
 	}
 
