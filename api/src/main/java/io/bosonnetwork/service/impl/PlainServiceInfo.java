@@ -90,7 +90,7 @@ public class PlainServiceInfo implements ServiceInfo {
 	}
 
 	@Override
-	public String getServiceId() {
+	public String getServiceType() {
 		return serviceId;
 	}
 

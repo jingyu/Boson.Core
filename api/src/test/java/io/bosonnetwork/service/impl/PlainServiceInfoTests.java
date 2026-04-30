@@ -20,7 +20,7 @@ public class PlainServiceInfoTests {
 		assertFalse(info.hasExtra());
 		assertNull(info.getExtraData());
 		assertEquals(Map.of(), info.getExtra());
-		assertEquals(peerId.toString(), info.getServiceId());
+		assertEquals(peerId.toString(), info.getServiceType());
 		assertEquals(peerId.toAbbrBase58String(), info.getServiceName());
 	}
 
@@ -30,7 +30,7 @@ public class PlainServiceInfoTests {
 		Id nodeId = Id.random();
 		PlainServiceInfo info = new PlainServiceInfo(peerId, 1L, nodeId, "e", "mySvc", "My Service");
 
-		assertEquals("mySvc", info.getServiceId());
+		assertEquals("mySvc", info.getServiceType());
 		assertEquals("My Service", info.getServiceName());
 	}
 }

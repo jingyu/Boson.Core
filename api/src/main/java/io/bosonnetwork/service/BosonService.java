@@ -36,11 +36,18 @@ import io.bosonnetwork.PeerInfo;
  */
 public interface BosonService {
 	/**
-	 * The unique identifier for the service.
+	 * Retrieves the peer identifier associated with the service.
 	 *
-	 * @return the unique identifier string.
+	 * @return an {@link Id} object representing the peer identifier.
 	 */
-	String getId();
+	Id getId();
+
+	/**
+	 * The unique identifier for the service type.
+	 *
+	 * @return the unique type identifier string.
+	 */
+	String getType();
 
 	/**
 	 * The user-friendly service name.
@@ -48,13 +55,6 @@ public interface BosonService {
 	 * @return the service name.
 	 */
 	String getName();
-
-	/**
-	 * Retrieves the peer identifier associated with the service.
-	 *
-	 * @return an {@link Id} object representing the peer identifier.
-	 */
-	Id getPeerId();
 
 	/**
 	 * Retrieves the host associated with the service.

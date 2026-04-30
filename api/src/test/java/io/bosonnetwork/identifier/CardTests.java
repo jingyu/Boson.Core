@@ -56,12 +56,13 @@ public class CardTests {
 		assertNotNull(card.getCredential("profile"));
 		assertNotNull(card.getService("homeNode"));
 
-		assertNotNull(card.getProfileCredential());
-		assertNotNull(card.getHomeNodeService());
+		assertEquals(1, card.getCredentials("BosonProfile").size());
+		assertEquals(1, card.getServices("BosonHomeNode").size());
 
-		assertTrue(card.getProfileCredential().isGenuine());
-		assertTrue(card.getProfileCredential().isValid());
-		assertTrue(card.getProfileCredential().selfIssued());
+		Credential cred = card.getCredential("profile");
+		assertTrue(cred.isGenuine());
+		assertTrue(cred.isValid());
+		assertTrue(cred.selfIssued());
 
 		assertTrue(card.isGenuine());
 
@@ -133,12 +134,13 @@ public class CardTests {
 		assertEquals("messaging", services.get(1).getId());
 		assertEquals("bcr", services.get(2).getId());
 
-		assertNotNull(card.getProfileCredential());
-		assertTrue(card.getProfileCredential().isGenuine());
-		assertTrue(card.getProfileCredential().isValid());
-		assertTrue(card.getProfileCredential().selfIssued());
+		Credential cred = card.getCredential("profile", "BosonProfile");
+		assertNotNull(cred);
+		assertTrue(cred.isGenuine());
+		assertTrue(cred.isValid());
+		assertTrue(cred.selfIssued());
 
-		assertNotNull(card.getHomeNodeService());
+		assertNotNull(card.getService("homeNode", "BosonHomeNode"));
 
 		assertTrue(card.isGenuine());
 

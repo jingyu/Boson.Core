@@ -345,7 +345,7 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public ClientAuthorizer getAuthorizer() {
-		return (userId, deviceId, serviceId) -> VertxFuture.succeededFuture(Map.of());
+		return (userId, deviceId, serviceType) -> VertxFuture.succeededFuture(Map.of());
 	}
 
 	@Override

@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.identifier.Card;
+import io.bosonnetwork.identifier.DIDDocument;
+import io.bosonnetwork.json.Json;
 
 public class BosonUserProfileTests {
 	@Test
@@ -33,6 +35,9 @@ public class BosonUserProfileTests {
 
 		Card card = profile.getCard();
 		assertNotNull(card);
+		System.out.println(Json.toPrettyString(card));
+		System.out.println("\n================\n");
+		System.out.println(Json.toPrettyString(DIDDocument.fromCard(card)));
 
 		// Test fromCard
 		BosonUserProfile profile2 = BosonUserProfile.fromCard(card);

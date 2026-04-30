@@ -83,11 +83,11 @@ public interface ServiceInfo {
 	Map<String, Object> getExtra();
 
 	/**
-	 * Gets the unique identifier string for the specific service type.
+	 * Gets the unique type identifier string for the specific service type.
 	 *
-	 * @return the service ID
+	 * @return the service type
 	 */
-	String getServiceId();
+	String getServiceType();
 
 	/**
 	 * Gets the human-readable name of the service.

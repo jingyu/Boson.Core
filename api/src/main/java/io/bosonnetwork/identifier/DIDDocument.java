@@ -405,6 +405,42 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
+	 * Retrieves a verifiable credential based on the specified identifier and type.
+	 *
+	 * @param id the identifier of the credential to be retrieved; must not be null
+	 * @param type the type of the credential to be retrieved; must not be null
+	 * @return the verifiable credential matching the specified identifier and type
+	 * @throws NullPointerException if either the id or type is null
+	 */
+	public VerifiableCredential getCredential(String id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
+		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
+				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
+
+		return getCredential(idUrl, type);
+	}
+
+	/**
+	 * Retrieves a verifiable credential that matches the specified DID URL and credential type.
+	 *
+	 * @param id   The DID URL that uniquely identifies the credential. Must not be null.
+	 * @param type The type of the credential to retrieve. Must not be null.
+	 * @return A {@code VerifiableCredential} instance that matches the given ID and type,
+	 *         or {@code null} if no matching credential is found.
+	 */
+	public VerifiableCredential getCredential(DIDURL id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
+
+		String sid = id.toString();
+		return credentials.stream()
+				.filter(vc -> vc.getId().equals(sid) && vc.getTypes().contains(type))
+				.findFirst()
+				.orElse(null);
+	}
+
+	/**
 	 * Returns the list of service endpoints described by this document.
 	 * @return List of service endpoints
 	 */
@@ -449,6 +485,41 @@ public class DIDDocument extends W3CDIDFormat {
 			.filter(service -> service.getId().equals(sid))
 			.findFirst()
 			.orElse(null);
+	}
+
+	/**
+	 * Retrieves a service object based on the provided service identifier and type.
+	 *
+	 * @param id the unique identifier of the service, must not be null
+	 * @param type the type of the service, must not be null
+	 * @return the service object associated with the given identifier and type
+	 * @throws NullPointerException if either the id or type is null
+	 */
+	public Service getService(String id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
+		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
+				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
+
+		return getService(idUrl, type);
+	}
+
+	/**
+	 * Retrieves a service based on its DIDURL identifier and type.
+	 *
+	 * @param id the DIDURL identifier of the service; must not be null
+	 * @param type the type of the service; must not be null
+	 * @return the matching Service object if found, otherwise null
+	 */
+	public Service getService(DIDURL id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
+
+		String sid = id.toString();
+		return services.stream()
+				.filter(service -> service.getId().equals(sid) && service.getType().equals(type))
+				.findFirst()
+				.orElse(null);
 	}
 
 	/**

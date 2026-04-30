@@ -12,6 +12,8 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.identifier.Card;
+import io.bosonnetwork.identifier.DIDDocument;
+import io.bosonnetwork.json.Json;
 
 public class BosonSuperNodeProfileTests {
 	@Test
@@ -20,8 +22,8 @@ public class BosonSuperNodeProfileTests {
 		URI apiEndpoint = new URI("https://api.bosonnetwork.io");
 		URI webGatewayEndpoint = new URI("https://gateway.bosonnetwork.io");
 		URI ionStoreEndpoint = new URI("https://store.bosonnetwork.io");
-		URI photonMessagingEndpoint = new URI("https://messaging.bosonnetwork.io");
-		URI activeProxyEndpoint = new URI("https://proxy.bosonnetwork.io");
+		URI photonMessagingEndpoint = new URI("mqtts://messaging.bosonnetwork.io");
+		URI activeProxyEndpoint = new URI("tcp://proxy.bosonnetwork.io");
 
 		Id webGatewayPeer = Id.random();
 		Id ionStorePeer = Id.random();
@@ -65,6 +67,11 @@ public class BosonSuperNodeProfileTests {
 
 		// Test fromCard
 		Card card = profile.getCard();
+		assertNotNull(card);
+		System.out.println(Json.toPrettyString(card));
+		System.out.println("\n================\n");
+		System.out.println(Json.toPrettyString(DIDDocument.fromCard(card)));
+
 		BosonSuperNodeProfile profile2 = BosonSuperNodeProfile.fromCard(card);
 
 		assertNotNull(profile2);

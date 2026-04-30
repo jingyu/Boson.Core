@@ -39,9 +39,9 @@ public interface ClientAuthorizer {
 	 *
 	 * @param userId    the unique identifier of the user requesting access
 	 * @param deviceId  the unique identifier of the device used for the request
-	 * @param serviceId the identifier of the service to be accessed
+	 * @param serviceType the identifier of the target service type to be accessed
 	 * @return a {@link CompletableFuture} that completes with a map containing authorization details
 	 *         (e.g., tokens, permissions) if successful, or completes exceptionally if authorization fails
 	 */
-	CompletableFuture<Map<String, Object>> authorize(Id userId, Id deviceId, String serviceId);
+	CompletableFuture<Map<String, Object>> authorize(Id userId, Id deviceId, String serviceType);
 }

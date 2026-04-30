@@ -23,7 +23,7 @@
 package io.bosonnetwork.service;
 
 import java.net.URI;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,7 +41,7 @@ import io.bosonnetwork.identifier.Credential;
  */
 public class BosonSuperNodeProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
-	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonProfile";
+	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonSuperNodeProfile";
 
 	private static final String SUPER_NODE_API_SERVICE_TYPE = "io.bosonnetwork.supernodeapi";
 	private static final String WEB_GATEWAY_SERVICE_TYPE = "io.bosonnetwork.webgateway";
@@ -92,13 +92,13 @@ public class BosonSuperNodeProfile {
 		String logo = null;
 		String website = null;
 		String contact = null;
-		Credential profile = card.getProfileCredential();
-		if (profile != null) {
+		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
+		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
-			name = (String) claims.get("name");
-			logo = (String) claims.get("logo");
-			website = (String) claims.get("website");
-			contact = (String) claims.get("contact");
+			name = String.valueOf(claims.get("name"));
+			logo = String.valueOf(claims.get("logo"));
+			website = String.valueOf(claims.get("website"));
+			contact = String.valueOf(claims.get("contact"));
 		}
 
 		return new BosonSuperNodeProfile(id, name, logo, website, contact, card);
@@ -147,15 +147,6 @@ public class BosonSuperNodeProfile {
 	 */
 	public String getContact() {
 		return contact;
-	}
-
-	/**
-	 * Returns the underlying {@link Card} representing this super node profile.
-	 *
-	 * @return the card
-	 */
-	public Card getCard() {
-		return card;
 	}
 
 	/**
@@ -235,6 +226,15 @@ public class BosonSuperNodeProfile {
 	 */
 	public List<Card.Service> getActiveProxyServices() {
 		return card.getServices(ACTIVE_PROXY_SERVICE_TYPE);
+	}
+
+	/**
+	 * Returns the underlying {@link Card} representing this super node profile.
+	 *
+	 * @return the card
+	 */
+	public Card getCard() {
+		return card;
 	}
 
 	/**
@@ -424,7 +424,7 @@ public class BosonSuperNodeProfile {
 		 * @throws IllegalStateException if no profile metadata (name, logo, website, or contact) was provided
 		 */
 		public BosonSuperNodeProfile build() {
-			Map<String, Object> claims = new HashMap<>();
+			Map<String, Object> claims = new LinkedHashMap<>();
 			if (name != null)
 				claims.put("name", name);
 			if (logo != null)

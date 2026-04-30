@@ -89,10 +89,14 @@ public class DIDDocumentTests {
 		assertTrue(credProfile.isValid());
 		assertTrue(credProfile.selfIssued());
 
+		assertNotNull(doc.getCredential("profile", "BosonProfile"));
+
 		assertEquals(1, doc.getServices().size());
 		assertNotNull(doc.getService("homeNode"));
 		assertNotNull(doc.getService(doc.getId().toDIDString() + "#homeNode"));
 		assertEquals(1, doc.getServices("BosonHomeNode").size());
+
+		assertNotNull(doc.getService("homeNode", "BosonHomeNode"));
 
 		assertTrue(doc.isGenuine());
 		assertDoesNotThrow(doc::validate);

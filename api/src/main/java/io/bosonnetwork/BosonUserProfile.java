@@ -22,7 +22,7 @@
 
 package io.bosonnetwork;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,18 +37,14 @@ import io.bosonnetwork.identifier.Credential;
  * It is backed by a {@link Card} (DID Document).
  */
 public class BosonUserProfile {
-	/** Default id used for profile credential entries. */
-	protected static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
-	/** Default type used for profile credential entries. */
-	protected static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonProfile";
-	/** Default id for the home node service. */
-	protected static final String DEFAULT_HOME_NODE_SERVICE_ID = "homeNode";
-	/** Default type for the home node service. */
-	protected static final String DEFAULT_HOME_NODE_SERVICE_TYPE = "BosonHomeNode";
-	/** Id for the Photon Messaging service */
-	protected static final String PHOTON_MESSAGING_SERVICE_ID = "photonMessaging";
-	/** Type for the Photon Messaging service */
-	protected static final String PHOTON_MESSAGING_SERVICE_TYPE = "BosonHomePeer";
+	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
+	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonProfile";
+
+	private static final String NAME = "name";
+	private static final String AVATAR = "avatar";
+	private static final String BIO = "bio";
+	private static final String HOME_NODE = "homeNode";
+	private static final String MESSAGING_HOME_PEER = "messagingHomePeer";
 
 	private final Id id;
 	private final String name;
@@ -95,33 +91,26 @@ public class BosonUserProfile {
 		String name = null;
 		String avatar = null;
 		String bio = null;
-		Credential profile = card.getProfileCredential();
-		if (profile != null) {
-			Map<String, Object> claims = profile.getSubject().getClaims();
-			name = (String) claims.get("name");
-			avatar = (String) claims.get("avatar");
-			bio = (String) claims.get("bio");
-		}
-
 		Id homeNode = null;
-		Card.Service service = card.getHomeNodeService();
-		if (service != null) {
-			String endpoint = service.getEndpoint();
-			if (endpoint != null) {
+		Id messagingHomePeer = null;
+		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
+		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
+			Map<String, Object> claims = profile.getSubject().getClaims();
+			name = String.valueOf(claims.get(NAME));
+			avatar = String.valueOf(claims.get(AVATAR));
+			bio = String.valueOf(claims.get(BIO));
+
+			Object value = claims.get(HOME_NODE);
+			if (value != null) {
 				try {
-					homeNode = Id.of(endpoint);
+					homeNode = Id.of((String) value);
 				} catch (Exception ignored) {
 				}
 			}
-		}
-
-		Id messagingHomePeer = null;
-		service = card.getService(PHOTON_MESSAGING_SERVICE_ID, PHOTON_MESSAGING_SERVICE_TYPE);
-		if (service != null) {
-			String endpoint = service.getEndpoint();
-			if (endpoint != null) {
+			value = claims.get(MESSAGING_HOME_PEER);
+			if (value != null) {
 				try {
-					messagingHomePeer = Id.of(endpoint);
+					messagingHomePeer = Id.of((String) value);
 				} catch (Exception ignored) {
 				}
 			}
@@ -208,7 +197,7 @@ public class BosonUserProfile {
 	 * Builder class for {@link BosonUserProfile}.
 	 */
 	public static class Builder {
-		private Identity identity;
+		private final Identity identity;
 		private String name;
 		private String avatar;
 		private String bio;
@@ -279,29 +268,27 @@ public class BosonUserProfile {
 		 * Builds a {@link BosonUserProfile} instance based on the provided data.
 		 *
 		 * @return a new user profile
-		 * @throws IllegalStateException if no profile data (name, avatar, bio, home node, or messaging peer) is provided
+		 * @throws IllegalStateException if no profile data is provided
 		 */
 		public BosonUserProfile build() {
-			Map<String, Object> claims = new HashMap<>();
+			Map<String, Object> claims = new LinkedHashMap<>();
 			if (name != null)
-				claims.put("name", name);
+				claims.put(NAME, name);
 			if (avatar != null)
-				claims.put("avatar", avatar);
+				claims.put(AVATAR, avatar);
 			if (bio != null)
-				claims.put("bio", bio);
+				claims.put(BIO, bio);
+			if (homeNode != null)
+				claims.put(HOME_NODE, homeNode.toString());
+			if (messagingHomePeer != null)
+				claims.put(MESSAGING_HOME_PEER, messagingHomePeer.toString());
 
-			if (claims.isEmpty() && homeNode == null && messagingHomePeer == null)
+			if (claims.isEmpty())
 				throw new IllegalStateException("No profile data provided");
 
 			CardBuilder builder = Card.builder(identity);
 			if (!claims.isEmpty())
 				builder.addCredential(DEFAULT_PROFILE_CREDENTIAL_ID, DEFAULT_PROFILE_CREDENTIAL_TYPE, claims);
-
-			if (homeNode != null)
-				builder.addService(DEFAULT_HOME_NODE_SERVICE_ID, DEFAULT_HOME_NODE_SERVICE_TYPE, homeNode.toString());
-
-			if (messagingHomePeer != null)
-				builder.addService(PHOTON_MESSAGING_SERVICE_ID, PHOTON_MESSAGING_SERVICE_TYPE, messagingHomePeer.toString());
 
 			Card card = builder.build();
 			return new BosonUserProfile(identity.getId(), name, avatar, bio, homeNode, messagingHomePeer, card);

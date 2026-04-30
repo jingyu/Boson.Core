@@ -62,22 +62,12 @@ import io.bosonnetwork.json.Json;
  */
 @JsonPropertyOrder({"id", "c", "s", "sat", "sig"})
 public class Card {
-	/** Default id used for profile credential entries. */
-	protected static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
-	/** Default type used for profile credential entries. */
-	protected static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonProfile";
-	/** Default id for the home node service. */
-	protected static final String DEFAULT_HOME_NODE_SERVICE_ID = "homeNode";
-	/** Default type for the home node service. */
-	protected static final String DEFAULT_HOME_NODE_SERVICE_TYPE = "BosonHomeNode";
-
 	/** The DID identifier of the subject. */
 	@JsonProperty("id")
 	private final Id id;
 
 	/**
 	 * List of credentials associated with this Card.
-	 *
 	 * Compact JSON property name "c".
 	 */
 	@JsonProperty("c")
@@ -86,7 +76,6 @@ public class Card {
 
 	/**
 	 * List of services associated with this Card.
-	 *
 	 * Compact JSON property name "s".
 	 */
 	@JsonProperty("s")
@@ -95,7 +84,6 @@ public class Card {
 
 	/**
 	 * Timestamp when this Card was signed.
-	 *
 	 * Compact JSON property name "sat".
 	 */
 	@JsonProperty("sat")
@@ -104,7 +92,6 @@ public class Card {
 
 	/**
 	 * Digital signature over the contents of this Card.
-	 *
 	 * Compact JSON property name "sig".
 	 */
 	@JsonProperty("sig")
@@ -141,8 +128,8 @@ public class Card {
 	 * The caller should transfer ownership of the credentials and services to the new instance.
 	 *
 	 * @param id          the DID identifier
-	 * @param credentials list of credentials (may be null or empty)
-	 * @param services    list of services (may be null or empty)
+	 * @param credentials list of credentials (maybe null or empty)
+	 * @param services    list of services (maybe null or empty)
 	 */
 	protected Card(Id id, List<Credential> credentials, List<Service> services) {
 		Objects.requireNonNull(id, "id");
@@ -217,15 +204,19 @@ public class Card {
 	}
 
 	/**
-	 * Returns the profile credential, if present.
-	 * The profile credential is identified by id "profile" and type "BosonProfile".
+	 * Retrieves a credential from the list of credentials that matches the specified id and type.
 	 *
-	 * @return the profile credential, or null if not found
+	 * @param id   the unique identifier of the credential to find, it must not be null
+	 * @param type the type of the credential to filter by
+	 * @return the credential matching the specified id and type, or null if no such credential exists
+	 * @throws NullPointerException if the id or type is null
 	 */
-	public Credential getProfileCredential() {
+	public Credential getCredential(String id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
+
 		return credentials.stream()
-				.filter(c -> c.getId().equals(DEFAULT_PROFILE_CREDENTIAL_ID) &&
-						c.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE))
+				.filter(c -> c.getId().equals(id) && c.getTypes().contains(type))
 				.findFirst()
 				.orElse(null);
 	}
@@ -276,20 +267,9 @@ public class Card {
 	 */
 	public Service getService(String id, String type) {
 		return services.stream()
-				.filter(s -> s.getId().equals(id) &&
-						s.getType().equals(type))
+				.filter(s -> s.getId().equals(id) && s.getType().equals(type))
 				.findFirst()
 				.orElse(null);
-	}
-
-	/**
-	 * Returns the home node service, if present.
-	 * The home node service is identified by id "homeNode" and type "BosonHomeNode".
-	 *
-	 * @return the home node service, or null if not found
-	 */
-	public Service getHomeNodeService() {
-		return getService(DEFAULT_HOME_NODE_SERVICE_ID, DEFAULT_HOME_NODE_SERVICE_TYPE);
 	}
 
 	/**
@@ -341,9 +321,9 @@ public class Card {
 	/**
 	 * Returns the byte array over which the signature is computed.
 	 * <p>
-	 * If this Card is already signed (signature present), returns the unsigned form
+	 * If this Card is already signed (signature presents), returns the unsigned form
 	 * of this Card for signature verification (signature and timestamp omitted).
-	 * Otherwise returns the serialized form of this Card.
+	 * Otherwise, returns the serialized form of this Card.
 	 *
 	 * @return byte array representing the signing data
 	 */
@@ -452,7 +432,7 @@ public class Card {
 	 *
 	 * @param subject the Identity subject for the Card
 	 * @return a new CardBuilder instance
-	 * @throws NullPointerException if subject is null
+	 * @throws NullPointerException if the subject is null
 	 */
 	public static CardBuilder builder(Identity subject) {
 		Objects.requireNonNull(subject, "subject");
@@ -526,7 +506,7 @@ public class Card {
 		 * @param id         the service identifier
 		 * @param type       the service type
 		 * @param endpoint   the service endpoint
-		 * @param properties additional properties map, may be null
+		 * @param properties additional properties map, maybe null
 		 */
 		protected Service(String id, String type, String endpoint, Map<String, Object> properties) {
 			this.id = id;
