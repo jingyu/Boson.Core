@@ -819,8 +819,18 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
+	public byte[] encrypt(Id receiver, byte[] nonce, byte[] data) throws CryptoException {
+		return identity.encrypt(receiver, nonce, data);
+	}
+
+	@Override
 	public byte[] decrypt(Id sender, byte[] data) throws CryptoException {
 		return identity.decrypt(sender, data);
+	}
+
+	@Override
+	public byte[] decrypt(Id sender, byte[] nonce, byte[] data) throws CryptoException {
+		return identity.decrypt(sender, nonce, data);
 	}
 
 	@Override

@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.ByteBuffer;
-import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -32,23 +30,21 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.vertx.VertxFuture;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DHTRegistryTest {
-	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "IdentifierRegistryTest");
-	private static Vertx vertx = Vertx.vertx();
+	// private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "IdentifierRegistryTest");
+	private static final Vertx vertx = Vertx.vertx();
 	private static Node node;
 	private static Registry registry;
 
 	@BeforeAll
 	public static void setup() throws Exception {
 		node = new Node() {
-			private Identity identity = new CryptoIdentity();
-			private Map<Id, Value> values = new ConcurrentHashMap<>();
+			private final Identity identity = new CryptoIdentity();
+			private final Map<Id, Value> values = new ConcurrentHashMap<>();
 
 			@Override
 			public Id getId() {
@@ -115,7 +111,17 @@ public class DHTRegistryTest {
 			}
 
 			@Override
+			public byte[] encrypt(Id receiver, byte[] nonce, byte[] data) {
+				return new byte[0];
+			}
+
+			@Override
 			public byte[] decrypt(Id sender, byte[] data) {
+				return new byte[0];
+			}
+
+			@Override
+			public byte[] decrypt(Id sender, byte[] nonce, byte[] data) {
 				return new byte[0];
 			}
 
@@ -136,7 +142,7 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
-				var updated = values.compute(value.getId(), (k, v) -> {
+				values.compute(value.getId(), (k, v) -> {
 					if (v != null) {
 						if (v.isMutable() && value.getSequenceNumber() < v.getSequenceNumber())
 							return v;
@@ -196,13 +202,12 @@ public class DHTRegistryTest {
 			}
 		};
 
-		registry = Registry.DHTRegistry();
-		registry.initialize(vertx, node, ResolverCache.fileSystem()).get();
+		registry = Registry.DHTRegistry(node, vertx, ResolverCache.fileSystem());
 	}
 
 	@AfterAll
-	public static void cleanup() throws Exception {
-		node.stop();
+	public static void cleanup() {
+		node.stop().join();
 	}
 
 	private static Identity alice;
@@ -219,15 +224,8 @@ public class DHTRegistryTest {
 				.build();
 
 		int version = 1;
-		var nonce = CryptoBox.Nonce.random();
-		var sha = Hash.sha256();
-		sha.update(card.getId().bytes());
-		sha.update(nonce.bytes());
-		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(version).array());
-		sha.update(card.toBytes());
-		var sig = alice.sign(sha.digest());
 
-		registry.register(card, nonce, version, sig).get();
+		registry.register(alice, card, version).get();
 	}
 
 	@Test
@@ -259,15 +257,7 @@ public class DHTRegistryTest {
 				.build();
 
 		int version = 2;
-		var nonce = CryptoBox.Nonce.random();
-		var sha = Hash.sha256();
-		sha.update(card.getId().bytes());
-		sha.update(nonce.bytes());
-		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(version).array());
-		sha.update(card.toBytes());
-		var sig = alice.sign(sha.digest());
-
-		registry.register(card, nonce, version, sig).get();
+		registry.register(alice, card, version).get();
 	}
 
 	@Test

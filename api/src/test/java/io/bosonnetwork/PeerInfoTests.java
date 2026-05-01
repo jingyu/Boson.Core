@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,7 +50,7 @@ public class PeerInfoTests {
 		assertTrue(peer.isValid());
 
 		String endpoint1 = "tcp://172.16.31.10:9876";
-		PeerInfo peer1 = peer.update(endpoint1);
+		PeerInfo peer1 = peer.update().endpoint(endpoint1).build();
 
 		assertNotNull(peer1);
 		assertTrue(peer1.hasPrivateKey());
@@ -70,7 +70,7 @@ public class PeerInfoTests {
 		assertTrue(peer1.isValid());
 
 		String endpoint2 = "tcp://203.0.113.126:5678";
-		PeerInfo peer2 = peer1.update(endpoint2);
+		PeerInfo peer2 = peer1.update().endpoint(endpoint2).build();
 
 		assertNotNull(peer2);
 		assertTrue(peer2.hasPrivateKey());
@@ -89,13 +89,19 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getSignature());
 		assertTrue(peer2.isValid());
 
-		PeerInfo peer3 = peer2.update(endpoint2);
-		assertSame(peer2, peer3);
+		PeerInfo peer3 = peer2.update().endpoint(endpoint2).build();
+		assertNotSame(peer2, peer3);
+		assertEquals(endpoint2, peer3.getEndpoint());
+		assertTrue(peer3.hasPrivateKey());
+		assertFalse(peer3.isAuthenticated());
+		assertFalse(peer3.hasExtra());
+		assertEquals(3, peer3.getSequenceNumber());
+		assertNotEquals(peer2.getNonce(), peer3.getNonce());
 
 		PeerInfo peer4 = peer3.withoutPrivateKey();
 		assertFalse(peer4.hasPrivateKey());
 		assertEquals(peer3, peer4);
-		assertThrows(UnsupportedOperationException.class, () -> peer4.update("tcp://hostname:2345"));
+		assertThrows(IllegalStateException.class, () -> peer4.update().endpoint("tcp://hostname:2345").build());
 
 		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
 		assertFalse(peer.isValid());
@@ -135,7 +141,7 @@ public class PeerInfoTests {
 		extra1.put("foo", "baz");
 		extra1.put("qux", false);
 		String endpoint1 = "tcp://172.16.31.10:9876";
-		PeerInfo peer1 = peer.update(endpoint1, extra1);
+		PeerInfo peer1 = peer.update().endpoint(endpoint1).extra(extra1).build();
 
 		assertNotNull(peer1);
 		assertTrue(peer1.hasPrivateKey());
@@ -157,7 +163,7 @@ public class PeerInfoTests {
 
 		byte[] extraData2 = Random.randomBytes(128);
 		String endpoint2 = "tcp://203.0.113.126:5678";
-		PeerInfo peer2 = peer1.update(endpoint2, extraData2);
+		PeerInfo peer2 = peer1.update().endpoint(endpoint2).extra(extraData2).build();
 
 		assertNotNull(peer2);
 		assertTrue(peer2.hasPrivateKey());
@@ -177,13 +183,19 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getSignature());
 		assertTrue(peer2.isValid());
 
-		PeerInfo peer3 = peer2.update(endpoint2, extraData2);
-		assertSame(peer2, peer3);
+		PeerInfo peer3 = peer2.update().endpoint(endpoint2).extra(extraData2).build();
+		assertNotSame(peer2, peer3);
+		assertEquals(endpoint2, peer3.getEndpoint());
+		assertFalse(peer3.isAuthenticated());
+		assertArrayEquals(extraData2, peer3.getExtraData());
+		assertEquals(3, peer3.getSequenceNumber());
+		assertEquals(10, peer3.getFingerprint());
+		assertTrue(peer3.hasPrivateKey());
 
 		PeerInfo peer4 = peer3.withoutPrivateKey();
 		assertFalse(peer4.hasPrivateKey());
 		assertEquals(peer3, peer4);
-		assertThrows(UnsupportedOperationException.class, () -> peer4.update("tcp://hostname:2345"));
+		assertThrows(IllegalStateException.class, () -> peer4.update().endpoint("tcp://hostname:2345").build());
 
 		peer.getExtraData()[0] = (byte) (peer.getExtraData()[0] + 1);
 		assertFalse(peer.isValid());
@@ -215,7 +227,7 @@ public class PeerInfoTests {
 		assertTrue(peer.isValid());
 
 		String endpoint1 = "tcp://172.16.31.10:9876";
-		PeerInfo peer1 = peer.update(node, endpoint1);
+		PeerInfo peer1 = peer.update().node(node).endpoint(endpoint1).build();
 
 		assertNotNull(peer1);
 		assertTrue(peer1.hasPrivateKey());
@@ -235,7 +247,7 @@ public class PeerInfoTests {
 		assertTrue(peer1.isValid());
 
 		String endpoint2 = "tcp://203.0.113.126:5678";
-		PeerInfo peer2 = peer1.update(node, endpoint2);
+		PeerInfo peer2 = peer1.update().node(node).endpoint(endpoint2).build();
 
 		assertNotNull(peer2);
 		assertTrue(peer2.hasPrivateKey());
@@ -254,15 +266,21 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getSignature());
 		assertTrue(peer2.isValid());
 
-		PeerInfo peer3 = peer2.update(node, endpoint2);
-		assertSame(peer2, peer3);
+		PeerInfo peer3 = peer2.update().node(node).endpoint(endpoint2).build();
+		assertNotSame(peer2, peer3);
+		assertEquals(node.getId(), peer3.getNodeId());
+		assertNotEquals(peer2.getNonce(), peer3.getNonce());
+		assertEquals(endpoint2, peer3.getEndpoint());
+		assertTrue(peer3.isAuthenticated());
+		assertEquals(3, peer3.getSequenceNumber());
 
 		PeerInfo peer4 = peer3.withoutPrivateKey();
 		assertFalse(peer4.hasPrivateKey());
 		assertEquals(peer3, peer4);
-		assertThrows(UnsupportedOperationException.class, () -> peer4.update(node, "tcp://hostname:2345"));
-		assertThrows(UnsupportedOperationException.class, () -> peer3.update(endpoint2));
-		assertThrows(IllegalArgumentException.class, () -> peer3.update(new CryptoIdentity(), endpoint2));
+		assertThrows(IllegalStateException.class, () -> peer4.update().node(node).endpoint("tcp://hostname:2345").build());
+		assertThrows(IllegalStateException.class, () -> peer3.update().endpoint(endpoint2).build());
+		assertThrows(IllegalArgumentException.class, () -> peer3.update().node(new CryptoIdentity()).endpoint(endpoint2).build());
+		assertThrows(IllegalArgumentException.class, () -> peer3.update().identity(new CryptoIdentity()).node(node).endpoint(endpoint2).build());
 
 		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
 		assertFalse(peer.isValid());
@@ -279,6 +297,7 @@ public class PeerInfoTests {
 		extra.put("quux", Random.randomBytes(64));
 		String endpoint = "tcp://203.0.113.10:5678";
 		PeerInfo peer = PeerInfo.builder()
+				.keepPrivateKey()
 				.node(node)
 				.fingerprint(-57)
 				.endpoint(endpoint)
@@ -305,7 +324,7 @@ public class PeerInfoTests {
 		extra1.put("foo", "baz");
 		extra1.put("qux", false);
 		String endpoint1 = "tcp://172.16.31.10:9876";
-		PeerInfo peer1 = peer.update(node, endpoint1, extra1);
+		PeerInfo peer1 = peer.update().node(node).endpoint(endpoint1).extra(extra1).build();
 
 		assertNotNull(peer1);
 		assertTrue(peer1.hasPrivateKey());
@@ -327,7 +346,7 @@ public class PeerInfoTests {
 
 		byte[] extraData2 = Random.randomBytes(128);
 		String endpoint2 = "tcp://203.0.113.126:5678";
-		PeerInfo peer2 = peer1.update(node, endpoint2, extraData2);
+		PeerInfo peer2 = peer1.update().node(node).endpoint(endpoint2).extra(extraData2).build();
 
 		assertNotNull(peer2);
 		assertTrue(peer2.hasPrivateKey());
@@ -347,15 +366,25 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getSignature());
 		assertTrue(peer2.isValid());
 
-		PeerInfo peer3 = peer2.update(node, endpoint2, extraData2);
-		assertSame(peer2, peer3);
+		PeerInfo peer3 = peer2.update().node(node).endpoint(endpoint2).extra(extraData2).build();
+		assertNotSame(peer2, peer3);
+		assertEquals(node.getId(), peer3.getNodeId());
+		assertEquals(-57, peer3.getFingerprint());
+		assertNotEquals(peer2.getNonce(), peer3.getNonce());
+		assertEquals(endpoint2, peer3.getEndpoint());
+		assertArrayEquals(extraData2, peer3.getExtraData());
+		assertTrue(peer3.hasPrivateKey());
+		assertTrue(peer3.isAuthenticated());
+		assertTrue(peer3.hasExtra());
+		assertEquals(3, peer3.getSequenceNumber());
 
 		PeerInfo peer4 = peer3.withoutPrivateKey();
 		assertFalse(peer4.hasPrivateKey());
 		assertEquals(peer3, peer4);
-		assertThrows(UnsupportedOperationException.class, () -> peer4.update(node,"tcp://hostname:2345"));
-		assertThrows(UnsupportedOperationException.class, () -> peer3.update(endpoint2));
-		assertThrows(IllegalArgumentException.class, () -> peer3.update(new CryptoIdentity(), endpoint2));
+		assertThrows(IllegalStateException.class, () -> peer4.update().node(node).endpoint("tcp://hostname:2345").build());
+		assertThrows(IllegalStateException.class, () -> peer3.update().endpoint(endpoint2).build());
+		assertThrows(IllegalArgumentException.class, () -> peer3.update().node(new CryptoIdentity()).endpoint(endpoint2).build());
+		assertThrows(IllegalArgumentException.class, () -> peer3.update().identity(new CryptoIdentity()).node(node).endpoint(endpoint2).build());
 
 		peer.getExtraData()[0] = (byte) (peer.getExtraData()[0] + 1);
 		assertFalse(peer.isValid());
@@ -391,7 +420,7 @@ public class PeerInfoTests {
 	@ParameterizedTest
 	@ValueSource(strings = {"simple", "simple+omitted", "simple+extra", "simple+extra+omitted",
 			"authenticated", "authenticated+omitted", "authenticated+extra", "authenticated+extra+omitted"})
-	void testJson(String mode) throws Exception {
+	void testJson(String mode) {
 		Identity nodeIdentity = new CryptoIdentity();
 		Signature.KeyPair keypair = Signature.KeyPair.random();
 		Id peerId = Id.of(keypair.publicKey().bytes());
@@ -441,9 +470,9 @@ public class PeerInfoTests {
 		assertEquals(json, json2);
 
 		if (omitted) {
-			Exception e = assertThrows(MismatchedInputException.class, () -> {
-				Json.objectMapper().readValue(json, PeerInfo.class);
-			});
+			Exception e = assertThrows(MismatchedInputException.class, () ->
+					Json.objectMapper().readValue(json, PeerInfo.class)
+			);
 			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
 		}
 	}
@@ -451,7 +480,7 @@ public class PeerInfoTests {
 	@ParameterizedTest
 	@ValueSource(strings = {"simple", "simple+omitted", "simple+extra", "simple+extra+omitted",
 			"authenticated", "authenticated+omitted", "authenticated+extra", "authenticated+extra+omitted"})
-	void testCbor(String mode) throws Exception {
+	void testCbor(String mode) {
 		Identity nodeIdentity = new CryptoIdentity();
 		Signature.KeyPair keypair = Signature.KeyPair.random();
 		Id peerId = Id.of(keypair.publicKey().bytes());
@@ -501,9 +530,9 @@ public class PeerInfoTests {
 		assertArrayEquals(cbor, cbor2);
 
 		if (omitted) {
-			Exception e = assertThrows(MismatchedInputException.class, () -> {
-				Json.cborMapper().readValue(cbor, PeerInfo.class);
-			});
+			Exception e = assertThrows(MismatchedInputException.class, () ->
+					Json.cborMapper().readValue(cbor, PeerInfo.class)
+			);
 			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
 		}
 	}

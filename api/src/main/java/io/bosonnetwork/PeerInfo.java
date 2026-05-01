@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
+import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
@@ -44,7 +45,7 @@ import io.bosonnetwork.json.Json;
  *
  * <p>PeerInfo has 2 types:
  * <ul>
- *     <li>Authenticated PeerInfo: The service peer is provided by a Boson DHT node, and includes the
+ *     <li>Authenticated PeerInfo: The service peer is provided by a Boson DHT node and includes the
  *     nodeId and node signature as proof.</li>
  *     <li>Regular PeerInfo: Without nodeId and node signature.</li>
  * </ul>
@@ -52,6 +53,14 @@ import io.bosonnetwork.json.Json;
  * <p>The PeerInfo is signed by the peer keypair, which is held by the service peer owner.
  *
  * <p>PeerInfo is uniquely identified by the peer ID (public key) and fingerprint.
+ *
+ * <p>Trust model:
+ * <ul>
+ *     <li>The node signature proves that the peer identity is associated with a specific node.</li>
+ *     <li>The peer signature proves the integrity and authenticity of the PeerInfo content.</li>
+ * </ul>
+ *
+ * <p>These two signatures serve different purposes and do not overlap.
  */
 
 public class PeerInfo {
@@ -65,7 +74,7 @@ public class PeerInfo {
 
 	/** The peer ID. */
 	private final Id publicKey;
-	/** The private key to sign the peer info. */
+	/** The private key to sign the peer info. Optional. */
 	private final byte[] privateKey;
 	/** The nonce. */
 	private final byte[] nonce;
@@ -77,7 +86,11 @@ public class PeerInfo {
 	private final byte[] nodeSig;
 	/** The signature. */
 	private final byte[] signature;
-	/** Unique fingerprint number for the peer with same peer id. */
+	/**
+	 * Unique fingerprint number for the peer with the same peer id.
+	 * <p>
+	 * Fingerprint is only unique per peer instance, not globally guaranteed.
+	 */
 	private final long fingerprint;
 	/** The service endpoint URI of the peer. */
 	private final String endpoint;
@@ -137,31 +150,33 @@ public class PeerInfo {
 	public static PeerInfo of(Id peerId, byte[] privateKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
 							  byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
 		if (peerId == null)
-			throw new IllegalArgumentException("Invalid peer id");
+			throw new IllegalArgumentException("Invalid peer id: must not be null");
 
 		// noinspection DuplicatedCode
 		if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
-			throw new IllegalArgumentException("Invalid private key");
+			throw new IllegalArgumentException("Invalid private key: incorrect length");
 
 		if (nonce == null || nonce.length != NONCE_BYTES)
-			throw new IllegalArgumentException("Invalid nonce");
+			throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
 
 		if (sequenceNumber < 0)
-			throw new IllegalArgumentException("Invalid sequence number");
+			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
 		if (nodeId != null) {
 			if (nodeSig == null || nodeSig.length != Signature.BYTES)
-				throw new IllegalArgumentException("Invalid node signature");
+				throw new IllegalArgumentException("Invalid node signature: incorrect length");
 		} else {
 			if (nodeSig != null)
-				throw new IllegalArgumentException("Invalid node signature, should be null if nodeId is null");
+				throw new IllegalArgumentException("Invalid node signature: must be null when nodeId is null");
 		}
 
 		if (signature == null || signature.length != Signature.BYTES)
-			throw new IllegalArgumentException("Invalid signature");
+			throw new IllegalArgumentException("Invalid signature: incorrect length");
 
 		if (endpoint == null || endpoint.isEmpty())
-			throw new IllegalArgumentException("Invalid endpoint");
+			throw new IllegalArgumentException("Invalid endpoint: must not be null or empty");
+
+		endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
 
 		return new PeerInfo(peerId, privateKey, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
@@ -176,38 +191,38 @@ public class PeerInfo {
 	}
 
 	/**
-	 * Helper method to create a new PeerInfo instance with common logic.
+	 * Creates a new instance of {@code PeerInfo} using the provided peer information.
 	 *
-	 * @param keypair        The peer keypair.
-	 * @param node           The node identity (optional).
-	 * @param sequenceNumber The sequence number.
-	 * @param fingerprint    The fingerprint.
-	 * @param endpoint       The endpoint.
-	 * @param extraData      The extra data.
-	 * @return The new PeerInfo instance.
+	 * @param peer The identity of the peer for which the {@code PeerInfo} is being created.
+	 * @param privateKey A private key associated with the peer identity. Optional.
+	 * @param node The identity of the node associated with the peer, or {@code null} if no node is linked.
+	 * @param sequenceNumber A unique sequence number for the {@code PeerInfo}, used to ensure freshness.
+	 * @param fingerprint A long value representing the fingerprint of the peer.
+	 * @param endpoint The network endpoint of the peer (e.g., an IP address or domain name).
+	 * @param extraData Additional arbitrary data associated with the {@code PeerInfo}.
+	 * @return A newly created {@code PeerInfo} instance containing the provided details and cryptographic signatures.
 	 */
-	private static PeerInfo create(Signature.KeyPair keypair, Identity node, int sequenceNumber,
+	private static PeerInfo create(Identity peer, byte[] privateKey, Identity node, int sequenceNumber,
 								   long fingerprint, String endpoint, byte[] extraData) {
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
 
-		Id peerId = Id.of(keypair.publicKey().bytes());
+		Id publicKey = peer.getId();
 		Id nodeId;
 		byte[] nodeSig;
 		if (node != null) {
 			nodeId = node.getId();
-			byte[] digest = Hash.sha256(peerId.bytes(), nodeId.bytes(), nonce);
+			byte[] digest = Hash.sha256(publicKey.bytes(), nodeId.bytes(), nonce);
 			nodeSig = node.sign(digest);
 		} else {
 			nodeId = null;
 			nodeSig = null;
 		}
 
-		byte[] digest = new PeerInfo(peerId, null, nonce, sequenceNumber,
-				nodeId, nodeSig, null, fingerprint, endpoint, extraData).digest();
-		byte[] sig = Signature.sign(digest, keypair.privateKey());
+		byte[] digest = computeDigest(publicKey, nonce, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
+		byte[] sig = peer.sign(digest);
 
-		return new PeerInfo(peerId, keypair.privateKey().bytes(), nonce, sequenceNumber,
+		return new PeerInfo(publicKey, privateKey, nonce, sequenceNumber,
 				nodeId, nodeSig, sig, fingerprint, endpoint, extraData);
 	}
 
@@ -277,8 +292,12 @@ public class PeerInfo {
 	/**
 	 * Checks if the peer info is authenticated.
 	 *
-	 * <p>Authenticated means the service peer provided by a Boson DHT node, and include the nodeId and
-	 * node signature to proof.
+	 * <p>Authenticated means the service peer is provided by a Boson DHT node, and includes the nodeId and
+	 * node signature to prove ownership of the peer identity by the node.
+	 *
+	 * <p>Note: Node authentication only proves the association between the peer ID and the node.
+	 * It does not imply endorsement of the PeerInfo content (such as endpoint or extra data),
+	 * which is authorized solely by the peer's signature.
 	 *
 	 * @return {@code true} if the peer info is authenticated, {@code false} otherwise.
 	 */
@@ -342,7 +361,7 @@ public class PeerInfo {
 				try {
 					extra = Collections.unmodifiableMap(Json.parse(extraData));
 				} catch (Exception e) {
-					throw new IllegalStateException("Invalid extra data", e);
+					throw new IllegalStateException("Invalid extra data for peer " + publicKey + ": failed to parse JSON", e);
 				}
 			} else {
 				extra = Collections.emptyMap();
@@ -357,7 +376,8 @@ public class PeerInfo {
 	 *
 	 * @return the digest
 	 */
-	private byte[] digest() {
+	private static byte[] computeDigest(Id publicKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
+										long fingerprint, String endpoint, byte[] extraData) {
 		MessageDigest sha = Hash.sha256();
 		sha.update(publicKey.bytes());
 		sha.update(nonce);
@@ -396,12 +416,15 @@ public class PeerInfo {
 		if (nonce == null || nonce.length != NONCE_BYTES)
 			return false;
 
+		if (sequenceNumber < 0)
+			return false;
+
 		if (nodeId != null) {
 			if (nodeSig == null || nodeSig.length != Signature.BYTES)
 				return false;
 
 			Signature.PublicKey nodePk = nodeId.toSignatureKey();
-			byte[] digest = Hash.sha256(publicKey.getBytes(), nodeId.bytes(), nonce);
+			byte[] digest = Hash.sha256(publicKey.bytes(), nodeId.bytes(), nonce);
 			if (!Signature.verify(digest, nodeSig, nodePk))
 				return false;
 		} else {
@@ -409,8 +432,9 @@ public class PeerInfo {
 				return false;
 		}
 
+		byte[] digest = computeDigest(publicKey, nonce, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
 		Signature.PublicKey peerPk = publicKey.toSignatureKey();
-		return Signature.verify(digest(), signature, peerPk);
+		return Signature.verify(digest, signature, peerPk);
 	}
 
 	/**
@@ -428,114 +452,13 @@ public class PeerInfo {
 	}
 
 	/**
-	 * Updates the endpoint of the peer info.
+	 * Creates and returns a new instance of the Builder class using the current object
+	 * as a reference to create the updated PeerInfo instance.
 	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param endpoint The new endpoint.
-	 * @return The updated PeerInfo instance.
+	 * @return a new Builder instance initialized with the context of the current object.
 	 */
-	public PeerInfo update(String endpoint) {
-		return update(null, endpoint, this.extraData);
-	}
-
-	/**
-	 * Updates the endpoint and extra data of the peer info.
-	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint/extra data and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param endpoint  The new endpoint.
-	 * @param extraData The new extra data.
-	 * @return The updated PeerInfo instance.
-	 */
-	public PeerInfo update(String endpoint, byte[] extraData) {
-		return update(null, endpoint, extraData);
-	}
-
-	/**
-	 * Updates the endpoint and extra data of the peer info.
-	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint/extra data and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param endpoint The new endpoint.
-	 * @param extra    The new extra data map.
-	 * @return The updated PeerInfo instance.
-	 */
-	public PeerInfo update(String endpoint, Map<String, Object> extra) {
-		byte[] extraData = extra != null && !extra.isEmpty() ? Json.toBytes(extra) : null;
-		return update(null, endpoint, extraData);
-	}
-
-	/**
-	 * Updates the endpoint of the peer info, optionally adding node authentication.
-	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param node     The node identity for authentication (optional).
-	 * @param endpoint The new endpoint.
-	 * @return The updated PeerInfo instance.
-	 */
-	public PeerInfo update(Identity node, String endpoint) {
-		return update(node, endpoint, this.extraData);
-	}
-
-	/**
-	 * Updates the endpoint and extra data of the peer info, optionally adding node authentication.
-	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint/extra data and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param node     The node identity for authentication (optional).
-	 * @param endpoint The new endpoint.
-	 * @param extra    The new extra data map.
-	 * @return The updated PeerInfo instance.
-	 */
-	public PeerInfo update(Identity node, String endpoint, Map<String, Object> extra) {
-		byte[] extraData = extra != null && !extra.isEmpty() ? Json.toBytes(extra) : null;
-		return update(node, endpoint, extraData);
-	}
-
-	/**
-	 * Updates the endpoint and extra data of the peer info, optionally adding node authentication.
-	 *
-	 * <p>This method creates a new PeerInfo instance with the updated endpoint/extra data and an incremented sequence number.
-	 * The new instance will be signed with the private key held by this instance.
-	 *
-	 * @param node      The node identity for authentication (optional).
-	 * @param endpoint  The new endpoint.
-	 * @param extraData The new extra data.
-	 * @return The updated PeerInfo instance.
-	 * @throws UnsupportedOperationException If this instance does not hold the private key.
-	 * @throws IllegalArgumentException      If the endpoint is invalid or if attempting to change the authenticating node ID.
-	 */
-	public PeerInfo update(Identity node, String endpoint, byte[] extraData) {
-		if (privateKey == null)
-			throw new UnsupportedOperationException("Not the owner of the peer info");
-
-		if (endpoint == null || endpoint.isEmpty())
-			throw new IllegalArgumentException("Invalid endpoint");
-
-		if (this.nodeId != null) {
-			if (node == null)
-				throw new UnsupportedOperationException("Cannot update node authenticated peer info without the owner node");
-			if (!node.getId().equals(this.nodeId))
-				throw new IllegalArgumentException("Cannot update node authenticated peer info with a different node");
-		}
-
-		String _endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
-		byte[] _extraData = extraData == null || extraData.length == 0 ? null : extraData;
-		Id nodeId = node != null ? node.getId() : null;
-
-		if (_endpoint.equals(this.endpoint) && Objects.equals(this.nodeId, nodeId) && Arrays.equals(this.extraData, _extraData))
-			return this; // nothing to update
-
-		int sequenceNumber = this.sequenceNumber + 1;
-		Signature.KeyPair keyPair = Signature.KeyPair.fromPrivateKey(this.privateKey);
-		return create(keyPair, node, sequenceNumber, fingerprint, _endpoint, _extraData);
+	public Builder update() {
+		return new Builder(this);
 	}
 
 	/**
@@ -610,7 +533,10 @@ public class PeerInfo {
 	 * PeerInfo builder.
 	 */
 	public static class Builder {
-		private Signature.KeyPair keyPair = null;
+		private final PeerInfo forUpdate;
+
+		private Identity identity = null;
+		private boolean keepPrivateKey;
 		private int sequenceNumber = 0;
 		private Identity node = null;
 		private long fingerprint = 0;
@@ -618,6 +544,21 @@ public class PeerInfo {
 		private byte[] extraData = null;
 
 		private Builder() {
+			this.forUpdate = null;
+		}
+
+		private Builder(PeerInfo peerInfo) {
+			this.forUpdate = peerInfo;
+			this.identity = peerInfo.hasPrivateKey() ? new CryptoIdentity(peerInfo.privateKey) : null;
+			this.keepPrivateKey = peerInfo.hasPrivateKey();
+			this.sequenceNumber = peerInfo.sequenceNumber + 1;
+			this.fingerprint = peerInfo.fingerprint;
+			this.endpoint = peerInfo.endpoint;
+			this.extraData = peerInfo.extraData;
+		}
+
+		private boolean isUpdate() {
+			return forUpdate != null;
 		}
 
 		/**
@@ -629,7 +570,7 @@ public class PeerInfo {
 		 */
 		public Builder endpoint(String endpoint) {
 			if (endpoint == null || endpoint.isEmpty())
-				throw new IllegalArgumentException("Endpoint cannot be null or empty");
+				throw new IllegalArgumentException("Endpoint must not be null or empty");
 			this.endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
 			return this;
 		}
@@ -663,6 +604,9 @@ public class PeerInfo {
 		 * @return the builder instance
 		 */
 		public Builder fingerprint(long fingerprint) {
+			if (isUpdate())
+				throw new UnsupportedOperationException("Cannot update fingerprint of an existing peer info");
+
 			this.fingerprint = fingerprint;
 			return this;
 		}
@@ -674,6 +618,13 @@ public class PeerInfo {
 		 * @return the builder instance
 		 */
 		public Builder node(Identity node) {
+			Objects.requireNonNull(node);
+
+			if (isUpdate()) {
+				if (forUpdate.nodeId != null && !forUpdate.nodeId.equals(node.getId()))
+					throw new IllegalArgumentException("Cannot change node identity of an authenticated peer info");
+			}
+
 			this.node = node;
 			return this;
 		}
@@ -686,8 +637,11 @@ public class PeerInfo {
 		 * @throws IllegalArgumentException if the sequence number is negative
 		 */
 		public Builder sequenceNumber(int sequenceNumber) {
+			if (isUpdate())
+				throw new UnsupportedOperationException("Cannot set sequence number of an update manually");
+
 			if (sequenceNumber < 0)
-				throw new IllegalArgumentException("Invalid sequence number");
+				throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 			this.sequenceNumber = sequenceNumber;
 			return this;
 		}
@@ -699,7 +653,8 @@ public class PeerInfo {
 		 * @return the builder instance
 		 */
 		public Builder key(Signature.KeyPair keyPair) {
-			this.keyPair = keyPair;
+			Objects.requireNonNull(keyPair);
+			identity(new CryptoIdentity(keyPair));
 			return this;
 		}
 
@@ -712,7 +667,7 @@ public class PeerInfo {
 		 */
 		public Builder key(Signature.PrivateKey privateKey) {
 			Objects.requireNonNull(privateKey);
-			this.keyPair = Signature.KeyPair.fromPrivateKey(privateKey);
+			key(Signature.KeyPair.fromPrivateKey(privateKey));
 			return this;
 		}
 
@@ -727,8 +682,34 @@ public class PeerInfo {
 		public Builder key(byte[] privateKey) {
 			Objects.requireNonNull(privateKey);
 			if (privateKey.length != Signature.PrivateKey.BYTES)
-				throw new IllegalArgumentException("Invalid private key");
-			this.keyPair = Signature.KeyPair.fromPrivateKey(privateKey);
+				throw new IllegalArgumentException("Invalid private key: incorrect length");
+			key(Signature.KeyPair.fromPrivateKey(privateKey));
+			return this;
+		}
+
+		/**
+		 * Sets the identity for the peer information.
+		 *
+		 * @param identity the identity to set; must not be null
+		 * @return the builder instance
+		 * @throws NullPointerException if the identity is null
+		 */
+		public Builder identity(Identity identity) {
+			Objects.requireNonNull(identity);
+			if (isUpdate() && !identity.getId().equals(forUpdate.getId()))
+				throw new IllegalArgumentException("Identity does not match the existing peer id");
+
+			this.identity = identity;
+			return this;
+		}
+
+		/**
+		 * Configures that the private key is retained in the built PeerInfo instance.
+		 *
+		 * @return the builder instance for method chaining
+		 */
+		public Builder keepPrivateKey() {
+			this.keepPrivateKey = true;
 			return this;
 		}
 
@@ -740,15 +721,39 @@ public class PeerInfo {
 		 */
 		public PeerInfo build() {
 			if (endpoint == null || endpoint.isEmpty())
-				throw new IllegalStateException("Missing endpoint");
+				throw new IllegalStateException("Missing required field: endpoint");
 
-			if (keyPair == null)
-				keyPair = Signature.KeyPair.random();
+			// Enforce monotonic authentication: cannot remove node authentication once present
+			if (isUpdate()) {
+				if (forUpdate.isAuthenticated()) {
+					if (node == null)
+						throw new IllegalStateException("Cannot remove node authentication from an authenticated peer info");
+				}
+			}
+
+			if (identity == null) {
+				if (isUpdate()) {
+					throw new IllegalStateException("Missing identity: required for updating existing peer info");
+				} else {
+					identity = new CryptoIdentity();
+					keepPrivateKey = true;
+				}
+			}
 
 			if (fingerprint == 0)
 				fingerprint = Random.secureRandom().nextLong();
 
-			return PeerInfo.create(keyPair, node, sequenceNumber, fingerprint, endpoint, extraData);
+			byte[] privateKey;
+			if (keepPrivateKey) {
+				if (identity instanceof CryptoIdentity cid)
+					privateKey = cid.getKeyPair().privateKey().bytes();
+				else
+					throw new IllegalStateException("Unable to extract private key from identity");
+			} else {
+				privateKey = null;
+			}
+
+			return PeerInfo.create(identity, privateKey, node, sequenceNumber, fingerprint, endpoint, extraData);
 		}
 	}
 }

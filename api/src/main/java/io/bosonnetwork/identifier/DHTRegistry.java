@@ -22,109 +22,78 @@
 
 package io.bosonnetwork.identifier;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.Identity;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.crypto.CryptoBox;
-import io.bosonnetwork.vertx.VertxFuture;
 
 /**
- * Singleton implementation of {@link Registry} that uses a distributed hash table (DHT) to store and resolve Cards.
+ * Implementation of the {@link Registry} interface that uses a Distributed Hash Table (DHT)
+ * for securely registering and resolving {@link Card}s.
  * <p>
- * Provides methods to initialize the registry with Vert.x and Node instances, register Cards in the DHT,
- * and retrieve a Resolver for asynchronous Card resolution.
+ * This class provides mechanisms for storing cryptographic identities and metadata within a DHT
+ * for decentralized access and lookup. It also integrates a caching layer to optimize the
+ * resolution process, leveraging asynchronous operations via Vert.x.
  */
 class DHTRegistry implements Registry {
-	/** Vert.x instance for asynchronous operations */
-	private Vertx vertx;
 	/** Local DHT node used for storing and finding values */
-	private Node node;
+	private final Node node;
 	/** Resolver instance for resolving Cards via DHT */
-	private Resolver resolver;
-	/** Singleton instance of the registry */
-	private static DHTRegistry instance;
+	private final Resolver resolver;
 	/** Logger for debug and error messages */
 	private static final Logger log = LoggerFactory.getLogger(DHTRegistry.class);
 
-	private DHTRegistry() {
-	}
-
 	/**
-	 * Retrieves the singleton instance of the DHTRegistry.
+	 * Constructs a new instance of {@code DHTRegistry}, initializing it with the provided Vert.x instance,
+	 * local DHT node, and a persistent cache for resolving values.
 	 *
-	 * @return the singleton Registry instance
+	 * @param node the local DHT node used for storing and retrieving values; must not be null
+	 * @param vertx the Vert.x instance used for asynchronous operations; must be null
+	 * @param persistentCache the cache instance used to persist resolver data; can be null depending on caching needs
+	 * @throws NullPointerException if {@code vertx} or {@code node} is null
 	 */
-	protected static Registry getInstance() {
-		if (instance == null)
-			instance = new DHTRegistry();
+	protected DHTRegistry(Node node, Vertx vertx, ResolverCache persistentCache) {
+		Objects.requireNonNull(node);
 
-		return instance;
-	}
-
-	/**
-	 * Initializes the registry with the required components.
-	 *
-	 * @param args variable arguments where:
-	 *             args[0] must be a Vertx instance for asynchronous operations,
-	 *             args[1] must be a Node instance representing the local DHT node,
-	 *             args[2] optionally a ResolverCache instance for persistent caching.
-	 * @return a CompletableFuture that completes when initialization is done or fails if arguments are invalid or already initialized
-	 */
-	@Override
-	public CompletableFuture<Void> initialize(Object... args) {
-		if (vertx != null && node != null)
-			return VertxFuture.failedFuture(new IllegalStateException("Already initialized"));
-
-		if (args.length < 2 || args.length > 3)
-			return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments length"));
-
-		if (args[0] instanceof Vertx v)
-			this.vertx = v;
-		else
-			return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments: args[0] is not a Vertx instance"));
-
-		if (args[1] instanceof Node n)
-			this.node = n;
-		else
-			return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments: args[1] is not a Node instance"));
-
-		// Optional persistent cache for resolved Cards
-		ResolverCache persistentCache;
-		if (args.length == 3) {
-			if (args[2] instanceof ResolverCache c)
-				persistentCache = c;
-			else
-				return VertxFuture.failedFuture(new IllegalArgumentException("Invalid arguments: args[2] is not a ResolverCache instance"));
-		} else {
-			persistentCache = null;
-		}
-
+		this.node = node;
 		this.resolver = new CachedResolver(new DHTResolver(node), vertx, persistentCache);
-
-		return VertxFuture.succeededFuture();
 	}
 
 	/**
-	 * Registers a Card in the DHT by creating a Value object with the given parameters and storing it.
+	 * Registers the {@code Card} as Value in the Distributed Hash Table (DHT).
 	 *
-	 * @param card the Card to register
-	 * @param nonce the nonce used in the signature
-	 * @param version the version number of the Card
-	 * @param signature the cryptographic signature validating the Card
-	 * @return a CompletableFuture that completes when the registration is successful or fails if the signature is invalid
+	 * @param identity the {@code Identity} to register, representing the entity owning the {@code Card}
+	 * @param card the {@code Card} containing cryptographic data and metadata to be stored
+	 * @param version the version number associated with the {@code Card}; must be a positive integer
+	 * @return a {@code CompletableFuture<Void>} indicating the completion of the registration process,
+	 *         which resolves successfully when the {@code Card} is stored or exceptionally if an error occurs
+	 * @throws NullPointerException if the {@code identity} or {@code card} is {@code null}
+	 * @throws IllegalArgumentException if the {@code version} is negative, the {@code card} is not genuine,
+	 *                                  or the {@code Identity} ID does not match the {@code Card} ID
 	 */
 	@Override
-	public CompletableFuture<Void> register(Card card, CryptoBox.Nonce nonce, int version, byte[] signature) {
+	public CompletableFuture<Void> register(Identity identity, Card card, int version) {
+		Objects.requireNonNull(identity);
+		Objects.requireNonNull(card);
+		if (version < 0)
+			throw new IllegalArgumentException("Version must be a positive integer");
+		if (!card.isGenuine())
+			throw new IllegalArgumentException("Card is not genuine");
+		if (!identity.getId().equals(card.getId()))
+			throw new IllegalArgumentException("Identity id does not match card id");
+
 		// Create a Value object encapsulating the Card data and signature details
-		Value value = Value.of(card.getId(), nonce.bytes(), version, signature, card.toBytes());
-		// Verify the signature validity before proceeding
-		if (!value.isValid())
-			return CompletableFuture.failedFuture(new IllegalArgumentException("Invalid signature"));
+		Value value = Value.signedBuilder()
+				.identity(identity)
+				.sequenceNumber(version)
+				.data(card.toBytes())
+				.build();
 
 		log.debug("Registering card {} ...", card.getId());
 		// Store the value in the DHT node, forcing an update

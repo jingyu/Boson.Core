@@ -328,11 +328,11 @@ public class RPCServerTests {
 	protected static Value createValue() {
 		try {
 			Value value = switch (Random.random().nextInt(0, 3)) {
-				case 0 -> Value.builder().data(faker.lorem().paragraph().getBytes()).build();
-				case 1 -> Value.builder().data(faker.lorem().paragraph().getBytes()).buildSigned();
-				case 2 -> Value.builder().recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
-						.data(faker.lorem().paragraph().getBytes()).buildEncrypted();
-				default -> Value.builder().sequenceNumber(2).data(faker.lorem().paragraph().getBytes()).build();
+				case 0 -> Value.immutableBuilder().data(faker.lorem().paragraph().getBytes()).build();
+				case 1 -> Value.signedBuilder().data(faker.lorem().paragraph().getBytes()).build();
+				case 2 -> Value.encryptedBuilder().recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
+						.data(faker.lorem().paragraph().getBytes()).build();
+				default -> Value.immutableBuilder().sequenceNumber(2).data(faker.lorem().paragraph().getBytes()).build();
 			};
 
 			values.put(value.getId(), value);

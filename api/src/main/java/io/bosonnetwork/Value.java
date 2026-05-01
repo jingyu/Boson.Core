@@ -29,22 +29,27 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Objects;
 
-import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
+import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Hex;
 
 /**
- * Represents a value in the Boson network.
- *
- * <p>Values can be of three types:
+ * Represents a value stored and propagated in the Boson network.
+ * <p>
+ * A {@code Value} can be one of three types:
  * <ul>
- *     <li>Immutable: Identified by the SHA-256 hash of their data.</li>
- *     <li>Mutable: Identified by a public key and can be updated by the owner.</li>
- *     <li>Encrypted: A mutable value whose data is encrypted for a specific recipient.</li>
+ *     <li><b>Immutable</b>: Identified by the SHA-256 hash of its data. Content cannot be changed.</li>
+ *     <li><b>Mutable (Signed)</b>: Identified by a public key. The owner can update the value by
+ *         increasing the sequence number and providing a valid signature.</li>
+ *     <li><b>Encrypted</b>: A mutable value whose payload is encrypted for a specific recipient.
+ *         The encrypted payload is still signed by the owner.</li>
  * </ul>
+ * <p>
+ * For mutable values, the {@code id} represents the logical record (public key), while
+ * the sequence number distinguishes different versions.
  */
 public class Value {
 	/** The number of bytes in the nonce. */
@@ -65,7 +70,13 @@ public class Value {
 	/** The data of the value. */
 	private final byte[] data;
 
-	/** The unique ID of the value. */
+	/**
+	 * The unique ID of the value.
+	 * <p>
+	 * For immutable values, the ID is the SHA-256 hash of the data.
+	 * For mutable values, the ID is the public key and identifies the logical record.
+	 * Multiple versions (sequence numbers) share the same ID.
+	 * */
 	private final transient Id id;
 
 	private Value(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
@@ -109,20 +120,20 @@ public class Value {
 		if (publicKey != null) {
 			// noinspection DuplicatedCode
 			if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
-				throw new IllegalArgumentException("Invalid private key");
+				throw new IllegalArgumentException("Invalid private key: incorrect length");
 
 			if (nonce == null || nonce.length != NONCE_BYTES)
-				throw new IllegalArgumentException("Invalid nonce");
+				throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
 
 			if (sequenceNumber < 0)
-				throw new IllegalArgumentException("Invalid sequence number");
+				throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
 			if (signature == null || signature.length != Signature.BYTES)
-				throw new IllegalArgumentException("Invalid signature");
+				throw new IllegalArgumentException("Invalid signature: incorrect length");
 		}
 
 		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data");
+			throw new IllegalArgumentException("Invalid data: must not be null or empty");
 
 		return new Value(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 	}
@@ -181,84 +192,98 @@ public class Value {
 	}
 
 	/**
-	 * Creates a mutable {@code Value} object from the data. The new value will be signed
-	 * by a new generated random key pair.
+	 * Creates a mutable {@code Value} object from the data.
 	 *
-	 * @param data the data of the value.
-	 * @return a new mutable {@code Value} object.
+	 * @param identity       The {@code Identity} object containing cryptographic methods, including signing.
+	 * @param privateKey     The private key associated with the value. Optional.
+	 * @param sequenceNumber The sequence number for the value. Must be non-negative.
+	 * @param data           The data to be included in the value. Cannot be null or empty.
+	 * @return A new signed {@code Value} instance containing the specified data, nonce, sequence number, and signature.
+	 * @throws IllegalArgumentException if the sequence number is negative, or the data is null/empty.
 	 */
-	private static Value createSigned(Signature.KeyPair keypair, int sequenceNumber, byte[] data) {
+	private static Value createSigned(Identity identity, byte[] privateKey, int sequenceNumber, byte[] data) {
 		// noinspection DuplicatedCode
 		if (sequenceNumber < 0)
-			throw new IllegalArgumentException("Invalid sequence number");
+			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
 		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data");
-
-		if (keypair == null)
-			keypair = Signature.KeyPair.random();
+			throw new IllegalArgumentException("Invalid data: must not be null or empty");
 
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
 
-		Id publicKey = Id.of(keypair.publicKey().bytes());
-		byte[] digest = new Value(publicKey, null, null, nonce, sequenceNumber, null, data).digest();
-		byte[] signature = Signature.sign(digest, keypair.privateKey());
+		Id publicKey = identity.getId();
+		byte[] digest = computeDigest(publicKey, null, nonce, sequenceNumber, data);
+		byte[] signature = identity.sign(digest);
 
-		return new Value(publicKey, keypair.privateKey().bytes(), null, nonce, sequenceNumber, signature, data);
+		return new Value(publicKey, privateKey, null, nonce, sequenceNumber, signature, data);
 	}
 
 	/**
 	 * Creates a new mutable Value object from the data, encrypted for a specific recipient.
 	 *
-	 * @param keypair        The owner's keypair.
+	 * @param identity       The owner's identity.
+	 * @param privateKey   	 The owner's private key. Optional.
 	 * @param recipient      The recipient's ID.
 	 * @param sequenceNumber The sequence number.
 	 * @param data           The data to encrypt.
 	 * @return The new encrypted Value instance.
 	 * @throws IllegalArgumentException if parameters are invalid.
 	 */
-	private static Value createEncrypted(Signature.KeyPair keypair, Id recipient, int sequenceNumber, byte[] data) {
+	private static Value createEncrypted(Identity identity, byte[] privateKey, Id recipient, int sequenceNumber, byte[] data) {
 		if (recipient == null)
-			throw new IllegalArgumentException("Invalid recipient");
+			throw new IllegalArgumentException("Invalid recipient: recipient id must not be null");
 
 		// noinspection DuplicatedCode
 		if (sequenceNumber < 0)
-			throw new IllegalArgumentException("Invalid sequence number");
+			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
 		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data");
-
-		if (keypair == null)
-			keypair = Signature.KeyPair.random();
+			throw new IllegalArgumentException("Invalid data: must not be null or empty");
 
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
 
 		byte[] encryptData;
 		try {
-			CryptoBox.PublicKey recipientPk = recipient.toEncryptionKey();
-			CryptoBox.PrivateKey ownerSk = CryptoBox.PrivateKey.fromSignatureKey(keypair.privateKey());
-			encryptData = CryptoBox.encrypt(data, recipientPk, ownerSk, CryptoBox.Nonce.fromBytes(nonce));
+			encryptData = identity.encrypt(recipient, nonce, data);
 		} catch (Exception e) {
 			// only will error on the recipient id is an invalid ED25519 public key
-			throw new IllegalArgumentException("Invalid recipient Id", e);
+			throw new IllegalArgumentException("Invalid recipient id: encryption failed", e);
 		}
 
-		Id publicKey = Id.of(keypair.publicKey().bytes());
-		byte[] digest = new Value(publicKey, null, recipient, nonce, sequenceNumber, null, encryptData).digest();
-		byte[] signature = Signature.sign(digest, keypair.privateKey());
+		Id publicKey = identity.getId();
+		byte[] digest = computeDigest(publicKey, recipient, nonce, sequenceNumber, encryptData);
+		byte[] signature = identity.sign(digest);
 
-		return new Value(publicKey, keypair.privateKey().bytes(), recipient, nonce, sequenceNumber, signature, encryptData);
+		return new Value(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, encryptData);
 	}
 
 	/**
-	 * Creates a new Value builder.
+	 * Creates a new immutable Value builder.
 	 *
-	 * @return a new Value builder
+	 * @return a new immutable Value builder
 	 */
-	public static Builder builder() {
-		return new Builder();
+	public static Builder immutableBuilder() {
+		return new Builder(Builder.Type.IMMUTABLE);
+	}
+
+	/**
+	 * Creates a new signed Value builder.
+	 *
+	 * @return a new signed Value builder
+	 */
+	public static Builder signedBuilder() {
+		return new Builder(Builder.Type.SIGNED);
+	}
+
+	/**
+	 * Creates a new encrypted Value builder.
+	 *
+	 * @return a new encrypted Value builder
+	 */
+	public static Builder encryptedBuilder() {
+		return new Builder(Builder.Type.ENCRYPTED);
 	}
 
 	/**
@@ -354,24 +379,69 @@ public class Value {
 	 */
 	public byte[] decryptData(Signature.PrivateKey recipientSk) throws CryptoException {
 		if (recipient == null)
-			throw new UnsupportedOperationException("Value is not encrypted");
+			throw new UnsupportedOperationException("Cannot decrypt: value is not encrypted");
 
-		if (recipientSk == null)
-			throw new IllegalArgumentException("Invalid recipient private key");
+		Objects.requireNonNull(recipientSk, "Recipient private key must not be null");
 
 		if (!isValid())
-			throw new IllegalStateException("Value is not valid");
+			throw new IllegalStateException("Cannot decrypt: value failed validation");
 
-		Signature.KeyPair recipientKeypair = Signature.KeyPair.fromPrivateKey(recipientSk);
-		if (!Arrays.equals(recipientKeypair.publicKey().bytes(), recipient.bytes()))
-			throw new IllegalArgumentException("Invalid recipient private key: not matching recipient public key");
-
-		CryptoBox.PublicKey pk = publicKey.toEncryptionKey();
-		CryptoBox.PrivateKey sk = CryptoBox.PrivateKey.fromSignatureKey(recipientSk);
-
-		return CryptoBox.decrypt(data, pk, sk, CryptoBox.Nonce.fromBytes(nonce));
+		return decryptData(new CryptoIdentity(recipientSk.bytes()));
 	}
 
+	/**
+	 * Decrypts the data using the recipient's private key.
+	 *
+	 * @param recipientSk the private key of the recipient, represented as a byte array.
+	 *                    Must not be null and must have a length equal to {@code Signature.PrivateKey.BYTES}.
+	 * @return the decrypted data as a byte array.
+	 * @throws CryptoException if there is an error during the decryption process.
+	 * @throws UnsupportedOperationException if the value is not encrypted.
+	 * @throws IllegalArgumentException if the provided private key is invalid.
+	 * @throws IllegalStateException if the value is not in a valid state for decryption.
+	 */
+	public byte[] decryptData(byte[] recipientSk) throws CryptoException {
+		if (recipient == null)
+			throw new UnsupportedOperationException("Cannot decrypt: value is not encrypted");
+
+		Objects.requireNonNull(recipientSk, "Recipient private key must not be null");
+		if (recipientSk.length != Signature.PrivateKey.BYTES)
+			throw new IllegalArgumentException("Invalid recipient private key: incorrect length");
+
+		if (!isValid())
+			throw new IllegalStateException("Cannot decrypt: value failed validation");
+
+		return decryptData(new CryptoIdentity(recipientSk));
+	}
+
+	/**
+	 * Decrypts the encrypted data using the recipient's identity.
+	 *
+	 * @param recipientIdentity the identity of the recipient that contains the private key
+	 *                          used to decrypt the data. Must not be null and must match the
+	 *                          public key of the intended recipient.
+	 * @return a byte array containing the decrypted data.
+	 * @throws CryptoException if an error occurs during the decryption process.
+	 * @throws UnsupportedOperationException if the data is not encrypted.
+	 * @throws NullPointerException if the recipientIdentity is null.
+	 * @throws IllegalStateException if the value is not valid or ready for decryption.
+	 * @throws IllegalArgumentException if the provided recipientIdentity does not match the
+	 *                                  recipient's public key.
+	 */
+	public byte[] decryptData(Identity recipientIdentity) throws CryptoException {
+		if (recipient == null)
+			throw new UnsupportedOperationException("Cannot decrypt: value is not encrypted");
+
+		Objects.requireNonNull(recipientIdentity, "recipientIdentity cannot be null");
+
+		if (!isValid())
+			throw new IllegalStateException("Cannot decrypt: value failed validation");
+
+		if (!recipientIdentity.getId().equals(recipient))
+			throw new IllegalArgumentException("Recipient identity does not match value recipient");
+
+		return recipientIdentity.decrypt(publicKey, nonce, data);
+	}
 
 	/**
 	 * Calculates the ID of the value.
@@ -382,6 +452,15 @@ public class Value {
 	 */
 	private static Id calculateId(Id publicKey, byte[] data) {
 		return publicKey != null ? publicKey : new Id(Hash.sha256(data));
+	}
+
+	/**
+	 * Check if the value is immutable.
+	 *
+	 * @return true if the object is immutable (when the publicKey is null), false otherwise.
+	 */
+	public boolean isImmutable() {
+		return publicKey == null;
 	}
 
 	/**
@@ -407,7 +486,7 @@ public class Value {
 	 *
 	 * @return the digest
 	 */
-	private byte[] digest() {
+	private static byte[] computeDigest(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] data) {
 		MessageDigest sha = Hash.sha256();
 		if (publicKey != null) {
 			sha.update(publicKey.bytes());
@@ -417,13 +496,14 @@ public class Value {
 			sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
 		}
 		sha.update(data);
-
 		return sha.digest();
 	}
 
 	/**
-	 * Checks if the value is valid, including checks for data integrity and
-	 * signature verification.
+	 * Validates structural integrity and cryptographic correctness of this value.
+	 *
+	 * <p>For mutable values, this verifies the signature against the computed digest.
+	 * For immutable values, this verifies that the id matches the hash of the data.
 	 *
 	 * @return {@code true} if the value is valid, {@code false} otherwise.
 	 */
@@ -435,52 +515,43 @@ public class Value {
 			if (signature == null || signature.length != Signature.BYTES)
 				return false;
 
-			if (nonce == null || nonce.length != CryptoBox.Nonce.BYTES)
+			if (nonce == null || nonce.length != NONCE_BYTES)
 				return false;
 
 			if (sequenceNumber < 0)
 				return false;
 
+			byte[] digest = computeDigest(publicKey, recipient, nonce, sequenceNumber, data);
 			Signature.PublicKey pk = publicKey.toSignatureKey();
-			return Signature.verify(digest(), signature, pk);
+			return Signature.verify(digest, signature, pk);
 		} else {
-			if (id == null || recipient != null || nonce != null || sequenceNumber < 0)
+			if (id == null || publicKey != null || recipient != null || nonce != null ||
+					sequenceNumber < 0 || signature != null)
 				return false;
 
 			return id.equals(calculateId(null, data));
 		}
 	}
 
-
 	/**
-	 * Updates the value with new data, incrementing the sequence number.
+	 * Updates the current state of the Value object by creating a new instance of the Builder
+	 * initialized with the current state.
 	 *
-	 * @param data the new data to be included in the updated value.
-	 * @return the updated Value object.
+	 * @return a new Builder instance containing the current state of the Value object.
 	 */
-	public Value update(byte[] data) {
-		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data");
+	public Builder update() {
+		if (isImmutable())
+			throw new UnsupportedOperationException("Cannot update immutable value");
 
-		if (!isMutable())
-			throw new UnsupportedOperationException("Immutable value");
+		if (!isValid())
+			throw new IllegalStateException("Cannot update: value failed validation");
 
-		if (!hasPrivateKey())
-			throw new UnsupportedOperationException("Not the owner of the value");
-
-		if (!isEncrypted() && Arrays.equals(this.data, data))
-			return this; // no need to update
-
-		Signature.KeyPair keypair = Signature.KeyPair.fromPrivateKey(getPrivateKey());
-		if (isEncrypted())
-			return createEncrypted(keypair, recipient, sequenceNumber + 1, data);
-		else
-			return createSigned(keypair, sequenceNumber + 1, data);
+		return new Builder(this);
 	}
 
 	/**
 	 * Returns a new Value instance without the private key, or the current instance if the private key is already null.
-	 *
+	 * <p>
 	 * This method checks if the private key is null. If it is, the current instance is returned.
 	 * Otherwise, a new Value instance is created and returned with the same properties as the current instance, excluding the private key.
 	 *
@@ -493,6 +564,7 @@ public class Value {
 		return new Value(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
 
+	// id is excluded from hash code and equality as it is a derived field from data or publicKey
 	@Override
 	public int hashCode() {
 		return 0x6030A + Objects.hash(publicKey, recipient, Arrays.hashCode(nonce),
@@ -542,12 +614,36 @@ public class Value {
 	 * Value builder.
 	 */
 	public static class Builder {
-		private Signature.KeyPair keyPair = null;
+		private enum Type { IMMUTABLE, SIGNED, ENCRYPTED }
+
+		private final Value forUpdate;
+		private final Type type;
+
+		private Identity identity = null;
+		private boolean keepPrivateKey;
 		Id recipient = null;
 		private int sequenceNumber = 0;
 		private byte[] data = null;
 
-		private Builder() {
+		private Builder(Type type) {
+			this.type = type;
+			this.forUpdate = null;
+		}
+
+		private Builder(Value value) {
+			this.forUpdate = value;
+			this.type = value.isImmutable() ? Type.IMMUTABLE :
+					(value.isEncrypted() ? Type.ENCRYPTED : Type.SIGNED);
+
+			this.identity = value.hasPrivateKey() ? new CryptoIdentity(value.getPrivateKey()) : null;
+			this.keepPrivateKey = value.hasPrivateKey();
+			this.recipient = value.getRecipient();
+			this.sequenceNumber = value.getSequenceNumber() + 1;
+			this.data = value.getData();
+		}
+
+		private boolean isUpdate() {
+			return forUpdate != null;
 		}
 
 		/**
@@ -559,7 +655,7 @@ public class Value {
 		 */
 		public Builder data(byte[] value) {
 			if (value == null || value.length == 0)
-				throw new IllegalArgumentException("value cannot be null or empty");
+				throw new IllegalArgumentException("Data must not be null or empty");
 			this.data = value;
 			return this;
 		}
@@ -581,6 +677,12 @@ public class Value {
 		 * @return the builder instance
 		 */
 		public Builder recipient(Id recipient) {
+			if (type != Type.ENCRYPTED)
+				throw new UnsupportedOperationException("Recipient can only be set for encrypted values");
+
+			if (isUpdate())
+				throw new UnsupportedOperationException("Recipient cannot be changed during update");
+
 			this.recipient = recipient;
 			return this;
 		}
@@ -593,8 +695,14 @@ public class Value {
 		 * @throws IllegalArgumentException if the sequence number is negative
 		 */
 		public Builder sequenceNumber(int sequenceNumber) {
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Sequence number is only applicable to mutable values");
+
+			if (isUpdate())
+				throw new UnsupportedOperationException("Sequence number is managed automatically during update");
+
 			if (sequenceNumber < 0)
-				throw new IllegalArgumentException("Invalid sequence number");
+				throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 			this.sequenceNumber = sequenceNumber;
 			return this;
 		}
@@ -604,9 +712,14 @@ public class Value {
 		 *
 		 * @param keyPair the keypair
 		 * @return the builder instance
+		 * @throws NullPointerException if the keyPair is null
 		 */
 		public Builder key(Signature.KeyPair keyPair) {
-			this.keyPair = keyPair;
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Keys are only applicable to mutable/encrypted values");
+
+			Objects.requireNonNull(keyPair);
+			identity(new CryptoIdentity(keyPair));
 			return this;
 		}
 
@@ -618,8 +731,11 @@ public class Value {
 		 * @throws NullPointerException if the private key is null
 		 */
 		public Builder key(Signature.PrivateKey privateKey) {
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Keys are only applicable to mutable/encrypted values");
+
 			Objects.requireNonNull(privateKey);
-			this.keyPair = Signature.KeyPair.fromPrivateKey(privateKey);
+			key(Signature.KeyPair.fromPrivateKey(privateKey));
 			return this;
 		}
 
@@ -632,59 +748,95 @@ public class Value {
 		 * @throws IllegalArgumentException if the length is invalid
 		 */
 		public Builder key(byte[] privateKey) {
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Keys are only applicable to mutable/encrypted values");
+
 			Objects.requireNonNull(privateKey);
 			if (privateKey.length != Signature.PrivateKey.BYTES)
-				throw new IllegalArgumentException("Invalid private key");
-			this.keyPair = Signature.KeyPair.fromPrivateKey(privateKey);
+				throw new IllegalArgumentException("Invalid private key: incorrect length");
+			key(Signature.KeyPair.fromPrivateKey(privateKey));
 			return this;
 		}
 
 		/**
-		 * Builds an immutable Value instance.
+		 * Sets the identity for the mutable/encrypted value.
 		 *
-		 * @return the new immutable Value instance
-		 * @throws IllegalStateException if the data is missing
+		 * @param identity the identity to be set; must not be {@code null}
+		 * @return the builder instance
+		 * @throws NullPointerException if the identity is {@code null}
+		 */
+		public Builder identity(Identity identity) {
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Identity is only applicable to mutable/encrypted values");
+
+			Objects.requireNonNull(identity);
+
+			if (isUpdate()) {
+				if (!forUpdate.isMutable())
+					throw new UnsupportedOperationException("Identity is only applicable to mutable/encrypted values");
+
+				if (!identity.getId().equals(forUpdate.publicKey))
+					throw new IllegalArgumentException("Identity does not match the value's public key");
+			}
+
+			this.identity = identity;
+			return this;
+		}
+
+		/**
+		 * Configures that the private key is retained in the built Value instance.
+		 *
+		 * @return the builder instance
+		 */
+		public Builder keepPrivateKey() {
+			if (type == Type.IMMUTABLE)
+				throw new UnsupportedOperationException("Immutable values do not have private keys");
+
+			this.keepPrivateKey = true;
+			return this;
+		}
+
+		/**
+		 * Constructs and returns a new `Value` object based on the current state and type.
+		 * The method performs several validations and operations depending on the type of the value.
+		 *
+		 * @return A `Value` object constructed according to the specifications and type of the current state.
+		 * @throws IllegalStateException If mandatory fields (`data`, `identity`, or `recipient`) are missing,
+		 *                                or if conditions for specific types are not satisfied.
 		 */
 		public Value build() {
 			if (data == null)
-				throw new IllegalStateException("Value data cannot be null");
+				throw new IllegalStateException("Missing required field: data");
 
-			return create(data);
+			if (type == Type.SIGNED || type == Type.ENCRYPTED) {
+				if (identity == null) {
+					if (isUpdate()) {
+						throw new IllegalStateException("Missing identity: required for updating an existing value");
+					} else {
+						identity = new CryptoIdentity();
+						keepPrivateKey = true;
+					}
+				}
+			}
+
+			if (type == Type.ENCRYPTED) {
+				if (recipient == null)
+					throw new IllegalStateException("Missing recipient: required for encrypted value");
+			}
+
+			byte[] privateKey = null;
+			if (keepPrivateKey) {
+				if (identity instanceof CryptoIdentity cid)
+					privateKey = cid.getKeyPair().privateKey().bytes();
+				else
+					throw new IllegalStateException("Unable to extract private key from identity");
+			}
+
+			return switch (type) {
+				case IMMUTABLE -> create(data);
+				case SIGNED -> createSigned(identity, privateKey, sequenceNumber, data);
+				case ENCRYPTED -> createEncrypted(identity, privateKey, recipient, sequenceNumber, data);
+			};
 		}
-
-		/**
-		 * Builds a signed mutable Value instance.
-		 *
-		 * @return the new mutable Value instance
-		 * @throws IllegalStateException if data is missing
-		 */
-		public Value buildSigned() {
-			if (data == null)
-				throw new IllegalStateException("Value data cannot be null");
-
-			if (keyPair == null)
-				keyPair = Signature.KeyPair.random();
-
-			return createSigned(keyPair, sequenceNumber, data);
-		}
-
-		/**
-		 * Builds an encrypted mutable Value instance.
-		 *
-		 * @return the new encrypted Value instance
-		 * @throws IllegalStateException if data or recipient is missing
-		 */
-		public Value buildEncrypted() {
-			if (data == null)
-				throw new IllegalStateException("Value data cannot be null");
-			if (recipient == null)
-				throw new IllegalStateException("Value recipient cannot be null");
-
-			if (keyPair == null)
-				keyPair = Signature.KeyPair.random();
-
-			return createEncrypted(keyPair, recipient, sequenceNumber, data);
-		}
-
 	}
 }

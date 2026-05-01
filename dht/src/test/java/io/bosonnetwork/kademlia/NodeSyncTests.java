@@ -253,7 +253,7 @@ public class NodeSyncTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
 			var p = peers.get(i);
-			p = p.update(announcer, faker.internet().url());
+			p = p.update().node(announcer).endpoint(faker.internet().url()).build();
 
 			System.out.format("\n\n\007🟢 %s update peer %s ...\n", announcer.getId(), p.getId());
 			announcer.announcePeer(p).get();
@@ -276,7 +276,7 @@ public class NodeSyncTests {
 	void testStoreAndFindValue() throws Exception {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
-			var v = Value.builder().data(("Hello from " + announcer.getId()).getBytes()).build();
+			var v = Value.immutableBuilder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
@@ -303,7 +303,7 @@ public class NodeSyncTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
 			var keyPair = KeyPair.random();
-			var v = Value.builder().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).buildSigned();
+			var v = Value.signedBuilder().keepPrivateKey().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).build();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -328,7 +328,7 @@ public class NodeSyncTests {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var announcer = testNodes.get(i);
 			var v = values.get(i);
-			v = v.update(("Updated value from " + announcer.getId()).getBytes());
+			v = v.update().data(("Updated value from " + announcer.getId()).getBytes()).build();
 			values.set(i, v);
 
 			System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
@@ -363,7 +363,7 @@ public class NodeSyncTests {
 
 			var keyPair = KeyPair.random();
 			var data = ("Hello from " + announcer.getId()).getBytes();
-			var v = Value.builder().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).buildEncrypted();
+			var v = Value.encryptedBuilder().keepPrivateKey().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).build();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -395,7 +395,7 @@ public class NodeSyncTests {
 
 			var v = values.get(i);
 			var data = ("Updated value from " + announcer.getId()).getBytes();
-			v = v.update(data);
+			v = v.update().data(data).build();
 			values.set(i, v);
 
 			System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());

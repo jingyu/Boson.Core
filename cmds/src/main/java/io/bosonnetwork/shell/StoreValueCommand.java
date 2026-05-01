@@ -64,13 +64,12 @@ public class StoreValueCommand implements Callable<Integer> {
 		Value value = null;
 
 		if (target == null) {
-			Value.Builder vb = Value.builder().data(text.getBytes());
-
+			Value.Builder vb;
 			if (!mutable) {
-				value = vb.build();
+				vb = Value.immutableBuilder();
 			} else {
 				if (recipient == null) {
-					value = vb.buildSigned();
+					vb = Value.signedBuilder();
 				} else {
  					Id recipientId = null;
  					try {
@@ -80,9 +79,11 @@ public class StoreValueCommand implements Callable<Integer> {
  						return -1;
  					}
 
- 					value = vb.recipient(recipientId).buildEncrypted();
+ 					vb = Value.encryptedBuilder().recipient(recipientId);
  				}
 			}
+
+			value = vb.data(text.getBytes()).build();
 		} else {
 			Id id = null;
 			try {
@@ -98,8 +99,13 @@ public class StoreValueCommand implements Callable<Integer> {
 				return -1;
 			}
 
+			if (!value.isMutable()) {
+				System.out.println("Value is immutable: " + target);
+				return -1;
+			}
+
 			try {
-				value = value.update(text.getBytes());
+				value = value.update().data(text.getBytes()).build();
 			} catch (Exception e) {
 				System.out.println("Can not update the value: " + e.getMessage());
 				return -1;

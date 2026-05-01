@@ -159,32 +159,32 @@ public class DataStorageTests {
 		for (int i = 0; i < count; i++) {
 			var type = i % 6;
 			var value = switch (type) {
-				case 0 -> Value.builder()
+				case 0 -> Value.immutableBuilder()
 						.data(faker.lorem().paragraph().getBytes())
 						.build();
-				case 1 -> Value.builder()
+				case 1 -> Value.signedBuilder()
 						.sequenceNumber(faker.number().numberBetween(2, 100))
 						.data(faker.lorem().paragraph().getBytes())
-						.buildSigned();
-				case 2 -> Value.builder()
+						.build();
+				case 2 -> Value.encryptedBuilder()
 						.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
 						.sequenceNumber(faker.number().numberBetween(2, 100))
 						.data(faker.lorem().paragraph().getBytes())
-						.buildEncrypted();
-				case 3 -> Value.builder()
+						.build();
+				case 3 -> Value.immutableBuilder()
 						.data(faker.lorem().paragraph().getBytes())
 						.build()
 						.withoutPrivateKey();
-				case 4 -> Value.builder()
+				case 4 -> Value.signedBuilder()
 						.sequenceNumber(faker.number().numberBetween(2, 100))
 						.data(faker.lorem().paragraph().getBytes())
-						.buildSigned()
+						.build()
 						.withoutPrivateKey();
-				case 5 -> Value.builder()
+				case 5 -> Value.encryptedBuilder()
 						.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
 						.sequenceNumber(faker.number().numberBetween(2, 100))
 						.data(faker.lorem().paragraph().getBytes())
-						.buildEncrypted()
+						.build()
 						.withoutPrivateKey();
 				default -> throw new IllegalStateException();
 			};
@@ -542,7 +542,7 @@ public class DataStorageTests {
 				if (!value.hasPrivateKey())
 					continue;
 
-				Value updated = value.update(faker.lorem().paragraph().getBytes());
+				Value updated = value.update().data(faker.lorem().paragraph().getBytes()).build();
 				var future = storage.putValue(updated).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
 					values.set(index, updated);
@@ -578,7 +578,7 @@ public class DataStorageTests {
 				if (!value.hasPrivateKey())
 					continue;
 
-				Value updated = value.update(faker.lorem().paragraph().getBytes());
+				Value updated = value.update().data(faker.lorem().paragraph().getBytes()).build();
 				var future = storage.putValue(updated, true).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
 					persistentValues.set(index, updated);
@@ -1200,8 +1200,10 @@ public class DataStorageTests {
 				}));
 				futures.add(future);
 			} else {
-				CryptoIdentity node = peerInfo.isAuthenticated() ? nodeIdentities.get(peerInfo.getNodeId()) : null;
-				PeerInfo updated = peerInfo.update(node, faker.internet().url());
+				PeerInfo.Builder pb = peerInfo.update();
+				if (peerInfo.isAuthenticated())
+					pb.node(nodeIdentities.get(peerInfo.getNodeId()));
+				PeerInfo updated = pb.endpoint(faker.internet().url()).build();
 				var future = storage.putPeer(updated).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
 					peerInfos.set(index, updated);
@@ -1234,8 +1236,10 @@ public class DataStorageTests {
 				}));
 				futures.add(future);
 			} else {
-				CryptoIdentity node = peerInfo.isAuthenticated() ? nodeIdentities.get(peerInfo.getNodeId()) : null;
-				PeerInfo updated = peerInfo.update(node, faker.internet().url());
+				PeerInfo.Builder pb = peerInfo.update();
+				if (peerInfo.isAuthenticated())
+					pb.node(nodeIdentities.get(peerInfo.getNodeId()));
+				PeerInfo updated = pb.endpoint(faker.internet().url()).build();
 				var future = storage.putPeer(updated, true).andThen(context.succeeding(result -> {
 					context.verify(() -> assertEquals(updated, result));
 					persistentPeerInfos.set(index, updated);

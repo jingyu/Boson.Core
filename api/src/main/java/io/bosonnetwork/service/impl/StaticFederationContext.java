@@ -156,14 +156,14 @@ public class StaticFederationContext implements FederationContext {
 	 * @param peerId the unique identifier of the peer providing the service
 	 * @param fingerprint the fingerprint of the service to ensure uniqueness
 	 * @param endpoint the endpoint URL address of the service
-	 * @param serviceId the unique identifier of the service
+	 * @param serviceType the unique type identifier of the service
 	 * @param serviceName the name of the service
 	 * @return true if the service was successfully added, false if the service already exists for the given peer and node
 	 * @throws IllegalArgumentException if the specified node does not exist
 	 * @throws NullPointerException if nodeId or peerId is null
 	 * @throws IllegalStateException if the node registry is in an invalid state
 	 */
-	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, String serviceId, String serviceName) {
+	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, String serviceType, String serviceName) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 		if (!existsNodeSync(nodeId))
@@ -176,7 +176,7 @@ public class StaticFederationContext implements FederationContext {
 			if (v == null)
 				throw new IllegalStateException("Node does not exist");
 
-			ServiceInfo newService = new PlainServiceInfo(peerId, fingerprint, nodeId, endpoint, serviceId, serviceName);
+			ServiceInfo newService = new PlainServiceInfo(peerId, fingerprint, nodeId, endpoint, serviceType, serviceName);
 			if (v.b().isEmpty()) {
 				return Pair.of(v.a(), List.of(newService));
 			} else {

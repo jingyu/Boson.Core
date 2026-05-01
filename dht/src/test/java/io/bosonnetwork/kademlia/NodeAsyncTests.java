@@ -314,7 +314,7 @@ public class NodeAsyncTests {
 			Faker faker = new Faker();
 			return executeSequentially(testNodes.size(), index -> {
 				KadNode announcer = testNodes.get(index);
-				final PeerInfo p = peers.get(index).update(announcer, faker.internet().url());
+				final PeerInfo p = peers.get(index).update().node(announcer).endpoint(faker.internet().url()).build();
 
 				System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 				return ((VertxFuture<Void>) announcer.announcePeer(p)).thenCompose(v -> {
@@ -340,7 +340,7 @@ public class NodeAsyncTests {
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testStoreAndFindValue(VertxTestContext context) {
 		executeSequentially(testNodes, announcer -> {
-			var v = Value.builder().data(("Hello from " + announcer.getId()).getBytes()).build();
+			var v = Value.immutableBuilder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 
@@ -369,7 +369,7 @@ public class NodeAsyncTests {
 		// initial announcement
 		executeSequentially(testNodes, announcer -> {
 			var keyPair = KeyPair.random();
-			final Value v = Value.builder().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).buildSigned();
+			final Value v = Value.signedBuilder().keepPrivateKey().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).build();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -396,7 +396,7 @@ public class NodeAsyncTests {
 				KadNode announcer = testNodes.get(index);
 				final Value v;
 				try {
-					v = values.get(index).update(("Updated value from " + announcer.getId()).getBytes());
+					v = values.get(index).update().data(("Updated value from " + announcer.getId()).getBytes()).build();
 					values.set(index, v);
 				} catch (Exception e) {
 					context.failNow(e);
@@ -436,7 +436,7 @@ public class NodeAsyncTests {
 
 			var keyPair = KeyPair.random();
 			var data = ("Hello from " + announcer.getId()).getBytes();
-			final Value v  = Value.builder().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).buildEncrypted();
+			final Value v  = Value.encryptedBuilder().keepPrivateKey().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).build();
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
@@ -468,7 +468,7 @@ public class NodeAsyncTests {
 				var data = ("Updated value from " + announcer.getId()).getBytes();
 				final Value v;
 				try {
-					v = values.get(index).update(data);
+					v = values.get(index).update().data(data).build();
 					values.set(index, v);
 				} catch (Exception e) {
 					context.failNow(e);

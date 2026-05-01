@@ -27,7 +27,7 @@ public class ValueTests {
 	@Test
 	void testImmutableValue() {
 		byte[] data = "Hello Boson".getBytes();
-		Value value = Value.builder().data(data).build();
+		Value value = Value.immutableBuilder().data(data).build();
 
 		assertNotNull(value);
 		assertNotNull(value.getId());
@@ -42,7 +42,7 @@ public class ValueTests {
 		assertArrayEquals(data, value.getData());
 		assertTrue(value.isValid());
 
-		assertThrows(UnsupportedOperationException.class, () -> value.update(data));
+		assertThrows(UnsupportedOperationException.class, () -> value.update().data(data).build());
 
 		value.getData()[0] = (byte) (value.getData()[0] + 1);
 		assertFalse(value.isValid());
@@ -54,7 +54,7 @@ public class ValueTests {
 	@Test
 	void testSignedValue() {
 		byte[] data = "Mutable data".getBytes();
-		Value value = Value.builder().data(data).buildSigned();
+		Value value = Value.signedBuilder().data(data).build();
 
 		assertNotNull(value);
 		assertTrue(value.hasPrivateKey());
@@ -70,7 +70,7 @@ public class ValueTests {
 		assertTrue(value.isValid());
 
 		byte[] data1 = "Updated mutable data".getBytes();
-		Value value1 = value.update(data1);
+		Value value1 = value.update().data(data1).build();
 
 		assertNotNull(value1);
 		assertTrue(value1.hasPrivateKey());
@@ -87,7 +87,7 @@ public class ValueTests {
 		assertTrue(value1.isValid());
 
 		byte[] data2 = "Updated mutable data 2".getBytes();
-		Value value2 = value1.update(data2);
+		Value value2 = value1.update().data(data2).build();
 
 		assertNotNull(value2);
 		assertTrue(value2.hasPrivateKey());
@@ -103,13 +103,16 @@ public class ValueTests {
 		assertArrayEquals(data2, value2.getData());
 		assertTrue(value2.isValid());
 
-		Value value3 = value2.update(data2);
-		assertSame(value2, value3);
+		Value value3 = value2.update().data(data2).build();
+		assertNotSame(value2, value3);
+		assertEquals(data2, value3.getData());
+		assertFalse(Arrays.equals(value2.getNonce(), value3.getNonce()));
+		assertEquals(3, value3.getSequenceNumber());
 
 		Value value4 = value3.withoutPrivateKey();
 		assertFalse(value4.hasPrivateKey());
 		assertEquals(value3, value4);
-		assertThrows(UnsupportedOperationException.class, () -> value4.update("should be failed".getBytes()));
+		assertThrows(IllegalStateException.class, () -> value4.update().data("should be failed".getBytes()).build());
 		assertThrows(UnsupportedOperationException.class, () -> value4.decryptData(Signature.KeyPair.random().privateKey()));
 
 		value.getData()[0] = (byte) (value.getData()[0] + 1);
@@ -122,7 +125,7 @@ public class ValueTests {
 		Signature.KeyPair recipientKp = Signature.KeyPair.random();
 		Id recipient = Id.of(recipientKp.publicKey().bytes());
 
-		Value value = Value.builder().recipient(recipient).data(data).buildEncrypted();
+		Value value = Value.encryptedBuilder().keepPrivateKey().recipient(recipient).data(data).build();
 
 		assertNotNull(value);
 		assertTrue(value.isMutable());
@@ -140,7 +143,7 @@ public class ValueTests {
 		assertArrayEquals(data, decrypted);
 
 		byte[] data1 = "Updated secret message".getBytes();
-		Value value1 = value.update(data1);
+		Value value1 = value.update().data(data1).build();
 
 		assertNotNull(value1);
 		assertTrue(value1.hasPrivateKey());
@@ -156,11 +159,11 @@ public class ValueTests {
 		assertFalse(Arrays.equals(data1, value1.getData())); // Data should be encrypted
 		assertTrue(value1.isValid());
 
-		decrypted = value1.decryptData(recipientKp.privateKey());
+		decrypted = value1.decryptData(recipientKp.privateKey().bytes());
 		assertArrayEquals(data1, decrypted);
 
 		byte[] data2 = "Updated secret message 2".getBytes();
-		Value value2 = value1.update(data2);
+		Value value2 = value1.update().data(data2).build();
 
 		assertNotNull(value2);
 		assertTrue(value2.hasPrivateKey());
@@ -179,7 +182,7 @@ public class ValueTests {
 		decrypted = value2.decryptData(recipientKp.privateKey());
 		assertArrayEquals(data2, decrypted);
 
-		Value value3 = value2.update(data2);
+		Value value3 = value2.update().data(data2).build();
 		assertNotSame(value2, value3);
 		assertNotEquals(value2, value3);
 		assertFalse(Arrays.equals(value2.getNonce(), value3.getNonce()));
@@ -191,7 +194,7 @@ public class ValueTests {
 		Value value4 = value3.withoutPrivateKey();
 		assertFalse(value4.hasPrivateKey());
 		assertEquals(value3, value4);
-		assertThrows(UnsupportedOperationException.class, () -> value4.update("should be failed".getBytes()));
+		assertThrows(IllegalStateException.class, () -> value4.update().data("should be failed".getBytes()).build());
 		assertThrows(IllegalArgumentException.class, () -> value4.decryptData(Signature.KeyPair.random().privateKey()));
 
 		value4.getData()[0] = (byte) (value4.getData()[0] + 1);
@@ -221,10 +224,10 @@ public class ValueTests {
 	@Test
 	void testEqualsAndHashCode() {
 		byte[] data = "data".getBytes();
-		Value v1 = Value.builder().data(data).build();
-		Value v2 = Value.builder().data(data).build();
-		Value v3 = Value.builder().data(data).buildSigned();
-		Value v4 = Value.builder().data(data).buildSigned();
+		Value v1 = Value.immutableBuilder().data(data).build();
+		Value v2 = Value.immutableBuilder().data(data).build();
+		Value v3 = Value.signedBuilder().data(data).build();
+		Value v4 = Value.signedBuilder().data(data).build();
 
 		assertEquals(v1, v2);
 		assertEquals(v1.hashCode(), v2.hashCode());
@@ -234,18 +237,18 @@ public class ValueTests {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"immutable", "signed", "encrypted"})
-	void testJson(String mode) throws Exception {
+	void testJson(String mode) {
 		Value v = switch (mode) {
-			case "immutable" -> Value.builder()
+			case "immutable" -> Value.immutableBuilder()
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
 					.build();
-			case "signed" -> Value.builder()
+			case "signed" -> Value.signedBuilder()
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
-					.buildSigned();
-			case "encrypted" -> Value.builder()
+					.build();
+			case "encrypted" -> Value.encryptedBuilder()
 					.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
-					.buildEncrypted();
+					.build();
 			default -> throw new AssertionError("Unknown mode: " + mode);
 		};
 
@@ -262,18 +265,18 @@ public class ValueTests {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"immutable", "signed", "encrypted"})
-	void testCbor(String mode) throws Exception {
+	void testCbor(String mode) {
 		Value v = switch (mode) {
-			case "immutable" -> Value.builder()
+			case "immutable" -> Value.immutableBuilder()
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
 					.build();
-			case "signed" -> Value.builder()
+			case "signed" -> Value.signedBuilder()
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
-					.buildSigned();
-			case "encrypted" -> Value.builder()
+					.build();
+			case "encrypted" -> Value.encryptedBuilder()
 					.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
 					.data("Hello from bosonnetwork!\n".repeat(10).getBytes())
-					.buildEncrypted();
+					.build();
 			default -> throw new AssertionError("Unknown mode: " + mode);
 		};
 

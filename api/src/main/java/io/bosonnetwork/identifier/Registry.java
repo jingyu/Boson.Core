@@ -22,9 +22,13 @@
 
 package io.bosonnetwork.identifier;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
-import io.bosonnetwork.crypto.CryptoBox;
+import io.vertx.core.Vertx;
+
+import io.bosonnetwork.Identity;
+import io.bosonnetwork.Node;
 
 /**
  * The {@code Registry} interface defines the contract for registering and resolving Boson {@link Card}s.
@@ -34,55 +38,24 @@ import io.bosonnetwork.crypto.CryptoBox;
  * operations are performed asynchronously using {@link CompletableFuture}, enabling non-blocking workflows.
  * <p>
  * This interface also exposes a default Distributed Hash Table (DHT) based registry implementation
- * via the static {@link #DHTRegistry()} method.
- *
- * <h2>Asynchronous Operations</h2>
- * <ul>
- *   <li>All methods that modify or access the registry state are asynchronous and return {@code CompletableFuture}.</li>
- *   <li>Callers should handle completion and exceptions using the returned futures.</li>
- * </ul>
- *
- * <h2>Signatures</h2>
- * <ul>
- *   <li>Card registrations require a cryptographic signature for authentication and integrity.</li>
- * </ul>
- *
- * <h2>Implementations</h2>
- * <ul>
- *   <li>The default implementation is a DHT-based registry accessible via {@link #DHTRegistry()}.</li>
- * </ul>
+ * via the static DHTRegistry(...) method.
  */
 public interface Registry {
 	/**
-	 * Initializes the registry with the specified arguments.
-	 * <p>
-	 * This method should be called before using the registry to perform any registration or resolution.
-	 * The arguments are implementation-specific and may be used to configure network connections,
-	 * cryptographic parameters, or other initialization requirements.
-	 * </p>
-	 *
-	 * @param args implementation-specific initialization arguments
-	 * @return a {@link CompletableFuture} that completes when initialization is finished.
-	 *         If initialization fails, the future will complete exceptionally.
-	 */
-	CompletableFuture<Void> initialize(Object... args);
-
-	/**
-	 * Registers a {@link Card} in the registry.
+	 * Registers the {@code Card} as Value in the Distributed Hash Table (DHT).
 	 * <p>
 	 * The registration is performed asynchronously and requires a cryptographic
 	 * signature to ensure the authenticity and integrity of the {@code Card} data.
 	 * The {@code nonce} and {@code version} parameters provide replay protection and versioning.
 	 * </p>
 	 *
-	 * @param card      the {@link Card} to register
-	 * @param nonce     a unique {@link CryptoBox.Nonce} for this registration operation
-	 * @param version   the version number of the {@code Card} being registered
-	 * @param signature a cryptographic signature over the registration data
-	 * @return a {@link CompletableFuture} that completes when registration is finished.
-	 *         If registration fails, the future will complete exceptionally.
+	 * @param identity the {@code Identity} to register, representing the entity owning the {@code Card}
+	 * @param card the {@code Card} containing cryptographic data and metadata to be stored
+	 * @param version the version number associated with the {@code Card}; must be a positive integer
+	 * @return a {@code CompletableFuture<Void>} indicating the completion of the registration process,
+	 *         which resolves successfully when the {@code Card} is stored or exceptionally if an error occurs
 	 */
-	CompletableFuture<Void> register(Card card, CryptoBox.Nonce nonce, int version, byte[] signature);
+	CompletableFuture<Void> register(Identity identity, Card card, int version);
 
 	/**
 	 * Returns a {@link Resolver} for resolving registered {@link Card}s.
@@ -95,15 +68,36 @@ public interface Registry {
 	Resolver getResolver();
 
 	/**
-	 * Returns the default DHT-based registry implementation.
-	 * <p>
-	 * This static factory method provides access to a singleton instance of the DHT-backed
-	 * {@code Registry}. The DHTRegistry is suitable for decentralized, distributed identity management.
-	 * </p>
+	 * Creates a new instance of a Distributed Hash Table (DHT)-based {@code Registry}.
 	 *
-	 * @return the singleton DHT-based {@code Registry} implementation
+	 * @param node the {@code Node} instance representing the local DHT node; must not be null
+	 * @param vertx the {@code Vertx} instance to be used for asynchronous operations; may be null.
+	 * @param persistentCache the {@code ResolverCache} implementation to be used for caching resolved entries; may be null
+	 * @return a new instance of a DHT-based {@code Registry}
 	 */
-	static Registry DHTRegistry() {
-		return DHTRegistry.getInstance();
+	static Registry DHTRegistry(Node node, Vertx vertx, ResolverCache persistentCache) {
+		Objects.requireNonNull(node, "node");
+		return new DHTRegistry(node, vertx, persistentCache);
+	}
+
+	/**
+	 * Creates a new instance of a Distributed Hash Table (DHT)-based {@code Registry}.
+	 *
+	 * @param node the {@code Node} instance representing the local DHT node; must not be null
+	 * @param persistentCache the {@code ResolverCache} implementation to be used for caching resolved entries; may be null
+	 * @return a new instance of a DHT-based {@code Registry}
+	 */
+	static Registry DHTRegistry(Node node, ResolverCache persistentCache) {
+		return new DHTRegistry(node, null, persistentCache);
+	}
+
+	/**
+	 * Creates a new instance of a Distributed Hash Table (DHT)-based {@code Registry}.
+	 *
+	 * @param node the {@code Node} instance representing the local DHT node; must not be null
+	 * @return a new instance of a DHT-based {@code Registry}
+	 */
+	static Registry DHTRegistry(Node node) {
+		return new DHTRegistry(node, null, null);
 	}
 }

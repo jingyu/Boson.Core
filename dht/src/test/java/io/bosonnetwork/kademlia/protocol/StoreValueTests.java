@@ -41,18 +41,18 @@ import io.bosonnetwork.crypto.Signature;
 
 public class StoreValueTests extends MessageTests {
 	private static Stream<Arguments> requestParameters() throws Exception {
-		Value immutable = Value.builder()
+		Value immutable = Value.immutableBuilder()
 				.data("This is a immutable value".getBytes())
 				.build();
-		Value signedValue = Value.builder()
+		Value signedValue = Value.signedBuilder()
 				.sequenceNumber(3)
 				.data("This is a signed value".getBytes())
-				.buildSigned();
-		Value encryptedValue = Value.builder()
+				.build();
+		Value encryptedValue = Value.encryptedBuilder()
 				.recipient(Id.of(Signature.KeyPair.random().publicKey().bytes()))
 				.sequenceNumber(9)
 				.data("This is a encrypted value".getBytes())
-				.buildEncrypted();
+				.build();
 
 		return Stream.of(
 			Arguments.of("immutable", immutable, 62),
