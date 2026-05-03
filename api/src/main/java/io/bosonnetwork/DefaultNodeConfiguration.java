@@ -767,6 +767,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 
 		/**
 		 * Add a new bootstrap node to the configuration.
+		 *
 		 * @param id the Id of the bootstrap node
 		 * @param addr the string address of the bootstrap node
 		 * @param port the port of the bootstrap node
@@ -774,6 +775,20 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 		 */
 		public Builder addBootstrap(String id, String addr, int port) {
 			NodeInfo node = new NodeInfo(Id.of(id), addr, port);
+			config().bootstraps.add(node);
+			return this;
+		}
+
+		/**
+		 * Adds a bootstrap node to the configuration.
+		 *
+		 * @param id   the unique identifier of the bootstrap node
+		 * @param addr the address of the bootstrap node
+		 * @param port the port number of the bootstrap node
+		 * @return the builder instance for chaining
+		 */
+		public Builder addBootstrap(Id id, String addr, int port) {
+			NodeInfo node = new NodeInfo(id, addr, port);
 			config().bootstraps.add(node);
 			return this;
 		}
