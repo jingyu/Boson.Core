@@ -78,33 +78,6 @@
     </dependency>
 
     <dependency>
-      <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-access-control</artifactId>
-    </dependency>
-
-    <!-- Provided dependencies -->
-    <!-- The following provided dependencies ONLY for the debug purpose in development time -->
-    <!--
-    <dependency>
-      <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-web-gateway</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-active-proxy</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>io.bosonnetwork</groupId>
-      <artifactId>boson-messaging</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    -->
-
-    <dependency>
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
     </dependency>

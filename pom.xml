@@ -56,7 +56,6 @@
   <modules>
     <module>api</module>
     <module>dht</module>
-    <module>accesscontrol</module>
     <module>cmds</module>
   </modules>
 
