@@ -64,14 +64,14 @@ public interface ClientDevice {
 	 *
 	 * @return the creation timestamp in milliseconds
 	 */
-	long getCreated();
+	long getCreatedAt();
 
 	/**
 	 * Gets the timestamp when the device information was last updated.
 	 *
 	 * @return the last update timestamp in milliseconds
 	 */
-	long getUpdated();
+	long getUpdatedAt();
 
 	/**
 	 * Gets the timestamp when the device was last seen active.

@@ -109,11 +109,11 @@ public interface FederatedNode {
 	String getDescription();
 
 	/**
-	 * Checks if the node is considered trusted within the federation.
+	 * Checks if the node is considered federated.
 	 *
-	 * @return {@code true} if the node is trusted, {@code false} otherwise
+	 * @return {@code true} if the node is federated, {@code false} otherwise
 	 */
-	boolean isTrusted();
+	boolean isFederated();
 
 	/**
 	 * Gets the reputation score of the node.
@@ -127,12 +127,12 @@ public interface FederatedNode {
 	 *
 	 * @return the creation timestamp in milliseconds
 	 */
-	long getCreated();
+	long getCreatedAt();
 
 	/**
 	 * Gets the timestamp when the node information was last updated.
 	 *
 	 * @return the last update timestamp in milliseconds
 	 */
-	long getUpdated();
+	long getUpdatedAt();
 }

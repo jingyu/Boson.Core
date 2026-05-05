@@ -41,12 +41,12 @@ public class TestClientDevice implements ClientDevice {
 	}
 
 	@Override
-	public long getCreated() {
+	public long getCreatedAt() {
 		return created;
 	}
 
 	@Override
-	public long getUpdated() {
+	public long getUpdatedAt() {
 		return updated;
 	}
 

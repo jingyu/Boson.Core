@@ -16,9 +16,9 @@ public class PlainDeviceTests {
 		assertEquals(userId, device.getUserId());
 		assertEquals("My Phone", device.getName());
 		assertEquals("BosonApp", device.getApp());
-		assertTrue(device.getCreated() > 0);
-		assertEquals(device.getCreated(), device.getUpdated());
-		assertEquals(device.getCreated(), device.getLastSeen());
+		assertTrue(device.getCreatedAt() > 0);
+		assertEquals(device.getCreatedAt(), device.getUpdatedAt());
+		assertEquals(device.getCreatedAt(), device.getLastSeen());
 		assertEquals("n/a", device.getLastAddress());
 	}
 

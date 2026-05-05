@@ -98,23 +98,13 @@ public class PlainUser implements ClientUser {
 	}
 
 	@Override
-	public long getCreated() {
+	public long getCreatedAt() {
 		return ts;
 	}
 
 	@Override
-	public long getUpdated() {
+	public long getUpdatedAt() {
 		return ts;
-	}
-
-	@Override
-	public boolean isAnnounce() {
-		return false;
-	}
-
-	@Override
-	public long getLastAnnounced() {
-		return 0;
 	}
 
 	@Override

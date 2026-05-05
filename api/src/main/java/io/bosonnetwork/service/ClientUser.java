@@ -79,28 +79,14 @@ public interface ClientUser {
 	 *
 	 * @return the creation timestamp in milliseconds
 	 */
-	long getCreated();
+	long getCreatedAt();
 
 	/**
 	 * Gets the timestamp when the user profile was last updated.
 	 *
 	 * @return the last update timestamp in milliseconds
 	 */
-	long getUpdated();
-
-	/**
-	 * Checks if the user presence is currently announced to the network.
-	 *
-	 * @return {@code true} if the user is announced, {@code false} otherwise
-	 */
-	boolean isAnnounce();
-
-	/**
-	 * Gets the timestamp of the last announcement of the user.
-	 *
-	 * @return the last announcement timestamp in milliseconds
-	 */
-	long getLastAnnounced();
+	long getUpdatedAt();
 
 	/**
 	 * Gets the name of the subscription plan associated with the user.

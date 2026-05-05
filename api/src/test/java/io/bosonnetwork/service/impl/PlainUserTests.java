@@ -1,7 +1,11 @@
 package io.bosonnetwork.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 import io.bosonnetwork.Id;
 
@@ -16,10 +20,8 @@ public class PlainUserTests {
 		assertNull(user.getAvatar());
 		assertNull(user.getEmail());
 		assertNull(user.getBio());
-		assertTrue(user.getCreated() > 0);
-		assertEquals(user.getCreated(), user.getUpdated());
-		assertFalse(user.isAnnounce());
-		assertEquals(0, user.getLastAnnounced());
+		assertTrue(user.getCreatedAt() > 0);
+		assertEquals(user.getCreatedAt(), user.getUpdatedAt());
 		assertEquals("Free", user.getPlanName());
 	}
 

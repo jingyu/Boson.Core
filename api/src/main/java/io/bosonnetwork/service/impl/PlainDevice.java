@@ -71,12 +71,12 @@ public class PlainDevice implements ClientDevice {
 	}
 
 	@Override
-	public long getCreated() {
+	public long getCreatedAt() {
 		return ts;
 	}
 
 	@Override
-	public long getUpdated() {
+	public long getUpdatedAt() {
 		return ts;
 	}
 

@@ -114,7 +114,7 @@ public class PlainFederatedNode implements FederatedNode {
 	}
 
 	@Override
-	public boolean isTrusted() {
+	public boolean isFederated() {
 		return true;
 	}
 
@@ -124,12 +124,12 @@ public class PlainFederatedNode implements FederatedNode {
 	}
 
 	@Override
-	public long getCreated() {
+	public long getCreatedAt() {
 		return ts;
 	}
 
 	@Override
-	public long getUpdated() {
+	public long getUpdatedAt() {
 		return ts;
 	}
 }

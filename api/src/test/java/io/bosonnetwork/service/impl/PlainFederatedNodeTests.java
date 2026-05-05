@@ -22,10 +22,10 @@ public class PlainFederatedNodeTests {
 		assertNull(node.getWebsite());
 		assertNull(node.getContact());
 		assertNull(node.getDescription());
-		assertTrue(node.isTrusted());
+		assertTrue(node.isFederated());
 		assertEquals(1000, node.getReputation());
-		assertTrue(node.getCreated() > 0);
-		assertEquals(node.getCreated(), node.getUpdated());
+		assertTrue(node.getCreatedAt() > 0);
+		assertEquals(node.getCreatedAt(), node.getUpdatedAt());
 	}
 
 	@Test

@@ -22,7 +22,10 @@
 
 package io.bosonnetwork.service;
 
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -314,12 +317,37 @@ public class BosonSuperNodeProfile {
 		 *
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
-		 * @throws NullPointerException if endpoint is null
+		 * @throws NullPointerException if the endpoint is null
 		 */
 		public Builder apiService(URI endpoint) {
 			Objects.requireNonNull(endpoint);
+			try {
+				URL url = endpoint.toURL();
+				if (!url.getProtocol().equals("http") && !url.getProtocol().equals("https"))
+					throw new IllegalArgumentException("Invalid endpoint protocol");
+			} catch (MalformedURLException e) {
+				throw new IllegalArgumentException("Invalid endpoint URL", e);
+			}
 			cardBuilder.addService(identity.getId().toBase58String(), SUPER_NODE_API_SERVICE_TYPE, endpoint.toString());
 			return this;
+		}
+
+		/**
+		 * Adds a super node API service to the profile.
+		 * The service ID will be derived from the node's identifier.
+		 *
+		 * @param endpoint the service endpoint URL
+		 * @return the builder instance
+		 * @throws NullPointerException if the endpoint is null
+		 */
+		public Builder apiService(String endpoint) {
+			Objects.requireNonNull(endpoint);
+			try {
+				URI uri = new URI(endpoint);
+				return apiService(uri);
+			} catch (URISyntaxException e) {
+				throw new IllegalArgumentException("Invalid endpoint URL", e);
+			}
 		}
 
 		/**
