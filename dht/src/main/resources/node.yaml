@@ -25,7 +25,7 @@
 #
 # Using 0.0.0.0 (wildcard) is generally discouraged as the node needs a 
 # deterministic external IP to advertise its presence to peers.
-host4: YOUR_PUBLIC_IPV4_ADDRESS
+host4: PUBLIC_IPV4_ADDRESS
 
 # IPv6 address to bind. 
 # Uncomment and set to a globally reachable IPv6 address to enable IPv6 support.
@@ -44,7 +44,7 @@ port: 39001
 #   - Hex string (double-quoted string, must start with "0x")
 #
 # CAUTION: Keep this key secret. Never share it.
-privateKey: YOUR_PRIVATE_KEY_FOR_DHT_NODE
+privateKey: NODE_PRIVATE_KEY
 
 # Root directory for persistent data.
 # Stores routing tables, caches, and database files.

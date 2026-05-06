@@ -247,6 +247,35 @@ public class FileUtils {
 	}
 
 	/**
+	 * Returns the per-user cache directory for the current platform.
+	 * <p>
+	 * This directory is used for non-essential data files. On Unix-like systems,
+	 * this follows the XDG Base Directory specification.
+	 *
+	 * <p>
+	 * Platform-specific locations:
+	 * <ul>
+	 *   <li>Windows: %LOCALAPPDATA% (e.g., {@code C:\\Users\\username\\AppData\\Local})</li>
+	 *   <li>Linux: {@code ~/.cache}</li>
+	 *   <li>macOS: {@code ~/Library/Caches}</li>
+	 * </ul>
+	 *
+	 * @return the per-user cache directory as a {@link Path}
+	 */
+	public static Path getUserCacheDir() {
+		String osName = System.getProperty("os.name").toLowerCase();
+		if (osName.startsWith("windows")) {
+			return Path.of(System.getenv("LOCALAPPDATA"));
+		} else if (osName.startsWith("mac")) {
+			// return Path.of(System.getProperty("user.home"), "Library/Caches");
+			return Path.of(System.getProperty("user.home"), ".cache");
+		} else {
+			// Unix like OS
+			return Path.of(System.getProperty("user.home"), ".cache");
+		}
+	}
+
+	/**
 	 * Converts a {@link URL} to a {@link Path}.
 	 * This method handles URLs with "jar" schemes and properly retrieves the corresponding
 	 * filesystem path for entries within JAR files.
