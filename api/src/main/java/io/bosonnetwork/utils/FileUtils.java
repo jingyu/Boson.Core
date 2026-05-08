@@ -130,27 +130,28 @@ public class FileUtils {
 	}
 
 	/**
-	 * Returns the system-local configuration directory for locally installed software.
+	 * Returns the site-wide configuration directory for locally installed software.
 	 * <p>
-	 * This directory is typically used for configuration files of software installed locally
-	 * (not part of the base OS distribution) that apply to all users on the system.
+	 * This directory is used for configuration files of software installed outside the base
+	 * OS distribution (e.g., by a local administrator), applying to all users on the system.
+	 * On Linux this corresponds to the {@code /usr/local} hierarchy defined by the FHS.
 	 *
 	 * <p>
 	 * Platform-specific locations:
 	 * <ul>
 	 *   <li>Windows: %ProgramData% (e.g., {@code C:\\ProgramData})</li>
-	 *   <li>Linux: {@code /usr/local/etc}</li>
-	 *   <li>macOS: {@code /Library/Application Support} (follows macOS conventions for system-level config)</li>
+	 *   <li>Linux: {@code /usr/local/etc} (FHS local hierarchy)</li>
+	 *   <li>macOS: {@code /Library/Preferences} (follows macOS conventions for system-level config)</li>
 	 * </ul>
 	 *
-	 * @return the system-local configuration directory as a {@link Path}
+	 * @return the site-wide configuration directory as a {@link Path}
 	 */
-	public static Path getSystemLocalConfigDir() {
+	public static Path getSiteConfigDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
 			return Path.of(System.getenv("ProgramData"));
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Application Support");
+			return Path.of("/Library/Preferences");
 		} else {
 			// Unix like OS
 			return Path.of("/usr/local/etc");
@@ -247,6 +248,34 @@ public class FileUtils {
 	}
 
 	/**
+	 * Returns the system-wide cache directory for the current platform.
+	 * <p>
+	 * This directory is used for non-essential cached data that applies to all users
+	 * on the system and requires administrative privileges to modify.
+	 *
+	 * <p>
+	 * Platform-specific locations:
+	 * <ul>
+	 *   <li>Windows: %SystemRoot%\Temp (e.g., {@code C:\\Windows\\Temp})</li>
+	 *   <li>Linux: {@code /var/cache}</li>
+	 *   <li>macOS: {@code /Library/Caches}</li>
+	 * </ul>
+	 *
+	 * @return the system-wide cache directory as a {@link Path}
+	 */
+	public static Path getSystemCacheDir() {
+		String osName = System.getProperty("os.name").toLowerCase();
+		if (osName.startsWith("windows")) {
+			return Path.of(System.getenv("SystemRoot"), "Temp");
+		} else if (osName.startsWith("mac")) {
+			return Path.of("/Library/Caches");
+		} else {
+			// Unix like OS
+			return Path.of("/var/cache");
+		}
+	}
+
+	/**
 	 * Returns the per-user cache directory for the current platform.
 	 * <p>
 	 * This directory is used for non-essential data files. On Unix-like systems,
@@ -256,8 +285,8 @@ public class FileUtils {
 	 * Platform-specific locations:
 	 * <ul>
 	 *   <li>Windows: %LOCALAPPDATA% (e.g., {@code C:\\Users\\username\\AppData\\Local})</li>
-	 *   <li>Linux: {@code ~/.cache}</li>
-	 *   <li>macOS: {@code ~/Library/Caches}</li>
+	 *   <li>Linux: {@code ~/.cache} (XDG_CACHE_HOME)</li>
+	 *   <li>macOS: {@code ~/.cache} (intentionally using XDG style instead of {@code ~/Library/Caches})</li>
 	 * </ul>
 	 *
 	 * @return the per-user cache directory as a {@link Path}
@@ -272,6 +301,63 @@ public class FileUtils {
 		} else {
 			// Unix like OS
 			return Path.of(System.getProperty("user.home"), ".cache");
+		}
+	}
+
+	/**
+	 * Returns the system-wide log directory for the current platform.
+	 * <p>
+	 * This directory is used for storing system and application log files that apply
+	 * to all users on the system and require administrative privileges to modify.
+	 *
+	 * <p>
+	 * Platform-specific locations:
+	 * <ul>
+	 *   <li>Windows: %SystemRoot%\Logs (e.g., {@code C:\\Windows\\Logs})</li>
+	 *   <li>Linux: {@code /var/log}</li>
+	 *   <li>macOS: {@code /Library/Logs}</li>
+	 * </ul>
+	 *
+	 * @return the system-wide log directory as a {@link Path}
+	 */
+	public static Path getSystemLogDir() {
+		String osName = System.getProperty("os.name").toLowerCase();
+		if (osName.startsWith("windows")) {
+			return Path.of(System.getenv("SystemRoot"), "Logs");
+		} else if (osName.startsWith("mac")) {
+			return Path.of("/Library/Logs");
+		} else {
+			// Unix like OS
+			return Path.of("/var/log");
+		}
+	}
+
+	/**
+	 * Returns the per-user log directory for the current platform.
+	 * <p>
+	 * This directory is used for storing user-specific application log files. On Unix-like
+	 * systems, this follows the XDG Base Directory specification.
+	 *
+	 * <p>
+	 * Platform-specific locations:
+	 * <ul>
+	 *   <li>Windows: %LOCALAPPDATA% (e.g., {@code C:\\Users\\username\\AppData\\Local})</li>
+	 *   <li>Linux: {@code ~/.local/state} (XDG_STATE_HOME, preferred for logs since XDG spec v0.8)</li>
+	 *   <li>macOS: {@code ~/.local/state} (intentionally using XDG style instead of {@code ~/Library/Logs})</li>
+	 * </ul>
+	 *
+	 * @return the per-user log directory as a {@link Path}
+	 */
+	public static Path getUserLogDir() {
+		String osName = System.getProperty("os.name").toLowerCase();
+		if (osName.startsWith("windows")) {
+			return Path.of(System.getenv("LOCALAPPDATA"));
+		} else if (osName.startsWith("mac")) {
+			// return Path.of(System.getProperty("user.home"), "Library/Logs");
+			return Path.of(System.getProperty("user.home"), ".local/state");
+		} else {
+			// Unix like OS
+			return Path.of(System.getProperty("user.home"), ".local/state");
 		}
 	}
 
