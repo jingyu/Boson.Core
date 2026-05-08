@@ -78,25 +78,44 @@ public class ApplicationLock implements AutoCloseable {
 
 	private void tryLock() throws IOException, IllegalStateException {
 		Path parent = lockFile.getParent();
-		if (Files.notExists(parent))
+		if (parent != null && Files.notExists(parent))
 			Files.createDirectories(parent);
 
 		fc = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-		lock = fc.tryLock(0, 0, false);
-		if (lock == null)
-			throw new IllegalStateException("Already locked by another instance.");
+		try {
+			lock = fc.tryLock(0, Long.MAX_VALUE, false);
+			if (lock == null)
+				throw new IllegalStateException("Already locked by another instance.");
+		} catch (IOException | RuntimeException | Error e) {
+			fc.close();
+			fc = null;
+			throw e;
+		}
+	}
+
+	private void unlock() {
+		try {
+			if (lock != null) {
+				lock.close();
+				lock = null;
+			}
+
+			if (fc != null) {
+				fc.close();
+				fc = null;
+			}
+
+			Files.deleteIfExists(lockFile);
+		} catch (IOException ignore) {
+			// Ignore cleanup errors
+		} finally {
+			lock = null;
+			fc = null;
+		}
 	}
 
 	@Override
 	public void close() {
-		if (lock != null) {
-			try {
-				lock.close();
-				Files.delete(lockFile);
-				lock = null;
-			} catch (IOException ignore) {
-				lock = null;
-			}
-		}
+		unlock();
 	}
 }
