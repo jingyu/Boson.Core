@@ -21,58 +21,54 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
-import java.net.InetAddress;
 import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.LookupOption;
 
 /**
  * @hidden
  */
-@Command(name = "bootstrap", mixinStandardHelpOptions = true, version = "Boson bootstrap 2.0",
-		description = "Bootstrap from the node.")
-public class BootstrapCommand implements Callable<Integer> {
-	@Parameters(paramLabel = "ID", index = "0", description = "The node id.")
-	private String id = null;
+@Command(name = "findvalue", mixinStandardHelpOptions = true, version = "Boson findvalue 2.0",
+		description = "Find value and show the value if exists.")
+public class FindValueCommand implements Callable<Integer> {
+@Option(names = {"-m", "--mode"}, description = "lookup mode: arbitrary, optimistic, conservative.")
+private String mode = "conservative";
 
-	@Parameters(paramLabel = "ADDRESS", index = "1", description = "The node address.")
-	private String address = null;
+@Parameters(paramLabel = "ID", index = "0", description = "The target value id to be find.")
+private String target;
 
-	@Parameters(paramLabel = "PORT", index = "2", description = "The node port.")
-	private int port = 0;
-
-	@Override
-	public Integer call() throws Exception {
-		Id nodeId = null;
-		try {
-			nodeId = Id.of(id);
-		} catch (Exception e) {
-			System.out.println("Invalid id: " + id);
-			return -1;
-		}
-
-		InetAddress addr = null;
-		try {
-			addr = InetAddress.getByName(address);
-		} catch (Exception e) {
-			System.out.println("Invalid address: " + id);
-			return -1;
-		}
-
-		if (port <= 0) {
-			System.out.println("Invalid port: " + port);
-			return -1;
-		}
-
-		NodeInfo n = new NodeInfo(nodeId, addr, port);
-		Main.getBosonNode().bootstrap(n);
-
-		return null;
+@Override
+public Integer call() throws Exception {
+	LookupOption option = null;
+	try {
+		option = LookupOption.valueOf(mode.toUpperCase());
+	} catch (Exception e) {
+		System.out.println("Unknown mode: " + mode);
+		return -1;
 	}
+
+	Id id = null;
+	try {
+		id = Id.of(target);
+	} catch (Exception e) {
+		System.out.println("Invalid ID: " + target);
+		return -1;
+	}
+
+	Main.getBosonNode().findValue(id, option).thenAccept(v -> {
+		if (v != null)
+			System.out.println(v);
+		else
+			System.out.println("Not found.");
+	}).get();
+
+	return 0;
+}
 }

@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
 import java.io.File;
 import java.io.IOException;
@@ -80,7 +80,7 @@ import io.bosonnetwork.json.Json;
 			GenerateKeyPairCommand.class
 		})
 public class Main implements Callable<Integer> {
-	private static final String DEFAULT_DATA_DIR = "~/.cache/boson";
+	private static final String DEFAULT_DATA_DIR = "data";
 
 	@Option(names = {"-4", "--address4"}, description = "IPv4 address to listen.")
 	private String addr4 = null;
@@ -91,10 +91,10 @@ public class Main implements Callable<Integer> {
 	@Option(names = {"-p", "--port"}, description = "The port to listen.")
 	private int port = 0;
 
-	@Option(names = {"-d", "--dataDir"}, description = "The directory to store the node data, default: ~/.cache/boson.")
+	@Option(names = {"-d", "--dataDir"}, description = "The directory to store the node data, default: ./data.")
 	private String dataDir = null;
 
-	@Option(names = {"-s", "--storageURL"}, description = "The storage URL, default: jdbc:sqlite:<dataDir>/node.db.")
+	@Option(names = {"-s", "--storageURL"}, description = "The storage URL, default: jdbc:sqlite:node.db.")
 	private String storageURL = null;
 
 	@Option(names = {"-b", "--bootstrap"}, description = "The bootstrap node, format: ID:ADDRESS:PORT")
@@ -145,7 +145,7 @@ public class Main implements Callable<Integer> {
 	private void initTerminal() {
 		try {
 			terminal = buildTerminal(false);
-			Path workDir = Path.of(System.getProperty("user.home"));
+			Path workDir = Path.of("");
 			// set up JLine built-in commands
 			Builtins builtins = new Builtins(() -> workDir, new ConfigurationPath((Path) null, (Path) null), null);
 			// builtins.rename(Builtins.Command.HELP, "builtin-help");
@@ -224,19 +224,10 @@ public class Main implements Callable<Integer> {
 		if (port != 0)
 			builder.port(port);
 
-		if (dataDir != null) {
-			builder.dataDir(dataDir);
-		} else {
-			if (!builder.hasDataDir())
-				builder.dataDir(DEFAULT_DATA_DIR);
-		}
+		builder.dataDir(dataDir != null ? dataDir : DEFAULT_DATA_DIR);
 
-		if (storageURL != null) {
+		if (storageURL != null)
 			builder.database(storageURL);
-		} else {
-			if (builder.hasDataDir())
-				builder.database("jdbc:sqlite:" + builder.dataDir().resolve("node.db"));
-		}
 
 		if (!builder.hasPrivateKey())
 			builder.generatePrivateKey();

@@ -1,4 +1,4 @@
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
 import java.io.IOException;
 import java.nio.file.Files;

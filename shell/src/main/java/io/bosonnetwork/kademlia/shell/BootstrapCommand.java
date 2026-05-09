@@ -21,56 +21,58 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
+import java.net.InetAddress;
 import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.NodeInfo;
 
 /**
  * @hidden
  */
-@Command(name = "findpeer", mixinStandardHelpOptions = true, version = "Boson findpeer 2.0",
-		description = "Find peer and show the candidate peers if exists.")
-public class FindPeerCommand implements Callable<Integer> {
-	@Option(names = { "-m", "--mode" }, description = "lookup mode: arbitrary, optimistic, conservative.")
-	private String mode = "conservative";
+@Command(name = "bootstrap", mixinStandardHelpOptions = true, version = "Boson bootstrap 2.0",
+		description = "Bootstrap from the node.")
+public class BootstrapCommand implements Callable<Integer> {
+	@Parameters(paramLabel = "ID", index = "0", description = "The node id.")
+	private String id = null;
 
-	@Option(names = { "-s", "--expected-sequence-number" }, description = "expected sequence number of peers")
-	private int expectedSequenceNumber = -1;
+	@Parameters(paramLabel = "ADDRESS", index = "1", description = "The node address.")
+	private String address = null;
 
-	@Option(names = { "-x", "--expected-count" }, description = "expected number of peers")
-	private int expectedCount = 1;
-
-	@Parameters(paramLabel = "ID", index = "0", description = "The peer id to be find.")
-	private String id;
+	@Parameters(paramLabel = "PORT", index = "2", description = "The node port.")
+	private int port = 0;
 
 	@Override
 	public Integer call() throws Exception {
-		LookupOption option = null;
+		Id nodeId = null;
 		try {
-			option = LookupOption.valueOf(mode.toUpperCase());
+			nodeId = Id.of(id);
 		} catch (Exception e) {
-			System.out.println("Unknown mode: " + mode);
+			System.out.println("Invalid id: " + id);
 			return -1;
 		}
 
-		Id peerId = Id.of(id);
-		Main.getBosonNode().findPeer(peerId, expectedSequenceNumber, expectedCount, option).thenAccept(peers -> {
-			if (!peers.isEmpty()) {
-				for (PeerInfo p : peers)
-					System.out.println(p);
-			} else {
-				System.out.println("Not found.");
-			}
-		}).get();
+		InetAddress addr = null;
+		try {
+			addr = InetAddress.getByName(address);
+		} catch (Exception e) {
+			System.out.println("Invalid address: " + id);
+			return -1;
+		}
 
-		return 0;
+		if (port <= 0) {
+			System.out.println("Invalid port: " + port);
+			return -1;
+		}
+
+		NodeInfo n = new NodeInfo(nodeId, addr, port);
+		Main.getBosonNode().bootstrap(n);
+
+		return null;
 	}
 }

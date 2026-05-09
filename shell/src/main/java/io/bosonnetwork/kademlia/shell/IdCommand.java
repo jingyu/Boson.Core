@@ -21,21 +21,25 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
 import java.util.concurrent.Callable;
+
+import io.bosonnetwork.Id;
 
 import picocli.CommandLine.Command;
 
 /**
  * @hidden
  */
-@Command(name = "stop", mixinStandardHelpOptions = true, version = "Boson stop command 2.0",
-		description = "Display the ID of current Boson node.")
-public class StopCommand implements Callable<Integer> {
+@Command(name = "id", mixinStandardHelpOptions = true, version = "Boson id 2.0",
+	description = "Display the ID of current Boson node.")
+public class IdCommand implements Callable<Integer> {
 	@Override
-	public Integer call() throws Exception {
-		Main.getBosonNode().stop().thenRun(() -> System.out.println("Boson node stopped.")).get();
+	public Integer call() {
+		Id id = Main.getBosonNode().getId();
+		System.out.println("Boson id: " + id);
+
 		return 0;
 	}
 }

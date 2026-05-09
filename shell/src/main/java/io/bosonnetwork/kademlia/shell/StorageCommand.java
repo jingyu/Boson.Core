@@ -21,7 +21,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.shell;
+package io.bosonnetwork.kademlia.shell;
 
 import java.util.concurrent.Callable;
 
@@ -30,10 +30,10 @@ import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.kademlia.storage.DataStorage;
-import io.bosonnetwork.shell.StorageCommand.ListPeerCommand;
-import io.bosonnetwork.shell.StorageCommand.ListValueCommand;
-import io.bosonnetwork.shell.StorageCommand.PeerCommand;
-import io.bosonnetwork.shell.StorageCommand.ValueCommand;
+import io.bosonnetwork.kademlia.shell.StorageCommand.ListPeerCommand;
+import io.bosonnetwork.kademlia.shell.StorageCommand.ListValueCommand;
+import io.bosonnetwork.kademlia.shell.StorageCommand.PeerCommand;
+import io.bosonnetwork.kademlia.shell.StorageCommand.ValueCommand;
 import io.bosonnetwork.vertx.VertxFuture;
 
 /**

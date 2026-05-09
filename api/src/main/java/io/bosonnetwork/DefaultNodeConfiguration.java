@@ -314,9 +314,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 			throw new IllegalArgumentException("Invalid privateKey: " + config.privateKey);
 		}
 
-		String dir = m.getString("dataDir", null);
-		if (dir != null && !dir.isEmpty())
-			config.dataDir = Path.of(dir);
+		config.dataDir = m.getPath("dataDir", Path.of("."));
 
 		ConfigMap db = m.getObject("database");
 		if (db != null && !db.isEmpty()) {

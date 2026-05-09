@@ -56,7 +56,7 @@
   <modules>
     <module>api</module>
     <module>dht</module>
-    <module>cmds</module>
+    <module>shell</module>
   </modules>
 
   <build>
