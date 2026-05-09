@@ -206,7 +206,7 @@ public class Main implements Callable<Integer> {
 
 		if (configFile != null && (!saveConfig || Files.exists(Path.of(configFile)))) {
 			try {
-				Map<String, Object> map = Json.yamlMapper().readValue(configFile, Json.mapType());
+				Map<String, Object> map = Json.yamlMapper().readValue(new File(configFile), Json.mapType());
 				builder.template(map);
 			} catch (Exception e) {
 				System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
