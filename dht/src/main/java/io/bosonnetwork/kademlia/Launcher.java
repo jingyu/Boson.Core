@@ -43,10 +43,9 @@ import io.bosonnetwork.vertx.VertxFuture;
  * and managing the application lifecycle, including graceful shutdown.
  */
 public class Launcher {
-	private static Vertx vertx;
 	private static KadNode node;
 
-	private static NodeConfiguration buildConfigFromArgs(Vertx vertx, String[] args) throws IllegalArgumentException {
+	private static DefaultNodeConfiguration buildConfigFromArgs(String[] args) throws IllegalArgumentException {
 		DefaultNodeConfiguration.Builder builder = NodeConfiguration.builder();
 
 		int i = 0;
@@ -140,7 +139,7 @@ public class Launcher {
 			i++;
 		}
 
-		return builder.vertx(vertx).build();
+		return (DefaultNodeConfiguration) builder.build();
 	}
 
 	private static void printUsage() {
@@ -159,17 +158,9 @@ public class Launcher {
 	}
 
 	public static void main(String[] args) {
-		Object shutdown = new Object();
-
-		vertx = Vertx.vertx(new VertxOptions()
-				.setEventLoopPoolSize(4)
-				.setWorkerPoolSize(4)
-				.setPreferNativeTransport(true));
-
-		NodeConfiguration config;
-
+		DefaultNodeConfiguration config;
 		try {
-			config = buildConfigFromArgs(vertx, args);
+			config = buildConfigFromArgs(args);
 		} catch (IllegalArgumentException e) {
 			System.err.println("Error: " + e.getMessage());
 			if (e.getCause() != null && e.getCause().getMessage() != null)
@@ -178,6 +169,13 @@ public class Launcher {
 			return;
 		}
 
+		Vertx vertx = Vertx.vertx(new VertxOptions()
+				.setEventLoopPoolSize(4)
+				.setWorkerPoolSize(4)
+				.setPreferNativeTransport(true));
+		config.setVertx(vertx);
+
+		Object shutdown = new Object();
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			synchronized (shutdown) {
 				try {
