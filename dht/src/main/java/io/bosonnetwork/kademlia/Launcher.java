@@ -195,6 +195,8 @@ public class Launcher {
 			}
 		}));
 
+		System.out.println("Native transport: " + vertx.isNativeTransportEnabled() + "\n");
+
 		int rc = 0;
 		Path dataDir = config.dataDir() != null ? config.dataDir() : Path.of(".");
 		Path lockFile = dataDir.resolve("lock");

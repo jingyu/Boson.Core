@@ -23,8 +23,6 @@
 
   <logger name="io.netty" level="OFF"/>
   <logger name="io.vertx" level="OFF"/>
-  <logger name="io.bosonnetwork.kademlia.deprecated.NetworkEngine" level="WARN"/>
-  <logger name="io.bosonnetwork.kademlia.deprecated.RPCServer" level="WARN"/>
 
   <root level="INFO">
     <appender-ref ref="STDOUT" />
