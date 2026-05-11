@@ -67,12 +67,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Compile dependencies -->
-        <dependency>
-            <groupId>io.bosonnetwork</groupId>
-            <artifactId>boson-api</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>io.bosonnetwork</groupId>
             <artifactId>boson-dht</artifactId>
@@ -139,7 +133,7 @@
 
                     <!-- copy self -->
                     <execution>
-                        <id>self</id>
+                        <id>copy-self</id>
                         <phase>package</phase>
                         <goals>
                             <goal>copy</goal>

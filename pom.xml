@@ -1,73 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" 
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
-  <modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-  <parent>
+    <parent>
+        <groupId>io.bosonnetwork</groupId>
+        <artifactId>boson-parent</artifactId>
+        <version>3.0.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
     <groupId>io.bosonnetwork</groupId>
-    <artifactId>boson-parent</artifactId>
+    <artifactId>boson-core</artifactId>
     <version>3.0.0-SNAPSHOT</version>
-    <relativePath/>
-  </parent>
+    <packaging>pom</packaging>
 
-  <groupId>io.bosonnetwork</groupId>
-  <artifactId>boson-core</artifactId>
-  <version>3.0.0-SNAPSHOT</version>
-  <packaging>pom</packaging>
+    <name>Boson Core</name>
+    <description>
+        Boson is a decentralized and encrypted peer-to-peer (P2P) communication framework that facilitates network
+        traffic routing between virtual machines and decentralized Applications (dApps). Boson Java is a Java
+        distribution designed to run on VPS servers with a public IP address, serving as a super Boson Node service.
+    </description>
+    <url>https://github.com/bosonnetwork/Boson.Core</url>
 
-  <name>Boson Core</name>
-  <description>
-    Boson is a decentralized and encrypted peer-to-peer (P2P)  communication framework that facilitates network traffic routing between virtual machines and decentralized Applications (dApps).  Boson Java is a Java distribution designed to run on VPS servers with a public IP address, serving as a super Boson Node service.
-  </description>
-  <url>https://github.com/bosonnetwork/Boson.Core</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/bosonnetwork/Boson.Core/blob/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-  <licenses>
-    <license>
-      <name>MIT License</name>
-      <url>https://github.com/bosonnetwork/Boson.Core/blob/master/LICENSE</url>
-      <distribution>repo</distribution>
-    </license>
-  </licenses>
+    <developers>
+        <developer>
+            <id>boson-network-dev</id>
+            <name>Boson Network</name>
+            <email>support@bosonnetwork.io</email>
+            <organization>BosonNetwork</organization>
+            <organizationUrl>https://github.com/bosonnetwork</organizationUrl>
+            <roles>
+                <role>architect</role>
+                <role>developer</role>
+            </roles>
+            <properties>
+                <picUrl>https://avatars.githubusercontent.com/u/152134507</picUrl>
+            </properties>
+        </developer>
+    </developers>
 
-  <developers>
-    <developer>
-      <id>boson-network-dev</id>
-      <name>Boson Network</name>
-      <email>support@bosonnetwork.io</email>
-      <organization>BosonNetwork</organization>
-      <organizationUrl>https://github.com/bosonnetwork</organizationUrl>
-      <roles>
-        <role>architect</role>
-        <role>developer</role>
-      </roles>
-      <properties>
-        <picUrl>https://avatars.githubusercontent.com/u/152134507</picUrl>
-      </properties>
-    </developer>
-  </developers>
+    <scm>
+        <connection>scm:git:git@github.com:bosonnetwork/Boson.Core.git</connection>
+        <developerConnection>scm:git:git@github.com:bosonnetwork/Boson.Core.git</developerConnection>
+        <url>git@github.com:bosonnetwork/Boson.Core.git</url>
+    </scm>
 
-  <scm>
-    <connection>scm:git:git@github.com:bosonnetwork/Boson.Core.git</connection>
-    <developerConnection>scm:git:git@github.com:bosonnetwork/Boson.Core.git</developerConnection>
-    <url>git@github.com:bosonnetwork/Boson.Core.git</url>
-  </scm>
+    <modules>
+        <module>api</module>
+        <module>dht</module>
+        <module>shell</module>
+    </modules>
 
-  <modules>
-    <module>api</module>
-    <module>dht</module>
-    <module>shell</module>
-  </modules>
-
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-deploy-plugin</artifactId>
-        <configuration>
-          <skip>true</skip>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
