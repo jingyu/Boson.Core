@@ -48,10 +48,10 @@ public class RpcCall {
 	private final NodeInfo target;
 
 	/** The request message sent to the target node. */
-	private final Message<?> request;
+	private final Message request;
 
 	/** The response message received from the target node, null until received. */
-	private Message<?> response;
+	private Message response;
 
 	/** The cause of an error if the RPC call fails, null otherwise. */
 	private Throwable cause;
@@ -107,7 +107,7 @@ public class RpcCall {
 	 * @param request the request message to send
 	 * @throws IllegalArgumentException if target or request is null, or if request is not of type REQUEST
 	 */
-	public RpcCall(NodeInfo target, Message<?> request) {
+	public RpcCall(NodeInfo target, Message request) {
 		this.target = target;
 		this.request = request;
 		this.listener = null;
@@ -226,23 +226,19 @@ public class RpcCall {
 	/**
 	 * Gets the request message.
 	 *
-	 * @param <T> the type of the request body
 	 * @return the request message
 	 */
-	@SuppressWarnings("unchecked")
-	public <T> Message<T> getRequest() {
-		return (Message<T>) request;
+	public Message getRequest() {
+		return request;
 	}
 
 	/**
 	 * Gets the response message.
 	 *
-	 * @param <T> the type of the response body
 	 * @return the response message, or null if no response has been received
 	 */
-	@SuppressWarnings("unchecked")
-	public <T> Message<T> getResponse() {
-		return (Message<T>) response;
+	public Message getResponse() {
+		return response;
 	}
 
 	/**
@@ -495,7 +491,7 @@ public class RpcCall {
 	 * @param response the response message
 	 * @throws NullPointerException if response is null
 	 */
-	protected void respond(Message<?> response) {
+	protected void respond(Message response) {
 		responseTime = System.currentTimeMillis();
 		response.setAssociatedCall(this);
 		cancelTimeoutTimer();
@@ -503,9 +499,7 @@ public class RpcCall {
 
 		if (response.isError()) {
 			// Extract error cause from response
-			@SuppressWarnings("unchecked")
-			Message<Error> error = (Message<Error>) response;
-			this.cause = error.getBody().getCause();
+			this.cause = response.<Error>getBody().getCause();
 		}
 
 		switch(response.getType()) {
@@ -521,7 +515,7 @@ public class RpcCall {
 	 *
 	 * @param response the response message
 	 */
-	protected void respondInconsistentSocket(Message<?> response) {
+	protected void respondInconsistentSocket(Message response) {
 		// Inconsistent sockets are rare and may indicate NAT issues; stall to allow retry
 		if (state != State.SENT)
 			return;
@@ -534,7 +528,7 @@ public class RpcCall {
 	 *
 	 * @param response the response message
 	 */
-	protected void respondWrongMethod(Message<?> response) {
+	protected void respondWrongMethod(Message response) {
 		// Store response and set error cause for debugging
 		this.response = response;
 		this.cause = new ProtocolError("Got response with wrong method");

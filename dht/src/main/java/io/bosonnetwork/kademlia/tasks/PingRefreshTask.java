@@ -179,7 +179,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 			}
 
 			log.debug("{}#{} sending PING RPC to {}", getName(), getId(), entry.getId());
-			Message<Void> request = Message.pingRequest();
+			Message request = Message.pingRequest();
 			sendCall(entry, request, unused -> todo.removeFirst());
 		}
 	}

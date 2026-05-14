@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
-import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
 
 /**
@@ -101,7 +100,7 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 			}
 
 			log.debug("{}#{} sending ANNOUNCE_PEER RPC to {}", getName(), getId(), cn.getId());
-			Message<AnnouncePeerRequest> request = Message.announcePeerRequest(peer, cn.getToken(), expectedSequenceNumber);
+			Message request = Message.announcePeerRequest(peer, cn.getToken(), expectedSequenceNumber);
 			sendCall(cn, request, c -> todo.remove(cn));
 		}
 	}

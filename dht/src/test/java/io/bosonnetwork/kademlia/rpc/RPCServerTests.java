@@ -169,7 +169,7 @@ public class RPCServerTests {
 			});
 		}
 
-		protected void sendMessage(Message<?> message) {
+		protected void sendMessage(Message message) {
 			//noinspection CodeBlock2Expr
 			runOnContext(v -> {
 				rpcServer.sendMessage(message).andThen(ar -> {
@@ -193,8 +193,8 @@ public class RPCServerTests {
 		}
 
 		@SuppressWarnings("unchecked")
-		private void onRequest(Message<?> message) {
-			Message<?> response;
+		private void onRequest(Message message) {
+			Message response;
 
 			if (simulateAbnormal) {
 				double chance = Random.random().nextDouble();
@@ -221,17 +221,17 @@ public class RPCServerTests {
 				case PING -> Message.pingResponse(message.getTxid());
 				case FIND_NODE -> Message.findNodeResponse(message.getTxid(), createRandomNodes(8), null, 0);
 				case FIND_VALUE -> {
-					Message<FindValueRequest> request = (Message<FindValueRequest>) message;
-					if (values.containsKey(request.getBody().getTarget()))
-						yield Message.findValueResponse(message.getTxid(), values.get(request.getBody().getTarget()));
+					FindValueRequest body = message.getBody();
+					if (values.containsKey(body.getTarget()))
+						yield Message.findValueResponse(message.getTxid(), values.get(body.getTarget()));
 					else
 						yield Message.findValueResponse(message.getTxid(), createRandomNodes(8), null);
 				}
 				case STORE_VALUE -> Message.storeValueResponse(message.getTxid());
 				case FIND_PEER -> {
-					Message<FindPeerRequest> request = (Message<FindPeerRequest>) message;
-					if (peers.containsKey(request.getBody().getTarget()))
-						yield Message.findPeerResponse(message.getTxid(), peers.get(request.getBody().getTarget()));
+					FindPeerRequest body = message.getBody();
+					if (peers.containsKey(body.getTarget()))
+						yield Message.findPeerResponse(message.getTxid(), peers.get(body.getTarget()));
 					else
 						yield Message.findPeerResponse(message.getTxid(), createRandomNodes(8), null);
 				}
@@ -243,7 +243,7 @@ public class RPCServerTests {
 			sendMessage(response);
 		}
 
-		private void onMessage(Message<?> message) {
+		private void onMessage(Message message) {
 			receivedMessages++;
 
 			if (message.isRequest()) {
@@ -370,7 +370,7 @@ public class RPCServerTests {
 					break;
 				}
 
-				Message<?> request = switch (i % 7) {
+				Message request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
 					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), -1);
@@ -476,7 +476,7 @@ public class RPCServerTests {
 					break;
 				}
 
-				Message<?> request = switch (i % 7) {
+				Message request = switch (i % 7) {
 					case 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
 					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), 3);
@@ -584,7 +584,7 @@ public class RPCServerTests {
 					break;
 				}
 
-				Message<?> request = switch (i % 7) {
+				Message request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
 					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), -1);
@@ -678,7 +678,7 @@ public class RPCServerTests {
 			}
 
 			for (int i = 0; i < 150; i++) {
-				Message<?> request = switch (i % 7) {
+				Message request = switch (i % 7) {
 					case 0, 1 -> Message.pingRequest();
 					case 2 -> Message.findNodeRequest(Id.random(), true, false, true);
 					case 3 -> Message.announcePeerRequest(createPeerInfo(), Random.random().nextInt(1, Integer.MAX_VALUE), 2);

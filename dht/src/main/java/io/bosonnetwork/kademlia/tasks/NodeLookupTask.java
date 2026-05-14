@@ -33,7 +33,6 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
-import io.bosonnetwork.kademlia.protocol.FindNodeRequest;
 import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -194,7 +193,7 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 
 			// Send a FIND_NODE request to the candidate
 			Network network = getContext().getNetwork();
-			Message<FindNodeRequest> request = Message.findNodeRequest(getTarget(),
+			Message request = Message.findNodeRequest(getTarget(),
 					network.isIPv4(), network.isIPv6(), doesWantToken());
 
 			log.debug("{}#{} sending FIND_NODE RPC to candidate {}", getName(), getId(), cn.getId());
@@ -217,9 +216,9 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 			return;
 		}
 
-		Message<FindNodeResponse> response = call.getResponse();
+		Message response = call.getResponse();
 		// TODO: handle both IPv4 & IPv6 result
-		List<NodeInfo> nodes = response.getBody().getNodes(getContext().getNetwork());
+		List<NodeInfo> nodes = response.<FindNodeResponse>getBody().getNodes(getContext().getNetwork());
 		if (nodes.isEmpty()) {
 			log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
 			return;

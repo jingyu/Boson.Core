@@ -43,7 +43,7 @@ public class FindValueRequest extends LookupRequest {
 	}
 
 	public FindValueRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber) {
-		super(target, want4, want6, true);
+		super(target, want4, want6, false);
 		this.expectedSequenceNumber = expectedSequenceNumber;
 	}
 

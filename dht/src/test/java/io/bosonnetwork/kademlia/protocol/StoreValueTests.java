@@ -80,9 +80,9 @@ public class StoreValueTests extends MessageTests {
 		assertEquals(Message.Method.STORE_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(token, msg.getBody().getToken());
-		assertEquals(cas, msg.getBody().getExpectedSequenceNumber());
-		assertEquals(value, msg.getBody().getValue());
+		assertEquals(token, msg.<StoreValueRequest>getBody().getToken());
+		assertEquals(cas, msg.<StoreValueRequest>getBody().getExpectedSequenceNumber());
+		assertEquals(value, msg.<StoreValueRequest>getBody().getValue());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
@@ -110,9 +110,9 @@ public class StoreValueTests extends MessageTests {
 		assertEquals(Message.Method.STORE_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(token, msg.getBody().getToken());
-		assertEquals(cas, msg.getBody().getExpectedSequenceNumber());
-		assertEquals(value, msg.getBody().getValue());
+		assertEquals(token, msg.<StoreValueRequest>getBody().getToken());
+		assertEquals(cas, msg.<StoreValueRequest>getBody().getExpectedSequenceNumber());
+		assertEquals(value, msg.<StoreValueRequest>getBody().getValue());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);

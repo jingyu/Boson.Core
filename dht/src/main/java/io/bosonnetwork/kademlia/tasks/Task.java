@@ -506,7 +506,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 * @param request the RPC request message
 	 * @return true if the call was sent, false if concurrency limits prevent it
 	 */
-	protected boolean sendCall(NodeInfo node, Message<?> request) {
+	protected boolean sendCall(NodeInfo node, Message request) {
 		return sendCall(node, request, null);
 	}
 
@@ -518,7 +518,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 * @param beforeSend optional callback to execute before sending the call
 	 * @return true if the call was sent, false if concurrency limits prevent it
 	 */
-	protected boolean sendCall(NodeInfo node, Message<?> request, Consumer<RpcCall> beforeSend) {
+	protected boolean sendCall(NodeInfo node, Message request, Consumer<RpcCall> beforeSend) {
 		if (!canDoRequest())
 			return false;
 

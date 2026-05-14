@@ -61,8 +61,8 @@ public class ErrorMessageTests extends MessageTests {
 		assertEquals(nodeId, msg.getId());
 		assertEquals(txid, msg.getTxid());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(code, msg.getBody().getCode());
-		assertEquals(errorMessage, msg.getBody().getMessage());
+		assertEquals(code, msg.<Error>getBody().getCode());
+		assertEquals(errorMessage, msg.<Error>getBody().getMessage());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);

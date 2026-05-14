@@ -33,7 +33,6 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.impl.KadContext;
-import io.bosonnetwork.kademlia.protocol.FindValueRequest;
 import io.bosonnetwork.kademlia.protocol.FindValueResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -99,7 +98,7 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 
 			log.debug("{}#{} sending FIND_VALUE RPC to {}", getName(), getId(), cn.getId());
 			Network network = getContext().getNetwork();
-			Message<FindValueRequest> request = Message.findValueRequest(getTarget(),
+			Message request = Message.findValueRequest(getTarget(),
 					network.isIPv4(), network.isIPv6(), expectedSequenceNumber);
 			sendCall(cn, request, c -> cn.setSent());
 		}
@@ -121,9 +120,10 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 			return;
 		}
 
-		Message<FindValueResponse> response = call.getResponse();
-		if (response.getBody().hasValue()) {
-			Value value = response.getBody().getValue();
+		Message response = call.getResponse();
+		FindValueResponse body = response.getBody();
+		if (body.hasValue()) {
+			Value value = body.getValue();
 			if (!result.update(value)) {
 				log.warn("{}#{} dropping response from {} due to ineligible value(id | sequenceNumber | signature mismatch)",
 						getName(), getId(), call.getTargetId());
@@ -139,7 +139,7 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 				}
 			}
 		} else {
-			List<NodeInfo> nodes = response.getBody().getNodes(getContext().getNetwork());
+			List<NodeInfo> nodes = response.<FindValueResponse>getBody().getNodes(getContext().getNetwork());
 			if (nodes.isEmpty()) {
 				log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
 				return;

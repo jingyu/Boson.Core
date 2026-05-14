@@ -49,20 +49,20 @@ public interface DHTMetrics extends Metrics {
 	}
 
 	// requestReceived - process - responseSent
-	default void requestReceived(Message<?> request) {
+	default void requestReceived(Message request) {
 	}
 
-	default void responseSent(Message<?> response) {
+	default void responseSent(Message response) {
 	}
 
 	// requestSent - wanting for response - responseReceived ｜ responseTimeout
-	default void requestSent(Message<?> request) {
+	default void requestSent(Message request) {
 	}
 
-	default void responseReceived(Message<?> response) {
+	default void responseReceived(Message response) {
 	}
 
-	default void responseTimeout(Message<?> request) {
+	default void responseTimeout(Message request) {
 	}
 
 	default void verifiedLossRateUpdate(double rate) {

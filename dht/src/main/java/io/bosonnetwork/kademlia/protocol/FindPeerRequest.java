@@ -32,6 +32,8 @@ import io.bosonnetwork.Id;
 @JsonPropertyOrder({"t", "w", "cas", "e"})
 public class FindPeerRequest extends LookupRequest {
 	private final int expectedSequenceNumber;
+	@JsonProperty("e")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private final int expectedCount;
 
 	@JsonCreator
@@ -54,20 +56,14 @@ public class FindPeerRequest extends LookupRequest {
 		return expectedSequenceNumber;
 	}
 
-	@JsonProperty("cas")
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private Integer getCas() {
-		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
-	}
-
 	public int getExpectedCount() {
 		return expectedCount;
 	}
 
-	@JsonProperty("e")
+	@JsonProperty("cas")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private Integer getExceptedPeers() {
-		return expectedCount > 0 ? expectedCount : null;
+	private Integer getCas() {
+		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
 	}
 
 	@Override

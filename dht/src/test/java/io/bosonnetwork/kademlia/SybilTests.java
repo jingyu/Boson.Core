@@ -46,7 +46,6 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.kademlia.protocol.FindNodeRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.kademlia.rpc.RpcCallListener;
@@ -118,7 +117,7 @@ public class SybilTests {
 			sybil = new KadNode(sybilConfig);
 			sybil.start().get();
 
-			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
+			Message request = Message.findNodeRequest(Id.random(), true, false);
 			RpcCall call = new RpcCall(targetInfo, request);
 
 			AtomicBoolean result = new AtomicBoolean(false);
@@ -181,7 +180,7 @@ public class SybilTests {
 			sybil = new KadNode(sybilConfig);
 			sybil.start().get();
 
-			Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), true, false);
+			Message request = Message.findNodeRequest(Id.random(), true, false);
 			RpcCall call = new RpcCall(targetInfo, request);
 
 			AtomicBoolean result = new AtomicBoolean(false);

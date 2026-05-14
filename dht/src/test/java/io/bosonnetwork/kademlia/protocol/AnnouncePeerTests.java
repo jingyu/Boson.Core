@@ -85,8 +85,8 @@ public class AnnouncePeerTests extends MessageTests {
 
 		assertEquals(Message.Type.REQUEST, msg.getType());
 		assertEquals(Message.Method.ANNOUNCE_PEER, msg.getMethod());
-		assertEquals(token, msg.getBody().getToken());
-		assertEquals(peer, msg.getBody().getPeer());
+		assertEquals(token, msg.<AnnouncePeerRequest>getBody().getToken());
+		assertEquals(peer, msg.<AnnouncePeerRequest>getBody().getPeer());
 
 		var msg2 = Message.parse(bin, peer.getNodeId());
 		msg2.setId(peer.getNodeId());

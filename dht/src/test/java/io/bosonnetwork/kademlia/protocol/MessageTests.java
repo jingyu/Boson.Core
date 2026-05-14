@@ -34,7 +34,7 @@ public abstract class MessageTests {
 	protected static int TIMING_ITERATIONS = 1_000_000;
 	protected static String DEFAULT_VERSION_STR = "Orca/1";
 
-	protected void printMessage(Message<?> msg) throws IOException {
+	protected void printMessage(Message msg) throws IOException {
 		var cbor = msg.toBytes();
 		var json = msg.toJson();
 

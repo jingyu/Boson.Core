@@ -34,7 +34,6 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
-import io.bosonnetwork.kademlia.protocol.StoreValueRequest;
 
 /**
  * A task for performing a Kademlia value announcement to store a value on the closest nodes
@@ -100,7 +99,7 @@ public class ValueAnnounceTask extends Task<ValueAnnounceTask> {
 			}
 
 			log.debug("{}#{} sending STORE_VALUE RPC to {}", getName(), getId(), cn.getId());
-			Message<StoreValueRequest> request = Message.storeValueRequest(value, cn.getToken(), expectedSequenceNumber);
+			Message request = Message.storeValueRequest(value, cn.getToken(), expectedSequenceNumber);
 			sendCall(cn, request, c -> todo.remove(cn));
 		}
 	}

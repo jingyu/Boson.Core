@@ -29,8 +29,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonToken;
@@ -38,11 +39,8 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.net.impl.SocketAddressImpl;
 
@@ -51,14 +49,14 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.json.JsonContext;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
-import io.bosonnetwork.json.Json;
 
+@JsonPropertyOrder({"y", "t", "q", "r", "e", "v"})
 @JsonDeserialize(using = Message.Deserializer.class)
-@JsonSerialize(using = Message.Serializer.class)
-public class Message<T> {
+public class Message {
 	// The minimum size of message: 10 bytes
 	public static final int MIN_BYTES = 10;
 
@@ -70,9 +68,15 @@ public class Message<T> {
 
 	private final Type type;
 	private final Method method;
+
 	// Transaction id, should be unsigned integer.
+	@JsonProperty("t")
 	private final long txid;
-	private final T body;
+
+	private final Object body;
+
+	@JsonProperty("v")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private final int version;
 
 	private RpcCall associatedCall;
@@ -166,7 +170,116 @@ public class Message<T> {
 		Type getType();
 	}
 
-	protected Message(Type type, Method method, long txid, T body, int version) {
+	// Jackson polymorphic deserialization implementation.
+	// Benchmark results show it is approximately 1.5x–2x slower than the dedicated Message deserializer.
+	// Therefore, the custom deserializer remains the default implementation.
+	/*/
+	static class MessageTypeResolver extends TypeIdResolverBase {
+		@Override
+		public JavaType typeFromId(DatabindContext context, String id) {
+			Type type;
+			Method method;
+			try {
+				int compositeType = Integer.parseInt(id);
+				type = Type.valueOf(compositeType);
+				method = Method.valueOf(compositeType);
+			} catch (NumberFormatException e) {
+				throw new IllegalArgumentException("Unknown message type: " + id);
+			}
+
+			return switch (type) {
+				case REQUEST -> switch (method) {
+					case UNKNOWN, PING -> context.constructType(Void.class);
+					case FIND_NODE -> context.constructType(FindNodeRequest.class);
+					case ANNOUNCE_PEER -> context.constructType(AnnouncePeerRequest.class);
+					case FIND_PEER -> context.constructType(FindPeerRequest.class);
+					case STORE_VALUE -> context.constructType(StoreValueRequest.class);
+					case FIND_VALUE -> context.constructType(FindValueRequest.class);
+				};
+
+				case RESPONSE -> switch (method) {
+					case UNKNOWN, PING, STORE_VALUE, ANNOUNCE_PEER -> context.constructType(Void.class);
+					case FIND_NODE -> context.constructType(FindNodeResponse.class);
+					case FIND_PEER -> context.constructType(FindPeerResponse.class);
+					case FIND_VALUE -> context.constructType(FindValueResponse.class);
+				};
+
+				case ERROR -> context.constructType(Error.class);
+			};
+
+		}
+
+		@Override
+		public String idFromValue(Object value) {
+			return "";
+		}
+
+		@Override
+		public String idFromValueAndType(Object value, Class<?> suggestedType) {
+			return "";
+		}
+
+		@Override
+		public JsonTypeInfo.Id getMechanism() {
+			return JsonTypeInfo.Id.CUSTOM;
+		}
+	}
+
+	@JsonCreator
+	protected Message(@JsonProperty(value = "y", required = true)
+					  int compositeType,
+	                  @JsonProperty(value = "t", required = true)
+					  long txid,
+	                  @JsonProperty(value = "q")
+						  @JsonTypeInfo(
+								  use = JsonTypeInfo.Id.CUSTOM,
+								  include = JsonTypeInfo.As.EXTERNAL_PROPERTY,
+								  property = "y",
+								  defaultImpl = Void.class
+						  )
+						  @JsonTypeIdResolver(MessageTypeResolver.class)
+					  Object request,
+	                  @JsonProperty(value = "r")
+						  @JsonTypeInfo(
+								  use = JsonTypeInfo.Id.CUSTOM,
+								  include = JsonTypeInfo.As.EXTERNAL_PROPERTY,
+								  property = "y",
+								  defaultImpl = Void.class
+						  )
+						  @JsonTypeIdResolver(MessageTypeResolver.class)
+					  Object response,
+	                  @JsonProperty(value = "e")
+					  Error error,
+	                  @JsonProperty(value = "v")
+					  int version) {
+		this.type = Type.valueOf(compositeType);
+		switch (this.type) {
+			case REQUEST -> {
+				if (response != null || error != null)
+					throw new IllegalArgumentException("Invalid request message: " + response);
+				body = request;
+			}
+			case RESPONSE -> {
+				if (request != null || error != null)
+					throw new IllegalArgumentException("Invalid response message: " + response);
+				body = response;
+			}
+			case ERROR -> {
+				if (error == null || request != null || response != null)
+					throw new IllegalArgumentException("Invalid error message: " + error);
+				body = error;
+			}
+			default -> body = null;
+		}
+
+
+		this.method = Method.valueOf(compositeType);
+		this.txid = txid;
+		this.version = version;
+	}
+	*/
+
+	protected Message(Type type, Method method, long txid, Object body, int version) {
 		this.type = type;
 		this.method = method;
 		this.txid = txid;
@@ -174,10 +287,11 @@ public class Message<T> {
 		this.version = version;
 	}
 
-	protected Message(Type type, Method method, long txid, T body) {
+	protected Message(Type type, Method method, long txid, Object body) {
 		this(type, method, txid, body, KadNode.VERSION);
 	}
 
+	@JsonProperty("y")
 	protected int getCompositeType() {
 		return type.value() | method.value();
 	}
@@ -194,12 +308,30 @@ public class Message<T> {
 		return type == Type.REQUEST;
 	}
 
+	@JsonProperty("q")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Request getRequestBody() {
+		return type == Type.REQUEST ? (Request) body : null;
+	}
+
 	public boolean isResponse() {
 		return type == Type.RESPONSE;
 	}
 
+	@JsonProperty("r")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Response getResponseBody() {
+		return type == Type.RESPONSE ? (Response) body : null;
+	}
+
 	public boolean isError() {
 		return type == Type.ERROR;
+	}
+
+	@JsonProperty("e")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public Error getError() {
+		return type == Type.ERROR ? (Error) body : null;
 	}
 
 	public Id getId() {
@@ -214,15 +346,9 @@ public class Message<T> {
 		return txid;
 	}
 
-	public T getBody() {
-		return body;
-	}
-
-	public <B> B getBody(Class<B> clazz) {
-		if (clazz.isInstance(body))
-			return clazz.cast(body);
-
-		throw new IllegalArgumentException("Body is not an instance of " + clazz);
+	@SuppressWarnings("unchecked")
+	public <T> T getBody() {
+		return (T) body;
 	}
 
 	public int getVersion() {
@@ -233,7 +359,7 @@ public class Message<T> {
 		return Version.toString(version);
 	}
 
-	public Message<T> setAssociatedCall(RpcCall associatedCall) {
+	public Message setAssociatedCall(RpcCall associatedCall) {
 		this.associatedCall = associatedCall;
 		return this;
 	}
@@ -259,19 +385,19 @@ public class Message<T> {
 		return remoteAddress.port();
 	}
 
-	public Message<T> setRemote(Id id, SocketAddress address) {
+	public Message setRemote(Id id, SocketAddress address) {
 		this.remoteId = id;
 		this.remoteAddress = address;
 		return this;
 	}
 
-	public Message<T> setRemote(Id id, InetAddress address, int port) {
+	public Message setRemote(Id id, InetAddress address, int port) {
 		this.remoteId = id;
 		this.remoteAddress = SocketAddress.inetSocketAddress(new InetSocketAddress(address, port));
 		return this;
 	}
 
-	public Message<T> setRemote(Id id, InetSocketAddress address) {
+	public Message setRemote(Id id, InetSocketAddress address) {
 		this.remoteId = id;
 		this.remoteAddress = SocketAddress.inetSocketAddress(address);
 		return this;
@@ -287,7 +413,7 @@ public class Message<T> {
 		if (this == obj)
 			return true;
 
-		if (obj instanceof Message<?> that)
+		if (obj instanceof Message that)
 			return Objects.equals(id, that.id)
 					&& type == that.type
 					&& method == that.method
@@ -303,8 +429,8 @@ public class Message<T> {
 	private static final ObjectReader jsonReader = Json.objectMapper().readerFor(Message.class);
 	private static final ObjectWriter jsonWriter = Json.objectMapper().writerFor(Message.class);
 
-	// ndodeId -Source node ID, required to correctly deserialize inbound messages
-	public static Message<?> parse(byte[] bytes, Id nodeId) {
+	// nodeId -Source node ID, required to correctly deserialize inbound messages
+	public static Message parse(byte[] bytes, Id nodeId) {
 		try {
 			return nodeId == null ?
 					cborReader.readValue(bytes) :
@@ -314,12 +440,12 @@ public class Message<T> {
 		}
 	}
 
-	public static Message<?> parse(String json) {
+	public static Message parse(String json) {
 		return parse(json, null);
 	}
 
 	// nodeId -Source node ID, required to correctly deserialize inbound messages
-	public static Message<?> parse(String json, Id nodeId) {
+	public static Message parse(String json, Id nodeId) {
 		try {
 			return nodeId == null ?
 					jsonReader.readValue(json) :
@@ -329,7 +455,7 @@ public class Message<T> {
 		}
 	}
 
-	public static Message<?> parse(byte[] bytes) {
+	public static Message parse(byte[] bytes) {
 		return parse(bytes, null);
 	}
 
@@ -381,109 +507,83 @@ public class Message<T> {
 		return Integer.toUnsignedLong(nextTxId.getAndIncrement());
 	}
 
-	public static <B> Message<B> message(Type type, Method method, long txid, B body) {
-		return new Message<>(type, method, txid, body);
+	public static Message message(Type type, Method method, long txid, Object body) {
+		return new Message(type, method, txid, body);
 	}
 
-	public static Message<Void> pingRequest() {
-		return new Message<>(Type.REQUEST, Method.PING, nextTxid(), null);
+	public static Message pingRequest() {
+		return new Message(Type.REQUEST, Method.PING, nextTxid(), null);
 	}
 
-	public static Message<Void> pingResponse(long txid) {
-		return new Message<>(Type.RESPONSE, Method.PING, txid, null);
+	public static Message pingResponse(long txid) {
+		return new Message(Type.RESPONSE, Method.PING, txid, null);
 	}
 
-	public static Message<FindNodeRequest> findNodeRequest(Id target, boolean want4, boolean want6) {
-		return new Message<>(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, false));
+	public static Message findNodeRequest(Id target, boolean want4, boolean want6) {
+		return new Message(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, false));
 	}
 
-	public static Message<FindNodeRequest> findNodeRequest(Id target, boolean want4, boolean want6, boolean wantToken) {
-		return new Message<>(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, wantToken));
+	public static Message findNodeRequest(Id target, boolean want4, boolean want6, boolean wantToken) {
+		return new Message(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, wantToken));
 	}
 
-	public static Message<FindNodeResponse> findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, int token) {
-		return new Message<>(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
+	public static Message findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, int token) {
+		return new Message(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 
-	public static Message<FindPeerRequest> findPeerRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber, int expectedCount) {
-		return new Message<>(Type.REQUEST, Method.FIND_PEER, nextTxid(), new FindPeerRequest(target, want4, want6, expectedSequenceNumber, expectedCount));
+	public static Message findPeerRequest(Id target, boolean want4, boolean want6, int expectedSequenceNumber, int expectedCount) {
+		return new Message(Type.REQUEST, Method.FIND_PEER, nextTxid(), new FindPeerRequest(target, want4, want6, expectedSequenceNumber, expectedCount));
 	}
 
-	public static Message<FindPeerResponse> findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
-		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6));
+	public static Message findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
+		return new Message(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6));
 	}
 
-	public static Message<FindPeerResponse> findPeerResponse(long txid, List<PeerInfo> peers) {
-		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(peers));
+	public static Message findPeerResponse(long txid, List<PeerInfo> peers) {
+		return new Message(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(peers));
 	}
 
-	protected static Message<FindPeerResponse> findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, List<PeerInfo> peers) {
-		return new Message<>(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
+	protected static Message findPeerResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, List<PeerInfo> peers) {
+		return new Message(Type.RESPONSE, Method.FIND_PEER, txid, new FindPeerResponse(n4, n6, peers));
 	}
 
-	public static Message<AnnouncePeerRequest> announcePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
-		return new Message<>(Type.REQUEST, Method.ANNOUNCE_PEER, nextTxid(), new AnnouncePeerRequest(peer, token, expectedSequenceNumber));
+	public static Message announcePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
+		return new Message(Type.REQUEST, Method.ANNOUNCE_PEER, nextTxid(), new AnnouncePeerRequest(peer, token, expectedSequenceNumber));
 	}
 
-	public static Message<Void> announcePeerResponse(long txid) {
-		return new Message<>(Type.RESPONSE, Method.ANNOUNCE_PEER, txid, null);
+	public static Message announcePeerResponse(long txid) {
+		return new Message(Type.RESPONSE, Method.ANNOUNCE_PEER, txid, null);
 	}
 
-	public static Message<FindValueRequest> findValueRequest(Id target, boolean want4, boolean want6, int sequenceNumber) {
-		return new Message<>(Type.REQUEST, Method.FIND_VALUE, nextTxid(), new FindValueRequest(target, want4, want6, sequenceNumber));
+	public static Message findValueRequest(Id target, boolean want4, boolean want6, int sequenceNumber) {
+		return new Message(Type.REQUEST, Method.FIND_VALUE, nextTxid(), new FindValueRequest(target, want4, want6, sequenceNumber));
 	}
 
-	public static Message<FindValueResponse> findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
-		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6));
+	public static Message findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6) {
+		return new Message(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6));
 	}
 
-	public static Message<FindValueResponse> findValueResponse(long txid, Value value) {
-		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(value));
+	public static Message findValueResponse(long txid, Value value) {
+		return new Message(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(value));
 	}
 
-	protected static Message<FindValueResponse> findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, Value value) {
-		return new Message<>(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6, value));
+	protected static Message findValueResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, Value value) {
+		return new Message(Type.RESPONSE, Method.FIND_VALUE, txid, new FindValueResponse(n4, n6, value));
 	}
 
-	public static Message<StoreValueRequest> storeValueRequest(Value value, int token, int expectedSequenceNumber) {
-		return new Message<>(Type.REQUEST, Method.STORE_VALUE, nextTxid(), new StoreValueRequest(value, token, expectedSequenceNumber));
+	public static Message storeValueRequest(Value value, int token, int expectedSequenceNumber) {
+		return new Message(Type.REQUEST, Method.STORE_VALUE, nextTxid(), new StoreValueRequest(value, token, expectedSequenceNumber));
 	}
 
-	public static Message<Void> storeValueResponse(long txid) {
-		return new Message<>(Type.RESPONSE, Method.STORE_VALUE, txid, null);
+	public static Message storeValueResponse(long txid) {
+		return new Message(Type.RESPONSE, Method.STORE_VALUE, txid, null);
 	}
 
-	public static Message<Error> error(Method method, long txid, int code, String message) {
-		return new Message<>(Type.ERROR, method, txid, new Error(code, message));
+	public static Message error(Method method, long txid, int code, String message) {
+		return new Message(Type.ERROR, method, txid, new Error(code, message));
 	}
 
-	@SuppressWarnings("rawtypes")
-	static class Serializer extends StdSerializer<Message> {
-		private static final long serialVersionUID = -5377850531790575309L;
-
-		@SuppressWarnings("unused")
-		public Serializer() {
-			this(Message.class);
-		}
-
-		public Serializer(Class<Message> vc) {
-			super(vc);
-		}
-
-		@Override
-		public void serialize(Message value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			gen.writeStartObject();
-			gen.writeNumberField("y", value.getCompositeType());
-			gen.writeNumberField("t", value.getTxid());
-			if (value.getBody() != null)
-				gen.writeObjectField(value.getType().bodyFieldName(), value.getBody());
-			if (value.getVersion() != 0)
-				gen.writeNumberField("v", value.getVersion());
-			gen.writeEndObject();
-		}
-	}
-
-	static class Deserializer extends StdDeserializer<Message<?>> {
+	static class Deserializer extends StdDeserializer<Message> {
 		private static final long serialVersionUID = -46020275686127311L;
 
 		@SuppressWarnings("unused")
@@ -496,7 +596,7 @@ public class Message<T> {
 		}
 
 		@Override
-		public Message<?> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JacksonException {
+		public Message deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
 			if (p.currentToken() != JsonToken.START_OBJECT)
 				throw ctxt.wrongTokenException(p, Message.class, JsonToken.START_ARRAY,
 						"Invalid Message: should be an object");
@@ -513,56 +613,56 @@ public class Message<T> {
 				String fieldName = p.currentName();
 				p.nextToken();
 				switch (fieldName) {
-				case "y": {
-					int value = p.getIntValue();
-					type = Type.valueOf(value);
-					method = Method.valueOf(value);
-					bodyClass = method.bodyClassOf(type);
-					break;
-				}
-				case "t":
-					txid = p.getLongValue();
-					if (txid == 0)
-						throw ctxt.weirdNumberException(txid, Integer.class,
-								"Invalid `[t]xid` field: should be non-zero integer");
-					break;
-
-				case "q":
-				case "r":
-					if (type == null || method == null) {
-						ctxt.reportInputMismatch(Message.class, "Not seen 'y' field before + '" + fieldName + "' field");
-						return null; // should never here
+					case "y": {
+						int value = p.getIntValue();
+						type = Type.valueOf(value);
+						method = Method.valueOf(value);
+						bodyClass = method.bodyClassOf(type);
+						break;
 					}
+					case "t":
+						txid = p.getLongValue();
+						if (txid == 0)
+							throw ctxt.weirdNumberException(txid, Integer.class,
+									"Invalid `[t]xid` field: should be non-zero integer");
+						break;
 
-					if (!type.bodyFieldName().equals(fieldName))
-						throw ctxt.weirdKeyException(bodyClass, fieldName, "Invalid '" + fieldName + "' field for " + type.name() + " message");
+					case "q":
+					case "r":
+						if (type == null || method == null) {
+							ctxt.reportInputMismatch(Message.class, "Not seen 'y' field before + '" + fieldName + "' field");
+							return null; // should never here
+						}
 
-					if (bodyClass == Void.class)
-						throw ctxt.weirdKeyException(bodyClass, fieldName, "Invalid '" + fieldName + "' field for request: " + method);
+						if (!type.bodyFieldName().equals(fieldName))
+							throw ctxt.weirdKeyException(bodyClass, fieldName, "Invalid '" + fieldName + "' field for " + type.name() + " message");
 
-					body = (Body) ctxt.readValue(p, bodyClass);
-					break;
+						if (bodyClass == Void.class)
+							throw ctxt.weirdKeyException(bodyClass, fieldName, "Invalid '" + fieldName + "' field for request: " + method);
 
-				case "e":
-					if (type != Type.ERROR)
-						throw ctxt.weirdKeyException(Error.class, "e", "Invalid 'e' field for non-error message");
+						body = (Body) ctxt.readValue(p, bodyClass);
+						break;
 
-					body = p.readValueAs(Error.class);
-					break;
+					case "e":
+						if (type != Type.ERROR)
+							throw ctxt.weirdKeyException(Error.class, "e", "Invalid 'e' field for non-error message");
 
-				case "v":
-					version = p.getIntValue();
-					break;
+						body = p.readValueAs(Error.class);
+						break;
 
-				default:
-					p.skipChildren();
+					case "v":
+						version = p.getIntValue();
+						break;
+
+					default:
+						p.skipChildren();
 				}
 			}
 
 			if (txid == 0)
 				ctxt.reportInputMismatch(Message.class, "Missing '[t]xid' field");
 
-			return new Message<>(type, method, txid, body, version);
+			return new Message(type, method, txid, body, version);
 		}
 	}
 }

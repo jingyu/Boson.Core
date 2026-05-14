@@ -22,29 +22,36 @@
 
 package io.bosonnetwork.kademlia.protocol;
 
-import java.io.IOException;
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.json.internal.DataFormat;
 
 @JsonPropertyOrder({"tok", "cas", "k", "rec", "n", "seq", "sig", "v"})
-@JsonDeserialize(using = StoreValueRequest.Deserializer.class)
 public class StoreValueRequest implements Request {
 	private final int token;
 	private final int expectedSequenceNumber;
 	private final Value value;
+
+	@JsonCreator
+	protected StoreValueRequest(
+			@JsonProperty(value = "tok", required = true) int token,
+			@JsonProperty(value = "cas") Integer expectedSequenceNumber,
+			@JsonProperty(value = "k") Id publicKey,
+			@JsonProperty(value = "rec") Id recipient,
+			@JsonProperty(value = "n") byte[] nonce,
+			@JsonProperty(value = "seq") int sequenceNumber,
+			@JsonProperty(value = "sig") byte[] signature,
+			@JsonProperty(value = "v", required = true) byte[] data) {
+		this.token = token;
+		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
+		this.value = Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data);
+	}
 
 	protected StoreValueRequest(Value value, int token, int expectedSequenceNumber) {
 		this.token = token;
@@ -123,78 +130,5 @@ public class StoreValueRequest implements Request {
 					Objects.equals(value, that.value);
 
 		return false;
-	}
-
-	static class Deserializer extends StdDeserializer<StoreValueRequest> {
-		private static final long serialVersionUID = -5378630545373241813L;
-
-		public Deserializer() {
-			super(StoreValueRequest.class);
-		}
-
-		public Deserializer(Class<?> vc) {
-			super(vc);
-		}
-
-		@Override
-		public StoreValueRequest deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-			if (p.getCurrentToken() != JsonToken.START_OBJECT)
-				throw ctxt.wrongTokenException(p, StoreValueRequest.class, JsonToken.START_OBJECT,
-						"Invalid StoreValueRequest: should be an object");
-
-			final boolean binaryFormat = DataFormat.isBinary(p);
-
-			int tok = 0;
-			int cas = -1;
-			Id publicKey = null;
-			Id recipient = null;
-			byte[] nonce = null;
-			int sequenceNumber = 0;
-			byte[] signature = null;
-			byte[] data = null;
-
-			while (p.nextToken() != JsonToken.END_OBJECT) {
-				String fieldName = p.currentName();
-				JsonToken token = p.nextToken();
-				switch (fieldName) {
-				case "tok":
-					tok = p.getIntValue();
-					break;
-				case "cas":
-					cas = p.getIntValue();
-					break;
-				case "k":
-					if (token != JsonToken.VALUE_NULL)
-						publicKey = binaryFormat || token != JsonToken.VALUE_STRING ?
-								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
-					break;
-				case "rec":
-					if (token != JsonToken.VALUE_NULL)
-						recipient = binaryFormat || token != JsonToken.VALUE_STRING ?
-								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
-					break;
-				case "n":
-					if (token != JsonToken.VALUE_NULL)
-						nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				case "seq":
-					if (token != JsonToken.VALUE_NULL)
-						sequenceNumber = p.getIntValue();
-					break;
-				case "sig":
-					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				case "v":
-					if (token != JsonToken.VALUE_NULL)
-						data = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				default:
-					p.skipChildren();
-				}
-			}
-
-			return new StoreValueRequest(Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data),
-					tok, cas);
-		}
 	}
 }

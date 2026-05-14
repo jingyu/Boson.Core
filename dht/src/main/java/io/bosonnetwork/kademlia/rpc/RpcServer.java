@@ -136,7 +136,7 @@ public class RpcServer implements Measured {
 	private Consumer<Boolean> reachableHandler;
 
 	/** Handler for incoming messages, null if not set. */
-	private Consumer<Message<?>> messageHandler;
+	private Consumer<Message> messageHandler;
 
 	/** Handler for RPC call sent, null if not set. */
 	private Consumer<RpcCall> callSentHandler;
@@ -333,7 +333,7 @@ public class RpcServer implements Measured {
 	 *
 	 * @param messageHandler the handler to process messages
 	 */
-	public void setMessageHandler(Consumer<Message<?>> messageHandler) {
+	public void setMessageHandler(Consumer<Message> messageHandler) {
 		this.messageHandler = messageHandler;
 	}
 
@@ -482,7 +482,7 @@ public class RpcServer implements Measured {
 		}
 
 		// Decrypt and parse message
-		Message<?> message;
+		Message message;
 		try {
 			byte[] encryptedMsg = buffer.getBytes(Id.BYTES, buffer.length());
 			byte[] decryptedMsg = identity.decrypt(remoteId, encryptedMsg);
@@ -668,7 +668,7 @@ public class RpcServer implements Measured {
 	 * @param message the message to send
 	 * @return a Future that completes when the message is sent
 	 */
-	public Future<Void> sendMessage(Message<?> message) {
+	public Future<Void> sendMessage(Message message) {
 		Buffer buffer;
 
 		message.setId(identity.getId());

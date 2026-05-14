@@ -69,10 +69,10 @@ public class FindValueTests extends MessageTests {
 		assertEquals(Message.Method.FIND_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(target, msg.getBody().getTarget());
-		assertEquals(want4, msg.getBody().doesWant4());
-		assertEquals(want6, msg.getBody().doesWant6());
-		assertEquals(seq, msg.getBody().getExpectedSequenceNumber());
+		assertEquals(target, msg.<FindValueRequest>getBody().getTarget());
+		assertEquals(want4, msg.<FindValueRequest>getBody().doesWant4());
+		assertEquals(want6, msg.<FindValueRequest>getBody().doesWant6());
+		assertEquals(seq, msg.<FindValueRequest>getBody().getExpectedSequenceNumber());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
@@ -98,10 +98,10 @@ public class FindValueTests extends MessageTests {
 		assertEquals(Message.Method.FIND_VALUE, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(target, msg.getBody().getTarget());
-		assertEquals(want4, msg.getBody().doesWant4());
-		assertEquals(want6, msg.getBody().doesWant6());
-		assertEquals(seq, msg.getBody().getExpectedSequenceNumber());
+		assertEquals(target, msg.<FindValueRequest>getBody().getTarget());
+		assertEquals(want4, msg.<FindValueRequest>getBody().doesWant4());
+		assertEquals(want6, msg.<FindValueRequest>getBody().doesWant6());
+		assertEquals(seq, msg.<FindValueRequest>getBody().getExpectedSequenceNumber());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
@@ -180,16 +180,16 @@ public class FindValueTests extends MessageTests {
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
 
 		if (nodes4 != null)
-			assertEquals(nodes4, msg.getBody().getNodes4());
+			assertEquals(nodes4, msg.<FindValueResponse>getBody().getNodes4());
 		else
-			assertTrue(msg.getBody().getNodes4().isEmpty());
+			assertTrue(msg.<FindValueResponse>getBody().getNodes4().isEmpty());
 
 		if (nodes6 != null)
-			assertEquals(nodes6, msg.getBody().getNodes6());
+			assertEquals(nodes6, msg.<FindValueResponse>getBody().getNodes6());
 		else
-			assertTrue(msg.getBody().getNodes6().isEmpty());
+			assertTrue(msg.<FindValueResponse>getBody().getNodes6().isEmpty());
 
-		assertEquals(value, msg.getBody().getValue());
+		assertEquals(value, msg.<FindValueResponse>getBody().getValue());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);

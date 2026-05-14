@@ -77,11 +77,11 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(Message.Method.FIND_PEER, msg.getMethod());
 		assertEquals(nodeId, msg.getId());
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
-		assertEquals(target, msg.getBody().getTarget());
-		assertEquals(want4, msg.getBody().doesWant4());
-		assertEquals(want6, msg.getBody().doesWant6());
-		assertEquals(expectedSequenceNumber, msg.getBody().getExpectedSequenceNumber());
-		assertEquals(expectedCount, msg.getBody().getExpectedCount());
+		assertEquals(target, msg.<FindPeerRequest>getBody().getTarget());
+		assertEquals(want4, msg.<FindPeerRequest>getBody().doesWant4());
+		assertEquals(want6, msg.<FindPeerRequest>getBody().doesWant6());
+		assertEquals(expectedSequenceNumber, msg.<FindPeerRequest>getBody().getExpectedSequenceNumber());
+		assertEquals(expectedCount, msg.<FindPeerRequest>getBody().getExpectedCount());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);
@@ -155,19 +155,19 @@ public class FindPeerTests extends MessageTests {
 		assertEquals(DEFAULT_VERSION_STR, msg.getReadableVersion());
 
 		if (nodes4 != null)
-			assertEquals(nodes4, msg.getBody().getNodes4());
+			assertEquals(nodes4, msg.<FindPeerResponse>getBody().getNodes4());
 		else
-			assertTrue(msg.getBody().getNodes4().isEmpty());
+			assertTrue(msg.<FindPeerResponse>getBody().getNodes4().isEmpty());
 
 		if (nodes6 != null)
-			assertEquals(nodes6, msg.getBody().getNodes6());
+			assertEquals(nodes6, msg.<FindPeerResponse>getBody().getNodes6());
 		else
-			assertTrue(msg.getBody().getNodes6().isEmpty());
+			assertTrue(msg.<FindPeerResponse>getBody().getNodes6().isEmpty());
 
 		if (peers != null)
-			assertEquals(peers, msg.getBody().getPeers());
+			assertEquals(peers, msg.<FindPeerResponse>getBody().getPeers());
 		else
-			assertTrue(msg.getBody().getPeers().isEmpty());
+			assertTrue(msg.<FindPeerResponse>getBody().getPeers().isEmpty());
 
 		var msg2 = Message.parse(bin);
 		msg2.setId(nodeId);

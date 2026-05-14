@@ -33,7 +33,6 @@ import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
-import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
 import io.bosonnetwork.kademlia.protocol.FindPeerResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -103,7 +102,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 
 			log.debug("{}#{} sending FIND_PEER RPC to {}", getName(), getId(), cn.getId());
 			Network network = getContext().getNetwork();
-			Message<FindPeerRequest> request = Message.findPeerRequest(getTarget(), network.isIPv4(), network.isIPv6(), expectedSequenceNumber, expectedCount);
+			Message request = Message.findPeerRequest(getTarget(), network.isIPv4(), network.isIPv6(), expectedSequenceNumber, expectedCount);
 			sendCall(cn, request, c -> cn.setSent());
 		}
 	}
@@ -124,9 +123,10 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 			return;
 		}
 
-		Message<FindPeerResponse> response = call.getResponse();
-		if (response.getBody().hasPeers()) {
-			List<PeerInfo> peers = response.getBody().getPeers();
+		Message response = call.getResponse();
+		FindPeerResponse body = response.getBody();
+		if (body.hasPeers()) {
+			List<PeerInfo> peers = body.getPeers();
 			if (!result.add(peers)) {
 				log.warn("{}#{} Dropping response from {} due to ineligible peer(id | sequenceNumber | signature mismatch)",
 						getName(), getId(), call.getTargetId());
@@ -144,7 +144,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 				result.prune();
 			}
 		} else {
-			List<NodeInfo> nodes = response.getBody().getNodes(getContext().getNetwork());
+			List<NodeInfo> nodes = body.getNodes(getContext().getNetwork());
 			if (nodes.isEmpty()) {
 				log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
 				return;

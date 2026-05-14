@@ -43,9 +43,7 @@ import io.bosonnetwork.kademlia.protocol.Error;
 import io.bosonnetwork.kademlia.protocol.FindNodeRequest;
 import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
-import io.bosonnetwork.kademlia.protocol.FindPeerResponse;
 import io.bosonnetwork.kademlia.protocol.FindValueRequest;
-import io.bosonnetwork.kademlia.protocol.FindValueResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.StoreValueRequest;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -393,7 +391,7 @@ public class DHT extends BosonVerticle {
 			log.info("Periodic: random ping...");
 			KBucketEntry entry = routingTable.getRandomEntry();
 			if (entry != null) {
-				Message<Void> request = Message.pingRequest();
+				Message request = Message.pingRequest();
 				RpcCall c = new RpcCall(entry, request);
 				rpcServer.sendCall(c);
 			}
@@ -478,14 +476,14 @@ public class DHT extends BosonVerticle {
 			for (NodeInfo node : bootstrapNodes) {
 				Promise<List<NodeInfo>> promise = Promise.promise();
 
-				Message<FindNodeRequest> request = Message.findNodeRequest(Id.random(), network.isIPv4(), network.isIPv6());
+				Message request = Message.findNodeRequest(Id.random(), network.isIPv4(), network.isIPv6());
 				RpcCall call = new RpcCall(node, request).addListener(new RpcCallListener() {
 					@Override
 					public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
 						if (state.isFinal()) {
 							if (state == RpcCall.State.RESPONDED) {
-								Message<FindNodeResponse> response = c.getResponse();
-								promise.complete(response.getBody().getNodes(network));
+								Message response = c.getResponse();
+								promise.complete(response.<FindNodeResponse>getBody().getNodes(network));
 							} else {
 								promise.complete(Collections.emptyList());
 							}
@@ -652,7 +650,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	@SuppressWarnings("unchecked")
-	private void onMessage(Message<?> message) {
+	private void onMessage(Message message) {
 		if (!isRunning())
 			return;
 
@@ -663,75 +661,79 @@ public class DHT extends BosonVerticle {
 		switch (message.getType()) {
 			case REQUEST -> onRequest(message);
 			case RESPONSE -> onResponse(message);
-			case ERROR -> onError((Message<Error>) message);
+			case ERROR -> onError(message);
 		}
 
 		received(message);
 	}
 
 	@SuppressWarnings("unchecked")
-	private void onRequest(Message<?> message) {
+	private void onRequest(Message message) {
 		switch (message.getMethod()) {
-			case PING -> onPing((Message<Void>) message);
-			case FIND_NODE -> onFindNode((Message<FindNodeRequest>) message);
-			case FIND_VALUE -> onFindValue((Message<FindValueRequest>) message);
-			case STORE_VALUE -> onStoreValue((Message<StoreValueRequest>) message);
-			case FIND_PEER -> onFindPeer((Message<FindPeerRequest>) message);
-			case ANNOUNCE_PEER -> onAnnouncePeer((Message<AnnouncePeerRequest>) message);
+			case PING -> onPing(message);
+			case FIND_NODE -> onFindNode(message);
+			case FIND_VALUE -> onFindValue(message);
+			case STORE_VALUE -> onStoreValue(message);
+			case FIND_PEER -> onFindPeer(message);
+			case ANNOUNCE_PEER -> onAnnouncePeer(message);
 			default -> onUnknownMethod(message);
 		}
 	}
 
-	private void onPing(Message<Void> request) {
-		Message<Void> response = Message.pingResponse(request.getTxid())
+	private void onPing(Message request) {
+		Message response = Message.pingResponse(request.getTxid())
 				.setRemote(request.getRemoteId(), request.getRemoteAddress());
 		rpcServer.sendMessage(response);
 	}
 
-	private void onFindNode(Message<FindNodeRequest> request) {
-		Id target = request.getBody().getTarget();
-		int want4 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
-		int want6 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
+	private void onFindNode(Message request) {
+		FindNodeRequest body = request.getBody();
+		Id target = body.getTarget();
+		int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+		int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 		Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 
-		int token = request.getBody().doesWantToken() ?
+		int token = body.doesWantToken() ?
 				tokenManager.generateToken(request.getId(), request.getRemoteAddress(), target) : 0;
 
-		Message<FindNodeResponse> response = Message.findNodeResponse(request.getTxid(), closest.getV4(), closest.getV6(), token)
+		Message response = Message.findNodeResponse(request.getTxid(), closest.getV4(), closest.getV6(), token)
 				.setRemote(request.getId(), request.getRemoteAddress());
 		rpcServer.sendMessage(response);
 	}
 
-	private void onFindValue(Message<FindValueRequest> request) {
-		Id target = request.getBody().getTarget();
-		int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+	private void onFindValue(Message request) {
+		FindValueRequest body = request.getBody();
+		Id target = body.getTarget();
+		int expectedSequenceNumber = body.getExpectedSequenceNumber();
 		storage.getValue(target).map(value -> {
-			Message<FindValueResponse> response;
+			Message response;
 
 			if (value != null && (!value.isMutable() || expectedSequenceNumber < 0 ||
 					value.getSequenceNumber() >= expectedSequenceNumber)) {
 				response = Message.findValueResponse(request.getTxid(), value);
 			} else {
-				int want4 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 				response = Message.findValueResponse(request.getTxid(), closest.getV4(), closest.getV6());
 			}
 
 			return response;
 		}).transform(ar -> {
-			Message<?> response = ar.succeeded() ? ar.result() :
+			Message response = ar.succeeded() ? ar.result() :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
 			return rpcServer.sendMessage(response);
 		});
 	}
 
-	private void onStoreValue(Message<StoreValueRequest> request) {
-		kadContext.executeBlocking(() -> {
-			Value value = request.getBody().getValue();
+	private void onStoreValue(Message request) {
+		StoreValueRequest body = request.getBody();
 
-			if (!tokenManager.verifyToken(request.getBody().getToken(), request.getId(),
+		kadContext.executeBlocking(() -> {
+			Value value = body.getValue();
+
+			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteAddress(), value.getId())) {
 				log.warn("Received a store value request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidToken("Invalid token for STORE VALUE request");
@@ -750,7 +752,7 @@ public class DHT extends BosonVerticle {
 						return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
 					}
 
-					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+					int expectedSequenceNumber = body.getExpectedSequenceNumber();
 					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 						log.warn("Rejecting value {}: sequence number not expected", value.getId());
 						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
@@ -767,39 +769,41 @@ public class DHT extends BosonVerticle {
 				return storage.putValue(value);
 			});
 		}).transform(ar -> {
-			Message<?> response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
+			Message response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
 			return rpcServer.sendMessage(response);
 		});
 	}
 
-	private void onFindPeer(Message<FindPeerRequest> request) {
-		Id target = request.getBody().getTarget();
-		int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
-		int expectedCount = request.getBody().getExpectedCount() > 0 ? request.getBody().getExpectedCount() : 16;
+	private void onFindPeer(Message request) {
+		FindPeerRequest body = request.getBody();
+		Id target = body.getTarget();
+		int expectedSequenceNumber = body.getExpectedSequenceNumber();
+		int expectedCount = body.getExpectedCount() > 0 ? body.getExpectedCount() : 16;
 		storage.getPeers(target, expectedSequenceNumber, expectedCount).map(peers -> {
-			Message<FindPeerResponse> response;
+			Message response;
 
 			if (!peers.isEmpty()) {
 				response = Message.findPeerResponse(request.getTxid(), peers);
 			} else {
-				int want4 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = request.getBody().doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 				response = Message.findPeerResponse(request.getTxid(), closest.getV4(), closest.getV6());
 			}
 
 			return response;
 		}).transform(ar -> {
-			Message<?> response = ar.succeeded() ? ar.result() :
+			Message response = ar.succeeded() ? ar.result() :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
 			return rpcServer.sendMessage(response);
 		});
 	}
 
-	private void onAnnouncePeer(Message<AnnouncePeerRequest> request) {
+	private void onAnnouncePeer(Message request) {
+		AnnouncePeerRequest body = request.getBody();
 		InetAddress remoteAddress = request.getRemoteIpAddress();
 		boolean allowed = kadContext.isDeveloperMode() ?
 				AddressUtils.isAnyUnicast(remoteAddress) : AddressUtils.isGlobalUnicast(remoteAddress);
@@ -810,9 +814,9 @@ public class DHT extends BosonVerticle {
 		}
 
 		kadContext.executeBlocking(() -> {
-			PeerInfo peer = request.getBody().getPeer();
+			PeerInfo peer = body.getPeer();
 
-			if (!tokenManager.verifyToken(request.getBody().getToken(), request.getId(),
+			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteAddress(), peer.getId())) {
 				log.warn("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidToken("Invalid token for ANNOUNCE PEER request");
@@ -825,7 +829,7 @@ public class DHT extends BosonVerticle {
 		}).compose(peer -> {
 			return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
 				if (existing != null) {
-					int expectedSequenceNumber = request.getBody().getExpectedSequenceNumber();
+					int expectedSequenceNumber = body.getExpectedSequenceNumber();
 					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 						log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
 						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
@@ -842,28 +846,29 @@ public class DHT extends BosonVerticle {
 				return storage.putPeer(peer);
 			});
 		}).transform(ar -> {
-			Message<?> response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
+			Message response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
 			return rpcServer.sendMessage(response);
 		});
 	}
 
-	private void onUnknownMethod(Message<?> request) {
-		Message<?> response = Message.error(request.getMethod(), request.getTxid(), ErrorCode.MethodUnknown.value(),
+	private void onUnknownMethod(Message request) {
+		Message response = Message.error(request.getMethod(), request.getTxid(), ErrorCode.MethodUnknown.value(),
 				"Unknown method: " + request.getMethod());
 		response.setRemote(request.getId(), request.getRemoteAddress());
 		rpcServer.sendMessage(response);
 	}
 
 	@SuppressWarnings("unused")
-	private void onResponse(Message<?> response) {
+	private void onResponse(Message response) {
 		// Nothing to do
 	}
 
-	private void onError(Message<Error> error) {
+	private void onError(Message error) {
+		Error body = error.getBody();
 		log.warn("Error from {}/{} - {}:{}, method {}, txid {}", error.getRemoteAddress(), error.getReadableVersion(),
-				error.getBody().getCode(), error.getBody().getMessage(), error.getMethod(), error.getTxid());
+				body.getCode(), body.getMessage(), error.getMethod(), error.getTxid());
 	}
 
 	/**
@@ -888,7 +893,7 @@ public class DHT extends BosonVerticle {
 		routingTable.onRequestSent(nodeId);
 	}
 
-	private Message<Error> exceptionToError(Message.Method method, long txid, Throwable cause) {
+	private Message exceptionToError(Message.Method method, long txid, Throwable cause) {
 		int code;
 		String msg;
 
@@ -903,7 +908,7 @@ public class DHT extends BosonVerticle {
 		return Message.error(method, txid, code, msg);
 	}
 
-	private void received(Message<?> message) {
+	private void received(Message message) {
 		InetAddress remoteAddress = message.getRemoteIpAddress();
 		int remotePort = message.getRemotePort();
 		boolean allowed = kadContext.isDeveloperMode() ?
@@ -989,7 +994,7 @@ public class DHT extends BosonVerticle {
 		if (existing == null && !newEntry.isReachable()) {
 			// Verify the node, speed up the bootstrap process or make the bucket more reliable.
 			// only if the new entry is unreachable and the bucket is not full yet
-			Message<Void> request = Message.pingRequest();
+			Message request = Message.pingRequest();
 			RpcCall ping = new RpcCall(newEntry, request);
 			rpcServer.sendCall(ping);
 		}

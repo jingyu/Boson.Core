@@ -22,31 +22,39 @@
 
 package io.bosonnetwork.kademlia.protocol;
 
-import java.io.IOException;
 import java.util.Objects;
 
-import com.fasterxml.jackson.core.Base64Variants;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.json.internal.DataFormat;
 
-@JsonSerialize(using = AnnouncePeerRequest.Serializer.class)
-@JsonDeserialize(using = AnnouncePeerRequest.Deserializer.class)
+@JsonPropertyOrder({"tok", "cas", "k", "n", "seq", "o", "os", "sig", "f", "e", "ex"})
 public class AnnouncePeerRequest implements Request {
 	private final int token;
 	private final int expectedSequenceNumber;
 	private final PeerInfo peer;
+
+	@JsonCreator
+	protected AnnouncePeerRequest(
+			@JsonProperty(value = "tok", required = true) int token,
+			@JsonProperty(value = "cas") Integer expectedSequenceNumber,
+			@JsonProperty(value = "k", required = true) Id peerId,
+			@JsonProperty(value = "n", required = true) byte[] nonce,
+			@JsonProperty(value = "seq") int sequenceNumber,
+			@JsonProperty(value = "o") Id nodeId,
+			@JsonProperty(value = "os") byte[] nodeSig,
+			@JsonProperty(value = "sig", required = true) byte[] signature,
+			@JsonProperty(value = "f", required = true) long fingerprint,
+			@JsonProperty(value = "e", required = true) String endpoint,
+			@JsonProperty(value = "ex") byte[] extraData) {
+		this.token = token;
+		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
+		this.peer = PeerInfo.of(peerId, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+	}
 
 	public AnnouncePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
 		this.token = token;
@@ -54,6 +62,7 @@ public class AnnouncePeerRequest implements Request {
 		this.peer = peer;
 	}
 
+	@JsonProperty("tok")
 	public int getToken() {
 		return token;
 	}
@@ -64,6 +73,61 @@ public class AnnouncePeerRequest implements Request {
 
 	public PeerInfo getPeer() {
 		return peer;
+	}
+
+	@JsonProperty("cas")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Integer getCas() {
+		return expectedSequenceNumber >= 0 ? expectedSequenceNumber : null;
+	}
+
+	@JsonProperty("k")
+	protected Id getPeerId() {
+		return peer.getId();
+	}
+
+	@JsonProperty("n")
+	protected byte[] getNonce() {
+		return peer.getNonce();
+	}
+
+	@JsonProperty("seq")
+	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
+	protected int getSequenceNumber() {
+		return peer.getSequenceNumber();
+	}
+
+	@JsonProperty("o")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected Id getNodeId() {
+		return peer.getNodeId();
+	}
+
+	@JsonProperty("os")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected byte[] getNodeSignature() {
+		return peer.getNodeSignature();
+	}
+
+	@JsonProperty("sig")
+	protected byte[] getSignature() {
+		return peer.getSignature();
+	}
+
+	@JsonProperty("f")
+	protected long getFingerprint() {
+		return peer.getFingerprint();
+	}
+
+	@JsonProperty("e")
+	protected String getEndpoint() {
+		return peer.getEndpoint();
+	}
+
+	@JsonProperty("ex")
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	protected byte[] getExtraData() {
+		return peer.getExtraData();
 	}
 
 	@Override
@@ -80,154 +144,5 @@ public class AnnouncePeerRequest implements Request {
 			return this.token == that.token && this.peer.equals(that.peer);
 
 		return false;
-	}
-
-	static class Serializer extends StdSerializer<AnnouncePeerRequest> {
-		private static final long serialVersionUID = -3471421981677027622L;
-
-		public Serializer() {
-			this(AnnouncePeerRequest.class);
-		}
-
-		public Serializer(Class<AnnouncePeerRequest> t) {
-			super(t);
-		}
-
-		@Override
-		public void serialize(AnnouncePeerRequest value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-			boolean binaryFormat = DataFormat.isBinary(gen);
-
-			gen.writeStartObject();
-			gen.writeNumberField("tok", value.token);
-
-			if (value.expectedSequenceNumber >= 0)
-				gen.writeNumberField("cas", value.expectedSequenceNumber);
-
-			PeerInfo peer = value.peer;
-
-			if (binaryFormat) {
-				gen.writeFieldName("k");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peer.getId().bytes(), 0, Id.BYTES);
-			} else {
-				gen.writeStringField("k", peer.getId().toBase58String());
-			}
-
-			byte[] nonce = peer.getNonce();
-			gen.writeFieldName("n");
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, nonce, 0, nonce.length);
-
-			if (peer.getSequenceNumber() > 0)
-				gen.writeNumberField("seq", peer.getSequenceNumber());
-
-			if (peer.isAuthenticated()) {
-				if (binaryFormat) {
-					gen.writeFieldName("o");
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, peer.getNodeId().bytes(), 0, Id.BYTES);
-				} else {
-					gen.writeStringField("o", value.peer.getNodeId().toBase58String());
-				}
-
-				byte[] sig = peer.getNodeSignature();
-				gen.writeFieldName("os");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
-			}
-
-			byte[] sig = peer.getSignature();
-			gen.writeFieldName("sig");
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, sig, 0, sig.length);
-
-			gen.writeNumberField("f", peer.getFingerprint());
-			gen.writeStringField("e", peer.getEndpoint());
-
-			if (peer.hasExtra()) {
-				byte[] extra = peer.getExtraData();
-				gen.writeFieldName("ex");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, extra, 0, extra.length);
-			}
-
-			gen.writeEndObject();
-		}
-	}
-
-	static class Deserializer extends StdDeserializer<AnnouncePeerRequest> {
-		private static final long serialVersionUID = -1837715448567615081L;
-
-		public Deserializer() {
-			this(AnnouncePeerRequest.class);
-		}
-
-		public Deserializer(Class<AnnouncePeerRequest> t) {
-			super(t);
-		}
-
-		@Override
-		public AnnouncePeerRequest deserialize(JsonParser p, DeserializationContext ctxt) throws IOException, JsonProcessingException {
-			if (p.getCurrentToken() != JsonToken.START_OBJECT)
-				throw ctxt.wrongTokenException(p, AnnouncePeerRequest.class, JsonToken.START_OBJECT,
-						"Invalid AnnouncePeerRequest: should be an object");
-
-			final boolean binaryFormat = DataFormat.isBinary(p);
-
-			int tok = 0;
-			int cas = -1;
-			Id peerId = null;
-			byte[] nonce = null;
-			int sequenceNumber = 0;
-			Id nodeId = null;
-			byte[] nodeSig = null;
-			byte[] signature = null;
-			long fingerprint = 0;
-			String endpoint = null;
-			byte[] extraData = null;
-
-			while (p.nextToken() != JsonToken.END_OBJECT) {
-				final String fieldName = p.currentName();
-				final JsonToken token = p.nextToken();
-				switch (fieldName) {
-				case "tok":
-					tok = p.getIntValue();
-					break;
-				case "cas":
-					cas = p.getIntValue();
-					break;
-				case "k":
-					peerId = binaryFormat || token != JsonToken.VALUE_STRING ?
-							Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
-					break;
-				case "n":
-					nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				case "seq":
-					sequenceNumber = p.getIntValue();
-					break;
-				case "o":
-					if (token != JsonToken.VALUE_NULL)
-						nodeId = binaryFormat || token != JsonToken.VALUE_STRING ?
-								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
-					break;
-				case "os":
-					if (token != JsonToken.VALUE_NULL)
-						nodeSig = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				case "sig":
-					signature = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				case "f":
-					fingerprint = p.getLongValue();
-					break;
-				case "e":
-					endpoint = p.getText();
-					break;
-				case "ex":
-					if (token != JsonToken.VALUE_NULL)
-						extraData = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
-					break;
-				default:
-					p.skipChildren();
-				}
-			}
-
-			return new AnnouncePeerRequest(PeerInfo.of(peerId, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData), tok, cas);
-		}
 	}
 }
