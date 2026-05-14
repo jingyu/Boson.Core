@@ -1,68 +1,204 @@
-# Boson Java Core
+# Boson Core
 
-|GitHub CI|
-|:-:|
-|[![CI](https://github.com/trinity-tech-io/Boson.Java/actions/workflows/maven.yml/badge.svg)](https://github.com/trinity-tech-io/Boson.Java/actions/workflows/maven.yml)|
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net/)
+[![Maven](https://img.shields.io/badge/Maven-3.8%2B-red.svg)](https://maven.apache.org/)
 
-We use Bugsnag for error tracking. thanks for [![Bugsnag](https://images.typeform.com/images/QKuaAssrFCq7/image/default)](http://www.bugsnag.com/)
+Boson Core is the foundational library for the [Boson Network](https://github.com/bosonnetwork) — a decentralized, encrypted peer-to-peer communication framework. It provides the common APIs, a secure Kademlia DHT implementation, and an interactive developer shell.
 
-Boson is a decentralized and encrypted peer-to-peer (P2P)  communication framework that facilitates network traffic routing between virtual machines and decentralized Applications (dApps).  Boson Java is a Java distribution designed to run on VPS servers with a public IP address, serving as a super Boson Node service.
+---
 
-Boson is a new two-layered architecture that features a unified DHT network as the bottom layer and facilitates various application-oriented services on top of the DHT network, where a list of services includes, but is not limited to:
+## Table of Contents
 
-- An active proxy service forwards the service entries from third-parties originally located within a LAN network, making them accessible from the public;
-- A federal-based decentralized communication system provides great efficiency and security, including similar features to Boson V1;
-- A content addressing based storage system allows the distribtion of data among peers for the application scenarios like P2P file sharing.
+- [About Boson](#about-boson)
+- [About Boson Core](#about-boson-core)
+  - [Common APIs (`api`)](#common-apis-api)
+  - [Secure Kademlia DHT (`dht`)](#secure-kademlia-dht-dht)
+  - [DHT Shell (`shell`)](#dht-shell-shell)
+- [Prerequisites](#prerequisites)
+- [Build Instructions](#build-instructions)
+- [Running the DHT Shell](#running-the-dht-shell)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
 
-**Notice**:  *the later two features have not been developed yet, but they are already included in the TODO List*.
+---
 
-## Guide to compiling and building to Boson Java
+## About Boson
 
-### Dependencies
+Boson is a decentralized and encrypted peer-to-peer communication framework designed for secure, censorship-resistant networking. It uses a two-layer architecture:
 
-- Java Virtual Machine (JVM) >= Java 11
-- sodium (libsodium) >= 1.0.16
+- **Bottom layer** — A unified DHT (Distributed Hash Table) network that handles node discovery, peer routing, and distributed storage.
+- **Top layer** — Application-oriented services (messaging, active proxy, etc.) built on top of the DHT network.
 
-### Build instructions
+Every node in the Boson network has a cryptographic identity derived from an Ed25519 key pair. Node IDs, peer announcements, and stored values are all signed and verified, making the network resistant to Sybil attacks and data tampering.
 
-Download this repository using Git:
+---
 
-```shell
-git clone https://github.com/trinity-tech-io/Boson.Java
+## About Boson Core
+
+This repository is organized into three Maven modules:
+
+### Common APIs (`api`)
+
+The `api` module defines the contracts and shared utilities used by the DHT implementation and all higher-level Boson services.
+
+- Core interfaces
+- Crypto primitives
+- Decentralized identifier system
+  Boson implements a self-sovereign identity layer that is fully compatible with the [W3C DID Core](https://www.w3.org/TR/did-core/) and [W3C Verifiable Credentials](https://www.w3.org/TR/vc-data-model/) specifications. Every Boson node or user has an identity anchored to an Ed25519 key pair, and that identity can be discovered, resolved, and verified entirely through the DHT — with no central registry. 
+  The dual-format design means every object can be serialized as a full W3C JSON-LD document (for interoperability with standards-compliant verifiers) or as the Boson compact format (for efficiency inside the P2P network).
+- Service framework
+  Defines the plugin API for Boson services, and federation support.
+
+---
+
+### Secure Kademlia DHT (`dht`)
+
+The `dht` module implements a hardened Kademlia DHT node. It extends standard Kademlia with several security features:
+
+- **Cryptographic node identity** — every node is identified by its Ed25519 public key; all RPC messages are authenticated.
+- **Signed values** — mutable values stored in the DHT carry an Ed25519 signature that any node can verify.
+- **Security blacklist** — misbehaving nodes are tracked and banned automatically.
+- **Dual-stack networking** — simultaneous IPv4 and IPv6 support on a single port.
+- **Dual serialization** — RPC messages support both JSON (text) and CBOR (binary) formats.
+
+**RPC protocol**
+
+| Method | Description |
+|---|---|
+| `PING` | Verify node liveness |
+| `FIND_NODE` | Iterative lookup for the closest nodes to a target ID |
+| `FIND_PEER` | Look up peer announcements by service ID |
+| `ANNOUNCE_PEER` | Publish a peer record to the network |
+| `FIND_VALUE` | Look up a signed or unsigned value by key |
+| `STORE_VALUE` | Publish a value to the network |
+
+See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specification.
+
+---
+
+### DHT Shell (`shell`)
+
+The `shell` module provides an interactive command-line shell that starts a local DHT node and lets developers interact with the network in real time. It is intended as a development and debugging tool.
+
+---
+
+## Prerequisites
+
+| Requirement | Version |
+|---|---|
+| Java JDK | 17 or later |
+| Apache Maven | 3.8 or later |
+| libsodium | 1.0.16 or later |
+
+**Installing libsodium**
+
+- **macOS**: `brew install libsodium`
+- **Ubuntu / Debian**: `sudo apt-get install libsodium-dev`
+- **Fedora / RHEL**: `sudo dnf install libsodium-devel`
+- **Windows**: Download from the [libsodium releases page](https://download.libsodium.org/libsodium/releases/) and add the DLL directory to `PATH`.
+
+---
+
+## Build Instructions
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/bosonnetwork/Boson.Core.git
+cd Boson.Core
 ```
 
-Then navigate to the directory with the source code downloaded:
+### 2. Install the parent POM
 
-```shell
-./mvnw
+The parent module must be installed into the local Maven repository before building the submodules.
+
+```bash
+# From the parent repository root (Boson.Java)
+mvn install -f parent/pom.xml
 ```
 
-If you want to skip the test cases, use the following command instead of the command mentioned above:
+### 3. Build all modules
 
-```shell
-./mvnw -Dmaven.test.skip=true 
+```bash
+./mvnw clean package
 ```
 
-If you want to run build and run all test cases, using the following command:
+To skip tests:
 
-```shell
-MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.environment=development
+```bash
+./mvnw clean package -DskipTests
 ```
 
-Or you can run specific test with the following command, for example `NodeTests`:
+---
 
-```shell
-MAVEN_OPTS="-Xmx20480m -Xms10240m" ./mvnw -Dio.bosonnetwork.environment=development -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=NodeTests
+## Running the DHT Shell
+
+The DHT shell is bundled as an executable JAR. Also create an easy-to-use shell script:
+
+```bash
+cd shell/target/dist
+./bin/dht-shell [OPTIONS]
 ```
 
-## Contribution
+**Example — start a local shell node and bootstrap into the network:**
 
-We welcome contributions from passionate developers from open-source community who aspire to create a secure, decentralized communication platform and help expand the capabilities of Boson to achieve wider adoption.
+```bash
+./bin/dht-shell \
+  -4 192.168.8.1 \
+  -p 39001 \
+  -d ./data \
+  --developerMode \
+  -b "HZXXs9LTfNQjrDKvvexRhuMk8TTJhYCfrHwaj3jUzuhZ:155.138.245.211:39001"
+```
 
-## Acknowledgments
+Once started, type `help` at the `Boson $` prompt to list all available commands.
 
-A sincere thank you goes out to all the projects that we rely on directly or indirectly, for their contributions to the development of Boson Project. We value the collaborative nature of the open-source community and recognize the importance of working together to create innovative, reliable software solutions.
+---
+
+## Configuration
+
+The node can be configured via a YAML file (loaded with `-c <file>`). Below is an annotated example:
+
+```yaml
+ipv4: true
+ipv6: false
+address4: "0.0.0.0"   # Listen on all IPv4 interfaces
+port: 39001
+
+dataDir: "/var/lib/boson"
+
+bootstraps:
+  - id: "HZXXs9LTfNQjrDKvvexRhuMk8TTJhYCfrHwaj3jUzuhZ"
+    address: "155.138.245.211"
+    port: 39001
+  - id: "6o6LkHgLyD5sYyW9iN5LNRYnUoX29jiYauQ5cDjhCpWQ"
+    address: "45.32.138.246"
+    port: 39001
+```
+
+---
+
+## Contributing
+
+We welcome contributions from the open-source community. To get started:
+
+1. Fork this repository and create a feature branch.
+2. Make your changes and add tests where applicable.
+3. Ensure `./mvnw clean verify` passes.
+4. Open a pull request with a clear description of the change.
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+---
 
 ## License
 
-This project is licensed under the terms of the [MIT License](https://github.com/trinity-tech-io/Boson.Java/blob/master/LICENSE). We believe that open-source licensing  promotes transparency, collaboration, and innovation, and we encourage others to contribute to the project in accordance with the terms of the license.
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Acknowledgments
+
+Boson Core builds on the shoulders of great open-source projects, including [libsodium](https://libsodium.org/), [Eclipse Vert.x](https://vertx.io/), [JLine](https://github.com/jline/jline3), [picocli](https://picocli.info/), and many others. We are grateful to the open-source community for making these tools available.
