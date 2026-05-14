@@ -164,7 +164,7 @@ The node can be configured via a YAML file (loaded with `-c <file>`). Below is a
 ```yaml
 ipv4: true
 ipv6: false
-address4: "0.0.0.0"   # Listen on all IPv4 interfaces
+address4: "203.0.113.42"   # Must be a specific public unicast IP address
 port: 39001
 
 dataDir: "/var/lib/boson"
@@ -177,6 +177,8 @@ bootstraps:
     address: "45.32.138.246"
     port: 39001
 ```
+
+> **Important:** `address4` and `address6` must be specific **public unicast** IP addresses. Wildcard addresses (`0.0.0.0`, `::`) and loopback addresses (`127.0.0.1`, `::1`) are not valid — the DHT embeds this address in node announcements so that other peers can reach you. If you omit the field entirely, the node will auto-detect its public IP via the default network route.
 
 ---
 
