@@ -28,7 +28,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
 /**
- * Authentication options for configuring the {@link CompactWebTokenAuth} provider.
+ * Authentication options for configuring the {@link CwtAuth} provider.
  * <p>
  * This class provides configuration properties for cryptographic identity, client
  * lookup, audience restrictions, token lifetime (TTL), and clock skew leeway.

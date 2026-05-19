@@ -21,7 +21,7 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.service.ClientUser;
 
 @ExtendWith(VertxExtension.class)
-public class CompactWebTokenAuthHandlerTest {
+public class CwtAuthHandlerTest {
 	private static final Identity superNodeIdentity = new CryptoIdentity();
 	private static final Signature.KeyPair aliceKeyPair = Signature.KeyPair.random();
 	private static final ClientUser alice = new TestClientUser(Id.of(aliceKeyPair.publicKey().bytes()),
@@ -45,7 +45,7 @@ public class CompactWebTokenAuthHandlerTest {
 				}
 			});
 
-	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(options);
+	private static final CwtAuth auth = CwtAuth.create(options);
 
 	@Test
 	void testHandlerSuccess(Vertx vertx, VertxTestContext context) {
@@ -54,7 +54,7 @@ public class CompactWebTokenAuthHandlerTest {
 		
 		// Protected route requiring "read" scope
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth).withScope("read"))
+			.handler(CwtAuthHandler.create(auth).withScope("read"))
 			.handler(ctx -> ctx.response().end(new JsonObject().put("status", "ok").encode()));
 
 		vertx.createHttpServer()
@@ -83,7 +83,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerMissingScope(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth).withScope("admin"))
+			.handler(CwtAuthHandler.create(auth).withScope("admin"))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
@@ -112,7 +112,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerWithoutScope(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth).withScope("admin"))
+			.handler(CwtAuthHandler.create(auth).withScope("admin"))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
@@ -141,7 +141,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerMultipleScopes(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth).withScopes(java.util.List.of("read", "write")))
+			.handler(CwtAuthHandler.create(auth).withScopes(java.util.List.of("read", "write")))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
@@ -169,7 +169,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerCustomScopeDelimiter(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth)
+			.handler(CwtAuthHandler.create(auth)
 				.scopeDelimiter(",")
 				.withScopes(java.util.List.of("read", "write")))
 			.handler(ctx -> ctx.response().end("ok"));
@@ -202,13 +202,13 @@ public class CompactWebTokenAuthHandlerTest {
 		
 		// 1. Metadata with String scope
 		Route route1 = router.get("/meta-string")
-			.handler(CompactWebTokenAuthHandler.create(auth));
+			.handler(CwtAuthHandler.create(auth));
 		route1.putMetadata("scopes", "read");
 		route1.handler(ctx -> ctx.response().end("ok"));
 
 		// 2. Metadata with List scope
 		Route route2 = router.get("/meta-list")
-			.handler(CompactWebTokenAuthHandler.create(auth));
+			.handler(CwtAuthHandler.create(auth));
 		route2.putMetadata("scopes", java.util.List.of("read", "write"));
 		route2.handler(ctx -> ctx.response().end("ok"));
 
@@ -247,7 +247,7 @@ public class CompactWebTokenAuthHandlerTest {
 	void testHandlerAuthenticationFailure(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
-			.handler(CompactWebTokenAuthHandler.create(auth))
+			.handler(CwtAuthHandler.create(auth))
 			.handler(ctx -> ctx.response().end("ok"));
 
 		vertx.createHttpServer()
@@ -260,8 +260,8 @@ public class CompactWebTokenAuthHandlerTest {
 				// Expired token
 				String token = auth.generateToken(alice.getId(), null, "read", 1);
 
-				// Wait 1.5 seconds for token expiration
-				vertx.setTimer(1500, id -> {
+				// Wait 2.5 seconds for token expiration to ensure strictly expired
+				vertx.setTimer(2500, id -> {
 					client.get(port, "localhost", "/protected")
 						.bearerTokenAuthentication(token)
 						.send()

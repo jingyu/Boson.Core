@@ -42,40 +42,40 @@ import io.vertx.ext.web.handler.impl.HTTPAuthorizationHandler;
 import io.vertx.ext.web.impl.RoutingContextInternal;
 
 /**
- * An auth handler that provides Compact Web Token (CWT) authentication support.
+ * An auth handler that provides CBOR Web Token (CWT) authentication support.
  * <p>
  * This handler validates the CWT format, signature and optionally verifies that
  * the authenticated user has the required scopes.
  * </p>
  */
-public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<CompactWebTokenAuth> implements AuthenticationHandler {
+public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements AuthenticationHandler {
 	private final List<String> scopes;
 	private String delimiter;
 
-	private CompactWebTokenAuthHandler(CompactWebTokenAuth authProvider, String realm) {
+	private CwtAuthHandler(CwtAuth authProvider, String realm) {
 		super(authProvider, Type.BEARER, realm);
 		this.scopes = Collections.emptyList();
 		this.delimiter  = " ";
 	}
 
-	private CompactWebTokenAuthHandler(CompactWebTokenAuthHandler base, List<String> scopes, String delimiter) {
+	private CwtAuthHandler(CwtAuthHandler base, List<String> scopes, String delimiter) {
 		super(base.authProvider, Type.BEARER, base.realm);
 		this.scopes = Objects.requireNonNull(scopes, "scopes cannot be null");;
 		this.delimiter = Objects.requireNonNull(delimiter, "delimiter cannot be null");
 	}
 
-	public static CompactWebTokenAuthHandler create(CompactWebTokenAuth authProvider, String realm) {
-		return new CompactWebTokenAuthHandler(authProvider, realm);
+	public static CwtAuthHandler create(CwtAuth authProvider, String realm) {
+		return new CwtAuthHandler(authProvider, realm);
 	}
 
 	/**
-	 * Create a new CompactWebTokenAuthHandler with the given auth provider.
+	 * Create a new CwtAuthHandler with the given auth provider.
 	 * 
-	 * @param authProvider the CompactWebTokenAuth provider to use for authentication
+	 * @param authProvider the CwtAuth provider to use for authentication
 	 * @return the auth handler
 	 */
-	public static CompactWebTokenAuthHandler create(CompactWebTokenAuth authProvider) {
-		return new CompactWebTokenAuthHandler(authProvider, null);
+	public static CwtAuthHandler create(CwtAuth authProvider) {
+		return new CwtAuthHandler(authProvider, null);
 	}
 
 	/**
@@ -171,11 +171,11 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	 * @param scope the required scope
 	 * @return a new handler instance
 	 */
-	public CompactWebTokenAuthHandler withScope(String scope) {
+	public CwtAuthHandler withScope(String scope) {
 		Objects.requireNonNull(scope, "scope cannot be null");
 		List<String> updatedScopes = new ArrayList<>(this.scopes);
 		updatedScopes.add(scope);
-		return new CompactWebTokenAuthHandler(this, updatedScopes, delimiter);
+		return new CwtAuthHandler(this, updatedScopes, delimiter);
 	}
 
 	/**
@@ -184,9 +184,9 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	 * @param scopes the list of required scopes
 	 * @return a new handler instance
 	 */
-	public CompactWebTokenAuthHandler withScopes(List<String> scopes) {
+	public CwtAuthHandler withScopes(List<String> scopes) {
 		Objects.requireNonNull(scopes, "scopes cannot be null");
-		return new CompactWebTokenAuthHandler(this, scopes, delimiter);
+		return new CwtAuthHandler(this, scopes, delimiter);
 	}
 
 	/**
@@ -196,7 +196,7 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	 * @param delimiter the delimiter string
 	 * @return self
 	 */
-	public CompactWebTokenAuthHandler scopeDelimiter(String delimiter) {
+	public CwtAuthHandler scopeDelimiter(String delimiter) {
 		Objects.requireNonNull(delimiter, "delimiter cannot be null");
 		this.delimiter = delimiter;
 		return this;

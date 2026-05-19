@@ -37,7 +37,7 @@ import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.vertx.VertxFuture;
 import io.bosonnetwork.web.ClientProvider;
-import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
@@ -51,7 +51,7 @@ import io.bosonnetwork.web.CwtAuthOptions;
  * - All authentication requests are permitted as valid.
  * - Authorization requests provide empty grants.
  * - Retrieval of users or devices always succeeds with placeholder objects or empty lists, as appropriate.
- * - Provides a permissive {@link CompactWebTokenAuth} instance for token handling.
+ * - Provides a permissive {@link CwtAuth} instance for token handling.
  * <p>
  * Note: This class should be used cautiously, as it bypasses all security and validation checks.
  */
@@ -126,7 +126,7 @@ public class AllowAllClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompactWebTokenAuth getWebTokenAuthenticator() {
+	public CwtAuth getWebTokenAuthenticator() {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
@@ -144,6 +144,6 @@ public class AllowAllClientContext implements ClientContext {
 					}
 				});
 
-		return CompactWebTokenAuth.create(options);
+		return CwtAuth.create(options);
 	}
 }

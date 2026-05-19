@@ -37,7 +37,7 @@ import io.bosonnetwork.service.ClientUser;
 
 @ExtendWith(VertxExtension.class)
 @SuppressWarnings("CodeBlock2Expr")
-public class CompactWebTokenAuthTest {
+public class CwtAuthTest {
 	private static final int DEFAULT_LIFETIME = 10; // 10 seconds
 	private static final Identity superNodeIdentity = new CryptoIdentity();
 	private static final Identity aliceIdentity = new CryptoIdentity();
@@ -66,7 +66,7 @@ public class CompactWebTokenAuthTest {
 				}
 			});
 
-	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(options);
+	private static final CwtAuth auth = CwtAuth.create(options);
 
 	private static void printToken(String token) {
 		try {
@@ -422,7 +422,7 @@ public class CompactWebTokenAuthTest {
 						return Future.failedFuture("Database connection failed");
 					}
 				});
-		CompactWebTokenAuth failAuth = CompactWebTokenAuth.create(failOptions);
+		CwtAuth failAuth = CwtAuth.create(failOptions);
 		String token = failAuth.generateToken(alice.getId(), "test");
 
 		failAuth.authenticate(new TokenCredentials(token)).onComplete(ar -> {

@@ -30,7 +30,7 @@ import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.impl.AllowAllFederationContext;
 import io.bosonnetwork.service.impl.DisabledFederationContext;
 import io.bosonnetwork.service.impl.StaticFederationContext;
-import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuth;
 
 /**
  * Federation manager (read-only) interface for the Boson Super Node services.
@@ -145,13 +145,13 @@ public interface FederationContext {
 	FederationAuthenticator getAuthenticator();
 
 	/**
-	 * Retrieves the instance of {@link CompactWebTokenAuth} used for handling
+	 * Retrieves the instance of {@link CwtAuth} used for handling
 	 * web token authentication within the federation.
 	 *
-	 * @return the {@link CompactWebTokenAuth} instance responsible for managing
+	 * @return the {@link CwtAuth} instance responsible for managing
 	 *         web token authentication.
 	 */
-	CompactWebTokenAuth getWebTokenAuthenticator();
+	CwtAuth getWebTokenAuthenticator();
 
 	/**
 	 * Creates and returns a disabled instance of FederationContext.

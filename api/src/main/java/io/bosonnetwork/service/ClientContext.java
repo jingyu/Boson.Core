@@ -29,7 +29,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.impl.AllowAllClientContext;
 import io.bosonnetwork.service.impl.StaticClientContext;
-import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuth;
 
 /**
  * Client manager interface (Read-only) for the Boson Super Node services.
@@ -111,13 +111,13 @@ public interface ClientContext {
 	ClientAuthorizer getAuthorizer();
 
 	/**
-	 * Get the instance of {@link CompactWebTokenAuth} used for handling
+	 * Get the instance of {@link CwtAuth} used for handling
 	 * web token authentication within the client context.
 	 *
-	 * @return the {@link CompactWebTokenAuth} instance responsible for managing
+	 * @return the {@link CwtAuth} instance responsible for managing
 	 *         web token authentication.
 	 */
-	CompactWebTokenAuth getWebTokenAuthenticator();
+	CwtAuth getWebTokenAuthenticator();
 
 	/**
 	 * Returns a new client context configured to allow all clients without Web Token Auth support.
@@ -151,7 +151,7 @@ public interface ClientContext {
 	 * <p>
 	 * This implementation uses an internal map for storage and is typically used for simulation
 	 * or unit testing where network connectivity is not required. Unlike production contexts,
-	 * this version does not support CompactWebTokenAuth. It does not require a node identity.
+	 * this version does not support {@link CwtAuth}. It does not require a node identity.
 	 * </p>
 	 *
 	 * @return a {@link ClientContext} instance using an in-memory map store for simulation purposes.

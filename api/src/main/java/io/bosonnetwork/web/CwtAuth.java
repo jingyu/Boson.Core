@@ -46,19 +46,19 @@ import io.bosonnetwork.service.FederatedNode;
 import io.bosonnetwork.service.ServiceInfo;
 
 /**
- * A Compact Web Token (CWT) authentication provider.
+ * A CBOR Web Token (CWT) authentication provider.
  * <p>
- * This class implements a custom authentication mechanism using a compact token format
- * designed for efficiency. The token structure is partially inspired by JWT but simplified
- * and using CBOR/base64url encoding.
+ * This class implements a custom authentication mechanism using the CWT format
+ * designed for efficiency. The token structure is based on the CWT standard (RFC 8392)
+ * using CBOR and Base64Url encoding.
  */
-public class CompactWebTokenAuth implements AuthenticationProvider {
+public class CwtAuth implements AuthenticationProvider {
 	private final Identity identity;
 	private final ClientProvider clientProvider;
 	private final int defaultTtl;
 	private final SignedCwt.Parser cwtParser;
 
-	private CompactWebTokenAuth(CwtAuthOptions options) {
+	private CwtAuth(CwtAuthOptions options) {
 		this.identity = Objects.requireNonNull(options.getIdentity(), "identity");
 		this.clientProvider = Objects.requireNonNull(options.getClientProvider(), "clientProvider");
 		this.defaultTtl = options.getDefaultTtl();
@@ -69,17 +69,15 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 	}
 
 	/**
-	 * Creates a new instance of {@code CompactWebTokenAuth} using the specified Vert.x instance
-	 * and authentication options.
+	 * Creates a new instance of {@code CwtAuth} using the specified authentication options.
 	 *
 	 * @param options the authentication options to configure the instance; must not be null
-	 * @return a new {@code CompactWebTokenAuth} instance configured with the provided Vert.x
-	 *         instance and authentication options
-	 * @throws NullPointerException if {@code vertx} or {@code options} is null
+	 * @return a new {@code CwtAuth} instance configured with the provided options
+	 * @throws NullPointerException if {@code options} is null
 	 */
-	public static CompactWebTokenAuth create(CwtAuthOptions options) {
+	public static CwtAuth create(CwtAuthOptions options) {
 		Objects.requireNonNull(options, "options");
-		return new CompactWebTokenAuth(options);
+		return new CwtAuth(options);
 	}
 
 	/**

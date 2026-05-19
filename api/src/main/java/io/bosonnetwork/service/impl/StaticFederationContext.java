@@ -40,7 +40,7 @@ import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.utils.Pair;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.VertxFuture;
-import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuthOptions;
 
@@ -395,7 +395,7 @@ public class StaticFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompactWebTokenAuth getWebTokenAuthenticator() {
+	public CwtAuth getWebTokenAuthenticator() {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
@@ -413,6 +413,6 @@ public class StaticFederationContext implements FederationContext {
 					}
 				});
 
-		return CompactWebTokenAuth.create(options);
+		return CwtAuth.create(options);
 	}
 }
