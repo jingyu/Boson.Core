@@ -24,8 +24,8 @@ package io.bosonnetwork.cwt;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -101,6 +101,16 @@ public class SignedCwt {
 	}
 
 	/**
+	 * Checks if the specified claim is present in the claims map.
+	 *
+	 * @param claim the integer key of the claim to check for presence.
+	 * @return true if the claim is present, false otherwise.
+	 */
+	public boolean containsClaim(int claim) {
+		return claims.containsKey(claim);
+	}
+
+	/**
 	 * Retrieves the value of a specific claim from the CWT payload.
 	 *
 	 * @param claim the integer key of the claim (e.g., from {@link Claim}).
@@ -110,6 +120,48 @@ public class SignedCwt {
 	@SuppressWarnings("unchecked")
 	public <T> T getClaim(int claim) {
 		return (T) claims.get(claim);
+	}
+
+	/**
+	 * Retrieves the value of a specific claim as a string.
+	 * If the value of the claim is not present, this method returns null.
+	 * If the value of the claim is of a type other than String, it is converted to a string.
+	 *
+	 * @param claim the integer key of the claim to retrieve
+	 * @return the claim value as a string, or null if the claim is not present
+	 */
+	public String getClaimAsString(int claim) {
+		Object value = claims.get(claim);
+		if (value == null)
+			return null;
+
+		if (value instanceof String s)
+			return s;
+		else
+			return String.valueOf(value);
+	}
+
+	/**
+	 * Retrieves the value of a specific claim as an {@code Id}.
+	 * If the value of the claim is not present, this method returns {@code null}.
+	 * If the value of the claim is a {@code byte[]} or a {@code String}, the method attempts to convert it to an {@code Id}.
+	 * If the value cannot be converted, an {@code IllegalStateException} is thrown.
+	 *
+	 * @param claim the integer key of the claim to retrieve.
+	 * @return the claim value as an {@code Id}, or {@code null} if the claim is not present.
+	 * @throws IllegalStateException if the claim value cannot be mapped to an {@code Id}.
+	 */
+	public Id getClaimAsId(int claim) {
+		Object value = claims.get(claim);
+		if (value == null)
+			return null;
+
+		if (value instanceof byte[] bs)
+			return Id.of(bs);
+		else if (value instanceof String s)
+			return Id.of(s);
+		else
+			throw new IllegalStateException("Can not map claim to Id");
 	}
 
 	/**
@@ -131,20 +183,55 @@ public class SignedCwt {
 	}
 
 	/**
-	 * Checks whether the CWT has expired based on its "exp" (Expiration Time) claim.
-	 * If the claim is not present, the token is not considered expired.
-	 * If the claim is present but malformed, it is considered expired for safety.
+	 * Checks whether the CWT has expired based on its "exp" (Expiration Time) claim,
+	 * strictly (with 0 leeway).
 	 *
 	 * @return true if the token is expired, false otherwise.
 	 */
 	public boolean isExpired() {
-		if (!claims.containsKey(Claim.EXPIRATION.getValue()))
-			return false;
+		return isExpired(0);
+	}
 
-		Object expObj = getClaim(Claim.EXPIRATION.getValue());
-		if (!(expObj instanceof Number exp))
-			return true;
-		return exp.longValue() < (System.currentTimeMillis()) / 1000;
+	/**
+	 * Determines whether the token has expired based on the "exp" (Expiration Time),
+	 * "nbf" (Not Before), and "iat" (Issued At) claims. The method considers
+	 * specified leeway to account for clock skew.
+	 *
+	 * @param leeway the number of seconds to adjust the expiration, not-before,
+	 *               and issued-at times to allow for clock skew. Must be >= 0.
+	 * @return true if the token is considered expired or invalid; false otherwise.
+	 * @throws IllegalArgumentException if the leeway is negative.
+	 */
+	public boolean isExpired(int leeway) {
+		if (leeway < 0)
+			throw new IllegalArgumentException("leeway must be >= 0");
+
+		long now = System.currentTimeMillis() / 1000;
+
+		if (claims.containsKey(Claim.EXPIRATION.getValue())) {
+			Object numObj = getClaim(Claim.EXPIRATION.getValue());
+			if (!(numObj instanceof Number exp))
+				return true;
+			if (exp.longValue() < (now - leeway))
+				return true;
+		}
+
+		if (claims.containsKey(Claim.NOT_BEFORE.getValue())) {
+			Object numObj = getClaim(Claim.NOT_BEFORE.getValue());
+			if (!(numObj instanceof Number nbf))
+				return true;
+			if (nbf.longValue() > (now + leeway))
+				return true;
+		}
+
+		if (claims.containsKey(Claim.ISSUED_AT.getValue())) {
+			Object numObj = getClaim(Claim.ISSUED_AT.getValue());
+			if (!(numObj instanceof Number iat))
+				return true;
+			return iat.longValue() > (now + leeway);
+		}
+
+		return false;
 	}
 
 	/**
@@ -171,7 +258,7 @@ public class SignedCwt {
 	*/
 
 	// Due to the object mapper cannot create CBOR definite-length map and array,
-	// So we need use low-level CBORGenerator to create the expected definite-length object
+	// So we need to use low-level CBORGenerator to create the expected definite-length object
 	private static void writeMap(CBORGenerator gen, Map<Integer, Object> map) throws IOException {
 		gen.writeStartObject(map.size());
 		for (Map.Entry<Integer, Object> e : map.entrySet()) {
@@ -195,8 +282,7 @@ public class SignedCwt {
 	private static byte[] getSignData(byte[] protectedHeaders, byte[] payload) {
 		try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 			CBORGenerator gen = Json.cborFactory().createGenerator(baos);
-			// noinspection deprecation
-			gen.writeStartArray(4);
+			gen.writeStartArray(null,4);
 			gen.writeString(SIG_STRUCTURE_SIGN_1);
 			gen.writeBinary(protectedHeaders);
 			gen.writeBinary(EXTERNAL_AAD);
@@ -218,118 +304,61 @@ public class SignedCwt {
 	 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
 	 */
 	public static SignedCwt parse(byte[] coseBytes) throws CwtException {
-		/*
-		 * RFC8392 A.3 structure:
-		 *
-		 * 18([
-		 *   protected,
-		 *   unprotected,
-		 *   payload,
-		 *   signature
-		 * ])
-		 *
-		 * Jackson does NOT understand CBOR tag 18,
-		 * but conveniently to check manually.
-		 */
+		return parse(coseBytes, 0);
+	}
 
-		// CBOR tag 18
-		int tag = Byte.toUnsignedInt(coseBytes[0]);
-		if (tag != COSE_SIGN_1_TAG)
-			throw new InvalidCborTagException("Unknown CBOR tag: " + tag);
+	/**
+	 * Parses and verifies a CBOR-encoded Signed CWT (COSE_Sign1).
+	 * This method strictly enforces that the algorithm is EdDSA and that the
+	 * issuer claim represents a valid Ed25519 public key.
+	 *
+	 * @param coseBytes the raw CBOR bytes of the CWT.
+	 * @param leeway the allowed clock skew in seconds for time-based claim validation.
+	 * @return the parsed and verified {@code SignedCwt} object.
+	 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
+	 * @throws IllegalArgumentException if the specified leeway is negative.
+	 */
+	public static SignedCwt parse(byte[] coseBytes, int leeway) throws CwtException {
+		return parser().setLeeway(leeway).parse(coseBytes);
+	}
 
-		// COSE Structure Array: 4 items for the signed CWT
-		List<Object> sign1;
-		try {
-			sign1 = COSE_LIST_READER.readValue(coseBytes);
-			if (sign1.size() != 4)
-				throw new InvalidCoseStructureException("COSE Structure Array should have 4 elements, actual: " + sign1.size());
-		} catch (IOException e) {
-			throw new InvalidCoseStructureException("Invalid COSE Structure", e);
-		}
+	/**
+	 * Parses and verifies a Signed CWT (COSE_Sign1) from a base64-encoded string representation
+	 * with leeway of 0 seconds for claim validation.
+	 * This method strictly enforces that the algorithm is EdDSA and that the
+	 * issuer claim represents a valid Ed25519 public key.
+	 *
+	 * @param base64Token the base64-encoded string representation of the CWT.
+	 * @return the parsed and verified {@code SignedCwt} object.
+	 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
+	 */
+	public static SignedCwt parse(String base64Token) throws CwtException {
+		return parse(base64Token, 0);
+	}
 
-		// protected headers
-		if (!(sign1.get(0) instanceof byte[] protectedHeadersBytes))
-			throw new InvalidCoseStructureException("Protected headers should be of type byte[]");
+	/**
+	 * Parses and verifies a Signed CWT (COSE_Sign1) from a base64-encoded string representation
+	 * with the specified leeway for claim validation.
+	 * This method strictly enforces that the algorithm is EdDSA and that the
+	 * issuer claim represents a valid Ed25519 public key.
+	 *
+	 * @param base64Token the base64-encoded string representation of the CWT.
+	 * @param leeway the allowed clock skew in seconds for time-based claim validation. Must be >= 0.
+	 * @return the parsed and verified {@code SignedCwt} object.
+	 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
+	 * @throws IllegalArgumentException if the specified leeway is negative.
+	 */
+	public static SignedCwt parse(String base64Token, int leeway) throws CwtException {
+		return parser().setLeeway(leeway).parse(base64Token);
+	}
 
-		Map<Integer, Object> protectedHeaders;
-		try {
-			protectedHeaders = COSE_MAP_READER.readValue(protectedHeadersBytes);
-		} catch (IOException e) {
-			throw new InvalidCoseStructureException("Invalid protected headers", e);
-		}
-		Object value = protectedHeaders.get(Header.ALG.getValue());
-		if (!(value instanceof Integer alg))
-			throw new InvalidAlgorithmException("Invalid algorithm: " + value);
-		if (alg != Algorithm.EDDSA.getValue())
-			throw new InvalidAlgorithmException("Unsupported algorithm: " + value);
-
-		// unprotectedHeaders
-		if (!(sign1.get(1) instanceof Map<?, ?> uph))
-			throw new InvalidCoseStructureException("Unprotected headers should be a map");
-
-		@SuppressWarnings("unchecked")
-		Map<Object, Object> map = (Map<Object, Object>) uph;
-		Map<Integer, Object> unprotectedHeaders;
-		if (map.isEmpty()) {
-			unprotectedHeaders = Map.of();
-		} else {
-			unprotectedHeaders = new LinkedHashMap<>(map.size());
-			for (Map.Entry<Object, Object> e : map.entrySet()) {
-				if (e.getKey() instanceof Integer k)
-					unprotectedHeaders.put(k, e.getValue());
-			}
-		}
-
-		// payload / claims
-		if (!(sign1.get(2) instanceof byte[] payload))
-			throw new InvalidCoseStructureException("Payload should be of type byte[]");
-
-		Map<Integer, Object> claims;
-		try {
-			claims = COSE_MAP_READER.readValue(payload);
-		} catch (IOException e) {
-			throw new InvalidCoseStructureException("Invalid claims", e);
-		}
-
-		Object issuerObj = claims.get(Claim.ISSUER.getValue());
-		if (!(issuerObj instanceof byte[] issuer) || issuer.length != Signature.PublicKey.BYTES)
-			throw new InvalidIssuerKeyException("Invalid issuer key");
-
-		Signature.PublicKey issuerPublicKey;
-		try {
-			issuerPublicKey = Signature.PublicKey.fromBytes(issuer);
-		} catch (Exception e) {
-			throw new InvalidIssuerKeyException("Invalid issuer key");
-		}
-
-		if (!(sign1.get(3) instanceof byte[] signature))
-			throw new InvalidCoseStructureException("Signature should be of type byte[]");
-		if (signature.length != Signature.BYTES)
-			throw new InvalidCoseStructureException("Invalid signature length: " + signature.length);
-
-		byte[] toSign = getSignData(protectedHeadersBytes, payload);
-		if (!issuerPublicKey.verify(toSign, signature))
-			throw new InvalidSignatureException("Verification failed");
-
-		long now = System.currentTimeMillis() / 1000;
-
-		if (claims.containsKey(Claim.EXPIRATION.getValue())) {
-			Object expObj = claims.get(Claim.EXPIRATION.getValue());
-			if (!(expObj instanceof Number exp))
-				throw new TokenExpiredException("Invalid expiration claim");
-			if (exp.longValue() < now)
-				throw new TokenExpiredException("Expired at: " + exp);
-		}
-
-		if (claims.containsKey(Claim.NOT_BEFORE.getValue())) {
-			Object nbfObj = claims.get(Claim.NOT_BEFORE.getValue());
-			if (!(nbfObj instanceof Number nbf))
-				throw new NotBeforeException("Invalid not-before claim");
-			if (nbf.longValue() > now)
-				throw new NotBeforeException("Not before: " + nbf);
-		}
-
-		return new SignedCwt(protectedHeaders, unprotectedHeaders, claims, signature);
+	/**
+	 * Creates a new {@code Parser} to parse and validate a {@code SignedCwt}.
+	 *
+	 * @return a new Parser instance.
+	 */
+	public static Parser parser() {
+		return new Parser();
 	}
 
 	/**
@@ -340,6 +369,286 @@ public class SignedCwt {
 	 */
 	public static Builder builder(Identity issuer) {
 		return new Builder(issuer);
+	}
+
+	/**
+	 * Builder class for parsing and validating a {@link SignedCwt}.
+	 */
+	public static class Parser {
+		private Id expectedIssuer;
+		private Object expectedSubject;
+		private Object expectedAudience;
+		private boolean ignoreExpiration = false;
+		private boolean ignoreNotBefore = false;
+		private boolean ignoreIssuedAt = false;
+		private int leeway = 0;
+
+		private Parser() {}
+
+		/**
+		 * Requires that the token's "iss" (Issuer) claim matches the specified Identity ID.
+		 * 
+		 * @param issuer the expected issuer.
+		 * @return the parser instance.
+		 */
+		public Parser requireIssuer(Id issuer) {
+			this.expectedIssuer = Objects.requireNonNull(issuer);
+			return this;
+		}
+
+		/**
+		 * Requires that the token's "sub" (Subject) claim matches the specified ID.
+		 * 
+		 * @param subject the expected subject ID.
+		 * @return the parser instance.
+		 */
+		public Parser requireSubject(Id subject) {
+			this.expectedSubject = Objects.requireNonNull(subject);
+			return this;
+		}
+
+		/**
+		 * Requires that the token's "sub" (Subject) claim matches the specified String.
+		 * 
+		 * @param subject the expected subject string.
+		 * @return the parser instance.
+		 */
+		public Parser requireSubject(String subject) {
+			this.expectedSubject = Objects.requireNonNull(subject);
+			return this;
+		}
+
+		/**
+		 * Requires that the token's "aud" (Audience) claim matches the specified ID.
+		 * 
+		 * @param audience the expected audience ID.
+		 * @return the parser instance.
+		 */
+		public Parser requireAudience(Id audience) {
+			this.expectedAudience = Objects.requireNonNull(audience);
+			return this;
+		}
+
+		/**
+		 * Requires that the token's "aud" (Audience) claim matches the specified String.
+		 * 
+		 * @param audience the expected audience string.
+		 * @return the parser instance.
+		 */
+		public Parser requireAudience(String audience) {
+			this.expectedAudience = Objects.requireNonNull(audience);
+			return this;
+		}
+
+		/**
+		 * Disables the validation of the "exp" (Expiration Time) claim.
+		 * 
+		 * @return the parser instance.
+		 */
+		public Parser ignoreExpiration() {
+			this.ignoreExpiration = true;
+			return this;
+		}
+
+		/**
+		 * Disables the validation of the "nbf" (Not Before) claim.
+		 * 
+		 * @return the parser instance.
+		 */
+		public Parser ignoreNotBefore() {
+			this.ignoreNotBefore = true;
+			return this;
+		}
+
+		/**
+		 * Disables the validation of the "iat" (Issued At) claim.
+		 * 
+		 * @return the parser instance.
+		 */
+		public Parser ignoreIssuedAt() {
+			this.ignoreIssuedAt = true;
+			return this;
+		}
+
+		/**
+		 * Sets the allowed clock skew leeway (in seconds) for time-based claims.
+		 * 
+		 * @param leeway the allowed clock skew.
+		 * @return the parser instance.
+		 */
+		public Parser setLeeway(int leeway) {
+			if (leeway < 0)
+				throw new IllegalArgumentException("leeway must be >= 0");
+			this.leeway = leeway;
+			return this;
+		}
+
+		@SuppressWarnings("BooleanMethodIsAlwaysInverted")
+		private boolean match(Object expected, Object claim) {
+			if (expected instanceof byte[] be && claim instanceof byte[] bc)
+				return Arrays.equals(be, bc);
+
+			if (expected instanceof Id id) {
+				if (claim instanceof byte[] bc)
+					return Arrays.equals(id.bytes(), bc);
+				if (claim instanceof String s)
+					return id.toString().equals(s);
+			}
+
+			return Objects.equals(expected, claim);
+		}
+
+		/**
+		 * Parses and validates the provided CBOR bytes according to the configured constraints.
+		 * 
+		 * @param coseBytes the raw CBOR bytes of the CWT.
+		 * @return the parsed and verified {@code SignedCwt} object.
+		 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
+		 */
+		public SignedCwt parse(byte[] coseBytes) throws CwtException {
+			/*
+			 * RFC8392 A.3 structure:
+			 *
+			 * 18([
+			 *   protected,
+			 *   unprotected,
+			 *   payload,
+			 *   signature
+			 * ])
+			 *
+			 * Jackson does NOT understand CBOR tag 18,
+			 * but conveniently to check manually.
+			 */
+			Objects.requireNonNull(coseBytes);
+
+			int tag = Byte.toUnsignedInt(coseBytes[0]);
+			if (tag != COSE_SIGN_1_TAG)
+				throw new InvalidCborTagException("Unknown CBOR tag: " + tag);
+
+			List<Object> sign1;
+			try {
+				sign1 = COSE_LIST_READER.readValue(coseBytes);
+				if (sign1.size() != 4)
+					throw new InvalidCoseStructureException("COSE Structure Array should have 4 elements, actual: " + sign1.size());
+			} catch (IOException e) {
+				throw new InvalidCoseStructureException("Invalid COSE Structure", e);
+			}
+
+			if (!(sign1.get(0) instanceof byte[] protectedHeadersBytes))
+				throw new InvalidCoseStructureException("Protected headers should be of type byte[]");
+
+			Map<Integer, Object> protectedHeaders;
+			try {
+				protectedHeaders = COSE_MAP_READER.readValue(protectedHeadersBytes);
+			} catch (IOException e) {
+				throw new InvalidCoseStructureException("Invalid protected headers", e);
+			}
+			Object value = protectedHeaders.get(Header.ALG.getValue());
+			if (!(value instanceof Integer alg))
+				throw new InvalidAlgorithmException("Invalid algorithm: " + value);
+			if (alg != Algorithm.EDDSA.getValue())
+				throw new InvalidAlgorithmException("Unsupported algorithm: " + value);
+
+			if (!(sign1.get(1) instanceof Map<?, ?> uph))
+				throw new InvalidCoseStructureException("Unprotected headers should be a map");
+
+			@SuppressWarnings("unchecked")
+			Map<Object, Object> map = (Map<Object, Object>) uph;
+			Map<Integer, Object> unprotectedHeaders;
+			if (map.isEmpty()) {
+				unprotectedHeaders = Map.of();
+			} else {
+				unprotectedHeaders = new LinkedHashMap<>(map.size());
+				for (Map.Entry<Object, Object> e : map.entrySet()) {
+					if (e.getKey() instanceof Integer k)
+						unprotectedHeaders.put(k, e.getValue());
+				}
+			}
+
+			if (!(sign1.get(2) instanceof byte[] payload))
+				throw new InvalidCoseStructureException("Payload should be of type byte[]");
+
+			Map<Integer, Object> claims;
+			try {
+				claims = COSE_MAP_READER.readValue(payload);
+			} catch (IOException e) {
+				throw new InvalidCoseStructureException("Invalid claims", e);
+			}
+
+			Object issuerObj = claims.get(Claim.ISSUER.getValue());
+			if (!(issuerObj instanceof byte[] issuer) || issuer.length != Signature.PublicKey.BYTES)
+				throw new InvalidIssuerKeyException("Invalid issuer key");
+
+			if (expectedIssuer != null) {
+				if (!Arrays.equals(issuer, expectedIssuer.bytes()))
+					throw new InvalidClaimException("Issuer mismatch");
+			}
+
+			if (expectedSubject != null) {
+				if (!match(expectedSubject, claims.get(Claim.SUBJECT.getValue())))
+					throw new InvalidClaimException("Subject mismatch");
+			}
+
+			if (expectedAudience != null) {
+				if (!match(expectedAudience, claims.get(Claim.AUDIENCE.getValue())))
+					throw new InvalidClaimException("Audience mismatch");
+			}
+
+			Signature.PublicKey issuerPublicKey;
+			try {
+				issuerPublicKey = Signature.PublicKey.fromBytes(issuer);
+			} catch (Exception e) {
+				throw new InvalidIssuerKeyException("Invalid issuer key");
+			}
+
+			if (!(sign1.get(3) instanceof byte[] signature))
+				throw new InvalidCoseStructureException("Signature should be of type byte[]");
+			if (signature.length != Signature.BYTES)
+				throw new InvalidCoseStructureException("Invalid signature length: " + signature.length);
+
+			byte[] toSign = getSignData(protectedHeadersBytes, payload);
+			if (!issuerPublicKey.verify(toSign, signature))
+				throw new InvalidSignatureException("Verification failed");
+
+			long now = System.currentTimeMillis() / 1000;
+
+			if (!ignoreExpiration && claims.containsKey(Claim.EXPIRATION.getValue())) {
+				Object expObj = claims.get(Claim.EXPIRATION.getValue());
+				if (!(expObj instanceof Number exp))
+					throw new TokenExpiredException("Invalid expiration claim");
+				if (exp.longValue() < (now - leeway))
+					throw new TokenExpiredException("Expired at: " + exp);
+			}
+
+			if (!ignoreNotBefore && claims.containsKey(Claim.NOT_BEFORE.getValue())) {
+				Object nbfObj = claims.get(Claim.NOT_BEFORE.getValue());
+				if (!(nbfObj instanceof Number nbf))
+					throw new NotBeforeException("Invalid not-before claim");
+				if (nbf.longValue() > (now + leeway))
+					throw new NotBeforeException("Not before: " + nbf);
+			}
+
+			if (!ignoreIssuedAt && claims.containsKey(Claim.ISSUED_AT.getValue())) {
+				Object iatObj = claims.get(Claim.ISSUED_AT.getValue());
+				if (!(iatObj instanceof Number iat))
+					throw new InvalidIssuedAtException("Invalid issued-at claim");
+				if (iat.longValue() > (now + leeway))
+					throw new InvalidIssuedAtException("Issued at future: " + iat);
+			}
+
+			return new SignedCwt(protectedHeaders, unprotectedHeaders, claims, signature);
+		}
+
+		/**
+		 * Parses the given Base64-encoded token and returns a SignedCwt object.
+		 *
+		 * @param base64Token the Base64-encoded token to be parsed
+		 * @return a SignedCwt object representing the parsed token
+		 * @throws CwtException if there is an error during parsing
+		 */
+		public SignedCwt parse(String base64Token) throws CwtException {
+			return parse(Json.BASE64_DECODER.decode(base64Token));
+		}
 	}
 
 	/**
@@ -533,7 +842,7 @@ public class SignedCwt {
 		 * @param issuedAt the exact date of issuance.
 		 * @return the builder instance.
 		 */
-		public Builder IssuedAt(Date issuedAt) {
+		public Builder issuedAt(Date issuedAt) {
 			Objects.requireNonNull(issuedAt);
 			long iat = issuedAt.getTime() / 1000;
 			claims.put(Claim.ISSUED_AT.getValue(), iat);
@@ -545,7 +854,7 @@ public class SignedCwt {
 		 *
 		 * @return the builder instance.
 		 */
-		public Builder IssuedAtNow() {
+		public Builder issuedAtNow() {
 			long iat = System.currentTimeMillis() / 1000;
 			claims.put(Claim.ISSUED_AT.getValue(), iat);
 			return this;
@@ -558,6 +867,18 @@ public class SignedCwt {
 		 * @return the builder instance.
 		 */
 		public Builder tokenId(byte[] id) {
+			Objects.requireNonNull(id);
+			claims.put(Claim.CWT_ID.getValue(), id);
+			return this;
+		}
+
+		/**
+		 * Sets the "cti" (CWT ID) claim using a String.
+		 *
+		 * @param id the unique token identifier string.
+		 * @return the builder instance.
+		 */
+		public Builder tokenId(String id) {
 			Objects.requireNonNull(id);
 			claims.put(Claim.CWT_ID.getValue(), id);
 			return this;
@@ -595,19 +916,19 @@ public class SignedCwt {
 		 */
 		public Builder scope(String scope) {
 			Objects.requireNonNull(scope);
-			claims.put(Claim.SCOPE.getValue(), scope.getBytes(StandardCharsets.UTF_8));
+			claims.put(Claim.SCOPE.getValue(), scope);
 			return this;
 		}
 
-		/**
-		 * Sets the "cti" (CWT ID) claim using a String.
-		 *
-		 * @param id the unique token identifier string.
-		 * @return the builder instance.
-		 */
-		public Builder tokenId(String id) {
-			Objects.requireNonNull(id);
-			claims.put(Claim.CWT_ID.getValue(), id.getBytes(StandardCharsets.UTF_8));
+		public Builder clientId(Id clientId) {
+			Objects.requireNonNull(clientId);
+			claims.put(Claim.CLIENT_ID.getValue(), clientId.getBytes());
+			return this;
+		}
+
+		public Builder clientId(String clientId) {
+			Objects.requireNonNull(clientId);
+			claims.put(Claim.CLIENT_ID.getValue(), clientId);
 			return this;
 		}
 
@@ -628,8 +949,7 @@ public class SignedCwt {
 			try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 				baos.write((byte) COSE_SIGN_1_TAG);
 				CBORGenerator gen = Json.cborFactory().createGenerator(baos);
-				// noinspection deprecation
-				gen.writeStartArray(4);
+				gen.writeStartArray(null, 4);
 				gen.writeBinary(protectedHeadersBytes);
 				writeMap(gen, unprotectedHeaders);
 				gen.writeBinary(payload);
@@ -639,6 +959,17 @@ public class SignedCwt {
 			} catch (IOException e) {
 				throw new IllegalStateException("INTERNAL ERROR: CWT data encode", e);
 			}
+		}
+
+		/**
+		 * Encodes the constructed and signed CBOR Web Token (CWT) into a Base64 string.
+		 * This method uses the Base64Url encoder to convert the byte array representation
+		 * of the CWT into a Base64-encoded format suitable for transmission or storage.
+		 *
+		 * @return a Base64-encoded string representation of the constructed CWT.
+		 */
+		public String buildBase64() {
+			return Json.BASE64_ENCODER.encodeToString(build());
 		}
 	}
 }
