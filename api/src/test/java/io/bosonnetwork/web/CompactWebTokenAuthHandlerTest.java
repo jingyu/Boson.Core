@@ -1,10 +1,9 @@
 package io.bosonnetwork.web;
 
-import java.util.Base64;
-
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.handler.BodyHandler;
@@ -28,21 +27,25 @@ public class CompactWebTokenAuthHandlerTest {
 	private static final ClientUser alice = new TestClientUser(Id.of(aliceKeyPair.publicKey().bytes()),
 			"Alice", null, null, null);
 
-	private static final CompactWebTokenAuth.UserRepository repo = new CompactWebTokenAuth.UserRepository() {
-		@Override
-		public Future<?> getSubject(Id subject) {
-			return subject.equals(alice.getId()) ?
-					Future.succeededFuture(alice) : Future.succeededFuture(null);
-		}
+	static CwtAuthOptions options = new CwtAuthOptions()
+			.setIdentity(superNodeIdentity)
+			.setExpectedAudience(superNodeIdentity.getId())
+			.setDefaultTtl(3600)
+			.setLeeway(0)
+			.setClientProvider(new ClientProvider() {
+				@Override
+				public Future<?> getUser(Id userId) {
+					return userId.equals(alice.getId()) ?
+							Future.succeededFuture(alice) : Future.succeededFuture(null);
+				}
 
-		@Override
-		public Future<?> getAssociated(Id subject, Id associated) {
-			return Future.succeededFuture(null);
-		}
-	};
+				@Override
+				public Future<?> getClient(Id userId, Id clientId) {
+					return Future.succeededFuture(null);
+				}
+			});
 
-	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(superNodeIdentity, repo,
-			3600, 3600, 0);
+	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(options);
 
 	@Test
 	void testHandlerSuccess(Vertx vertx, VertxTestContext context) {
@@ -106,7 +109,142 @@ public class CompactWebTokenAuthHandlerTest {
 	}
 	
 	@Test
-	void testHandlerWithPadding(Vertx vertx, VertxTestContext context) {
+	void testHandlerWithoutScope(Vertx vertx, VertxTestContext context) {
+		Router router = Router.router(vertx);
+		router.get("/protected")
+			.handler(CompactWebTokenAuthHandler.create(auth).withScope("admin"))
+			.handler(ctx -> ctx.response().end("ok"));
+
+		vertx.createHttpServer()
+			.requestHandler(router)
+			.listen(0)
+			.onComplete(context.succeeding(server -> {
+				int port = server.actualPort();
+				WebClient client = WebClient.create(vertx);
+
+				// Generate token without scope
+				String token = auth.generateToken(alice.getId(), null);
+
+				client.get(port, "localhost", "/protected")
+					.bearerTokenAuthentication(token)
+					.send()
+					.onComplete(context.succeeding(resp -> {
+						context.verify(() -> {
+							Assertions.assertEquals(403, resp.statusCode());
+						});
+						server.close().onComplete(context.succeedingThenComplete());
+					}));
+			}));
+	}
+
+	@Test
+	void testHandlerMultipleScopes(Vertx vertx, VertxTestContext context) {
+		Router router = Router.router(vertx);
+		router.get("/protected")
+			.handler(CompactWebTokenAuthHandler.create(auth).withScopes(java.util.List.of("read", "write")))
+			.handler(ctx -> ctx.response().end("ok"));
+
+		vertx.createHttpServer()
+			.requestHandler(router)
+			.listen(0)
+			.onComplete(context.succeeding(server -> {
+				int port = server.actualPort();
+				WebClient client = WebClient.create(vertx);
+
+				String token = auth.generateToken(alice.getId(), "read write");
+
+				client.get(port, "localhost", "/protected")
+					.bearerTokenAuthentication(token)
+					.send()
+					.onComplete(context.succeeding(resp -> {
+						context.verify(() -> {
+							Assertions.assertEquals(200, resp.statusCode());
+						});
+						server.close().onComplete(context.succeedingThenComplete());
+					}));
+			}));
+	}
+
+	@Test
+	void testHandlerCustomScopeDelimiter(Vertx vertx, VertxTestContext context) {
+		Router router = Router.router(vertx);
+		router.get("/protected")
+			.handler(CompactWebTokenAuthHandler.create(auth)
+				.scopeDelimiter(",")
+				.withScopes(java.util.List.of("read", "write")))
+			.handler(ctx -> ctx.response().end("ok"));
+
+		vertx.createHttpServer()
+			.requestHandler(router)
+			.listen(0)
+			.onComplete(context.succeeding(server -> {
+				int port = server.actualPort();
+				WebClient client = WebClient.create(vertx);
+
+				// Comma delimited scope string
+				String token = auth.generateToken(alice.getId(), "read,write");
+
+				client.get(port, "localhost", "/protected")
+					.bearerTokenAuthentication(token)
+					.send()
+					.onComplete(context.succeeding(resp -> {
+						context.verify(() -> {
+							Assertions.assertEquals(200, resp.statusCode());
+						});
+						server.close().onComplete(context.succeedingThenComplete());
+					}));
+			}));
+	}
+
+	@Test
+	void testHandlerMetadataScopes(Vertx vertx, VertxTestContext context) {
+		Router router = Router.router(vertx);
+		
+		// 1. Metadata with String scope
+		Route route1 = router.get("/meta-string")
+			.handler(CompactWebTokenAuthHandler.create(auth));
+		route1.putMetadata("scopes", "read");
+		route1.handler(ctx -> ctx.response().end("ok"));
+
+		// 2. Metadata with List scope
+		Route route2 = router.get("/meta-list")
+			.handler(CompactWebTokenAuthHandler.create(auth));
+		route2.putMetadata("scopes", java.util.List.of("read", "write"));
+		route2.handler(ctx -> ctx.response().end("ok"));
+
+		vertx.createHttpServer()
+			.requestHandler(router)
+			.listen(0)
+			.onComplete(context.succeeding(server -> {
+				int port = server.actualPort();
+				WebClient client = WebClient.create(vertx);
+
+				String token = auth.generateToken(alice.getId(), "read write");
+
+				// Test String metadata scope (should succeed)
+				client.get(port, "localhost", "/meta-string")
+					.bearerTokenAuthentication(token)
+					.send()
+					.compose(resp -> {
+						context.verify(() -> {
+							Assertions.assertEquals(200, resp.statusCode());
+						});
+						// Test List metadata scope (should succeed)
+						return client.get(port, "localhost", "/meta-list")
+							.bearerTokenAuthentication(token)
+							.send();
+					})
+					.onComplete(context.succeeding(resp2 -> {
+						context.verify(() -> {
+							Assertions.assertEquals(200, resp2.statusCode());
+						});
+						server.close().onComplete(context.succeedingThenComplete());
+					}));
+			}));
+	}
+
+	@Test
+	void testHandlerAuthenticationFailure(Vertx vertx, VertxTestContext context) {
 		Router router = Router.router(vertx);
 		router.get("/protected")
 			.handler(CompactWebTokenAuthHandler.create(auth))
@@ -119,21 +257,22 @@ public class CompactWebTokenAuthHandlerTest {
 				int port = server.actualPort();
 				WebClient client = WebClient.create(vertx);
 
-				// Generate token
-				String token = auth.generateToken(alice.getId());
-				String[] parts = token.split("\\.", 2);
-				String paddingToken = Base64.getUrlEncoder().encodeToString(Base64.getUrlDecoder().decode(parts[0])) + '.' +
-						Base64.getUrlEncoder().encodeToString(Base64.getUrlDecoder().decode(parts[1]));
-				 
-				client.get(port, "localhost", "/protected")
-					.bearerTokenAuthentication(paddingToken)
-					.send()
-					.onComplete(context.succeeding(resp -> {
-						context.verify(() -> {
-							Assertions.assertEquals(400, resp.statusCode());
-						});
-						server.close().onComplete(context.succeedingThenComplete());
-					}));
+				// Expired token
+				String token = auth.generateToken(alice.getId(), null, "read", 1);
+
+				// Wait 1.5 seconds for token expiration
+				vertx.setTimer(1500, id -> {
+					client.get(port, "localhost", "/protected")
+						.bearerTokenAuthentication(token)
+						.send()
+						.onComplete(context.succeeding(resp -> {
+							context.verify(() -> {
+								// Should be 401 Unauthorized for expired tokens
+								Assertions.assertEquals(401, resp.statusCode());
+							});
+							server.close().onComplete(context.succeedingThenComplete());
+						}));
+				});
 			}));
 	}
 }

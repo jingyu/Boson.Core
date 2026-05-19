@@ -41,7 +41,9 @@ import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.utils.Pair;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
  * A static implementation of the {@link ClientContext} interface.
@@ -353,16 +355,20 @@ public class StaticClientContext implements ClientContext {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
-		return CompactWebTokenAuth.create(nodeIdentity, new CompactWebTokenAuth.UserRepository() {
-			@Override
-			public Future<ClientUser> getSubject(Id subject) {
-				return Future.succeededFuture(getUserSync(subject));
-			}
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(nodeIdentity)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<ClientUser> getUser(Id userId) {
+						return Future.succeededFuture(getUserSync(userId));
+					}
 
-			@Override
-			public Future<ClientDevice> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture(getDeviceSync(subject, associated));
-			}
-		});
+					@Override
+					public Future<ClientDevice> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(getDeviceSync(userId, clientId));
+					}
+				});
+
+		return CompactWebTokenAuth.create(options);
 	}
 }

@@ -22,7 +22,7 @@
 
 package io.bosonnetwork.web;
 
-import java.io.IOException;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -38,12 +38,12 @@ import io.vertx.ext.auth.authentication.TokenCredentials;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.json.Json;
+import io.bosonnetwork.cwt.Claim;
+import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.service.FederatedNode;
 import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.utils.Pair;
 
 /**
  * A Compact Web Token (CWT) authentication provider.
@@ -51,108 +51,42 @@ import io.bosonnetwork.utils.Pair;
  * This class implements a custom authentication mechanism using a compact token format
  * designed for efficiency. The token structure is partially inspired by JWT but simplified
  * and using CBOR/base64url encoding.
- * </p>
- * <h2>Token Format</h2>
- * <pre>
- * token = payload.signature
- * payload = base64url(CBOR(claims))
- * signature = base64url(ED25519Signature(SHA256(payload)))
- * </pre>
- *
- * <h2>Claims Definition</h2>
- * <p>Server issued token claims:</p>
- * <ul>
- *   <li><b>jti</b>: Token ID (nonce)</li>
- *   <li><b>iss</b>: Issuer (null or server node ID)</li>
- *   <li><b>sub</b>: Subject (User ID / Federated node ID)</li>
- *   <li><b>asc</b>: Associated ID (Node ID / Federated service peer ID)</li>
- *   <li><b>exp</b>: Expiration timestamp</li>
- * </ul>
- *
- * <p>Client issued token claims:</p>
- * <ul>
- *   <li><b>jti</b>: Token ID (nonce)</li>
- *   <li><b>iss</b>: Issuer (Subject ID, or Associated ID if present)</li>
- *   <li><b>aud</b>: Audience (Server Node ID)</li>
- *   <li><b>sub</b>: Subject (User ID / Federated node ID)</li>
- *   <li><b>asc</b>: Associated ID (Node ID / Federated service peer ID)</li>
- *   <li><b>exp</b>: Expiration timestamp</li>
- * </ul>
  */
 public class CompactWebTokenAuth implements AuthenticationProvider {
-	private static final long MAX_SERVER_ISSUED_TOKEN_LIFETIME = 14 * 24 * 60 * 60;	// 14 days in seconds
-	private static final long MAX_CLIENT_ISSUED_TOKEN_LIFETIME = 30 * 60; 			// 30 minutes in seconds
-	private static final int DEFAULT_LEEWAY = 5 * 60; // 5 minutes in seconds
-
 	private final Identity identity;
-	private final UserRepository userRepository;
-	private final long maxServerIssuedTokenLifetime; // seconds
-	private final long maxClientIssuedTokenLifetime; // seconds
-	private final int leeway; // seconds
+	private final ClientProvider clientProvider;
+	private final int defaultTtl;
+	private final SignedCwt.Parser cwtParser;
 
-	/**
-	 * Interface for retrieving subject and associated entities.
-	 */
-	public interface UserRepository {
-		/**
-		 * Retrieves the subject (user or node) by ID.
-		 * @param subject the subject ID
-		 * @return a Future containing the subject object (ClientUser, FederatedNode, etc.) or null if not found
-		 */
-		Future<?> getSubject(Id subject);
-		
-		/**
-		 * Retrieves the associated entity (device, service, etc.) by ID.
-		 * @param subject the subject ID owning the associated entity
-		 * @param associated the associated entity ID
-		 * @return a Future containing the associated object or null if not found
-		 */
-		Future<?> getAssociated(Id subject, Id associated);
-	}
+	private CompactWebTokenAuth(CwtAuthOptions options) {
+		this.identity = Objects.requireNonNull(options.getIdentity(), "identity");
+		this.clientProvider = Objects.requireNonNull(options.getClientProvider(), "clientProvider");
+		this.defaultTtl = options.getDefaultTtl();
 
-	private CompactWebTokenAuth(Identity identity, UserRepository userRepository,
-								long maxServerIssuedTokenLifetime, long maxClientIssuedTokenLifetime, int leeway) {
-		this.identity = identity;
-		this.userRepository = userRepository;
-		this.maxServerIssuedTokenLifetime = maxServerIssuedTokenLifetime;
-		this.maxClientIssuedTokenLifetime = maxClientIssuedTokenLifetime;
-		this.leeway = leeway;
+		this.cwtParser = SignedCwt.parser().setLeeway(options.getLeeway());
+		if (options.getExpectedAudience() != null)
+			this.cwtParser.requireAudience(options.getExpectedAudience());
 	}
 
 	/**
-	 * Creates a new instance of CompactWebTokenAuth.
+	 * Creates a new instance of {@code CompactWebTokenAuth} using the specified Vert.x instance
+	 * and authentication options.
 	 *
-	 * @param identity the identity of the current server node (used for signing and verification)
-	 * @param userRepository the repository to look up token subjects and associated entities
-	 * @param maxServerIssuedTokenLifetime maximum lifetime for tokens issued by this server (seconds)
-	 * @param maxClientIssuedTokenLifetime maximum lifetime for tokens issued by clients (seconds)
-	 * @param leeway allowed clock skew (seconds)
-	 * @return the authenticator instance
+	 * @param options the authentication options to configure the instance; must not be null
+	 * @return a new {@code CompactWebTokenAuth} instance configured with the provided Vert.x
+	 *         instance and authentication options
+	 * @throws NullPointerException if {@code vertx} or {@code options} is null
 	 */
-	public static CompactWebTokenAuth create(Identity identity, UserRepository userRepository,
-								 long maxServerIssuedTokenLifetime, long maxClientIssuedTokenLifetime, int leeway) {
-		return new CompactWebTokenAuth(identity, userRepository,
-				maxServerIssuedTokenLifetime, maxClientIssuedTokenLifetime, leeway);
-	}
-
-	/**
-	 * Creates a new instance of CompactWebTokenAuth with the specified identity, user repository,
-	 * and default configuration values for token lifetimes and leeway.
-	 *
-	 * @param identity the identity associated with the authentication process
-	 * @param userRepository the repository used for managing user data
-	 * @return a new instance of CompactWebTokenAuth
-	 */
-	public static CompactWebTokenAuth create(Identity identity, UserRepository userRepository) {
-		return new CompactWebTokenAuth(identity, userRepository,
-				MAX_SERVER_ISSUED_TOKEN_LIFETIME, MAX_CLIENT_ISSUED_TOKEN_LIFETIME, DEFAULT_LEEWAY);
+	public static CompactWebTokenAuth create(CwtAuthOptions options) {
+		Objects.requireNonNull(options, "options");
+		return new CompactWebTokenAuth(options);
 	}
 
 	/**
 	 * Authenticates a user using the provided credentials.
 	 * <p>
 	 * Expected credentials type is {@link TokenCredentials}. The token is parsed, validated
-	 * (signature, expiration, claims), and resolved against the {@link UserRepository}.
+	 * (signature, expiration, claims), and resolved against the {@link ClientProvider}.
 	 * </p>
 	 *
 	 * @param credentials the credentials containing the token
@@ -174,333 +108,165 @@ public class CompactWebTokenAuth implements AuthenticationProvider {
 			return Future.failedFuture(e);
 		}
 
-		final String token = authInfo.getToken();
-		final int index = token.indexOf('.');
-		if (index <= 0 || index >= token.length() - 1)
-			return Future.failedFuture("Invalid authorization token: wrong format");
-
-		final byte[] payload;
-		final byte[] sig;
-		final JsonObject claims;
-
+		final SignedCwt cwt;
 		try {
-			payload = Json.BASE64_DECODER.decode(token.substring(0, index));
-			sig = Json.BASE64_DECODER.decode(token.substring(index + 1));
-			claims = new JsonObject(Json.cborMapper().readValue(payload, Json.mapType()));
-		} catch (IllegalArgumentException | IOException e) {
-			return Future.failedFuture("Invalid authorization token: format error");
+			cwt = cwtParser.parse(authInfo.getToken());
+		} catch (Exception e) {
+			return Future.failedFuture(e);
 		}
 
-		// check the timestamps and expiration first
-		if (!claims.containsKey("exp") || claims.getLong("exp") == null)
-			return Future.failedFuture("Invalid authorization token: missing expiration");
-		long expiration = claims.getLong("exp", 0L);
-		if (expiration <= 0)
-			return Future.failedFuture("Invalid authorization token: invalid expiration");
-		final long now = System.currentTimeMillis() / 1000;
-		if (now - leeway >= expiration)
-			return Future.failedFuture("Invalid authorization token: expired");
+		// The token signature and basic structure have already been verified by the parser.
+		// Extract the issuer; this is expected to be present if the parse succeeded.
+		final Id issuerId = cwt.getClaimAsId(Claim.ISSUER.getValue());
 
-		if (claims.containsKey("iat")) {
-			long iat = claims.getLong("iat", 0L);
-			// issued at must be in the past
-			if (iat > now + leeway)
-				return Future.failedFuture("Invalid authorization token: invalid issue at");
+		final Id userId;
+		try {
+			userId = cwt.getClaimAsId(Claim.SUBJECT.getValue());
+		} catch (Exception e) {
+			return Future.failedFuture("Invalid authorization token: invalid subject");
 		}
-
-		if (claims.containsKey("nbf")) {
-			Long nbf = claims.getLong("nbf", 0L);
-			// not before must be after now
-			if (nbf > now + leeway)
-				return Future.failedFuture("Invalid authorization token: invalid not before");
-		}
-
-		final boolean isServerIssued;
-
-		// determine the issuer, audience, subject and associated IDs
-		final Id issuer;
-		if (claims.containsKey("iss")) {
-			byte[] value = claims.getBinary("iss");
-			if (value == null || value.length != Id.BYTES)
-				return Future.failedFuture("Invalid authorization token: invalid issuer");
-
-			try {
-				Id id = Id.of(value);
-				if (id.equals(identity.getId())) {
-					issuer = identity.getId();
-					isServerIssued = true;
-				} else {
-					issuer = id;
-					isServerIssued = false;
-				}
-			} catch (IllegalArgumentException e) {
-				return Future.failedFuture("Invalid authorization token: invalid issuer");
-			}
-		} else {
-			// default: super node issued token, if iss is omitted
-			issuer = identity.getId();
-			isServerIssued = true;
-		}
-
-		Id audience = null;
-		if (claims.containsKey("aud")) {
-			byte[] value = claims.getBinary("aud");
-			if (value == null || value.length != Id.BYTES)
-				return Future.failedFuture("Invalid authorization token: invalid audience");
-			try {
-				audience = Id.of(value);
-			} catch (IllegalArgumentException e) {
-				return Future.failedFuture("Invalid authorization token: invalid audience");
-			}
-		}
-
-		Id subject;
-		if (claims.containsKey("sub")) {
-			byte[] value = claims.getBinary("sub");
-			if (value == null || value.length != Id.BYTES)
-				return Future.failedFuture("Invalid authorization token: invalid subject");
-			try {
-				subject = Id.of(value);
-			} catch (IllegalArgumentException e) {
-				return Future.failedFuture("Invalid authorization token: invalid subject");
-			}
-		} else {
+		if (userId == null)
 			return Future.failedFuture("Invalid authorization token: missing subject");
-		}
 
-		final Id associated;
-		if (claims.containsKey("asc")) {
-			byte[] value = claims.getBinary("asc");
-			if (value == null || value.length != Id.BYTES)
-				return Future.failedFuture("Invalid authorization token: invalid associated");
-			try {
-				associated = Id.of(value);
-			} catch (IllegalArgumentException e) {
-				return Future.failedFuture("Invalid authorization token: invalid associated");
-			}
-		} else {
-			associated = null;
-		}
-
-		// check issuer should be: super node or subject or associated
-		// audience is mandatory if the token not issued by the super node
-		if (!isServerIssued) {
-			// TODO: remove
-			/*/
-			if (associated != null) {
-				if (!issuer.equals(associated))
-					return Future.failedFuture("Invalid authorization token: wrong issuer");
-			} else {
-				if (!issuer.equals(subject))
-					return Future.failedFuture("Invalid authorization token: wrong issuer");
-			}
-			*/
-			if (!Objects.equals(issuer, subject) && !Objects.equals(issuer, associated))
-				return Future.failedFuture("Invalid authorization token: wrong issuer");
-
-			if (audience == null)
-				return Future.failedFuture("Invalid authorization token: missing audience");
-		}
-
-		if (audience != null && !audience.equals(identity.getId()))
-			return Future.failedFuture("Invalid authorization token: wrong audience");
-
-		// check the expiration time is in the acceptable range
-		if (isServerIssued) {
-			if (expiration - now - leeway > maxServerIssuedTokenLifetime)
-				return Future.failedFuture("Invalid authorization token: life time too long");
-		} else {
-			if (expiration - now - leeway > maxClientIssuedTokenLifetime)
-				return Future.failedFuture("Invalid authorization token: life time too long");
-		}
-
-		if (!issuer.toSignatureKey().verify(payload, sig)) {
-			return Future.failedFuture("Invalid authorization token: signature verification failed");
-		}
-
-		final String scope = claims.containsKey("scp") ?  claims.getString("scp") : null;
-
-		return userRepository.getSubject(subject).compose(s -> {
-			if (s == null)
-				return Future.failedFuture("Invalid authorization token: subject not exists");
-
-			if (associated != null)
-				return userRepository.getAssociated(subject, associated).compose(a -> {
-					if (a == null)
-						return Future.failedFuture("Invalid authorization token: associated not exists");
-
-					return Future.succeededFuture(Pair.of(s, a));
-				});
-			else
-				return Future.succeededFuture(Pair.of(s, null));
-		}).map(client -> {
-			JsonObject principal = new JsonObject();
-
-			// Optimize: reduction of object instances
-			if (client.a() instanceof ClientUser u) {
-				principal.put("username", u.getId().toBase58String());
-				principal.put("sub", u.getId());
-				principal.put("user", u);
-				principal.put("plan", u.getPlanName());
-			} else if (client.a() instanceof FederatedNode n) {
-				principal.put("username", n.getId().toBase58String());
-				principal.put("sub", n.getId());
-				principal.put("node", n);
-			} else {
-				principal.put("username", subject.toBase58String());
-				principal.put("sub", subject);
-				principal.put("subjectObject", client.a());
-			}
-
-			if (client.b() != null) {
-				if (client.b() instanceof ClientDevice d) {
-					principal.put("asc", d.getId());
-					principal.put("device", d);
-				} else if (client.b() instanceof ServiceInfo s) {
-					principal.put("asc", s.getPeerId());
-					principal.put("service", s);
-				} else {
-					principal.put("asc", associated);
-					principal.put("associatedObject", client.b());
-				}
-			}
-
-			if (scope != null)
-				principal.put("scope", scope);
-
-			// The origin unparsed token
-			principal.put("access_token", token);
-
-			JsonObject attributes = new JsonObject();
-
-			attributes.put("jti", claims.getBinary("jti"));
-			attributes.put("exp", expiration);
-			if (claims.containsKey("iat"))
-				attributes.put("iat", claims.getLong("iat"));
-			if (claims.containsKey("nbf"))
-				attributes.put("nbf", claims.getLong("nbf"));
-
-			// the origin parse claims
-			// attributes.put("accessToken", claims);
-
-			return User.create(principal, attributes);
-		});
-	}
-
-	private String encodeToken(Map<String, Object> claims) {
-		final byte[] payload;
+		final Id clientId;
 		try {
-			payload = Json.cborMapper().writeValueAsBytes(claims);
-		} catch (IOException e) {
-			throw new RuntimeException("INTERNAL ERROR: JSON serialization");
+			clientId = cwt.getClaimAsId(Claim.CLIENT_ID.getValue());
+		} catch (Exception e) {
+			return Future.failedFuture("Invalid authorization token: invalid client_id");
 		}
 
-		final byte[] sig = identity.sign(payload);
-		return Json.BASE64_ENCODER.encodeToString(payload) + "." + Json.BASE64_ENCODER.encodeToString(sig);
-	}
+		// The token may be issued by this identity (super node or service), by a user (self-issued),
+		// or by a client (e.g., a user's device or a federated service).
+		if (!issuerId.equals(identity.getId()) && 
+			!issuerId.equals(userId) && 
+			!(clientId != null && issuerId.equals(clientId)))
+			return Future.failedFuture("Invalid authorization token: unacceptable issuer");
 
-	/**
-	 * Generates a new token with specific claims.
-	 * 
-	 * @param claims the map of claims to include in the token
-	 * @return the generated token string
-	 * @throws IllegalArgumentException if expiration is invalid
-	 */
-	public String generateToken(Map<String, Object> claims) {
-		Map<String, Object> _claims = null;
+		final String scope = cwt.getClaimAsString(Claim.SCOPE.getValue());
 
-		long now = System.currentTimeMillis() / 1000;
-		if (claims.containsKey("exp") && claims.get("exp") != null) {
-			long expiration = (Long) claims.get("exp");
-			if (expiration <= 0 || expiration > now + maxServerIssuedTokenLifetime)
-				throw new IllegalArgumentException("Invalid expiration");
+		Future<?> getClient;
+		if (clientId == null) {
+			getClient = clientProvider.getUser(userId).transform(ar -> {
+				if (ar.failed())
+					return Future.failedFuture(ar.cause());
+
+				if (ar.result() == null)
+					return Future.failedFuture("Invalid authorization token: user not exists");
+
+				return Future.succeededFuture(ar.result());
+			});
 		} else {
-			_claims = new LinkedHashMap<>(claims);
-			_claims.put("exp", now + maxServerIssuedTokenLifetime);
+			getClient = clientProvider.getClient(userId, clientId).transform(ar -> {
+				if (ar.failed())
+					return Future.failedFuture(ar.cause());
+
+				if (ar.result() == null)
+					return Future.failedFuture("Invalid authorization token: client not exists");
+
+				return Future.succeededFuture(ar.result());
+			});
 		}
 
-		if (!claims.containsKey("jti")) {
-			if (_claims == null)
-				_claims = new LinkedHashMap<>(claims);
+		return getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken()));
+	}
 
-			_claims.put("jti", Random.randomBytes(24));
+	private User createUser(Object client, String scope, SignedCwt cwt, String accessToken) {
+		final Id userId;
+		final Id clientId;
+
+		if (client instanceof ClientUser u) {
+			userId = u.getId();
+			clientId = null;
+		} else if (client instanceof ClientDevice d) {
+			userId = d.getUserId();
+			clientId = d.getId();
+		} else if (client instanceof FederatedNode n) {
+			userId = n.getId();
+			clientId = null;
+		} else if (client instanceof ServiceInfo s) {
+			userId = s.getNodeId();
+			clientId = s.getPeerId();
+		} else {
+			throw new IllegalStateException("Invalid client type: " + client.getClass().getName());
 		}
 
-		if (_claims == null)
-			_claims = claims;
+		Map<String, Object> map = new LinkedHashMap<>();
+		// "username" should be lowercase, see Vert.x User.subject()
+		map.put("username", userId.toString());
+		map.put("userId", userId);
+		if (clientId != null)
+			map.put("clientId", clientId);
+		map.put("access_token", accessToken);
+		if (scope != null)
+			map.put("scope", scope);
+		JsonObject principal = new JsonObject(Map.copyOf(map));
 
-		return encodeToken(_claims);
+		map = new LinkedHashMap<>();
+		map.put("client", client);
+		map.put("accessToken", cwt);
+		map.put("rootClaim", "accessToken");
+		if (cwt.containsClaim(Claim.EXPIRATION.getValue()))
+			map.put("exp", cwt.getClaim(Claim.EXPIRATION.getValue()));
+		if (cwt.containsClaim(Claim.ISSUED_AT.getValue()))
+			map.put("iat", cwt.getClaim(Claim.ISSUED_AT.getValue()));
+		if (cwt.containsClaim(Claim.NOT_BEFORE.getValue()))
+			map.put("nbf", cwt.getClaim(Claim.NOT_BEFORE.getValue()));
+		map.put("sub", userId);
+		JsonObject attributes = new JsonObject(Map.copyOf(map));
+
+		return User.create(principal, attributes);
 	}
 
 	/**
-	 * Generates a new token for a subject and optional associated entity.
+	 * Generates a new token for a user and optional client.
 	 *
-	 * @param subject the subject ID
-	 * @param associated the associated entity ID (optional, can be null)
+	 * @param userId the user ID
+	 * @param clientId the client ID (optional, can be null)
 	 * @param scope the scope string (optional, can be null)
 	 * @param ttl the time-to-live in seconds (0 for default server lifetime)
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
-	public String generateToken(Id subject, Id associated, String scope, long ttl) {
-		Objects.requireNonNull(subject);
-		if (ttl < 0 || ttl > maxServerIssuedTokenLifetime)
-			throw new IllegalArgumentException("Invalid expiration");
+	public String generateToken(Id userId, Id clientId, String scope, long ttl) {
+		Objects.requireNonNull(userId, "user cannot be null");
+		if (ttl < 0)
+			throw new IllegalArgumentException("ttl must be positive");
 
-		long expiration = System.currentTimeMillis() / 1000 + (ttl == 0 ? maxServerIssuedTokenLifetime : ttl);
-
-		Map<String, Object> claims = new LinkedHashMap<>(5);
-		claims.put("jti", Random.randomBytes(24));
-		claims.put("sub", subject.bytes());
-		if (associated != null)
-			claims.put("asc", associated.bytes());
+		SignedCwt.Builder cwtBuilder = SignedCwt.builder(identity)
+				.subject(userId)
+				.audience(identity.getId())
+				.expiration(Duration.ofSeconds(ttl == 0 ? defaultTtl : ttl))
+				.notBeforeNow()
+				.issuedAtNow()
+				.tokenId(Random.randomBytes(8));
 		if (scope != null && !scope.isEmpty())
-			claims.put("scp", scope);
-		claims.put("exp", expiration);
-		return encodeToken(claims);
+			cwtBuilder.scope(scope);
+		if (clientId != null)
+			cwtBuilder.clientId(clientId);
+
+		return cwtBuilder.buildBase64();
 	}
 
 	/**
-	 * Generates a new token for a subject with standard lifetime.
+	 * Generates a new token for a user with standard lifetime.
 	 *
-	 * @param subject the subject ID
-	 * @param associated the associated entity ID (optional)
+	 * @param userId the user ID
+	 * @param clientId the client ID (optional)
 	 * @param scope the scope string (optional)
 	 * @return the generated token string
 	 */
-	public String generateToken(Id subject, Id associated, String scope) {
-		return generateToken(subject, associated, scope, 0);
+	public String generateToken(Id userId, Id clientId, String scope) {
+		return generateToken(userId, clientId, scope, 0);
 	}
 
 	/**
-	 * Generates a new token for a subject with standard lifetime and no scope.
+	 * Generates a new token for a user with the specified scope.
 	 *
-	 * @param subject the subject ID
-	 * @param associated the associated entity ID (optional)
+	 * @param userId the user ID for whom the token will be generated; must not be null
+	 * @param scope the scope string associated with the token; can be null or optional
 	 * @return the generated token string
 	 */
-	public String generateToken(Id subject, Id associated) {
-		return generateToken(subject, associated, null, 0);
-	}
-
-	/**
-	 * Generates a new token for a subject with scope and standard lifetime.
-	 *
-	 * @param subject the subject ID
-	 * @param scope the scope string
-	 * @return the generated token string
-	 */
-	public String generateToken(Id subject, String scope) {
-		return generateToken(subject, null, scope, 0);
-	}
-
-	/**
-	 * Generates a new token for a subject with standard lifetime and no associated entity or scope.
-	 *
-	 * @param subject the subject ID
-	 * @return the generated token string
-	 */
-	public String generateToken(Id subject) {
-		return generateToken(subject, null, null, 0);
+	public String generateToken(Id userId, String scope) {
+		return generateToken(userId, null, scope, 0);
 	}
 }

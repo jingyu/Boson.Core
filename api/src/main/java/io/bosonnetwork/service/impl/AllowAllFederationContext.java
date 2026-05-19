@@ -35,6 +35,8 @@ import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.vertx.VertxFuture;
 import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.ClientProvider;
+import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
  * An implementation of the FederationContext interface that allows all federated interactions
@@ -114,16 +116,20 @@ public class AllowAllFederationContext implements FederationContext {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
-		return CompactWebTokenAuth.create(nodeIdentity, new CompactWebTokenAuth.UserRepository() {
-			@Override
-			public Future<FederatedNode> getSubject(Id subject) {
-				return Future.succeededFuture(_getNode(subject));
-			}
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(nodeIdentity)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<FederatedNode> getUser(Id userId) {
+						return Future.succeededFuture(_getNode(userId));
+					}
 
-			@Override
-			public Future<ServiceInfo> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture(_getService(associated, subject));
-			}
-		});
+					@Override
+					public Future<ServiceInfo> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(_getService(clientId, userId));
+					}
+				});
+
+		return CompactWebTokenAuth.create(options);
 	}
 }

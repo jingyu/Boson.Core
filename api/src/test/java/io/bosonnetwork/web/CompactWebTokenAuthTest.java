@@ -2,12 +2,13 @@ package io.bosonnetwork.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.time.Duration;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -25,46 +26,55 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.cwt.InvalidCborTagException;
+import io.bosonnetwork.cwt.InvalidClaimException;
+import io.bosonnetwork.cwt.InvalidSignatureException;
+import io.bosonnetwork.cwt.SignedCwt;
+import io.bosonnetwork.cwt.TokenExpiredException;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.json.Json;
 
 @ExtendWith(VertxExtension.class)
 @SuppressWarnings("CodeBlock2Expr")
 public class CompactWebTokenAuthTest {
-	private static final long DEFAULT_LIFETIME = 10; // 10 seconds
+	private static final int DEFAULT_LIFETIME = 10; // 10 seconds
 	private static final Identity superNodeIdentity = new CryptoIdentity();
-	private static final Signature.KeyPair aliceKeyPair = Signature.KeyPair.random();
-	private static final Signature.KeyPair iPadKeyPair = Signature.KeyPair.random();
-	private static final ClientUser alice = new TestClientUser(Id.of(aliceKeyPair.publicKey().bytes()),
+	private static final Identity aliceIdentity = new CryptoIdentity();
+	private static final Identity iPadIdentity = new CryptoIdentity();
+	private static final ClientUser alice = new TestClientUser(aliceIdentity.getId(),
 			"Alice", null, null, null);
-	private static final ClientDevice iPad = new TestClientDevice(Id.of(iPadKeyPair.publicKey().bytes()), alice.getId(),
+	private static final ClientDevice iPad = new TestClientDevice(iPadIdentity.getId(), alice.getId(),
 			"iPad", "TestCase");
 
-	private static final CompactWebTokenAuth.UserRepository repo = new CompactWebTokenAuth.UserRepository() {
-		@Override
-		public Future<?> getSubject(Id subject) {
-			return subject.equals(alice.getId()) ?
-					Future.succeededFuture(alice) : Future.succeededFuture(null);
-		}
+	static CwtAuthOptions options = new CwtAuthOptions()
+			.setIdentity(superNodeIdentity)
+			.setExpectedAudience(superNodeIdentity.getId())
+			.setDefaultTtl(DEFAULT_LIFETIME)
+			.setLeeway(0)
+			.setClientProvider(new ClientProvider() {
+				@Override
+				public Future<?> getUser(Id userId) {
+					return userId.equals(alice.getId()) ?
+							Future.succeededFuture(alice) : Future.succeededFuture(null);
+				}
 
-		@Override
-		public Future<?> getAssociated(Id subject, Id associated) {
-			return subject.equals(alice.getId()) && associated.equals(iPad.getId()) ?
-					Future.succeededFuture(iPad) : Future.succeededFuture(null);
-		}
-	};
+				@Override
+				public Future<?> getClient(Id userId, Id clientId) {
+					return userId.equals(alice.getId()) && clientId.equals(iPad.getId()) ?
+							Future.succeededFuture(iPad) : Future.succeededFuture(null);
+				}
+			});
 
-	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(superNodeIdentity, repo,
-			DEFAULT_LIFETIME, DEFAULT_LIFETIME, 0);
+	private static final CompactWebTokenAuth auth = CompactWebTokenAuth.create(options);
 
 	private static void printToken(String token) {
-		System.out.println("Token: " + token);
-		String[] parts = token.split("\\.");
-		String payload = Json.toString(Json.parse(Json.BASE64_DECODER.decode(parts[0])));
-		System.out.println(" - " + payload);
-		System.out.println(" - " + parts[1]);
+		try {
+			SignedCwt cwt = SignedCwt.parse(Json.BASE64_DECODER.decode(token));
+			System.out.println("Token: " + cwt.toString());
+		} catch (Exception e) {
+			System.out.println("Token error: " + e.getMessage());
+		}
 	}
 
 	@Test
@@ -76,10 +86,10 @@ public class CompactWebTokenAuthTest {
 				assertNotNull(user);
 				Assertions.assertEquals(alice.getId().toString(), user.subject());
 				Id id = user.get("sub");
-				Assertions.assertEquals(alice.getId(), id);
-				assertEquals(alice, user.get("user"));
-				assertNull(user.get("asc"));
-				assertNull(user.get("device"));
+				assertEquals(alice.getId(), id);
+				assertEquals(alice, user.get("client"));
+				assertEquals(alice.getId(), user.get("userId"));
+				assertNull(user.get("clientId"));
 				assertEquals("test", user.get("scope"));
 				assertEquals(userToken, user.get("access_token"));
 				assertFalse(user.expired());
@@ -91,11 +101,11 @@ public class CompactWebTokenAuthTest {
 		Future<User> f2 = auth.authenticate(new TokenCredentials(deviceToken)).andThen(context.succeeding(user -> {
 			context.verify(() -> {
 				assertNotNull(user);
-				Assertions.assertEquals(alice.getId().toString(), user.subject());
-				Assertions.assertEquals(alice.getId(), user.get("sub"));
-				assertEquals(alice, user.get("user"));
-				Assertions.assertEquals(iPad.getId(), user.get("asc"));
-				assertEquals(iPad, user.get("device"));
+				assertEquals(alice.getId().toString(), user.subject());
+				assertEquals(alice.getId(), user.get("sub"));
+				assertEquals(iPad, user.get("client"));
+				assertEquals(alice.getId(), user.get("userId"));
+				assertEquals(iPad.getId(), user.get("clientId"));
 				assertEquals("test", user.get("scope"));
 				assertEquals(deviceToken, user.get("access_token"));
 				assertFalse(user.expired());
@@ -106,27 +116,27 @@ public class CompactWebTokenAuthTest {
 	}
 
 	@Test
-	void testSuperNodeIssuedAndExpiredToken(Vertx vertx, VertxTestContext context) {
-		String userToken = auth.generateToken(alice.getId(), "test");
+	void testSuperNodeIssuedExpiredToken(Vertx vertx, VertxTestContext context) {
+		String userToken = auth.generateToken(alice.getId(), null,"test", 1);
 		printToken(userToken);
-		String deviceToken = auth.generateToken(alice.getId(), iPad.getId(), "test");
+		String deviceToken = auth.generateToken(alice.getId(), iPad.getId(), "test", 1);
 		printToken(deviceToken);
 
 		Promise<Void> promise = Promise.promise();
-		vertx.setTimer(10000, l -> promise.complete());
+		vertx.setTimer(2000, l -> promise.complete());
 		System.out.println("Waiting for token expiration...");
 		promise.future().compose(v -> {
 			Future<User> f1 = auth.authenticate(new TokenCredentials(userToken)).onComplete(ar -> {
 				context.verify(() -> {
 					assertTrue(ar.failed());
-					assertTrue(ar.cause().getMessage().contains("expired"));
+					assertInstanceOf(TokenExpiredException.class, ar.cause());
 				});
 			});
 
 			Future<User> f2 = auth.authenticate(new TokenCredentials(deviceToken)).onComplete(ar -> {
 				context.verify(() -> {
 					assertTrue(ar.failed());
-					assertTrue(ar.cause().getMessage().contains("expired"));
+					assertInstanceOf(TokenExpiredException.class, ar.cause());
 				});
 			});
 
@@ -135,30 +145,30 @@ public class CompactWebTokenAuthTest {
 	}
 
 	@Test
-	void testSuperNodeIssuedAndInvalidSigToken(VertxTestContext context) {
+	void testSuperNodeIssuedInvalidSigToken(VertxTestContext context) {
 		String userToken = auth.generateToken(alice.getId(), "test");
 		printToken(userToken);
-		byte[] sig = Json.BASE64_DECODER.decode(userToken.substring(userToken.lastIndexOf('.') + 1));
-		sig[0] = (byte) ~sig[0];
-		String invalidUserToken = userToken.substring(0, userToken.lastIndexOf('.')) + '.' + Json.BASE64_ENCODER.encodeToString(sig);
+		byte[] token = Json.BASE64_DECODER.decode(userToken);
+		token[token.length - 8] = (byte) ~token[token.length - 8];
+		String invalidUserToken = Json.BASE64_ENCODER.encodeToString(token);
 
 		String deviceToken = auth.generateToken(alice.getId(), iPad.getId(), "test");
 		printToken(deviceToken);
-		sig = Json.BASE64_DECODER.decode(deviceToken.substring(deviceToken.lastIndexOf('.') + 1));
-		sig[0] = (byte) ~sig[0];
-		String invalidDeviceToken = deviceToken.substring(0, deviceToken.lastIndexOf('.')) + '.' + Json.BASE64_ENCODER.encodeToString(sig);
+		token = Json.BASE64_DECODER.decode(deviceToken);
+		token[token.length - 8] = (byte) ~token[token.length - 8];
+		String invalidDeviceToken = Json.BASE64_ENCODER.encodeToString(token);
 
 		Future<User> f1 = auth.authenticate(new TokenCredentials(invalidUserToken)).andThen(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("signature verification failed"));
+				assertInstanceOf(InvalidSignatureException.class, ar.cause());
 			});
 		}).otherwiseEmpty();
 
 		Future<User> f2 = auth.authenticate(new TokenCredentials(invalidDeviceToken)).andThen(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("signature verification failed"));
+				assertInstanceOf(InvalidSignatureException.class, ar.cause());
 			});
 		}).otherwiseEmpty();
 
@@ -167,54 +177,47 @@ public class CompactWebTokenAuthTest {
 	
 	@Test
 	void testInvalidBase64Token(VertxTestContext context) {
-		String invalidToken = "invalid-payload.invalid-signature";
+		String invalidToken = Json.BASE64_ENCODER.encodeToString("invalid-payload.invalid-signature".getBytes());
 		auth.authenticate(new TokenCredentials(invalidToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("format error"));
+				assertInstanceOf(InvalidCborTagException.class, ar.cause());
 				context.completeNow();
 			});
 		});
 	}
 
-	private String generateClientToken(Signature.KeyPair signer, Id subject, Id associated, Id audience, long expiration, String scope) throws Exception {
-		Map<String, Object> claims = new LinkedHashMap<>();
-		claims.put("jti", Random.randomBytes(24));
-		claims.put("sub", subject.bytes());
-		if (associated != null)
-			claims.put("asc", associated.bytes());
+	private String generateClientToken(Identity issuer, Id userId, Id clientId, Id audience, int expiration, String scope) throws Exception {
+		SignedCwt.Builder builder = SignedCwt.builder(issuer)
+				.subject(userId);
 
-		// Client issued token MUST have 'iss' (issuer) and 'aud' (audience)
-		claims.put("iss", signer.publicKey().bytes());
 		if (audience != null)
-			claims.put("aud", audience.bytes());
+			builder.audience(audience);
 
-		if (scope != null)
-			claims.put("scp", scope);
+		builder.expiration(Duration.ofSeconds(expiration == 0 ? DEFAULT_LIFETIME : expiration));
 
-		long now = System.currentTimeMillis() / 1000;
-		if (expiration <= 0)
-			expiration = now + DEFAULT_LIFETIME;
+		builder.tokenId(Random.randomBytes(8));
 
-		claims.put("exp", expiration);
+		if (scope != null && !scope.isEmpty())
+			builder.scope(scope);
 
-		byte[] payload = Json.cborMapper().writeValueAsBytes(claims);
-		byte[] sig = signer.privateKey().sign(payload);
+		if (clientId != null)
+			builder.clientId(clientId);
 
-		return Json.BASE64_ENCODER.encodeToString(payload) + "." + Json.BASE64_ENCODER.encodeToString(sig);
+		return builder.buildBase64();
 	}
 
 	@Test
 	void testClientIssuedToken(VertxTestContext context) throws Exception {
-		String userToken = generateClientToken(aliceKeyPair, alice.getId(), null, superNodeIdentity.getId(), 0, "test");
+		String userToken = generateClientToken(aliceIdentity, alice.getId(), null, superNodeIdentity.getId(), 0, "test");
 		printToken(userToken);
 
 		auth.authenticate(new TokenCredentials(userToken)).onComplete(context.succeeding(user -> {
 			context.verify(() -> {
 				assertNotNull(user);
 				Assertions.assertEquals(alice.getId().toString(), user.subject());
-				assertEquals(alice, user.get("user"));
-				assertNull(user.get("asc"));
+				assertEquals(alice, user.get("client"));
+				assertNull(user.get("clientId"));
 				assertEquals("test", user.get("scope"));
 				assertFalse(user.expired());
 				context.completeNow();
@@ -224,15 +227,15 @@ public class CompactWebTokenAuthTest {
 
 	@Test
 	void testDeviceIssuedToken(VertxTestContext context) throws Exception {
-		String deviceToken = generateClientToken(iPadKeyPair, alice.getId(), iPad.getId(), superNodeIdentity.getId(), 0, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), superNodeIdentity.getId(), 0, "test");
 		printToken(deviceToken);
 
 		auth.authenticate(new TokenCredentials(deviceToken)).onComplete(context.succeeding(user -> {
 			context.verify(() -> {
 				assertNotNull(user);
 				Assertions.assertEquals(alice.getId().toString(), user.subject());
-				Assertions.assertEquals(iPad.getId(), user.get("asc"));
-				assertEquals(iPad, user.get("device"));
+				Assertions.assertEquals(iPad.getId(), user.get("clientId"));
+				assertEquals(iPad, user.get("client"));
 				assertFalse(user.expired());
 				context.completeNow();
 			});
@@ -242,23 +245,23 @@ public class CompactWebTokenAuthTest {
 	@Test
 	void testClientIssuedTokenWrongAudience(VertxTestContext context) throws Exception {
 		// Wrong audience (random ID)
-		String userToken = generateClientToken(aliceKeyPair, alice.getId(), null, Id.random(), 0, "test");
+		String userToken = generateClientToken(aliceIdentity, alice.getId(), null, Id.random(), 0, "test");
 
 		auth.authenticate(new TokenCredentials(userToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("wrong audience"));
+				assertInstanceOf(InvalidClaimException.class, ar.cause());
 				context.completeNow();
 			});
 		});
 
 		// Wrong audience (random ID)
-		String deviceToken = generateClientToken(iPadKeyPair, alice.getId(), iPad.getId(), Id.random(), 0, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), Id.random(), 0, "test");
 
 		auth.authenticate(new TokenCredentials(deviceToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("wrong audience"));
+				assertInstanceOf(InvalidClaimException.class, ar.cause());
 				context.completeNow();
 			});
 		});
@@ -266,22 +269,22 @@ public class CompactWebTokenAuthTest {
 
 	@Test
 	void testClientIssuedTokenWithoutAudience(VertxTestContext context) throws Exception {
-		String userToken = generateClientToken(aliceKeyPair, alice.getId(), null, null, 0, "test");
+		String userToken = generateClientToken(aliceIdentity, alice.getId(), null, null, 0, "test");
 
 		auth.authenticate(new TokenCredentials(userToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("missing audience"));
+				assertInstanceOf(InvalidClaimException.class, ar.cause());
 				context.completeNow();
 			});
 		});
 
-		String deviceToken = generateClientToken(iPadKeyPair, alice.getId(), iPad.getId(), null, 0, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), null, 0, "test");
 
 		auth.authenticate(new TokenCredentials(deviceToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("missing audience"));
+				assertInstanceOf(InvalidClaimException.class, ar.cause());
 				context.completeNow();
 			});
 		});
@@ -290,22 +293,153 @@ public class CompactWebTokenAuthTest {
 	@Test
 	void testClientIssuedTokenWrongIssuer(VertxTestContext context) throws Exception {
 		// Wrong issuer
-		String userToken = generateClientToken(aliceKeyPair, Id.random(), null, Id.random(), 0, "test");
+		String userToken = generateClientToken(aliceIdentity, Id.random(), null, superNodeIdentity.getId(), 0, "test");
 
 		auth.authenticate(new TokenCredentials(userToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("wrong issuer"));
+				assertTrue(ar.cause().getMessage().contains("unacceptable issuer"));
 				context.completeNow();
 			});
 		});
 
-		String deviceToken = generateClientToken(iPadKeyPair, alice.getId(), Id.random(), Id.random(), 0, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), Id.random(), superNodeIdentity.getId(), 0, "test");
 
 		auth.authenticate(new TokenCredentials(deviceToken)).onComplete(ar -> {
 			context.verify(() -> {
 				assertTrue(ar.failed());
-				assertTrue(ar.cause().getMessage().contains("wrong issuer"));
+				assertTrue(ar.cause().getMessage().contains("unacceptable issuer"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testGenerateTokenValidation() {
+		// Null user ID
+		assertThrows(NullPointerException.class, () -> auth.generateToken(null, "test"));
+		// Negative TTL
+		assertThrows(IllegalArgumentException.class, () -> auth.generateToken(alice.getId(), null, "test", -1));
+	}
+
+	@Test
+	void testUserNotExists(VertxTestContext context) throws Exception {
+		// User self-issued valid token, but user does not exist in provider
+		Identity randomUserIdentity = new CryptoIdentity();
+		String token = generateClientToken(randomUserIdentity, randomUserIdentity.getId(), null, superNodeIdentity.getId(), 0, "test");
+		
+		auth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertTrue(ar.cause().getMessage().contains("user not exists"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testClientNotExists(VertxTestContext context) throws Exception {
+		// Client self-issued valid token, but client does not exist in provider
+		Identity randomDeviceIdentity = new CryptoIdentity();
+		String token = generateClientToken(randomDeviceIdentity, alice.getId(), randomDeviceIdentity.getId(), superNodeIdentity.getId(), 0, "test");
+
+		auth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertTrue(ar.cause().getMessage().contains("client not exists"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testMissingSubjectClaim(VertxTestContext context) throws Exception {
+		// Build token with missing subject
+		byte[] tokenBytes = SignedCwt.builder(superNodeIdentity)
+				.audience(superNodeIdentity.getId())
+				.build();
+		String token = Json.BASE64_ENCODER.encodeToString(tokenBytes);
+
+		auth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertTrue(ar.cause().getMessage().contains("missing subject"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testInvalidSubjectClaim(VertxTestContext context) throws Exception {
+		// Build token with invalid type for subject
+		byte[] tokenBytes = SignedCwt.builder(superNodeIdentity)
+				.claim(io.bosonnetwork.cwt.Claim.SUBJECT.getValue(), 123)
+				.audience(superNodeIdentity.getId())
+				.build();
+		String token = Json.BASE64_ENCODER.encodeToString(tokenBytes);
+
+		auth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertTrue(ar.cause().getMessage().contains("invalid subject"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testInvalidClientIdClaim(VertxTestContext context) throws Exception {
+		// Build token with invalid type for client_id
+		byte[] tokenBytes = SignedCwt.builder(superNodeIdentity)
+				.subject(alice.getId())
+				.claim(io.bosonnetwork.cwt.Claim.CLIENT_ID.getValue(), 456)
+				.audience(superNodeIdentity.getId())
+				.build();
+		String token = Json.BASE64_ENCODER.encodeToString(tokenBytes);
+
+		auth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertTrue(ar.cause().getMessage().contains("invalid client_id"));
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testClientProviderFailedFuture(VertxTestContext context) throws Exception {
+		CwtAuthOptions failOptions = new CwtAuthOptions()
+				.setIdentity(superNodeIdentity)
+				.setExpectedAudience(superNodeIdentity.getId())
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<?> getUser(Id userId) {
+						return Future.failedFuture("Database connection failed");
+					}
+
+					@Override
+					public Future<?> getClient(Id userId, Id clientId) {
+						return Future.failedFuture("Database connection failed");
+					}
+				});
+		CompactWebTokenAuth failAuth = CompactWebTokenAuth.create(failOptions);
+		String token = failAuth.generateToken(alice.getId(), "test");
+
+		failAuth.authenticate(new TokenCredentials(token)).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertEquals("Database connection failed", ar.cause().getMessage());
+				context.completeNow();
+			});
+		});
+	}
+
+	@Test
+	void testInvalidCredentialsType(VertxTestContext context) {
+		auth.authenticate(new io.vertx.ext.auth.authentication.UsernamePasswordCredentials("user", "pass")).onComplete(ar -> {
+			context.verify(() -> {
+				assertTrue(ar.failed());
+				assertInstanceOf(io.vertx.ext.auth.authentication.CredentialValidationException.class, ar.cause());
 				context.completeNow();
 			});
 		});

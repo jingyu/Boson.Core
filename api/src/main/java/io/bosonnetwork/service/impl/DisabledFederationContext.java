@@ -35,6 +35,8 @@ import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.vertx.VertxFuture;
 import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.ClientProvider;
+import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
  * A no-op implementation of the {@link FederationContext} interface, intended to be used
@@ -92,16 +94,20 @@ public class DisabledFederationContext implements FederationContext {
 
 	@Override
 	public CompactWebTokenAuth getWebTokenAuthenticator() {
-		return CompactWebTokenAuth.create(new CryptoIdentity(), new CompactWebTokenAuth.UserRepository() {
-			@Override
-			public Future<?> getSubject(Id subject) {
-				return Future.succeededFuture();
-			}
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(new CryptoIdentity())
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<?> getUser(Id userId) {
+						return Future.succeededFuture();
+					}
 
-			@Override
-			public Future<?> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture();
-			}
-		});
+					@Override
+					public Future<?> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture();
+					}
+				});
+
+		return CompactWebTokenAuth.create(options);
 	}
 }

@@ -36,7 +36,9 @@ import io.bosonnetwork.service.ClientContext;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CompactWebTokenAuth;
+import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
  * Implementation of the {@link ClientContext} interface that allows all operations without restrictions.
@@ -128,16 +130,20 @@ public class AllowAllClientContext implements ClientContext {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
-		return CompactWebTokenAuth.create(nodeIdentity, new CompactWebTokenAuth.UserRepository() {
-			@Override
-			public Future<ClientUser> getSubject(Id subject) {
-				return Future.succeededFuture(new PlainUser(subject));
-			}
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(nodeIdentity)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<ClientUser> getUser(Id userId) {
+						return Future.succeededFuture(new PlainUser(userId));
+					}
 
-			@Override
-			public Future<?> getAssociated(Id subject, Id associated) {
-				return Future.succeededFuture(new PlainDevice(associated, subject));
-			}
-		});
+					@Override
+					public Future<?> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(new PlainDevice(clientId, userId));
+					}
+				});
+
+		return CompactWebTokenAuth.create(options);
 	}
 }

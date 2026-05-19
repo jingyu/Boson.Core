@@ -52,18 +52,20 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	private final List<String> scopes;
 	private String delimiter;
 
-	private CompactWebTokenAuthHandler(CompactWebTokenAuth authProvider) {
-		super(authProvider, Type.BEARER, null);
-		this.scopes = new ArrayList<>();
+	private CompactWebTokenAuthHandler(CompactWebTokenAuth authProvider, String realm) {
+		super(authProvider, Type.BEARER, realm);
+		this.scopes = Collections.emptyList();
 		this.delimiter  = " ";
 	}
 
 	private CompactWebTokenAuthHandler(CompactWebTokenAuthHandler base, List<String> scopes, String delimiter) {
-		super(base.authProvider, Type.BEARER, null);
-		Objects.requireNonNull(scopes, "scopes cannot be null");
-		this.scopes = scopes;
-		Objects.requireNonNull(delimiter, "delimiter cannot be null");
-		this.delimiter = delimiter;
+		super(base.authProvider, Type.BEARER, base.realm);
+		this.scopes = Objects.requireNonNull(scopes, "scopes cannot be null");;
+		this.delimiter = Objects.requireNonNull(delimiter, "delimiter cannot be null");
+	}
+
+	public static CompactWebTokenAuthHandler create(CompactWebTokenAuth authProvider, String realm) {
+		return new CompactWebTokenAuthHandler(authProvider, realm);
 	}
 
 	/**
@@ -73,7 +75,7 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	 * @return the auth handler
 	 */
 	public static CompactWebTokenAuthHandler create(CompactWebTokenAuth authProvider) {
-		return new CompactWebTokenAuthHandler(authProvider);
+		return new CompactWebTokenAuthHandler(authProvider, null);
 	}
 
 	/**
@@ -85,20 +87,8 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 	@Override
 	public Future<User> authenticate(RoutingContext context) {
 		return parseAuthorization(context).compose(token -> {
-			int segments = 0;
-			for (int i = 0; i < token.length(); i++) {
-				char c = token.charAt(i);
-				if (c == '.') {
-					if (++segments == 2)
-						return Future.failedFuture(new HttpException(400, "Too many segments in token"));
-					continue;
-				}
-				if (Character.isLetterOrDigit(c) || c == '-' || c == '_')
-					continue;
-
-				// invalid character
-				return Future.failedFuture(new HttpException(400, "Invalid character in token: " + (int) c));
-			}
+			if (token == null || token.isEmpty())
+				return Future.failedFuture(new HttpException(400, "Invalid token: null or empty"));
 
 			final TokenCredentials credentials = new TokenCredentials(token);
 			final SecurityAudit audit = ((RoutingContextInternal) context).securityAudit();
@@ -108,28 +98,6 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 					.andThen(op -> audit.audit(Marker.AUTHENTICATION, op.succeeded()))
 					.recover(err -> Future.failedFuture(new HttpException(401, err.getMessage())));
 		});
-	}
-
-	@SuppressWarnings("unchecked")
-	private List<String> getScopesOrSearchMetadata(RoutingContext ctx) {
-		if (!scopes.isEmpty())
-			return scopes;
-
-		final Route currentRoute = ctx.currentRoute();
-		if (currentRoute == null)
-			return Collections.emptyList();
-
-		final Object value = currentRoute.metadata().get("scopes");
-		if (value == null)
-			return Collections.emptyList();
-
-		if (value instanceof List<?> l)
-			return (List<String>) l;
-		else if (value instanceof String s) {
-			return Collections.singletonList(s);
-		}
-
-		throw new IllegalStateException("Invalid type for scopes metadata: " + value.getClass().getName());
 	}
 
 	/**
@@ -149,7 +117,6 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 
 		// the user is authenticated, however, the user may not have all the required scopes
 		final List<String> scopes = getScopesOrSearchMetadata(ctx);
-
 		if (!scopes.isEmpty()) {
 			final String scope = user.principal().getString("scope");
 			if (scope == null || scope.isEmpty()) {
@@ -158,14 +125,14 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 			}
 
 			// Use a Set for faster lookups
-			Set<String> target = new HashSet<>();
-			Collections.addAll(target, scope.split(delimiter));
-
-			if (target.isEmpty()) {
+			String[] ss = scope.split(delimiter);
+			if (ss.length == 0) {
 				ctx.fail(403, new HttpException(403, "Invalid authorization token: scope undefined"));
 				return;
 			}
 
+			Set<String> target = new HashSet<>();
+			Collections.addAll(target, ss);
 			for (String scp : scopes) {
 				if (!target.contains(scp)) {
 					ctx.fail(403, new HttpException(403, "Invalid authorization token: mismatched scope"));
@@ -175,6 +142,27 @@ public class CompactWebTokenAuthHandler extends HTTPAuthorizationHandler<Compact
 		}
 
 		ctx.next();
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<String> getScopesOrSearchMetadata(RoutingContext ctx) {
+		if (!scopes.isEmpty())
+			return scopes;
+
+		final Route currentRoute = ctx.currentRoute();
+		if (currentRoute == null)
+			return Collections.emptyList();
+
+		final Object value = currentRoute.metadata().get("scopes");
+		if (value == null)
+			return Collections.emptyList();
+
+		if (value instanceof List<?> l)
+			return (List<String>) l;
+		else if (value instanceof String s)
+			return Collections.singletonList(s);
+
+		throw new IllegalStateException("Invalid type for scopes metadata: " + value.getClass().getName());
 	}
 
 	/**
