@@ -618,7 +618,7 @@ public class Credential {
 			if (o instanceof Subject that)
 				return Objects.equals(id, that.id) && Objects.equals(claims, that.claims);
 
-			return true;
+			return false;
 		}
 	}
 }

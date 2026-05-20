@@ -284,7 +284,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 
 			// Add additional contexts associated with the type, avoiding duplicates
 			if (_typeContexts.containsKey(type)) {
-				for (String context : typeContexts.get(type)) {
+				for (String context : _typeContexts.get(type)) {
 					if (!contexts.contains(context))
 						contexts.add(context);
 				}

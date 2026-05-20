@@ -130,46 +130,51 @@ public class DIDDocument extends W3CDIDFormat {
 
 		// Resolve authentication references and ensure referenced methods exist
 		List<VerificationMethod> auths = new ArrayList<>();
-		for (VerificationMethod vm : authentications) {
-			if (vm instanceof VerificationMethod.Reference vmr) {
-				// Check that the referenced verification method exists in methods list
-				VerificationMethod entity = methods.stream()
-						.filter(v -> v.getId().equals(vm.getId()))
-						.findAny()
-						.orElse(null);
-				if (entity == null)
-					throw new IllegalArgumentException("authentications contains an invalid reference");
-				// Update the reference to point to the actual method
-				vmr.updateReference(entity);
-				auths.add(vm);
-			} else {
-				// Add new method and reference if not a reference
-				methods.add(vm);
-				auths.add(vm.getReference());
+		if (authentications != null && !authentications.isEmpty()) {
+			for (VerificationMethod vm : authentications) {
+				if (vm instanceof VerificationMethod.Reference vmr) {
+					// Check that the referenced verification method exists in methods list
+					VerificationMethod entity = methods.stream()
+							.filter(v -> v.getId().equals(vm.getId()))
+							.findAny()
+							.orElse(null);
+					if (entity == null)
+						throw new IllegalArgumentException("authentications contains an invalid reference");
+					// Update the reference to point to the actual method
+					vmr.updateReference(entity);
+					auths.add(vm);
+				} else {
+					// Add new method and reference if not a reference
+					methods.add(vm);
+					auths.add(vm.getReference());
+				}
 			}
 		}
 
 		// Resolve assertion references and ensure referenced methods exist
 		List<VerificationMethod> as = new ArrayList<>();
-		for (VerificationMethod vm : assertions) {
-			if (vm instanceof VerificationMethod.Reference vmr) {
-				// Check that the referenced verification method exists in methods list
-				VerificationMethod entity = methods.stream()
-						.filter(v -> v.getId().equals(vm.getId()))
-						.findAny()
-						.orElse(null);
-				if (entity == null)
-					throw new IllegalArgumentException("assertions contains an invalid reference");
+		if (assertions != null && !assertions.isEmpty()) {
+			for (VerificationMethod vm : assertions) {
+				if (vm instanceof VerificationMethod.Reference vmr) {
+					// Check that the referenced verification method exists in methods list
+					VerificationMethod entity = methods.stream()
+							.filter(v -> v.getId().equals(vm.getId()))
+							.findAny()
+							.orElse(null);
+					if (entity == null)
+						throw new IllegalArgumentException("assertions contains an invalid reference");
 
-				// Update the reference to point to the actual method
-				vmr.updateReference(entity);
-				as.add(vm);
-			} else {
-				// Add new method and reference if not a reference
-				methods.add(vm);
-				as.add(vm.getReference());
+					// Update the reference to point to the actual method
+					vmr.updateReference(entity);
+					as.add(vm);
+				} else {
+					// Add new method and reference if not a reference
+					methods.add(vm);
+					as.add(vm.getReference());
+				}
 			}
 		}
+
 		this.verificationMethods = methods.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(methods);
 		this.authentications = auths.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(auths);
 		this.assertions = as.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(as);
@@ -633,7 +638,7 @@ public class DIDDocument extends W3CDIDFormat {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, verificationMethods, authentications, assertions, services, proof);
+		return Objects.hash(id, contexts, verificationMethods, authentications, assertions, services, credentials, proof);
 	}
 
 	@Override
@@ -643,10 +648,12 @@ public class DIDDocument extends W3CDIDFormat {
 
 		if (o instanceof DIDDocument that)
 			return Objects.equals(id, that.id) &&
+					Objects.equals(contexts, that.contexts) &&
 					Objects.equals(verificationMethods, that.verificationMethods) &&
 					Objects.equals(authentications, that.authentications) &&
 					Objects.equals(assertions, that.assertions) &&
 					Objects.equals(services, that.services) &&
+					Objects.equals(credentials, that.credentials) &&
 					Objects.equals(proof, that.proof);
 
 		return false;

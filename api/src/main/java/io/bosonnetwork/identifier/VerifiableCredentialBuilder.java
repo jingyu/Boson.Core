@@ -270,6 +270,9 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 */
 	@Override
 	public VerifiableCredential build() {
+		if (id == null || id.isEmpty())
+			throw new IllegalStateException("Credential id cannot be null");
+
 		Id issuer = identity.getId();
 
 		if (subject == null)
