@@ -59,6 +59,19 @@ public class Id implements Comparable<Id> {
 	 * A constant representing the maximum identifier (all bits set to 1).
 	 */
 	public static final Id MAX_ID = createMaxId();
+	/**
+	 * A constant representing the ID derived from a private key consisting of all zero bits.
+	 * This ID should be considered illegal or invalid in critical or secure scenarios due to
+	 * the weak and predictable nature of the corresponding private key.
+	 */
+	public static final Id ID_OF_MIN_PRIVATE_KEY = createIdOfMinPrivateKey();
+	/**
+	 * A constant representing the ID derived from a private key composed entirely of 1 bits.
+	 * This ID should be considered invalid or illegal in critical security scenarios
+	 * due to its predictable and non-random nature. It is primarily used for testing
+	 * or illustrative purposes where an extreme edge case needs to be represented.
+	 */
+	public static final Id ID_OF_MAX_PRIVATE_KEY = createIdOfMaxPrivateKey();
 
 	private static final String DID_PREFIX = "did:boson:";
 	private static final SecureRandom RANDOM = new SecureRandom();
@@ -294,6 +307,29 @@ public class Id implements Comparable<Id> {
 	}
 
 	/**
+	 * Returns the ID derived from a private key consisting of all zero bits.
+	 * This ID is considered invalid or inappropriate for secure or critical
+	 * use cases due to the predictable and weak nature of the corresponding
+	 * private key.
+	 *
+	 * @return the ID derived from a zero-bit private key
+	 */
+	public static Id minPrivateKeyId() {
+		return ID_OF_MIN_PRIVATE_KEY;
+	}
+
+	/**
+	 * Retrieves the constant ID that represents a derived private key composed entirely of 1 bits.
+	 * This ID is typically used for testing or illustrative purposes in scenarios requiring edge case representation.
+	 * It should be avoided in critical security contexts due to its predictable and non-random characteristics.
+	 *
+	 * @return The ID that corresponds to a private key with all bits set to 1.
+	 */
+	public static Id maxPrivateKeyId() {
+		return ID_OF_MAX_PRIVATE_KEY;
+	}
+
+	/**
 	 * Generates a random identifier.
 	 *
 	 * @return a new random {@code Id} instance.
@@ -308,6 +344,16 @@ public class Id implements Comparable<Id> {
 		Id id = new Id();
 		Arrays.fill(id.bytes, (byte) 0xFF);
 		return id;
+	}
+
+	private static Id createIdOfMinPrivateKey() {
+		String hex = "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
+		return ofHex(hex);
+	}
+
+	private static Id createIdOfMaxPrivateKey() {
+		String hex = "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5";
+		return ofHex(hex);
 	}
 
 	/**
