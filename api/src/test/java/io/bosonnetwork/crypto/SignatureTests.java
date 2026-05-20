@@ -26,11 +26,15 @@ package io.bosonnetwork.crypto;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
+
 import org.junit.jupiter.api.Test;
 
+import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
 
 public class SignatureTests {
@@ -111,5 +115,57 @@ public class SignatureTests {
 
 		ex = assertThrows(IllegalStateException.class, () -> keyPair.publicKey().bytes());
 		assertEquals("allocated value has been destroyed", ex.getMessage());
+	}
+
+	@Test
+	public void testDerive() {
+		Signature.KeyPair keyPair = Signature.KeyPair.random();
+
+		Signature.KeyPair subKeyPair1 = keyPair.derive(1, "io.bosonnetwork.foo");
+		Signature.KeyPair subKeyPair2 = keyPair.derive(2, "io.bosonnetwork.bar");
+
+		Signature.KeyPair subKeyPairFoo = keyPair.derive(1, "io.bosonnetwork.foo");
+		Signature.KeyPair subKeyPairBar = keyPair.derive(2, "io.bosonnetwork.bar");
+
+		assertEquals(subKeyPair1, subKeyPairFoo);
+		assertEquals(subKeyPair2, subKeyPairBar);
+		assertNotEquals(subKeyPair1, subKeyPair2);
+
+		Signature.PrivateKey subKey1 = keyPair.privateKey().derive(1, "io.bosonnetwork.foo");
+		Signature.PrivateKey subKey2 = keyPair.privateKey().derive(2, "io.bosonnetwork.bar");
+
+		Signature.PrivateKey subKeyFoo = keyPair.privateKey().derive(1, "io.bosonnetwork.foo");
+		Signature.PrivateKey subKeyBar = keyPair.privateKey().derive(2, "io.bosonnetwork.bar");
+
+		assertEquals(subKey1, subKeyFoo);
+		assertEquals(subKey2, subKeyBar);
+		assertNotEquals(subKey1, subKey2);
+
+		assertEquals(subKeyPair1.privateKey(), subKey1);
+		assertEquals(subKeyPair2.privateKey(), subKey2);
+	}
+
+	private void printSpecialKey(byte[] seed) {
+		System.out.println("Seed:");
+		System.out.println("- Hex:    " + Hex.encode(seed));
+		System.out.println("- Base58: " + Base58.encode(seed));
+
+		Signature.KeyPair keyPair = Signature.KeyPair.fromSeed(seed);
+		System.out.println("Private key:");
+		System.out.println("- Hex:    " + Hex.encode(keyPair.privateKey().bytes()));
+		System.out.println("- Base58: " + Base58.encode(keyPair.privateKey().bytes()));
+		System.out.println("Public key:");
+		System.out.println("- Hex:    " + Hex.encode(keyPair.publicKey().bytes()));
+		System.out.println("- Base58: " + Base58.encode(keyPair.publicKey().bytes()));
+		System.out.println();
+	}
+
+	@Test
+	public void testSpecialKeys() {
+		byte[] seed = new byte[Signature.KeyPair.SEED_BYTES];
+		printSpecialKey(seed);
+
+		Arrays.fill(seed, (byte) 0xFF);
+		printSpecialKey(seed);
 	}
 }

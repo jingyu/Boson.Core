@@ -23,10 +23,14 @@
 
 package io.bosonnetwork.crypto;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-
+import java.util.Objects;
 import javax.security.auth.Destroyable;
 
+import org.apache.tuweni.crypto.sodium.KeyDerivation;
 import org.apache.tuweni.crypto.sodium.Signature.Seed;
 import org.apache.tuweni.crypto.sodium.Sodium;
 
@@ -51,8 +55,8 @@ public class Signature {
 		}
 
 		/**
-		 *  Create a PublicKey from an array of bytes. The byte array must be of
-		 *  length {@link #BYTES}.
+		 * Create a PublicKey from an array of bytes. The byte array must be of
+		 * length {@link #BYTES}.
 		 *
 		 * @param key the bytes for the public key.
 		 * @return the created public key object.
@@ -81,7 +85,7 @@ public class Signature {
 		/**
 		 * Verifies the signature of a message.
 		 *
-		 * @param message the message to verify.
+		 * @param message   the message to verify.
 		 * @param signature the signature of the message.
 		 * @return true if the signature matches the message according to this public key.
 		 */
@@ -115,7 +119,7 @@ public class Signature {
 				key.destroy();
 
 				if (bytes != null) {
-					Arrays.fill(bytes, (byte)0);
+					Arrays.fill(bytes, (byte) 0);
 					bytes = null;
 				}
 			}
@@ -186,6 +190,52 @@ public class Signature {
 			return bytes;
 		}
 
+
+		/**
+		 * Derives a new {@code PrivateKey} based on the provided subkey ID and context string.
+		 *
+		 * @param subKeyId the identifier for the derived subkey. This ensures that the generated private key
+		 *                 is unique per subkey ID.
+		 * @param context  the context string used during the key derivation process. Must not be null.
+		 * @return a newly derived {@code PrivateKey} created using the specified subkey ID and context.
+		 */
+		public PrivateKey derive(long subKeyId, String context) {
+			Objects.requireNonNull(context, "context");
+			if (context.isEmpty())
+				throw new IllegalArgumentException("context must not be empty");
+
+			final int len = KeyDerivation.contextLength(); // 8 bytes
+			byte[] contextBytes = new byte[len];
+			try {
+				MessageDigest md = MessageDigest.getInstance("MD5");
+				byte[] hashBytes = md.digest(context.getBytes(StandardCharsets.UTF_8));
+				for (int i = 0; i < len; i++)
+					contextBytes[i] = (byte) (hashBytes[i] + hashBytes[i + 8]);
+			} catch (NoSuchAlgorithmException e) {
+				throw new RuntimeException(e);
+			}
+
+			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(bytes(), 0, 32));
+			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
+			return PrivateKey.fromSeed(subSeed);
+		}
+
+		/**
+		 * Derives a new {@code PrivateKey} based on the provided subkey ID and context.
+		 *
+		 * @param subKeyId the identifier for the derived subkey. This is used to ensure the generated key
+		 *                 is unique per subkey ID.
+		 * @param context  the context-specific data used during key derivation. Must be provided as a byte
+		 *                 array and cannot be null.
+		 * @return a new {@code PrivateKey} derived using the specified subkey ID and context.
+		 */
+		public PrivateKey derive(long subKeyId, byte[] context) {
+			Objects.requireNonNull(context, "context");
+			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(bytes(), 0, 32));
+			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, context);
+			return PrivateKey.fromSeed(subSeed);
+		}
+
 		/**
 		 * Signs a message with this private key.
 		 *
@@ -223,7 +273,7 @@ public class Signature {
 				key.destroy();
 
 				if (bytes != null) {
-					Arrays.fill(bytes, (byte)0);
+					Arrays.fill(bytes, (byte) 0);
 					bytes = null;
 				}
 			}
@@ -332,6 +382,51 @@ public class Signature {
 			return sk;
 		}
 
+		/**
+		 * Derives a new {@code KeyPair} based on the provided subkey ID and context.
+		 *
+		 * @param subKeyId the identifier for the derived subkey. This ensures that the generated private key
+		 *                 is unique per subkey ID.
+		 * @param context  the context string used during the key derivation process. Must not be null.
+		 * @return the derived {@code KeyPair} instance.
+		 */
+		public KeyPair derive(long subKeyId, String context) {
+			Objects.requireNonNull(context, "context");
+			if (context.isEmpty())
+				throw new IllegalArgumentException("context must not be empty");
+
+			final int len = KeyDerivation.contextLength(); // 8 bytes
+			byte[] contextBytes = new byte[len];
+			try {
+				MessageDigest md = MessageDigest.getInstance("MD5");
+				byte[] hashBytes = md.digest(context.getBytes(StandardCharsets.UTF_8));
+				for (int i = 0; i < len; i++)
+					contextBytes[i] = (byte) (hashBytes[i] + hashBytes[i + 8]);
+			} catch (NoSuchAlgorithmException e) {
+				throw new RuntimeException(e);
+			}
+
+			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(privateKey().bytes(), 0, 32));
+			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
+			return KeyPair.fromSeed(subSeed);
+		}
+
+		/**
+		 * Derives a new {@code KeyPair} based on the provided subkey ID and context.
+		 *
+		 * @param subKeyId the identifier for the derived subkey. This is used to ensure the generated key
+		 *                 is unique per subkey ID.
+		 * @param context  the context-specific data used during key derivation. Must be provided as a byte
+		 *                 array and cannot be null.
+		 * @return the derived {@code KeyPair} instance.
+		 */
+		public KeyPair derive(long subKeyId, byte[] context) {
+			Objects.requireNonNull(context, "context");
+			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(privateKey().bytes(), 0, 32));
+			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, context);
+			return KeyPair.fromSeed(subSeed);
+		}
+
 		@Override
 		public boolean equals(Object obj) {
 			if (obj == this)
@@ -360,7 +455,7 @@ public class Signature {
 	 * Signs a message with a given key.
 	 *
 	 * @param message the message to sign.
-	 * @param key the private key to sign the message with.
+	 * @param key     the private key to sign the message with.
 	 * @return the signature of the message.
 	 */
 	public static byte[] sign(byte[] message, PrivateKey key) {
@@ -371,9 +466,9 @@ public class Signature {
 	/**
 	 * Verifies the signature of a message.
 	 *
-	 * @param message the message to verify.
+	 * @param message   the message to verify.
 	 * @param signature the signature of the message.
-	 * @param key the public key to verify the message with.
+	 * @param key       the public key to verify the message with.
 	 * @return true if the signature matches the message according to this public key.
 	 */
 	public static boolean verify(byte[] message, byte[] signature, PublicKey key) {
