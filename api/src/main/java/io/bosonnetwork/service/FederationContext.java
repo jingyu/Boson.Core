@@ -151,7 +151,7 @@ public interface FederationContext {
 	 * @return the {@link CwtAuth} instance responsible for managing
 	 *         web token authentication.
 	 */
-	CwtAuth getWebTokenAuthenticator();
+	CwtAuth getWebAuthenticator();
 
 	/**
 	 * Creates and returns a disabled instance of FederationContext.
@@ -165,18 +165,6 @@ public interface FederationContext {
 	}
 
 	/**
-	 * Creates and returns a federation context that allows all operations without requiring
-	 * web token authentication. This method is intended for use in scenarios where open access
-	 * is permitted, and web token authentication is bypassed.
-	 *
-	 * @return a {@link FederationContext} instance that allows all operations while bypassing
-	 *         web token authentication
-	 */
-	static FederationContext allowAll() {
-		return new AllowAllFederationContext(null);
-	}
-
-	/**
 	 * Creates and returns a {@link FederationContext} that allows all operations
 	 * without requiring web token authentication. This method is intended for use
 	 * in scenarios where unrestricted access is permitted, bypassing authentication mechanisms.
@@ -186,17 +174,6 @@ public interface FederationContext {
 	 */
 	static FederationContext allowAll(Identity nodeIdentity) {
 		return new AllowAllFederationContext(nodeIdentity);
-	}
-
-	/**
-	 * Creates and returns a static {@link FederationContext} instance that bypasses
-	 * web token authentication. This method is suitable for scenarios requiring static
-	 * federation configuration without the need for token-based authentication mechanisms.
-	 *
-	 * @return a {@link FederationContext} instance configured to bypass web token authentication
-	 */
-	static FederationContext staticContext() {
-		return new StaticFederationContext(null);
 	}
 
 	/**

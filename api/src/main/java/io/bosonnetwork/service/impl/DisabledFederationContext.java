@@ -93,7 +93,7 @@ public class DisabledFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CwtAuth getWebTokenAuthenticator() {
+	public CwtAuth getWebAuthenticator() {
 		CwtAuthOptions options = new CwtAuthOptions()
 				.setIdentity(new CryptoIdentity())
 				.setClientProvider(new ClientProvider() {

@@ -43,6 +43,7 @@ public class CwtAuthOptions {
 	private Id expectedAudience;
 	private int leeway; // seconds
 	private int defaultTtl; // seconds
+	private String defaultScope;
 
 	/**
 	 * Creates a new instance of {@code CwtAuthOptions} with default settings.
@@ -163,6 +164,26 @@ public class CwtAuthOptions {
 		if (defaultTtl < 0)
 			throw new IllegalArgumentException("defaultTtl must be >= 0");
 		this.defaultTtl = defaultTtl;
+		return this;
+	}
+
+	/**
+	 * Returns the default access scope to be used for token generation.
+	 *
+	 * @return the default access scope, or null if no default scope is configured
+	 */
+	public String getDefaultScope() {
+		return defaultScope;
+	}
+
+	/**
+	 * Sets the default access scope to be used for token generation.
+	 *
+	 * @param defaultScope the default access scope to set; may be null to disable default scope
+	 * @return this CwtAuthOptions instance for method chaining
+	 */
+	public CwtAuthOptions setDefaultScope(String defaultScope) {
+		this.defaultScope = defaultScope;
 		return this;
 	}
 }

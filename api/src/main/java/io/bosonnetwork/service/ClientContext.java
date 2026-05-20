@@ -117,20 +117,7 @@ public interface ClientContext {
 	 * @return the {@link CwtAuth} instance responsible for managing
 	 *         web token authentication.
 	 */
-	CwtAuth getWebTokenAuthenticator();
-
-	/**
-	 * Returns a new client context configured to allow all clients without Web Token Auth support.
-	 * <p>
-	 * Useful for scenarios where the Web Token authenticator is not required or should be nullified,
-	 * typically used in simplified or test configurations.
-	 * </p>
-	 *
-	 * @return a {@link ClientContext} instance allowing all access without token auth support.
-	 */
-	static ClientContext allowAll() {
-		return new AllowAllClientContext(null);
-	}
+	CwtAuth getWebAuthenticator();
 
 	/**
 	 * Returns a new client context configured to allow all clients with the specified node identity.
@@ -144,20 +131,6 @@ public interface ClientContext {
 	 */
 	static ClientContext allowAll(Identity nodeIdentity) {
 		return new AllowAllClientContext(nodeIdentity);
-	}
-
-	/**
-	 * Returns a new in-memory client context suitable for testing without Web Token Auth support.
-	 * <p>
-	 * This implementation uses an internal map for storage and is typically used for simulation
-	 * or unit testing where network connectivity is not required. Unlike production contexts,
-	 * this version does not support {@link CwtAuth}. It does not require a node identity.
-	 * </p>
-	 *
-	 * @return a {@link ClientContext} instance using an in-memory map store for simulation purposes.
-	 */
-	static ClientContext staticContext() {
-		return new StaticClientContext(null);
 	}
 
 	/**

@@ -56,12 +56,14 @@ public class CwtAuth implements AuthenticationProvider {
 	private final Identity identity;
 	private final ClientProvider clientProvider;
 	private final int defaultTtl;
+	private final String defaultScope;
 	private final SignedCwt.Parser cwtParser;
 
 	private CwtAuth(CwtAuthOptions options) {
 		this.identity = Objects.requireNonNull(options.getIdentity(), "identity");
 		this.clientProvider = Objects.requireNonNull(options.getClientProvider(), "clientProvider");
 		this.defaultTtl = options.getDefaultTtl();
+		this.defaultScope = options.getDefaultScope();
 
 		this.cwtParser = SignedCwt.parser().setLeeway(options.getLeeway());
 		if (options.getExpectedAudience() != null)
@@ -220,7 +222,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 *
 	 * @param userId the user ID
 	 * @param clientId the client ID (optional, can be null)
-	 * @param scope the scope string (optional, can be null)
+	 * @param scope the scope associated with the token; can be null or optional
 	 * @param ttl the time-to-live in seconds (0 for default server lifetime)
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
@@ -237,7 +239,9 @@ public class CwtAuth implements AuthenticationProvider {
 				.notBeforeNow()
 				.issuedAtNow()
 				.tokenId(Random.randomBytes(8));
-		if (scope != null && !scope.isEmpty())
+		if (scope == null)
+			scope = defaultScope;
+		if (scope != null)
 			cwtBuilder.scope(scope);
 		if (clientId != null)
 			cwtBuilder.clientId(clientId);
@@ -250,7 +254,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 *
 	 * @param userId the user ID
 	 * @param clientId the client ID (optional)
-	 * @param scope the scope string (optional)
+	 * @param scope the scope associated with the token; can be null or optional
 	 * @return the generated token string
 	 */
 	public String generateToken(Id userId, Id clientId, String scope) {
@@ -261,7 +265,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 * Generates a new token for a user with the specified scope.
 	 *
 	 * @param userId the user ID for whom the token will be generated; must not be null
-	 * @param scope the scope string associated with the token; can be null or optional
+	 * @param scope the scope associated with the token; can be null or optional
 	 * @return the generated token string
 	 */
 	public String generateToken(Id userId, String scope) {

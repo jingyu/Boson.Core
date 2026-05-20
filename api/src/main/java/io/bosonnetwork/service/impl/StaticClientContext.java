@@ -351,7 +351,7 @@ public class StaticClientContext implements ClientContext {
 	}
 
 	@Override
-	public CwtAuth getWebTokenAuthenticator() {
+	public CwtAuth getWebAuthenticator() {
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 
