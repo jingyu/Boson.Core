@@ -968,7 +968,7 @@ public class SignedCwt {
 		 *
 		 * @return a Base64-encoded string representation of the constructed CWT.
 		 */
-		public String buildBase64() {
+		public String buildToString() {
 			return Json.BASE64_ENCODER.encodeToString(build());
 		}
 	}

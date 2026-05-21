@@ -246,7 +246,7 @@ public class CwtAuth implements AuthenticationProvider {
 		if (clientId != null)
 			cwtBuilder.clientId(clientId);
 
-		return cwtBuilder.buildBase64();
+		return cwtBuilder.buildToString();
 	}
 
 	/**

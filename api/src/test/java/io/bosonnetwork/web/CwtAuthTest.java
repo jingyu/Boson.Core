@@ -204,7 +204,7 @@ public class CwtAuthTest {
 		if (clientId != null)
 			builder.clientId(clientId);
 
-		return builder.buildBase64();
+		return builder.buildToString();
 	}
 
 	@Test

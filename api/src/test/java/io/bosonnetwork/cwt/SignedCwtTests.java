@@ -46,7 +46,7 @@ public class SignedCwtTests {
 				.audience(Id.random())
 				.expiration(Duration.ofDays(7))
 				.scope("federation")
-				.buildBase64();
+				.buildToString();
 
 		System.out.println(token);
 
