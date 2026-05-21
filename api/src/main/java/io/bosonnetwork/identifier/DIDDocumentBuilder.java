@@ -383,18 +383,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");
 
-		DIDURL idUrl;
-		if (id.startsWith("did:")) {
-			idUrl = DIDURL.create(id);
-			// Validate that the DIDURL subject matches the identity
-			if (!idUrl.getId().equals(identity.getId()))
-				throw new IllegalStateException("Invalid credential id: should be the subject id based DIDURL");
-			// Validate that the DIDURL contains a fragment
-			if (idUrl.getFragment() == null)
-				throw new IllegalStateException("Invalid credential id: should has the fragment part");
-		} else {
-			idUrl = new DIDURL(identity.getId(), null, null, id);
-		}
+		DIDURL idUrl = normalizeSubjectId(identity.getId(), id);
 
 		if (properties == null || properties.isEmpty()) {
 			properties = Map.of();
@@ -402,7 +391,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 			// Reserved properties are not allowed
 			if (properties.keySet().stream().anyMatch(k -> k.equals("id") ||
 					k.equals("type") || k.equals("serviceEndpoint")))
-				throw new IllegalArgumentException("Service properties cannot contain 'id', 'type' or 'serviceEndpoint'");
+				throw new IllegalArgumentException("Service properties must not contain reserved keys: id, type, serviceEndpoint");
 
 			properties = new LinkedHashMap<>(properties);
 		}

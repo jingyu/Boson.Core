@@ -124,7 +124,7 @@ public class VouchTests {
 		var identity = new CryptoIdentity();
 
 		var ex = assertThrows(IllegalStateException.class, () -> new VouchBuilder(identity).build());
-		assertEquals("Credentials cannot be empty", ex.getMessage());
+		assertEquals("Vouch must include at least one credential", ex.getMessage());
 	}
 
 	@Test

@@ -118,7 +118,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 		Objects.requireNonNull(type, "type");
 
 		if (claims == null || claims.isEmpty())
-			throw new IllegalArgumentException("Claims cannot be null or empty");
+			throw new IllegalArgumentException("Credential claims must not be null or empty");
 
 		return addCredential(new CredentialBuilder(identity)
 				.id(id)
@@ -254,7 +254,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 		} else {
 			// Reject reserved keys in service properties
 			if (properties.keySet().stream().anyMatch(k -> k.equals("id") || k.equals("t") || k.equals("e")))
-				throw new IllegalArgumentException("Service properties cannot contain 'id', 't' or 'e'");
+				throw new IllegalArgumentException("Service properties must not contain reserved keys: id, t, e");
 
 			properties = normalize(properties);
 		}

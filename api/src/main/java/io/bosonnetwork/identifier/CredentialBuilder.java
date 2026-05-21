@@ -83,7 +83,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	public CredentialBuilder id(String id) {
 		Objects.requireNonNull(id, "id");
 		if (id.isEmpty())
-			throw new IllegalArgumentException("Id cannot be empty");
+			throw new IllegalArgumentException("Credential id must not be empty");
 
 		this.id = normalize(id);
 		return this;
@@ -208,10 +208,10 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 		Objects.requireNonNull(name, "name");
 		Objects.requireNonNull(value, "value");
 		if (name.isEmpty())
-			throw new IllegalArgumentException("Claim name cannot be empty");
+			throw new IllegalArgumentException("Credential claim name must not be empty");
 		// Reserved claim key check
 		if (name.equals("id"))
-			throw new IllegalArgumentException("Claims cannot contain 'id'");
+			throw new IllegalArgumentException("Credential claims must not contain reserved key: id");
 
 		// Normalize name and value before adding
 		this.claims.put(normalize(name), normalize(value));
@@ -234,7 +234,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 
 		// Reserved claim key check
 		if (claims.keySet().stream().anyMatch(k -> k.equals("id")))
-			throw new IllegalArgumentException("Claims cannot contain 'id'");
+			throw new IllegalArgumentException("Credential claims must not contain reserved key: id");
 
 		// Normalize all keys and values before adding
 		this.claims.putAll(normalize(claims));
@@ -252,8 +252,11 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 */
 	@Override
 	public Credential build() {
+		if (id == null || id.isEmpty())
+			throw new IllegalStateException("Credential id must be set and non-empty");
+
 		if (claims.isEmpty())
-			throw new IllegalStateException("Claims cannot be empty");
+			throw new IllegalStateException("Credential must contain at least one claim");
 
 		Credential unsigned = new Credential(id, types, name, description, identity.getId(), validFrom, validUntil,
 				subject, claims, null, null);

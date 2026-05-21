@@ -112,13 +112,13 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	public VerifiableCredentialBuilder id(String id) {
 		Objects.requireNonNull(id, "id");
 		if (id.isEmpty())
-			throw new IllegalArgumentException("Id cannot be empty");
+			throw new IllegalArgumentException("Credential id must not be empty");
 
 		if (id.startsWith(DIDConstants.DID_SCHEME + ":")) {
 			// Validate DID URL format and ensure it has a fragment
 			DIDURL url = DIDURL.create(id); // check the format only
 			if (url.getFragment() == null)
-				throw new IllegalArgumentException("Id must has the fragment part");
+				throw new IllegalArgumentException("Credential id DID URL must include a fragment: " + id);
 		}
 
 		this.id = normalize(id);
@@ -229,10 +229,10 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 		Objects.requireNonNull(name, "name");
 		Objects.requireNonNull(value, "value");
 		if (name.isEmpty())
-			throw new IllegalArgumentException("Claim name cannot be empty");
+			throw new IllegalArgumentException("Credential claim name must not be empty");
 		// Claims cannot contain the reserved "id" field
 		if (name.equals("id"))
-			throw new IllegalArgumentException("Claims cannot contain 'id'");
+			throw new IllegalArgumentException("Credential claims must not contain reserved key: id");
 
 		this.claims.put(normalize(name), normalize(value));
 		return this;
@@ -270,31 +270,15 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 */
 	@Override
 	public VerifiableCredential build() {
-		if (id == null || id.isEmpty())
-			throw new IllegalStateException("Credential id cannot be null");
-
 		Id issuer = identity.getId();
 
 		if (subject == null)
 			subject = identity.getId();
 
-		DIDURL idUrl;
-		if (id.startsWith(DIDConstants.DID_SCHEME + ":")) {
-			// Canonical DIDURL
-			idUrl = DIDURL.create(id);
-			// The credential id must be a DIDURL based on the subject's DID
-			if (!idUrl.getId().equals(subject))
-				throw new IllegalStateException("Invalid credential id: should be the subject id based DIDURL");
-			// The DIDURL must contain a fragment part
-			if (idUrl.getFragment() == null)
-				throw new IllegalStateException("Invalid credential id: should has the fragment part");
-		} else {
-			// id is a fragment or relative reference only, create DIDURL using subject DID and fragment
-			idUrl = new DIDURL(subject, null, null, id);
-		}
+		DIDURL idUrl = normalizeSubjectId(subject, id);
 
 		if (claims.isEmpty())
-			throw new IllegalStateException("Claims cannot be empty");
+			throw new IllegalStateException("Credential must contain at least one claim");
 
 		VerifiableCredential unsigned = new VerifiableCredential(contexts, idUrl.toString(), types,
 				name, description, issuer, validFrom, validUntil, subject, claims);

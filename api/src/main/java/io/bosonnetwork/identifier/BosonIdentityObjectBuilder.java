@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
+import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
 /**
@@ -127,6 +128,24 @@ public abstract class BosonIdentityObjectBuilder<T> {
 		}
 
 		return value;
+	}
+
+	protected DIDURL normalizeSubjectId(Id subject, String id) {
+		if (id == null || id.isEmpty())
+			throw new IllegalStateException("id must be set and non-empty");
+
+		if (!id.startsWith(DIDConstants.DID_SCHEME + ":"))
+			return new DIDURL(subject, null, null, id);
+
+		DIDURL idUrl = DIDURL.create(id);
+		if (!idUrl.getId().equals(subject))
+			throw new IllegalStateException("id DID URL subject part must be DID "
+					+ subject.toDIDString() + ": " + id);
+
+		if (idUrl.getFragment() == null)
+			throw new IllegalStateException("id DID URL must include a fragment: " + id);
+
+		return idUrl;
 	}
 
 	/**

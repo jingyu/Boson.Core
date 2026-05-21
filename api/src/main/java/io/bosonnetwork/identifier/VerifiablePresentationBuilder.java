@@ -60,7 +60,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	public VerifiablePresentationBuilder id(String id) {
 		Objects.requireNonNull(id, "id");
 		if (id.isEmpty())
-			throw new IllegalArgumentException("Id cannot be empty");
+			throw new IllegalArgumentException("Verifiable presentation id must not be empty");
 
 		DIDURL idUrl;
 		// Check if id is a full DID URL starting with DID scheme
@@ -68,10 +68,11 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 			idUrl = DIDURL.create(id);
 			// Validate that the DID URL's id matches the holder's DID
 			if (!idUrl.getId().equals(identity.getId()))
-				throw new IllegalArgumentException("Id must be the holder id based DIDURL");
+				throw new IllegalArgumentException("Verifiable presentation id DID URL must use holder DID "
+						+ identity.getId().toDIDString() + ": " + id);
 			// Validate that the DID URL contains a fragment part
 			if (idUrl.getFragment() == null)
-				throw new IllegalArgumentException("Id must has the fragment part");
+				throw new IllegalArgumentException("Verifiable presentation id DID URL must include a fragment: " + id);
 		} else {
 			// If id is a fragment, create a DIDURL using the holder's DID and the fragment
 			idUrl = new DIDURL(identity.getId(), null, null, id);
@@ -315,7 +316,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	@Override
 	public VerifiablePresentation build() {
 		if (credentials.isEmpty())
-			throw new IllegalStateException("Credentials cannot be empty");
+			throw new IllegalStateException("Verifiable presentation must include at least one credential");
 
 		List<VerifiableCredential> credentials = new ArrayList<>(this.credentials.values());
 		// Create unsigned VerifiablePresentation object

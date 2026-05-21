@@ -244,4 +244,17 @@ public class CredentialTests {
 		assertFalse(cred.isGenuine());
 		assertThrows(InvalidSignatureException.class, cred::validate);
 	}
+
+	@Test
+	void builderValidationMessagesArePrecise() {
+		var identity = new CryptoIdentity();
+
+		var missingId = assertThrows(IllegalStateException.class,
+				() -> new CredentialBuilder(identity).claim("name", "Bob").build());
+		assertEquals("Credential id must be set and non-empty", missingId.getMessage());
+
+		var missingClaim = assertThrows(IllegalStateException.class,
+				() -> new CredentialBuilder(identity).id("profile").build());
+		assertEquals("Credential must contain at least one claim", missingClaim.getMessage());
+	}
 }

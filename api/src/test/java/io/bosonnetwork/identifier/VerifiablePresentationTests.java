@@ -218,7 +218,7 @@ public class VerifiablePresentationTests {
 		var identity = new CryptoIdentity();
 
 		var ex = assertThrows(IllegalStateException.class, () -> new VerifiablePresentationBuilder(identity).build());
-		assertEquals("Credentials cannot be empty", ex.getMessage());
+		assertEquals("Verifiable presentation must include at least one credential", ex.getMessage());
 	}
 
 	@Test
@@ -262,5 +262,43 @@ public class VerifiablePresentationTests {
 		vp.getProof().getProofValue()[0] = (byte) (vp.getProof().getProofValue()[0] + 1);
 		assertFalse(vp.isGenuine());
 		assertThrows(InvalidSignatureException.class, vp::validate);
+	}
+
+	@Test
+	void compactRoundTripWorksWithoutTypeContexts() {
+		var vp = new VerifiablePresentationBuilder(new CryptoIdentity())
+				.id("vp")
+				.type("DelegationPresentation", "https://example.com/presentations/delegation/v1")
+				.addCredential("profile", "BosonProfile", List.of("https://example.com/credentials/profile/v1"),
+						"name", "Bob")
+				.build();
+		var compact = Vouch.parse(vp.toVouch().toBytes());
+
+		var expanded = VerifiablePresentation.fromVouch(compact, null);
+
+		assertEquals(compact, expanded.toVouch());
+		assertEquals(3, expanded.getContexts().size());
+		assertEquals(List.of(DIDConstants.DEFAULT_VP_TYPE, "DelegationPresentation"), expanded.getTypes());
+		assertTrue(expanded.isGenuine());
+	}
+
+	@Test
+	void holderMayPresentCredentialsAboutAnotherSubject() {
+		var alice = new CryptoIdentity();
+		var bob = new CryptoIdentity();
+		var delegation = new VerifiableCredentialBuilder(bob)
+				.id("aliceDelegation")
+				.claim("delegate", alice.getId().toDIDString())
+				.claim("scope", "messaging")
+				.build();
+
+		var vp = new VerifiablePresentationBuilder(alice)
+				.addCredential(delegation)
+				.build();
+
+		assertEquals(alice.getId(), vp.getHolder());
+		assertEquals(bob.getId(), vp.getCredentials().get(0).getSubject().getId());
+		assertTrue(vp.isGenuine());
+		assertTrue(vp.getCredentials().get(0).isGenuine());
 	}
 }

@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.CryptoIdentity;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Hex;
 
 public class DIDDocumentTests {
@@ -377,5 +379,44 @@ public class DIDDocumentTests {
 		doc.getProof().getProofValue()[0] = (byte) (doc.getProof().getProofValue()[0] + 1);
 		assertFalse(doc.isGenuine());
 		assertThrows(InvalidSignatureException.class, doc::validate);
+	}
+
+	@Test
+	void parsesSpecMinimalOptionalVerificationRelationships() throws Exception {
+		var doc = new DIDDocumentBuilder(new CryptoIdentity()).build();
+		@SuppressWarnings("unchecked")
+		Map<String, Object> data = Json.objectMapper().readValue(doc.toString(), Map.class);
+		data.remove("authentication");
+		data.remove("assertion");
+
+		var parsed = DIDDocument.parse(Json.objectMapper().writeValueAsString(data));
+
+		assertEquals(doc.getId(), parsed.getId());
+		assertEquals(1, parsed.getVerificationMethods().size());
+		assertEquals(0, parsed.getAuthentications().size());
+		assertEquals(0, parsed.getAssertions().size());
+		assertTrue(parsed.isGenuine());
+	}
+
+	@Test
+	void equalityIncludesContextsAndCredentials() throws Exception {
+		var doc = new DIDDocumentBuilder(new CryptoIdentity())
+				.addCredential("profile", "BosonProfile", List.of("https://example.com/credentials/profile/v1"),
+						"name", "Bob")
+				.build();
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> withoutContexts = Json.objectMapper().readValue(doc.toString(), Map.class);
+		withoutContexts.remove("@context");
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> withoutCredentials = Json.objectMapper().readValue(doc.toString(), Map.class);
+		withoutCredentials.remove("verifiableCredential");
+
+		var noContexts = DIDDocument.parse(Json.objectMapper().writeValueAsString(withoutContexts));
+		var noCredentials = DIDDocument.parse(Json.objectMapper().writeValueAsString(withoutCredentials));
+
+		assertNotEquals(doc, noContexts);
+		assertNotEquals(doc, noCredentials);
 	}
 }

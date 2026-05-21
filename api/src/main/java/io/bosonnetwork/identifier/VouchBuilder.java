@@ -157,7 +157,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 		Objects.requireNonNull(type, "type");
 
 		if (claims == null || claims.isEmpty())
-			throw new IllegalArgumentException("Claims cannot be null or empty");
+			throw new IllegalArgumentException("Credential claims must not be null or empty");
 
 		return addCredential(new CredentialBuilder(identity)
 				.id(id)
@@ -287,7 +287,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	@Override
 	public Vouch build() {
 		if (credentials.isEmpty())
-			throw new IllegalStateException("Credentials cannot be empty");
+			throw new IllegalStateException("Vouch must include at least one credential");
 
 		List<Credential> credentials = new ArrayList<>(this.credentials.values());
 		// Create an unsigned Vouch with the collected data

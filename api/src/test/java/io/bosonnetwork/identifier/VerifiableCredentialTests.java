@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +42,7 @@ import io.bosonnetwork.ExpiredException;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.InvalidSignatureException;
 import io.bosonnetwork.crypto.CryptoIdentity;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Hex;
 
 public class VerifiableCredentialTests {
@@ -371,5 +373,54 @@ public class VerifiableCredentialTests {
 		assertTrue(vc.isValid());
 		assertFalse(vc.isGenuine());
 		assertThrows(InvalidSignatureException.class, vc::validate);
+	}
+
+	@Test
+	void compactRoundTripWorksWithoutTypeContexts() {
+		var vc = new VerifiableCredentialBuilder(new CryptoIdentity())
+				.id("profile")
+				.type("BosonProfile", "https://example.com/credentials/profile/v1")
+				.claim("name", "Bob")
+				.build();
+		var compact = Credential.parse(vc.toCredential().toBytes());
+
+		var expanded = VerifiableCredential.fromCredential(compact, null);
+
+		assertEquals(compact, expanded.toCredential());
+		assertEquals(3, expanded.getContexts().size());
+		assertEquals(List.of(DIDConstants.DEFAULT_VC_TYPE, "BosonProfile"), expanded.getTypes());
+		assertTrue(expanded.isGenuine());
+	}
+
+	@Test
+	void equalityIncludesSubjectClaims() throws Exception {
+		var vc = new VerifiableCredentialBuilder(new CryptoIdentity())
+				.id("profile")
+				.type("BosonProfile")
+				.claim("name", "Bob")
+				.build();
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> data = Json.objectMapper().readValue(vc.toString(), Map.class);
+		@SuppressWarnings("unchecked")
+		Map<String, Object> subject = (Map<String, Object>) data.get("credentialSubject");
+		subject.put("name", "Alice");
+
+		var changed = VerifiableCredential.parse(Json.objectMapper().writeValueAsString(data));
+
+		assertNotEquals(vc, changed);
+	}
+
+	@Test
+	void builderValidationMessagesArePrecise() {
+		var identity = new CryptoIdentity();
+
+		var missingId = assertThrows(IllegalStateException.class,
+				() -> new VerifiableCredentialBuilder(identity).claim("name", "Bob").build());
+		assertEquals("id must be set and non-empty", missingId.getMessage());
+
+		var missingClaim = assertThrows(IllegalStateException.class,
+				() -> new VerifiableCredentialBuilder(identity).id("profile").build());
+		assertEquals("Credential must contain at least one claim", missingClaim.getMessage());
 	}
 }

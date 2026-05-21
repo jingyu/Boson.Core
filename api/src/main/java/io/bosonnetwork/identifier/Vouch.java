@@ -383,7 +383,7 @@ public class Vouch {
 		try {
 			return Json.objectMapper().readValue(json, Vouch.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid JSON date for Vouch", e);
+			throw new IllegalArgumentException("Invalid JSON data for Vouch", e);
 		}
 	}
 
@@ -398,7 +398,7 @@ public class Vouch {
 		try {
 			return Json.cborMapper().readValue(cbor, Vouch.class);
 		} catch (IOException e) {
-			throw new IllegalArgumentException("Invalid CBOR date for Vouch", e);
+			throw new IllegalArgumentException("Invalid CBOR data for Vouch", e);
 		}
 	}
 
