@@ -61,10 +61,10 @@ public interface FederationContext {
 	 *
 	 * @param nodeId                 the unique identifier of the node to retrieve
 	 * @param tryFederateIfNotExists if {@code true}, attempts to add the node to the federation if it is not already known
-	 * @return a {@link CompletableFuture} that completes with the {@link FederatedNode} object if found,
+	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} object if found,
 	 *         or completes exceptionally/with null if the node cannot be found or federated
 	 */
-	CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists);
+	CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists);
 
 	/**
 	 * Retrieves a federated node by its ID.
@@ -72,10 +72,10 @@ public interface FederationContext {
 	 * This is a convenience method that calls {@link #getNode(Id, boolean)} with {@code federateIfNotExists} set to {@code false}.
 	 *
 	 * @param nodeId the unique identifier of the node to retrieve
-	 * @return a {@link CompletableFuture} that completes with the {@link FederatedNode} object if found,
+	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} object if found,
 	 *         or completes exceptionally/with null if the node is not part of the federation
 	 */
-	default CompletableFuture<FederatedNode> getNode(Id nodeId) {
+	default CompletableFuture<SuperNodeInfo> getNode(Id nodeId) {
 		return getNode(nodeId, false);
 	}
 

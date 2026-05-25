@@ -30,7 +30,7 @@ import io.bosonnetwork.Id;
  * This interface provides access to the properties of a federated node, including its identity,
  * connection details, software information, and metadata such as trust status and reputation.
  */
-public interface FederatedNode {
+public interface SuperNodeInfo {
 	/**
 	 * Gets the unique identifier of the federated node.
 	 *

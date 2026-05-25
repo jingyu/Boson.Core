@@ -42,7 +42,7 @@ import io.bosonnetwork.cwt.Claim;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.ServiceInfo;
 
 /**
@@ -180,7 +180,7 @@ public class CwtAuth implements AuthenticationProvider {
 		} else if (client instanceof ClientDevice d) {
 			userId = d.getUserId();
 			clientId = d.getId();
-		} else if (client instanceof FederatedNode n) {
+		} else if (client instanceof SuperNodeInfo n) {
 			userId = n.getId();
 			clientId = null;
 		} else if (client instanceof ServiceInfo s) {

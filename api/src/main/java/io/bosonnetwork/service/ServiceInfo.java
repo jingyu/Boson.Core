@@ -95,4 +95,11 @@ public interface ServiceInfo {
 	 * @return the service name
 	 */
 	String getServiceName();
+
+	/**
+	 * Checks whether federation functionality is enabled for the service.
+	 *
+	 * @return {@code true} if federation is enabled, {@code false} otherwise
+	 */
+	boolean isFederationEnabled();
 }

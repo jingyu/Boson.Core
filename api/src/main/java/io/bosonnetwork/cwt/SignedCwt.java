@@ -920,12 +920,26 @@ public class SignedCwt {
 			return this;
 		}
 
+		/**
+		 * Sets the "client_id" claim using an {@link Id}.
+		 *
+		 * @param clientId the client identifier.
+		 * @return the builder instance.
+		 * @throws NullPointerException if the provided clientId is null.
+		 */
 		public Builder clientId(Id clientId) {
 			Objects.requireNonNull(clientId);
 			claims.put(Claim.CLIENT_ID.getValue(), clientId.getBytes());
 			return this;
 		}
 
+		/**
+		 * Sets the "client_id" claim in the CWT payload using the provided client identifier string.
+		 *
+		 * @param clientId the client identifier to set.
+		 * @return the builder instance.
+		 * @throws NullPointerException if the provided clientId is null.
+		 */
 		public Builder clientId(String clientId) {
 			Objects.requireNonNull(clientId);
 			claims.put(Claim.CLIENT_ID.getValue(), clientId);

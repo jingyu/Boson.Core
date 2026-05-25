@@ -42,9 +42,9 @@ import io.bosonnetwork.identifier.Credential;
  * A super node profile includes information such as name, logo, website, and contact info,
  * as well as the various services it provides (API, Web Gateway, Ion Store, etc.).
  */
-public class BosonSuperNodeProfile {
+public class SuperNodeProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
-	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonSuperNodeProfile";
+	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "SuperNodeProfile";
 
 	private static final String SUPER_NODE_API_SERVICE_TYPE = "io.bosonnetwork.supernodeapi";
 	private static final String WEB_GATEWAY_SERVICE_TYPE = "io.bosonnetwork.webgateway";
@@ -70,7 +70,7 @@ public class BosonSuperNodeProfile {
 	 * @param contact the node's contact information
 	 * @param card the underlying card object
 	 */
-	private BosonSuperNodeProfile(Id nodeId, String name, String logo, String website, String contact, Card card) {
+	private SuperNodeProfile(Id nodeId, String name, String logo, String website, String contact, Card card) {
 		this.nodeId = nodeId;
 		this.name = name;
 		this.logo = logo;
@@ -80,13 +80,13 @@ public class BosonSuperNodeProfile {
 	}
 
 	/**
-	 * Creates a {@code BosonSuperNodeProfile} from a {@link Card}.
+	 * Creates a {@code SuperNodeProfile} from a {@link Card}.
 	 *
 	 * @param card the card to extract super node profile information from; must not be null
 	 * @return a new super node profile instance
 	 * @throws NullPointerException if card is null
 	 */
-	public static BosonSuperNodeProfile fromCard(Card card) {
+	public static SuperNodeProfile fromCard(Card card) {
 		Objects.requireNonNull(card);
 
 		Id id = card.getId();
@@ -104,7 +104,7 @@ public class BosonSuperNodeProfile {
 			contact = String.valueOf(claims.get("contact"));
 		}
 
-		return new BosonSuperNodeProfile(id, name, logo, website, contact, card);
+		return new SuperNodeProfile(id, name, logo, website, contact, card);
 	}
 
 	/**
@@ -241,7 +241,7 @@ public class BosonSuperNodeProfile {
 	}
 
 	/**
-	 * Creates a new builder for creating a {@code BosonSuperNodeProfile}.
+	 * Creates a new builder for creating a {@code SuperNodeProfile}.
 	 *
 	 * @param identity the identity to associate with the profile
 	 * @return a new builder instance
@@ -251,7 +251,7 @@ public class BosonSuperNodeProfile {
 	}
 
 	/**
-	 * Builder class for {@link BosonSuperNodeProfile}.
+	 * Builder class for {@link SuperNodeProfile}.
 	 */
 	public static class Builder {
 		private final Identity identity;
@@ -446,12 +446,12 @@ public class BosonSuperNodeProfile {
 		}
 
 		/**
-		 * Builds a {@link BosonSuperNodeProfile} instance.
+		 * Builds a {@link SuperNodeProfile} instance.
 		 *
 		 * @return a new super node profile
 		 * @throws IllegalStateException if no profile metadata (name, logo, website, or contact) was provided
 		 */
-		public BosonSuperNodeProfile build() {
+		public SuperNodeProfile build() {
 			Map<String, Object> claims = new LinkedHashMap<>();
 			if (name != null)
 				claims.put("name", name);
@@ -468,7 +468,7 @@ public class BosonSuperNodeProfile {
 			cardBuilder.addCredential(DEFAULT_PROFILE_CREDENTIAL_ID, DEFAULT_PROFILE_CREDENTIAL_TYPE, claims);
 			Card card = cardBuilder.build();
 
-			return new BosonSuperNodeProfile(identity.getId(), name, logo, website, contact, card);
+			return new SuperNodeProfile(identity.getId(), name, logo, website, contact, card);
 		}
 
 	}

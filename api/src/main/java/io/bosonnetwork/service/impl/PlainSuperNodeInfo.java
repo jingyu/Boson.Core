@@ -25,28 +25,28 @@ package io.bosonnetwork.service.impl;
 import java.util.Objects;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 
 /**
- * A basic implementation of the {@link FederatedNode} interface, representing
+ * A basic implementation of the {@link SuperNodeInfo} interface, representing
  * a minimal federated node within a network.
  *
  * This class provides a foundational implementation of the required
- * {@link FederatedNode} methods. It uses a provided identifier and records
+ * {@link SuperNodeInfo} methods. It uses a provided identifier and records
  * the creation timestamp at the time of instantiation.
  */
-public class PlainFederatedNode implements FederatedNode {
+public class PlainSuperNodeInfo implements SuperNodeInfo {
 	private final Id id;
 	private final String host;
 	private final int port;
 	private final String apiEndpoint;
 	private final long ts;
 
-	PlainFederatedNode(Id nodeId, String host, int port) {
+	PlainSuperNodeInfo(Id nodeId, String host, int port) {
 		this(nodeId, host, port, null);
 	}
 
-	PlainFederatedNode(Id nodeId, String host, int port, String apiEndpoint) {
+	PlainSuperNodeInfo(Id nodeId, String host, int port, String apiEndpoint) {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port");
 

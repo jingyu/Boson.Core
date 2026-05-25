@@ -60,6 +60,13 @@ public enum AccessScope {
 		return value;
 	}
 
+	/**
+	 * Converts a string representation of an access scope into the corresponding {@link AccessScope} enum value.
+	 *
+	 * @param value the string value representing the access scope
+	 * @return the corresponding {@link AccessScope} enum value
+	 * @throws IllegalArgumentException if the provided string does not match any valid access scope
+	 */
 	public static AccessScope fromString(String value) {
 		return switch (value) {
 			case "api:admin" -> ADMIN;

@@ -64,6 +64,10 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import io.bosonnetwork.utils.Base58;
 
+/**
+ * Utility class for performing cryptographic operations and generating PEM-encoded certificates and keys
+ * using the Bouncy Castle library.
+ */
 public class CertUtilBouncyCastle {
 	/**
 	 * Represents a pair of PEM-encoded certificate and private key.

@@ -34,7 +34,7 @@ public interface ClientProvider {
 	 * Retrieves the user or federated node by ID.
 	 *
 	 * @param userId the user ID or node ID
-	 * @return a Future containing the user object (ClientUser, FederatedNode, etc.) or null if not found
+	 * @return a Future containing the user object (ClientUser, SuperNodeInfo, etc.) or null if not found
 	 */
 	Future<?> getUser(Id userId);
 

@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutionException;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.ServiceInfo;
 
 public class AllowAllFederationContextTests {
@@ -20,7 +20,7 @@ public class AllowAllFederationContextTests {
 		assertTrue(context.existsNode(Id.random()).get());
 		
 		Id nodeId = Id.random();
-		FederatedNode node = context.getNode(nodeId, true).get();
+		SuperNodeInfo node = context.getNode(nodeId, true).get();
 		assertNotNull(node);
 		assertEquals(nodeId, node.getId());
 

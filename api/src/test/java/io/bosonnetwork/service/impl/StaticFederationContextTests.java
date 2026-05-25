@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.ServiceInfo;
 
 public class StaticFederationContextTests {
@@ -38,7 +38,7 @@ public class StaticFederationContextTests {
 		assertTrue(context.existsNode(nodeId).get());
 		assertFalse(context.existsNode(Id.random()).get());
 
-		FederatedNode node = context.getNode(nodeId, true).get();
+		SuperNodeInfo node = context.getNode(nodeId, true).get();
 		assertNotNull(node);
 		assertEquals(nodeId, node.getId());
 		assertEquals("localhost", node.getHost());

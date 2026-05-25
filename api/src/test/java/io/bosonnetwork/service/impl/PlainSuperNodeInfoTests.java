@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import io.bosonnetwork.Id;
 
-public class PlainFederatedNodeTests {
+public class PlainSuperNodeInfoTests {
 	@Test
 	public void testBasicProperties() {
 		Id id = Id.random();
-		PlainFederatedNode node = new PlainFederatedNode(id, "127.0.0.1", 8080);
+		PlainSuperNodeInfo node = new PlainSuperNodeInfo(id, "127.0.0.1", 8080);
 
 		assertEquals(id, node.getId());
 		assertEquals("127.0.0.1", node.getHost());
@@ -31,14 +31,14 @@ public class PlainFederatedNodeTests {
 	@Test
 	public void testCustomApiEndpoint() {
 		Id id = Id.random();
-		PlainFederatedNode node = new PlainFederatedNode(id, "127.0.0.1", 8080, "https://api.example.com");
+		PlainSuperNodeInfo node = new PlainSuperNodeInfo(id, "127.0.0.1", 8080, "https://api.example.com");
 		assertEquals("https://api.example.com", node.getApiEndpoint());
 	}
 
 	@Test
 	public void testInvalidPort() {
 		Id id = Id.random();
-		assertThrows(IllegalArgumentException.class, () -> new PlainFederatedNode(id, "127.0.0.1", 0));
-		assertThrows(IllegalArgumentException.class, () -> new PlainFederatedNode(id, "127.0.0.1", 70000));
+		assertThrows(IllegalArgumentException.class, () -> new PlainSuperNodeInfo(id, "127.0.0.1", 0));
+		assertThrows(IllegalArgumentException.class, () -> new PlainSuperNodeInfo(id, "127.0.0.1", 70000));
 	}
 }

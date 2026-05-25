@@ -64,15 +64,22 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 		this.delimiter = Objects.requireNonNull(delimiter, "delimiter cannot be null");
 	}
 
+	/**
+	 * Creates a new instance of CwtAuthHandler with the specified authentication provider and realm.
+	 *
+	 * @param authProvider the authentication provider to be used for managing authentication.
+	 * @param realm the authentication realm to be associated with this handler.
+	 * @return a new instance of CwtAuthHandler initialized with the provided authentication provider and realm.
+	 */
 	public static CwtAuthHandler create(CwtAuth authProvider, String realm) {
 		return new CwtAuthHandler(authProvider, realm);
 	}
 
 	/**
-	 * Create a new CwtAuthHandler with the given auth provider.
-	 * 
-	 * @param authProvider the CwtAuth provider to use for authentication
-	 * @return the auth handler
+	 * Creates a new instance of CwtAuthHandler with the specified authentication provider.
+	 *
+	 * @param authProvider the authentication provider to be used for managing authentication.
+	 * @return a new instance of CwtAuthHandler initialized with the provided authentication provider.
 	 */
 	public static CwtAuthHandler create(CwtAuth authProvider) {
 		return new CwtAuthHandler(authProvider, null);

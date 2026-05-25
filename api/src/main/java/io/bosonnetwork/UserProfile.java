@@ -36,7 +36,7 @@ import io.bosonnetwork.identifier.Credential;
  * and associated service endpoints like home nodes and messaging peers.
  * It is backed by a {@link Card} (DID Document).
  */
-public class BosonUserProfile {
+public class UserProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
 	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "BosonProfile";
 
@@ -66,7 +66,7 @@ public class BosonUserProfile {
 	 * @param messagingHomePeer the user's messaging home peer identifier
 	 * @param card the underlying card object
 	 */
-	private BosonUserProfile(Id id, String name, String avatar, String bio, Id homeNode, Id messagingHomePeer, Card card) {
+	private UserProfile(Id id, String name, String avatar, String bio, Id homeNode, Id messagingHomePeer, Card card) {
 		this.id = id;
 		this.name = name;
 		this.avatar = avatar;
@@ -77,13 +77,13 @@ public class BosonUserProfile {
 	}
 
 	/**
-	 * Creates a {@code BosonUserProfile} from a {@link Card}.
+	 * Creates a {@code UserProfile} from a {@link Card}.
 	 *
 	 * @param card the card to extract profile information from; must not be null
 	 * @return a new user profile instance
 	 * @throws NullPointerException if card is null
 	 */
-	public static BosonUserProfile fromCard(Card card) {
+	public static UserProfile fromCard(Card card) {
 		Objects.requireNonNull(card);
 
 		Id id = card.getId();
@@ -116,7 +116,7 @@ public class BosonUserProfile {
 			}
 		}
 
-		return new BosonUserProfile(id, name, avatar, bio, homeNode, messagingHomePeer, card);
+		return new UserProfile(id, name, avatar, bio, homeNode, messagingHomePeer, card);
 	}
 
 	/**
@@ -183,7 +183,7 @@ public class BosonUserProfile {
 	}
 
 	/**
-	 * Creates a new builder for creating a {@code BosonUserProfile}.
+	 * Creates a new builder for creating a {@code UserProfile}.
 	 *
 	 * @param identity the identity to associate with the profile
 	 * @return a new builder instance
@@ -194,7 +194,7 @@ public class BosonUserProfile {
 	}
 
 	/**
-	 * Builder class for {@link BosonUserProfile}.
+	 * Builder class for {@link UserProfile}.
 	 */
 	public static class Builder {
 		private final Identity identity;
@@ -265,12 +265,12 @@ public class BosonUserProfile {
 		}
 
 		/**
-		 * Builds a {@link BosonUserProfile} instance based on the provided data.
+		 * Builds a {@link UserProfile} instance based on the provided data.
 		 *
 		 * @return a new user profile
 		 * @throws IllegalStateException if no profile data is provided
 		 */
-		public BosonUserProfile build() {
+		public UserProfile build() {
 			Map<String, Object> claims = new LinkedHashMap<>();
 			if (name != null)
 				claims.put(NAME, name);
@@ -291,7 +291,7 @@ public class BosonUserProfile {
 				builder.addCredential(DEFAULT_PROFILE_CREDENTIAL_ID, DEFAULT_PROFILE_CREDENTIAL_TYPE, claims);
 
 			Card card = builder.build();
-			return new BosonUserProfile(identity.getId(), name, avatar, bio, homeNode, messagingHomePeer, card);
+			return new UserProfile(identity.getId(), name, avatar, bio, homeNode, messagingHomePeer, card);
 		}
 	}
 }

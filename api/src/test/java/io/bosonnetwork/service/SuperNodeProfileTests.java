@@ -15,7 +15,7 @@ import io.bosonnetwork.identifier.Card;
 import io.bosonnetwork.identifier.DIDDocument;
 import io.bosonnetwork.json.Json;
 
-public class BosonSuperNodeProfileTests {
+public class SuperNodeProfileTests {
 	@Test
 	void testBuilderAndFromCard() throws Exception {
 		Identity identity = new CryptoIdentity();
@@ -30,7 +30,7 @@ public class BosonSuperNodeProfileTests {
 		Id photonMessagingPeer = Id.random();
 		Id activeProxyPeer = Id.random();
 
-		BosonSuperNodeProfile profile = BosonSuperNodeProfile.builder(identity)
+		SuperNodeProfile profile = SuperNodeProfile.builder(identity)
 				.name("SuperNode 1")
 				.logo("https://bosonnetwork.io/logo.png")
 				.website("https://bosonnetwork.io")
@@ -72,7 +72,7 @@ public class BosonSuperNodeProfileTests {
 		System.out.println("\n================\n");
 		System.out.println(Json.toPrettyString(DIDDocument.fromCard(card)));
 
-		BosonSuperNodeProfile profile2 = BosonSuperNodeProfile.fromCard(card);
+		SuperNodeProfile profile2 = SuperNodeProfile.fromCard(card);
 
 		assertNotNull(profile2);
 		assertEquals(profile.getNodeId(), profile2.getNodeId());

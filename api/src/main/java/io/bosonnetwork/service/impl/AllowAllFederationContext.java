@@ -29,7 +29,7 @@ import io.vertx.core.Future;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
@@ -61,8 +61,8 @@ public class AllowAllFederationContext implements FederationContext {
 		this.nodeIdentity = nodeIdentity;
 	}
 
-	private FederatedNode _getNode(Id nodeId) {
-		return new PlainFederatedNode(nodeId, "localhost", 65535);
+	private SuperNodeInfo _getNode(Id nodeId) {
+		return new PlainSuperNodeInfo(nodeId, "localhost", 65535);
 	}
 
 	private ServiceInfo _getService(Id peerId, Id nodeId) {
@@ -70,7 +70,7 @@ public class AllowAllFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(_getNode(nodeId));
 	}
 
@@ -120,13 +120,13 @@ public class AllowAllFederationContext implements FederationContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<FederatedNode> getUser(Id userId) {
-						return Future.succeededFuture(_getNode(userId));
+					public Future<SuperNodeInfo> getUser(Id nodeId) {
+						return Future.succeededFuture(_getNode(nodeId));
 					}
 
 					@Override
-					public Future<ServiceInfo> getClient(Id userId, Id clientId) {
-						return Future.succeededFuture(_getService(clientId, userId));
+					public Future<ServiceInfo> getClient(Id nodeId, Id peerId) {
+						return Future.succeededFuture(_getService(peerId, nodeId));
 					}
 				});
 

@@ -130,6 +130,20 @@ public abstract class BosonIdentityObjectBuilder<T> {
 		return value;
 	}
 
+	/**
+	 * Normalizes the given subject ID into a valid {@code DIDURL}, ensuring compliance
+	 * with the required format and constraints.
+	 * <p>
+	 * If the ID is not in the expected DID scheme format, it creates a {@code DIDURL}
+	 * using the provided subject and the raw ID string. If the ID is in the correct
+	 * format, it verifies that the subject part matches the provided subject and that
+	 * a fragment is included. Fails with an exception if these validations are not satisfied.
+	 *
+	 * @param subject the {@code Id} of the subject to which the ID should be related
+	 * @param id a raw string representing the ID to be normalized
+	 * @return the normalized {@code DIDURL} instance
+	 * @throws IllegalStateException if the ID is null, empty, invalid, or fails validation
+	 */
 	protected DIDURL normalizeSubjectId(Id subject, String id) {
 		if (id == null || id.isEmpty())
 			throw new IllegalStateException("id must be set and non-empty");

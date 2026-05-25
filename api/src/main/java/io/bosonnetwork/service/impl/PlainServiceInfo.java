@@ -98,4 +98,9 @@ public class PlainServiceInfo implements ServiceInfo {
 	public String getServiceName() {
 		return serviceName;
 	}
+
+	@Override
+	public boolean isFederationEnabled() {
+		return false;
+	}
 }

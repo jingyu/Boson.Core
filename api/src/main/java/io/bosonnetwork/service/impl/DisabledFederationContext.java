@@ -29,7 +29,7 @@ import io.vertx.core.Future;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
@@ -53,7 +53,7 @@ import io.bosonnetwork.web.CwtAuthOptions;
  */
 public class DisabledFederationContext implements FederationContext {
 	@Override
-	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(null);
 	}
 
@@ -98,12 +98,12 @@ public class DisabledFederationContext implements FederationContext {
 				.setIdentity(new CryptoIdentity())
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<?> getUser(Id userId) {
+					public Future<?> getUser(Id nodeId) {
 						return Future.succeededFuture();
 					}
 
 					@Override
-					public Future<?> getClient(Id userId, Id clientId) {
+					public Future<?> getClient(Id nodeId, Id peerId) {
 						return Future.succeededFuture();
 					}
 				});

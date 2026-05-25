@@ -10,14 +10,14 @@ import io.bosonnetwork.identifier.Card;
 import io.bosonnetwork.identifier.DIDDocument;
 import io.bosonnetwork.json.Json;
 
-public class BosonUserProfileTests {
+public class UserProfileTests {
 	@Test
 	void testBuilderAndFromCard() {
 		Identity identity = new CryptoIdentity();
 		Id homeNode = Id.random();
 		Id messagingPeer = Id.random();
 
-		BosonUserProfile profile = BosonUserProfile.builder(identity)
+		UserProfile profile = UserProfile.builder(identity)
 				.name("John Doe")
 				.avatar("https://example.com/avatar.png")
 				.bio("A boson user")
@@ -40,7 +40,7 @@ public class BosonUserProfileTests {
 		System.out.println(Json.toPrettyString(DIDDocument.fromCard(card)));
 
 		// Test fromCard
-		BosonUserProfile profile2 = BosonUserProfile.fromCard(card);
+		UserProfile profile2 = UserProfile.fromCard(card);
 		assertNotNull(profile2);
 		assertEquals(profile.getId(), profile2.getId());
 		assertEquals(profile.getName(), profile2.getName());

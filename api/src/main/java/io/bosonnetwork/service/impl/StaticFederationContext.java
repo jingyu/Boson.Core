@@ -33,7 +33,7 @@ import io.vertx.core.Future;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.service.FederatedNode;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
@@ -60,7 +60,7 @@ import io.bosonnetwork.web.CwtAuthOptions;
  */
 public class StaticFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
-	private final Map<Id, Pair<FederatedNode, List<ServiceInfo>>> nodeServicesRegistry;
+	private final Map<Id, Pair<SuperNodeInfo, List<ServiceInfo>>> nodeServicesRegistry;
 
 	/**
 	 * Constructs a new instance of the StaticFederationContext class with the specified node identity.
@@ -95,7 +95,7 @@ public class StaticFederationContext implements FederationContext {
 			return false;
 
 		nodeServicesRegistry.computeIfAbsent(nodeId, k ->
-				Pair.of(new PlainFederatedNode(nodeId, host, port, apiEndpoint), List.of()));
+				Pair.of(new PlainSuperNodeInfo(nodeId, host, port, apiEndpoint), List.of()));
 		return true;
 	}
 
@@ -119,10 +119,10 @@ public class StaticFederationContext implements FederationContext {
 	 * If the node is not found in the registry, this method returns null.
 	 *
 	 * @param nodeId the unique identifier of the node to retrieve; cannot be null
-	 * @return the {@link FederatedNode} associated with the specified node ID, or null if no such node exists
+	 * @return the {@link SuperNodeInfo} associated with the specified node ID, or null if no such node exists
 	 * @throws NullPointerException if nodeId is null
 	 */
-	public FederatedNode getNodeSync(Id nodeId) {
+	public SuperNodeInfo getNodeSync(Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		return nodeServicesRegistry.getOrDefault(nodeId, Pair.empty()).a();
 	}
@@ -223,7 +223,7 @@ public class StaticFederationContext implements FederationContext {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 
-		Pair<FederatedNode, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
+		Pair<SuperNodeInfo, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
 		return pair == null ? null : pair.b().stream()
 				.filter(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint)
 				.findFirst()
@@ -256,7 +256,7 @@ public class StaticFederationContext implements FederationContext {
 	public List<ServiceInfo> getServicesSync(Id peerId, Id nodeId) {
 		Objects.requireNonNull(peerId);
 		Objects.requireNonNull(nodeId);
-		Pair<FederatedNode, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
+		Pair<SuperNodeInfo, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
 		return pair == null ? List.of() : pair.b().stream()
 				.filter(s -> s.getPeerId().equals(peerId))
 				.toList();
@@ -347,7 +347,7 @@ public class StaticFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<FederatedNode> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return VertxFuture.succeededFuture(getNodeSync(nodeId));
 	}
 
@@ -403,13 +403,13 @@ public class StaticFederationContext implements FederationContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<FederatedNode> getUser(Id userId) {
-						return Future.succeededFuture(getNodeSync(userId));
+					public Future<SuperNodeInfo> getUser(Id nodeId) {
+						return Future.succeededFuture(getNodeSync(nodeId));
 					}
 
 					@Override
-					public Future<ServiceInfo> getClient(Id userId, Id clientId) {
-						return Future.succeededFuture(getServicesSync(clientId, userId).stream().findFirst().orElse(null));
+					public Future<ServiceInfo> getClient(Id nodeId, Id peerId) {
+						return Future.succeededFuture(getServicesSync(peerId, nodeId).stream().findFirst().orElse(null));
 					}
 				});
 
