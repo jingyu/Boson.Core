@@ -80,7 +80,11 @@ public enum Claim {
 	/**
 	 * Client identifier
 	 */
-	CLIENT_ID(12);
+	CLIENT_ID(12),
+	/**
+	 * Session identifier — identifies THIS OAuth session within a user who may have multiple linked identities.
+	 */
+	SESSION_ID(13);
 
 	private final int value;
 
@@ -116,6 +120,7 @@ public enum Claim {
 			case 9 -> SCOPE;
 			case 10 -> NONCE;
 			case 12 -> CLIENT_ID;
+			case 13 -> SESSION_ID;
 			default -> APPLICATION_DEFINED;
 		};
 	}

@@ -199,6 +199,9 @@ public class CwtAuth implements AuthenticationProvider {
 		map.put("access_token", accessToken);
 		if (scope != null)
 			map.put("scope", scope);
+		// sid identifies THIS session — needed when a user has multiple linked AuthIdentities sharing the same userId subject.
+		if (cwt.containsClaim(Claim.SESSION_ID.getValue()))
+			map.put("sessionId", cwt.getClaimAsId(Claim.SESSION_ID.getValue()));
 		JsonObject principal = new JsonObject(Map.copyOf(map));
 
 		map = new LinkedHashMap<>();
@@ -221,13 +224,14 @@ public class CwtAuth implements AuthenticationProvider {
 	 * Generates a new token for a user and optional client.
 	 *
 	 * @param userId the user ID
+	 * @param sessionId the session ID to embed as the {@code sid} claim (optional, can be null)
 	 * @param clientId the client ID (optional, can be null)
 	 * @param scope the scope associated with the token; can be null or optional
 	 * @param ttl the time-to-live in seconds (0 for default server lifetime)
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
-	public String generateToken(Id userId, Id clientId, String scope, long ttl) {
+	public String generateToken(Id userId, Id sessionId, Id clientId, String scope, long ttl) {
 		Objects.requireNonNull(userId, "user cannot be null");
 		if (ttl < 0)
 			throw new IllegalArgumentException("ttl must be positive");
@@ -245,8 +249,24 @@ public class CwtAuth implements AuthenticationProvider {
 			cwtBuilder.scope(scope);
 		if (clientId != null)
 			cwtBuilder.clientId(clientId);
+		if (sessionId != null)
+			cwtBuilder.claim(Claim.SESSION_ID.getValue(), sessionId.bytes());
 
 		return cwtBuilder.buildToString();
+	}
+
+	/**
+	 * Generates a new token for a user and optional client.
+	 *
+	 * @param userId the user ID
+	 * @param clientId the client ID (optional, can be null)
+	 * @param scope the scope associated with the token; can be null or optional
+	 * @param ttl the time-to-live in seconds (0 for default server lifetime)
+	 * @return the generated token string
+	 * @throws IllegalArgumentException if expiration is invalid
+	 */
+	public String generateToken(Id userId, Id clientId, String scope, long ttl) {
+		return generateToken(userId, null, clientId, scope, ttl);
 	}
 
 	/**
@@ -269,6 +289,6 @@ public class CwtAuth implements AuthenticationProvider {
 	 * @return the generated token string
 	 */
 	public String generateToken(Id userId, String scope) {
-		return generateToken(userId, null, scope, 0);
+		return generateToken(userId, null, null, scope, 0);
 	}
 }
