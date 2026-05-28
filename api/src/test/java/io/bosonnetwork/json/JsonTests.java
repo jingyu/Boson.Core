@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Calendar;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.json.internal.DateFormat;
+import io.bosonnetwork.utils.Bytes;
 import io.bosonnetwork.utils.Hex;
 
 public class JsonTests {
@@ -81,7 +81,7 @@ public class JsonTests {
 		var bytes = Json.toBytes(date);
 		System.out.println(Hex.encode(bytes));
 		assertEquals(Long.BYTES + 1, bytes.length);
-		assertEquals(date.getTime(), ByteBuffer.wrap(bytes).getLong(1));
+		assertEquals(date.getTime(), Bytes.toLong(bytes, 1));
 
 		date2 = Json.parse(bytes, Date.class);
 		assertEquals(date, date2);

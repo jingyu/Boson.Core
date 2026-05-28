@@ -26,7 +26,6 @@ package io.bosonnetwork.kademlia.impl;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -35,6 +34,7 @@ import io.vertx.core.net.SocketAddress;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.utils.Bytes;
 
 /**
  * @hidden
@@ -68,9 +68,9 @@ public class TokenManager {
 		MessageDigest sha256 = Hash.sha256();
 		sha256.update(nodeId.bytes());
 		sha256.update(address.getAddress());
-		sha256.update(ByteBuffer.allocate(Short.BYTES).putShort((short)port).array());
+		sha256.update(Bytes.fromShort((short)port));
 		sha256.update(targetId.bytes());
-		sha256.update(ByteBuffer.allocate(Long.BYTES).putLong(timestamp).array());
+		sha256.update(Bytes.fromLong(timestamp));
 		sha256.update(sessionSecret);
 		byte[] digest = sha256.digest();
 		int pos = (digest[0] & 0xff) & 0x1f; // mod 32

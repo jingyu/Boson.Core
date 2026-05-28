@@ -62,9 +62,9 @@ public class AllowAllClientContext implements ClientContext {
 	 * Constructs an instance of {@code AllowAllClientContext} with the provided node identity.
 	 *
 	 * @param nodeIdentity the {@link Identity} associated with this client context.
-	 *                      This identity represents the cryptographic entity
-	 *                      used within the context, enabling signing, verification,
-	 *                      encryption, and decryption operations.
+	 *                     This identity represents the cryptographic entity
+	 *                     used within the context, enabling signing, verification,
+	 *                     encryption, and decryption operations.
 	 */
 	public AllowAllClientContext(Identity nodeIdentity) {
 		this.nodeIdentity = nodeIdentity;
@@ -78,24 +78,6 @@ public class AllowAllClientContext implements ClientContext {
 	@Override
 	public CompletableFuture<Boolean> existsUser(Id userId) {
 		return VertxFuture.succeededFuture(true);
-	}
-
-	@Override
-	public CompletableFuture<List<ClientDevice>> getDevices(Id userId) {
-		throw new UnsupportedOperationException("getDevices is not supported");
-		// return VertxFuture.succeededFuture(List.of());
-	}
-
-	@Override
-	public CompletableFuture<ClientDevice> getDevice(Id deviceId) {
-		throw new UnsupportedOperationException("getDevice is not supported");
-		// return VertxFuture.succeededFuture();
-	}
-
-	@Override
-	public CompletableFuture<Boolean> existsDevice(Id deviceId) {
-		throw new UnsupportedOperationException("existsDevice is not supported");
-		//return VertxFuture.succeededFuture(true);
 	}
 
 	@Override

@@ -23,7 +23,6 @@
 
 package io.bosonnetwork;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -34,6 +33,7 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.utils.Bytes;
 import io.bosonnetwork.utils.Hex;
 
 /**
@@ -76,19 +76,19 @@ public class Value {
 	 * For immutable values, the ID is the SHA-256 hash of the data.
 	 * For mutable values, the ID is the public key and identifies the logical record.
 	 * Multiple versions (sequence numbers) share the same ID.
-	 * */
+	 */
 	private final transient Id id;
 
 	private Value(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
 		this.publicKey = publicKey;
-		this.privateKey = privateKey;
+		this.privateKey = privateKey != null ? privateKey.clone() : null;
 		this.recipient = recipient;
-		this.nonce = nonce;
+		this.nonce = nonce != null ? nonce.clone() : null;
 		this.sequenceNumber = sequenceNumber;
-		this.signature = signature;
-		this.data = data;
+		this.signature = signature != null ? signature.clone() : null;
+		this.data = data != null ? data.clone() : null;
 
-		this.id = calculateId(publicKey, data);
+		this.id = calculateId(publicKey, this.data);
 	}
 
 	private Value(Id id, byte[] data) {
@@ -99,7 +99,7 @@ public class Value {
 		this.nonce = null;
 		this.sequenceNumber = 0;
 		this.signature = null;
-		this.data = data;
+		this.data = data != null ? data.clone() : null;
 	}
 
 	/**
@@ -223,7 +223,7 @@ public class Value {
 	 * Creates a new mutable Value object from the data, encrypted for a specific recipient.
 	 *
 	 * @param identity       The owner's identity.
-	 * @param privateKey   	 The owner's private key. Optional.
+	 * @param privateKey     The owner's private key. Optional.
 	 * @param recipient      The recipient's ID.
 	 * @param sequenceNumber The sequence number.
 	 * @param data           The data to encrypt.
@@ -319,7 +319,7 @@ public class Value {
 	 * @return the private key of the value, or null if the node does not have the private key.
 	 */
 	public byte[] getPrivateKey() {
-		return privateKey;
+		return privateKey != null ? privateKey.clone() : null;
 	}
 
 	/**
@@ -337,7 +337,7 @@ public class Value {
 	 * @return the nonce of the value, or null for immutable values.
 	 */
 	public byte[] getNonce() {
-		return nonce;
+		return nonce != null ? nonce.clone() : null;
 	}
 
 	/**
@@ -355,7 +355,7 @@ public class Value {
 	 * @return the signature of the value, or null for immutable values.
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature != null ? signature.clone() : null;
 	}
 
 	/**
@@ -364,7 +364,7 @@ public class Value {
 	 * @return the data of the value.
 	 */
 	public byte[] getData() {
-		return data;
+		return data != null ? data.clone() : null;
 	}
 
 	/**
@@ -493,7 +493,7 @@ public class Value {
 			if (recipient != null)
 				sha.update(recipient.bytes());
 			sha.update(nonce);
-			sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
+			sha.update(Bytes.fromInteger(sequenceNumber));
 		}
 		sha.update(data);
 		return sha.digest();
@@ -501,8 +501,8 @@ public class Value {
 
 	/**
 	 * Validates structural integrity and cryptographic correctness of this value.
-	 *
-	 * <p>For mutable values, this verifies the signature against the computed digest.
+	 * <p>
+	 * For mutable values, this verifies the signature against the computed digest.
 	 * For immutable values, this verifies that the id matches the hash of the data.
 	 *
 	 * @return {@code true} if the value is valid, {@code false} otherwise.

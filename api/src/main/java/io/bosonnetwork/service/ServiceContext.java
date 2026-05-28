@@ -26,8 +26,6 @@ package io.bosonnetwork.service;
 import java.nio.file.Path;
 import java.util.Map;
 
-import io.vertx.core.Vertx;
-
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 
@@ -37,11 +35,14 @@ import io.bosonnetwork.Node;
  */
 public interface ServiceContext {
 	/**
-	 * Get the Vert.x instance to be used by the current DHT node.
+	 * Unwraps the context to provide the underlying infrastructure instance.
 	 *
-	 * @return the {@link Vertx} instance.
+	 * @param clazz the type of the infrastructure component (e.g. io.vertx.core.Vertx)
+	 * @return the component instance, or null if not available or not supported
+	 * @param <T> the type parameter
 	 */
-	Vertx getVertx();
+	<T> T unwrap(Class<T> clazz);
+
 	/**
 	 * Gets the host Boson node object.
 	 *
@@ -102,7 +103,7 @@ public interface ServiceContext {
 	 * @param key the property key.
 	 * @param <T> the type of the property value.
 	 * @return the value of the specified property, or
-     *         {@code null} if the service contains no mapping for the property.
+	 *         {@code null} if the service contains no mapping for the property.
 	 */
 	<T> T getProperty(Object key);
 }

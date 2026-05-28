@@ -300,24 +300,6 @@ public class StaticClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompletableFuture<List<ClientDevice>> getDevices(Id userId) {
-		throw new UnsupportedOperationException("getDevices is not supported");
-		// return VertxFuture.succeededFuture(_getDevices(userId));
-	}
-
-	@Override
-	public CompletableFuture<ClientDevice> getDevice(Id deviceId) {
-		throw new UnsupportedOperationException("getDevice is not supported");
-		// return VertxFuture.succeededFuture(_getDevice(deviceId));
-	}
-
-	@Override
-	public CompletableFuture<Boolean> existsDevice(Id deviceId) {
-		throw new UnsupportedOperationException("existsDevice is not supported");
-		//return VertxFuture.completedFuture(_existsDevice(deviceId));
-	}
-
-	@Override
 	public CompletableFuture<Boolean> existsDevice(Id userId, Id deviceId) {
 		return VertxFuture.completedFuture(existsDeviceSync(userId, deviceId));
 	}

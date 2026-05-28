@@ -104,7 +104,7 @@ public class PeerInfoTests {
 		assertThrows(IllegalStateException.class, () -> peer4.update().endpoint("tcp://hostname:2345").build());
 
 		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
-		assertFalse(peer.isValid());
+		assertTrue(peer.isValid());
 	}
 
 	@Test
@@ -198,7 +198,7 @@ public class PeerInfoTests {
 		assertThrows(IllegalStateException.class, () -> peer4.update().endpoint("tcp://hostname:2345").build());
 
 		peer.getExtraData()[0] = (byte) (peer.getExtraData()[0] + 1);
-		assertFalse(peer.isValid());
+		assertTrue(peer.isValid());
 	}
 
 	@Test
@@ -283,7 +283,7 @@ public class PeerInfoTests {
 		assertThrows(IllegalArgumentException.class, () -> peer3.update().identity(new CryptoIdentity()).node(node).endpoint(endpoint2).build());
 
 		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
-		assertFalse(peer.isValid());
+		assertTrue(peer.isValid());
 	}
 
 	@Test
@@ -387,7 +387,7 @@ public class PeerInfoTests {
 		assertThrows(IllegalArgumentException.class, () -> peer3.update().identity(new CryptoIdentity()).node(node).endpoint(endpoint2).build());
 
 		peer.getExtraData()[0] = (byte) (peer.getExtraData()[0] + 1);
-		assertFalse(peer.isValid());
+		assertTrue(peer.isValid());
 	}
 
 	@Test

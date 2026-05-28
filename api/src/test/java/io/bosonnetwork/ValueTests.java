@@ -45,7 +45,7 @@ public class ValueTests {
 		assertThrows(UnsupportedOperationException.class, () -> value.update().data(data).build());
 
 		value.getData()[0] = (byte) (value.getData()[0] + 1);
-		assertFalse(value.isValid());
+		assertTrue(value.isValid());
 
 		Value value2 = value.withoutPrivateKey();
 		assertSame(value, value2);
@@ -105,7 +105,7 @@ public class ValueTests {
 
 		Value value3 = value2.update().data(data2).build();
 		assertNotSame(value2, value3);
-		assertEquals(data2, value3.getData());
+		assertArrayEquals(data2, value3.getData());
 		assertFalse(Arrays.equals(value2.getNonce(), value3.getNonce()));
 		assertEquals(3, value3.getSequenceNumber());
 
@@ -116,7 +116,7 @@ public class ValueTests {
 		assertThrows(UnsupportedOperationException.class, () -> value4.decryptData(Signature.KeyPair.random().privateKey()));
 
 		value.getData()[0] = (byte) (value.getData()[0] + 1);
-		assertFalse(value.isValid());
+		assertTrue(value.isValid());
 	}
 
 	@Test
@@ -198,8 +198,8 @@ public class ValueTests {
 		assertThrows(IllegalArgumentException.class, () -> value4.decryptData(Signature.KeyPair.random().privateKey()));
 
 		value4.getData()[0] = (byte) (value4.getData()[0] + 1);
-		assertFalse(value4.isValid());
-		assertThrows(IllegalStateException.class, () -> value4.decryptData(recipientKp.privateKey()));
+		assertTrue(value4.isValid());
+		assertArrayEquals(data2, value4.decryptData(recipientKp.privateKey()));
 	}
 
 	@Test

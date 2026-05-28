@@ -25,7 +25,6 @@ package io.bosonnetwork;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.text.Normalizer;
 import java.util.Arrays;
@@ -37,8 +36,9 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.utils.Bytes;
+import io.bosonnetwork.utils.Hex;
 
 /**
  * PeerInfo describes the service information published over the Boson DHT network.
@@ -102,15 +102,15 @@ public class PeerInfo {
 	private PeerInfo(Id peerId, byte[] privateKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
 					 byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
 		this.publicKey = peerId;
-		this.privateKey = privateKey;
-		this.nonce = nonce;
+		this.privateKey = privateKey == null ? null : privateKey.clone();
+		this.nonce = nonce == null ? null : nonce.clone();
 		this.sequenceNumber = sequenceNumber;
 		this.nodeId = nodeId;
 		this.nodeSig = nodeSig;
-		this.signature = signature;
+		this.signature = signature == null ? null : signature.clone();
 		this.fingerprint = fingerprint;
 		this.endpoint = endpoint;
-		this.extraData = extraData;
+		this.extraData = extraData == null ? null : extraData.clone();
 	}
 
 	/**
@@ -250,7 +250,7 @@ public class PeerInfo {
 	 * @return The private key.
 	 */
 	public byte[] getPrivateKey() {
-		return privateKey;
+		return privateKey == null ? null : privateKey.clone();
 	}
 
 	/**
@@ -259,7 +259,7 @@ public class PeerInfo {
 	 * @return the nonce
 	 */
 	public byte[] getNonce() {
-		return nonce;
+		return nonce == null ? null : nonce.clone();
 	}
 
 	/**
@@ -311,7 +311,7 @@ public class PeerInfo {
 	 * @return The signature.
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature == null ? null : signature.clone();
 	}
 
 	/**
@@ -347,7 +347,7 @@ public class PeerInfo {
 	 * @return the extra data
 	 */
 	public byte[] getExtraData() {
-		return extraData;
+		return extraData == null ? null : extraData.clone();
 	}
 
 	/**
@@ -381,12 +381,12 @@ public class PeerInfo {
 		MessageDigest sha = Hash.sha256();
 		sha.update(publicKey.bytes());
 		sha.update(nonce);
-		sha.update(ByteBuffer.allocate(Integer.BYTES).putInt(sequenceNumber).array());
+		sha.update(Bytes.fromInteger(sequenceNumber));
 		if (nodeId != null) {
 			sha.update(nodeId.bytes());
 			sha.update(nodeSig);
 		}
-		sha.update(ByteBuffer.allocate(Long.BYTES).putLong(fingerprint).array());
+		sha.update(Bytes.fromLong(fingerprint));
 		sha.update(endpoint.getBytes(UTF_8));
 		if (extraData != null)
 			sha.update(extraData);

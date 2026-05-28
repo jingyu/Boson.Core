@@ -58,35 +58,6 @@ public interface ClientContext {
 	CompletableFuture<Boolean> existsUser(Id userId);
 
 	/**
-	 * Retrieves a list of all devices associated with a specific user.
-	 *
-	 * @param userId the unique identifier of the user whose devices are to be retrieved
-	 * @return a {@link CompletableFuture} that completes with a list of {@link ClientDevice} objects belonging to the user
-	 */
-	@Deprecated
-	CompletableFuture<List<ClientDevice>> getDevices(Id userId);
-
-	/**
-	 * Retrieves the device information for a given device ID.
-	 *
-	 * @param deviceId the unique identifier of the device to retrieve
-	 * @return a {@link CompletableFuture} that completes with the {@link ClientDevice} object if found,
-	 *         or completes with {@code null} if the device does not exist
-	 */
-	@Deprecated
-	CompletableFuture<ClientDevice> getDevice(Id deviceId);
-
-	/**
-	 * Checks if a device with the specified ID exists.
-	 *
-	 * @param deviceId the unique identifier of the device to check
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the device exists,
-	 *         or {@code false} otherwise
-	 */
-	@Deprecated
-	CompletableFuture<Boolean> existsDevice(Id deviceId);
-
-	/**
 	 * Checks if a specific device exists and is associated with the specified user.
 	 *
 	 * @param userId   the unique identifier of the user
