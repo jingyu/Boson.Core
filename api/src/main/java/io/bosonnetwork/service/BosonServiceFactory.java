@@ -20,27 +20,36 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork;
+package io.bosonnetwork.service;
 
 /**
- * Service provider interface for creating {@link Node} instances.
+ * Service provider interface for creating {@link BosonService} instances.
  * <p>
  * Implementations are discovered at runtime via the {@link java.util.ServiceLoader}
- * mechanism, which decouples the {@code boson-api} contract from the concrete node
- * implementation (e.g. the Kademlia DHT node in {@code boson-dht}). Providers register
- * themselves through a {@code META-INF/services/io.bosonnetwork.NodeFactory} entry, or a
- * {@code provides io.bosonnetwork.NodeFactory with ...} declaration when running on the
- * Java module path.
- *
- * @see Node#kadNode(NodeConfiguration)
+ * mechanism and keyed by their {@link #getType() type}, which lets the Boson super node
+ * select and instantiate the configured layer2 services without referencing concrete
+ * implementation class names. Providers register themselves through a
+ * {@code META-INF/services/io.bosonnetwork.service.BosonServiceFactory} entry, or a
+ * {@code provides io.bosonnetwork.service.BosonServiceFactory with ...} declaration when
+ * running on the Java module path.
  */
-public interface NodeFactory {
+public interface BosonServiceFactory {
 	/**
-	 * Creates and initializes a new {@link Node} instance using the provided configuration.
+	 * The unique identifier for the service type produced by this factory.
+	 * <p>
+	 * Must equal the {@link BosonService#getType() type} of the services it creates.
 	 *
-	 * @param config the node configuration
-	 * @return an initialized {@link Node} instance
-	 * @throws BosonException if the node cannot be initialized
+	 * @return the unique type identifier string.
 	 */
-	Node create(NodeConfiguration config) throws BosonException;
+	String getType();
+
+	/**
+	 * Creates a new, uninitialized {@link BosonService} instance.
+	 * <p>
+	 * The returned service is not yet initialized; the caller is responsible for invoking
+	 * {@link BosonService#init(ServiceContext)} and {@link BosonService#start()}.
+	 *
+	 * @return a new {@link BosonService} instance.
+	 */
+	BosonService create();
 }
