@@ -25,6 +25,7 @@ package io.bosonnetwork;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.crypto.CryptoException;
@@ -451,20 +452,18 @@ public interface Node extends Identity {
 
 	/**
 	 * Creates and initializes a new KadNode instance using the provided configuration.
+	 * <p>
+	 * The concrete implementation is discovered via the {@link ServiceLoader} mechanism,
+	 * looking up a registered {@link NodeFactory} provider (the Kademlia DHT node is
+	 * provided by the {@code boson-dht} module).
 	 *
 	 * @param config the node configuration
 	 * @return an initialized {@link Node} instance
-	 * @throws BosonException if the KadNode cannot be initialized
+	 * @throws BosonException if no node implementation is available or it cannot be initialized
 	 */
 	static Node kadNode(NodeConfiguration config) throws BosonException {
-		try {
-			return (Node) Class.forName("io.bosonnetwork.kademlia.KadNode")
-					.getConstructor(NodeConfiguration.class)
-					.newInstance(config);
-		} catch (ClassNotFoundException e) {
-			throw new BosonException("KadNode not found in classpath", e);
-		} catch (Exception e) {
-			throw new BosonException("Internal error: can not instantiate KadNode", e);
-		}
+		NodeFactory factory = ServiceLoader.load(NodeFactory.class).findFirst()
+				.orElseThrow(() -> new BosonException("No NodeFactory implementation found in classpath"));
+		return factory.create(config);
 	}
 }
