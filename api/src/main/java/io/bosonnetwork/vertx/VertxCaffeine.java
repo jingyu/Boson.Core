@@ -63,7 +63,7 @@ public class VertxCaffeine {
 		 * Custom Caffeine Scheduler that schedules tasks using Vert.x timers.
 		 *
 		 * The scheduled task is executed on the provided executor after the specified delay.
-		 * Completion is signaled via a {@link VertxFuture}, which is completed when the task finishes
+		 * Completion is signaled via a {@link ContextualFuture}, which is completed when the task finishes
 		 * or completed exceptionally if an error occurs.
 		 */
 		Scheduler vertxScheduler = (executor, runnable, delay, unit) -> {
@@ -82,7 +82,7 @@ public class VertxCaffeine {
 				});
 			});
 
-			return VertxFuture.of(promise.future());
+			return ContextualFuture.of(promise.future());
 		};
 
 		return Caffeine.newBuilder()
@@ -119,7 +119,7 @@ public class VertxCaffeine {
 		 * Custom Caffeine Scheduler that schedules tasks using Vert.x timers from the current context.
 		 *
 		 * The scheduled task is executed on the provided executor after the specified delay.
-		 * Completion is signaled via a {@link VertxFuture}, which is completed when the task finishes
+		 * Completion is signaled via a {@link ContextualFuture}, which is completed when the task finishes
 		 * or completed exceptionally if an error occurs.
 		 */
 		Scheduler vertxScheduler = (executor, runnable, delay, unit) -> {
@@ -141,7 +141,7 @@ public class VertxCaffeine {
 				});
 			});
 
-			return VertxFuture.of(promise.future());
+			return ContextualFuture.of(promise.future());
 		};
 
 		return Caffeine.newBuilder()

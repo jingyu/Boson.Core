@@ -47,10 +47,10 @@ public class VertxCaffeineTests {
 					promise.fail(e);
 				}
 			});
-			return VertxFuture.of(promise.future());
+			return ContextualFuture.of(promise.future());
 		});
 
-		assertInstanceOf(VertxFuture.class, future);
+		assertInstanceOf(ContextualFuture.class, future);
 
 		future.thenAccept(s -> {
 			System.out.println("Future::thenAccept thread: " + Thread.currentThread().getName());
@@ -86,12 +86,12 @@ public class VertxCaffeineTests {
 						}
 					});
 
-					return VertxFuture.of(promise.future());
+					return ContextualFuture.of(promise.future());
 				});
 
 		var future = cache.get("foo");
 
-		assertInstanceOf(VertxFuture.class, future);
+		assertInstanceOf(ContextualFuture.class, future);
 
 		future.thenAccept(s -> {
 			System.out.println("Future::thenAccept thread: " + Thread.currentThread().getName());

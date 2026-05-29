@@ -40,7 +40,7 @@ import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.utils.Pair;
 import io.bosonnetwork.utils.Variable;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
@@ -291,17 +291,17 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public CompletableFuture<ClientUser> getUser(Id userId) {
-		return VertxFuture.succeededFuture(getUserSync(userId));
+		return ContextualFuture.succeededFuture(getUserSync(userId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsUser(Id userId) {
-		return VertxFuture.succeededFuture(existsUserSync(userId));
+		return ContextualFuture.succeededFuture(existsUserSync(userId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsDevice(Id userId, Id deviceId) {
-		return VertxFuture.completedFuture(existsDeviceSync(userId, deviceId));
+		return ContextualFuture.completedFuture(existsDeviceSync(userId, deviceId));
 	}
 
 	@Override
@@ -331,7 +331,7 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public ClientAuthorizer getAuthorizer() {
-		return (userId, deviceId, serviceType) -> VertxFuture.succeededFuture(Map.of());
+		return (userId, deviceId, serviceType) -> ContextualFuture.succeededFuture(Map.of());
 	}
 
 	@Override

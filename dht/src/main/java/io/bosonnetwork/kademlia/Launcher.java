@@ -35,7 +35,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.ApplicationLock;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * Launcher is the entry point for the Boson DHT Node application.
@@ -183,7 +183,7 @@ public class Launcher {
 						return;
 
 					System.out.println("Shutting down Boson DHT node...");
-					node.stop().thenCompose(v -> VertxFuture.of(vertx.close())).get();
+					node.stop().thenCompose(v -> ContextualFuture.of(vertx.close())).get();
 					System.out.println("Node stopped.");
 				} catch (Exception e) {
 					System.err.println("Error during shutdown: " + e.getMessage());

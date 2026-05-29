@@ -90,6 +90,35 @@ public class HybridTrustManager implements X509TrustManager {
 	 */
 	@Override
 	public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+		checkTrusted(chain, authType, false);
+	}
+
+	/**
+	 * Checks whether the provided client certificate chain can be trusted.
+	 *
+	 * <p>If the certificate is self-signed, it is validated against the expected CN and public key
+	 * (same pinning as {@link #checkServerTrusted}). Otherwise, the validation is delegated to the
+	 * system default trust manager.</p>
+	 *
+	 * @param chain the certificate chain
+	 * @param authType the key exchange algorithm used
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	@Override
+	public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+		checkTrusted(chain, authType, true);
+	}
+
+	/**
+	 * Shared trust check: pins self-signed certificates against the expected CN and public key,
+	 * otherwise delegates to the system default trust manager (client or server side).
+	 *
+	 * @param chain    the certificate chain
+	 * @param authType the authentication type
+	 * @param client   {@code true} to delegate non-self-signed chains as a client cert, {@code false} as a server cert
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	private void checkTrusted(X509Certificate[] chain, String authType, boolean client) throws CertificateException {
 		if (chain == null || chain.length == 0)
 			throw new CertificateException("Null or empty certificate chain");
 
@@ -108,7 +137,7 @@ public class HybridTrustManager implements X509TrustManager {
 
 			// 3. Validate CN
 			String dn = cert.getSubjectX500Principal().getName();
-			LdapName ldapName = null;
+			LdapName ldapName;
 			try {
 				ldapName = new LdapName(dn);
 			} catch (InvalidNameException e) {
@@ -130,22 +159,11 @@ public class HybridTrustManager implements X509TrustManager {
 			if (!Arrays.equals(pk, expectedPublicKey))
 				throw new CertificateException("Public key mismatch");
 		} else {
-			defaultTrustManager.checkServerTrusted(chain, authType);
+			if (client)
+				defaultTrustManager.checkClientTrusted(chain, authType);
+			else
+				defaultTrustManager.checkServerTrusted(chain, authType);
 		}
-	}
-
-	/**
-	 * Checks whether the provided client certificate chain can be trusted.
-	 *
-	 * <p>This implementation delegates the check to the system default trust manager.</p>
-	 *
-	 * @param chain the certificate chain
-	 * @param authType the key exchange algorithm used
-	 * @throws CertificateException if the certificate chain is invalid or not trusted
-	 */
-	@Override
-	public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		defaultTrustManager.checkClientTrusted(chain, authType);
 	}
 
 	/**

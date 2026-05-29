@@ -31,7 +31,7 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DHTRegistryTest {
@@ -82,12 +82,12 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Void> start() {
-				return VertxFuture.succeededFuture();
+				return ContextualFuture.succeededFuture();
 			}
 
 			@Override
 			public CompletableFuture<Void> stop() {
-				return VertxFuture.succeededFuture();
+				return ContextualFuture.succeededFuture();
 			}
 
 			@Override
@@ -137,7 +137,7 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
-				return VertxFuture.succeededFuture(values.get(id));
+				return ContextualFuture.succeededFuture(values.get(id));
 			}
 
 			@Override
@@ -158,22 +158,22 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
-				return VertxFuture.succeededFuture(List.of());
+				return ContextualFuture.succeededFuture(List.of());
 			}
 
 			@Override
 			public CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
-				return VertxFuture.failedFuture(new UnsupportedOperationException());
+				return ContextualFuture.failedFuture(new UnsupportedOperationException());
 			}
 
 			@Override
 			public CompletableFuture<Value> getValue(Id id) {
-				return VertxFuture.succeededFuture(values.get(id));
+				return ContextualFuture.succeededFuture(values.get(id));
 			}
 
 			@Override
 			public CompletableFuture<Boolean> removeValue(Id valueId) {
-				return VertxFuture.succeededFuture(values.remove(valueId) != null);
+				return ContextualFuture.succeededFuture(values.remove(valueId) != null);
 			}
 
 			@Override
@@ -183,17 +183,17 @@ public class DHTRegistryTest {
 
 			@Override
 			public CompletableFuture<Boolean> removePeers(Id peerId) {
-				return VertxFuture.succeededFuture(false);
+				return ContextualFuture.succeededFuture(false);
 			}
 
 			@Override
 			public CompletableFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
-				return VertxFuture.succeededFuture(null);
+				return ContextualFuture.succeededFuture(null);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> removePeer(Id peerId, long fingerprint) {
-				return VertxFuture.succeededFuture(false);
+				return ContextualFuture.succeededFuture(false);
 			}
 
 			@Override

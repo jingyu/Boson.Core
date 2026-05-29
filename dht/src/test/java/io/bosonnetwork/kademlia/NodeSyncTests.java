@@ -39,7 +39,7 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 public class NodeSyncTests {
 	private static Vertx vertx;
@@ -123,7 +123,7 @@ public class NodeSyncTests {
 		System.out.format("\007🟢 Dumping the routing table of bootstrap node %s ...\n", bootstrap.getId());
 		var file = testDir.resolve("nodes" + File.separator + "node-bootstrap" + File.separator + "routingtable");
 		try (var out = new PrintStream(Files.newOutputStream(file))) {
-			VertxFuture.of(bootstrap.getDHT(Network.IPv4).dumpRoutingTable(out)).get();
+			ContextualFuture.of(bootstrap.getDHT(Network.IPv4).dumpRoutingTable(out)).get();
 		}
 
 		for (int i = 0; i < testNodes.size(); i++) {
@@ -133,7 +133,7 @@ public class NodeSyncTests {
 			//noinspection SpellCheckingInspection
 			file = testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "routingtable");
 			try (var out = new PrintStream(Files.newOutputStream(file))) {
-				VertxFuture.of(dht.dumpRoutingTable(out)).get();
+				ContextualFuture.of(dht.dumpRoutingTable(out)).get();
 			}
 		}
 	}
@@ -171,7 +171,7 @@ public class NodeSyncTests {
 		stopTestNodes();
 		stopBootstrap();
 
-		VertxFuture.of(vertx.close()).get();
+		ContextualFuture.of(vertx.close()).get();
 
 		FileUtils.deleteFile(testDir);
 	}

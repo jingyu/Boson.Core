@@ -46,8 +46,8 @@ import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.EligibleValue;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
+import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.vertx.VertxCaffeine;
-import io.bosonnetwork.vertx.VertxFuture;
 
 public class KadNode extends BosonVerticle implements Node {
 	public static final String NAME = "Orca";
@@ -194,18 +194,18 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Void> start() {
+	public ContextualFuture<Void> start() {
 		if (this.vertx != null)
-			return VertxFuture.failedFuture(new IllegalStateException("Already started"));
+			return ContextualFuture.failedFuture(new IllegalStateException("Already started"));
 
 		Future<Void> future = config.vertx().deployVerticle(this).mapEmpty();
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<Void> stop() {
+	public ContextualFuture<Void> stop() {
 		if (!isRunning())
-			return VertxFuture.failedFuture(new IllegalStateException("Not started"));
+			return ContextualFuture.failedFuture(new IllegalStateException("Not started"));
 
 		Promise<Void> promise = Promise.promise();
 		runOnContext(v -> {
@@ -216,7 +216,7 @@ public class KadNode extends BosonVerticle implements Node {
 			vertx.undeploy(deploymentId).onComplete(promise);
 		});
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	@Override
@@ -375,7 +375,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Void> bootstrap(Collection<NodeInfo> bootstrapNodes) {
+	public ContextualFuture<Void> bootstrap(Collection<NodeInfo> bootstrapNodes) {
 		Objects.requireNonNull(bootstrapNodes, "Invalid bootstrap nodes");
 		checkRunning();
 
@@ -398,11 +398,11 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 		});
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	@Override
-	public VertxFuture<Result<NodeInfo>> findNode(Id id, LookupOption option) {
+	public ContextualFuture<Result<NodeInfo>> findNode(Id id, LookupOption option) {
 		Objects.requireNonNull(id, "Invalid node id");
 		checkRunning();
 
@@ -410,7 +410,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Result<NodeInfo>> promise = Promise.promise();
 		runOnContext(v -> doFindNode(id, lookupOption).onComplete(promise));
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	private Future<Result<NodeInfo>> doFindNode(Id id, LookupOption option) {
@@ -440,7 +440,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
+	public ContextualFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
 		Objects.requireNonNull(id, "Invalid value id");
 		checkRunning();
 
@@ -473,7 +473,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}).onComplete(promise);
 		});
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	private Future<Void> doFindValue(Id id, int expectedSequenceNumber, LookupOption option, EligibleValue result) {
@@ -537,7 +537,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
+	public ContextualFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(value, "Invalid value");
 		checkRunning();
 
@@ -551,7 +551,7 @@ public class KadNode extends BosonVerticle implements Node {
 				.onComplete(promise)
 		);
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	private Future<Void> doStoreValue(Value value, int expectedSequenceNumber) {
@@ -566,7 +566,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
+	public ContextualFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
 		Objects.requireNonNull(id, "Invalid peer id");
 		if (expectedSequenceNumber < -1)
 			throw new IllegalArgumentException("Invalid sequence number");
@@ -605,7 +605,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}).onComplete(promise);
 		});
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	private Future<Void> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount,
@@ -664,7 +664,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
+	public ContextualFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(peer, "Invalid value");
 		checkRunning();
 
@@ -678,7 +678,7 @@ public class KadNode extends BosonVerticle implements Node {
 				.onComplete(promise)
 		);
 
-		return VertxFuture.of(promise.future());
+		return ContextualFuture.of(promise.future());
 	}
 
 	private Future<Void> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
@@ -756,51 +756,51 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public VertxFuture<Value> getValue(Id valueId) {
+	public ContextualFuture<Value> getValue(Id valueId) {
 		Objects.requireNonNull(valueId, "valueId");
 		checkRunning();
 		Future<Value> future = storage.getValue(valueId);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<Boolean> removeValue(Id valueId) {
+	public ContextualFuture<Boolean> removeValue(Id valueId) {
 		Objects.requireNonNull(valueId, "valueId");
 		checkRunning();
 		Future<Boolean> future = storage.removeValue(valueId);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<List<PeerInfo>> getPeers(Id peerId) {
+	public ContextualFuture<List<PeerInfo>> getPeers(Id peerId) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<List<PeerInfo>> future = storage.getPeers(peerId);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<Boolean> removePeers(Id peerId) {
+	public ContextualFuture<Boolean> removePeers(Id peerId) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Boolean> future = storage.removePeers(peerId);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
+	public ContextualFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<PeerInfo> future = storage.getPeer(peerId, fingerprint);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override
-	public VertxFuture<Boolean> removePeer(Id peerId, long fingerprint) {
+	public ContextualFuture<Boolean> removePeer(Id peerId, long fingerprint) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Boolean> future = storage.removePeer(peerId, fingerprint);
-		return VertxFuture.of(future);
+		return ContextualFuture.of(future);
 	}
 
 	@Override

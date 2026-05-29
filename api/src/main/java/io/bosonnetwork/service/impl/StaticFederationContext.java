@@ -39,7 +39,7 @@ import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.utils.Pair;
 import io.bosonnetwork.utils.Variable;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuthOptions;
@@ -348,27 +348,27 @@ public class StaticFederationContext implements FederationContext {
 
 	@Override
 	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
-		return VertxFuture.succeededFuture(getNodeSync(nodeId));
+		return ContextualFuture.succeededFuture(getNodeSync(nodeId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsNode(Id nodeId) {
-		return VertxFuture.succeededFuture(existsNodeSync(nodeId));
+		return ContextualFuture.succeededFuture(existsNodeSync(nodeId));
 	}
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId) {
-		return VertxFuture.succeededFuture(getServicesSync(peerId, nodeId));
+		return ContextualFuture.succeededFuture(getServicesSync(peerId, nodeId));
 	}
 
 	@Override
 	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists) {
-		return VertxFuture.succeededFuture(getServicesSync(peerId));
+		return ContextualFuture.succeededFuture(getServicesSync(peerId));
 	}
 
 	@Override
 	public CompletableFuture<Void> reportIncident(Id nodeId, Id peerId, IncidentType incident, String details) {
-		return VertxFuture.succeededFuture();
+		return ContextualFuture.succeededFuture();
 	}
 
 	@Override
@@ -377,21 +377,21 @@ public class StaticFederationContext implements FederationContext {
 			@Override
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
 				if (!existsNodeSync(nodeId))
-					return VertxFuture.succeededFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
 				if (!existsServiceSync(peerId, nodeId))
-					return VertxFuture.succeededFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 		};
 	}

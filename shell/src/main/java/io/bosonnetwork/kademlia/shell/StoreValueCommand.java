@@ -32,7 +32,7 @@ import picocli.CommandLine.Parameters;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * @hidden
@@ -113,7 +113,7 @@ public class StoreValueCommand implements Callable<Integer> {
 		}
 
 		if (localOnly)
-			VertxFuture.of(Main.getBosonNode().getStorage().putValue(value, persistent)).get();
+			ContextualFuture.of(Main.getBosonNode().getStorage().putValue(value, persistent)).get();
 		else
 			Main.getBosonNode().storeValue(value, persistent).get();
 

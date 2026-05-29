@@ -21,7 +21,7 @@ import io.vertx.junit5.VertxTestContext;
 import io.bosonnetwork.utils.Variable;
 
 @ExtendWith(VertxExtension.class)
-public class VertxFutureTests {
+public class ContextualFutureTests {
 	private static void printThreadContext(String prefix) {
 		System.out.printf("%s: %s:%d\n", prefix, Thread.currentThread().getName(), Thread.currentThread().getId());
 	}
@@ -145,7 +145,7 @@ public class VertxFutureTests {
 			return p.future();
 		});
 
-		CompletableFuture<String> cf = VertxFuture.of(future);
+		CompletableFuture<String> cf = ContextualFuture.of(future);
 
 		cf.thenApply(s -> {
 			printThreadContext("CompletableFuture.thenApply");
@@ -154,7 +154,7 @@ public class VertxFutureTests {
 		}).thenCompose(v -> {
 			printThreadContext("CompletableFuture.thenCompose");
 			context.verify(() -> assertEquals(tid.get(), Thread.currentThread().getId()));
-			return VertxFuture.succeededFuture(v);
+			return ContextualFuture.succeededFuture(v);
 		}).thenAcceptAsync(s -> {
 			printThreadContext("CompletableFuture.thenAcceptAsync");
 			context.verify(() -> {
@@ -167,7 +167,7 @@ public class VertxFutureTests {
 				assertNotEquals(tid.get(), Thread.currentThread().getId());
 				assertTrue(Thread.currentThread().getName().startsWith("vert.x-worker-thread-"));
 			});
-			return VertxFuture.succeededFuture(v);
+			return ContextualFuture.succeededFuture(v);
 		}).thenComposeAsync(v -> {
 			printThreadContext("CompletableFuture.thenComposeAsync");
 			context.verify(() -> {
@@ -181,7 +181,7 @@ public class VertxFutureTests {
 				assertNotEquals(tid.get(), Thread.currentThread().getId());
 				assertTrue(Thread.currentThread().getName().startsWith("vert.x-worker-thread-"));
 			});
-			return VertxFuture.succeededFuture(v);
+			return ContextualFuture.succeededFuture(v);
 		});
 
 		future.onComplete(context.succeedingThenComplete());
@@ -189,7 +189,7 @@ public class VertxFutureTests {
 
 	@Test
 	void testVertxCompletableFutureGetCompleted() throws Exception {
-		VertxFuture<String> future = VertxFuture.succeededFuture("Foo bar");
+		ContextualFuture<String> future = ContextualFuture.succeededFuture("Foo bar");
 		assertEquals("Foo bar", future.get());
 	}
 
@@ -207,7 +207,7 @@ public class VertxFutureTests {
 			}
 		});
 
-		VertxFuture<String> future = VertxFuture.of(promise.future());
+		ContextualFuture<String> future = ContextualFuture.of(promise.future());
 		assertEquals("Foo bar", future.get());
 		context.completeNow();
 	}
@@ -219,7 +219,7 @@ public class VertxFutureTests {
 		Promise<String> promise = Promise.promise();
 		vertx.setTimer(2000, id -> promise.complete("Foo bar"));
 
-		VertxFuture<String> future = VertxFuture.of(promise.future());
+		ContextualFuture<String> future = ContextualFuture.of(promise.future());
 		ctx.runOnContext(v -> {
 			printThreadContext("context.verify");
 
@@ -230,7 +230,7 @@ public class VertxFutureTests {
 			});
 		});
 
-		VertxFuture<String> completedFuture = VertxFuture.succeededFuture("Foo bar");
+		ContextualFuture<String> completedFuture = ContextualFuture.succeededFuture("Foo bar");
 		ctx.runOnContext(v -> {
 			context.verify(() -> assertEquals("Foo bar", completedFuture.join()));
 		});

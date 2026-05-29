@@ -28,7 +28,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * Interface for authenticating nodes and peers within a federation.
@@ -99,7 +99,7 @@ public interface FederationAuthenticator {
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 
 			@Override
@@ -109,7 +109,7 @@ public interface FederationAuthenticator {
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 		};
 	}
@@ -137,11 +137,11 @@ public interface FederationAuthenticator {
 				Objects.requireNonNull(nodeId, "nodeId");
 
 				if (!nodeServicesMap.containsKey(nodeId))
-					return VertxFuture.succeededFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 
 			@Override
@@ -150,11 +150,11 @@ public interface FederationAuthenticator {
 				Objects.requireNonNull(peerId, "peerId");
 
 				if (!nodeServicesMap.containsKey(nodeId) || !nodeServicesMap.get(nodeId).contains(peerId))
-					return VertxFuture.succeededFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return VertxFuture.succeededFuture(valid);
+				return ContextualFuture.succeededFuture(valid);
 			}
 		};
 	}

@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.vertx.VertxCaffeine;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * A resolver implementation that uses in-memory and optional persistent caching
@@ -204,7 +204,7 @@ public class CachedResolver implements Resolver {
 				});
 			});
 
-			return VertxFuture.of(promise.future());
+			return ContextualFuture.of(promise.future());
 		});
 	}
 

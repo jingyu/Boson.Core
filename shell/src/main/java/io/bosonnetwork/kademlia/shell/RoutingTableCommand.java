@@ -29,7 +29,7 @@ import picocli.CommandLine.Command;
 
 import io.bosonnetwork.Network;
 import io.bosonnetwork.kademlia.impl.DHT;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * @hidden
@@ -42,14 +42,14 @@ public class RoutingTableCommand implements Callable<Integer> {
 		DHT dht4 = Main.getBosonNode().getDHT(Network.IPv4);
 		if (dht4 != null) {
 			System.out.println("Routing table for IPv4: ");
-			VertxFuture.of(dht4.dumpRoutingTable(System.out)).get();
+			ContextualFuture.of(dht4.dumpRoutingTable(System.out)).get();
 			System.out.println();
 		}
 
 		DHT dht6 = Main.getBosonNode().getDHT(Network.IPv6);
 		if (dht6 != null) {
 			System.out.println("Routing table for IPv6: ");
-			VertxFuture.of(dht6.dumpRoutingTable(System.out)).get();
+			ContextualFuture.of(dht6.dumpRoutingTable(System.out)).get();
 			System.out.println();
 		}
 

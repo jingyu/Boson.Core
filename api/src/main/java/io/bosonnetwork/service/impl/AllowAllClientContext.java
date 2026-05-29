@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.service.impl;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -33,9 +32,8 @@ import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.ClientAuthenticator;
 import io.bosonnetwork.service.ClientAuthorizer;
 import io.bosonnetwork.service.ClientContext;
-import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
@@ -72,17 +70,17 @@ public class AllowAllClientContext implements ClientContext {
 
 	@Override
 	public CompletableFuture<ClientUser> getUser(Id userId) {
-		return VertxFuture.succeededFuture(new PlainUser(userId));
+		return ContextualFuture.succeededFuture(new PlainUser(userId));
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsUser(Id userId) {
-		return VertxFuture.succeededFuture(true);
+		return ContextualFuture.succeededFuture(true);
 	}
 
 	@Override
 	public CompletableFuture<Boolean> existsDevice(Id userId, Id deviceId) {
-		return VertxFuture.succeededFuture(true);
+		return ContextualFuture.succeededFuture(true);
 	}
 
 	@Override
@@ -106,7 +104,7 @@ public class AllowAllClientContext implements ClientContext {
 
 	@Override
 	public ClientAuthorizer getAuthorizer() {
-		return (userId, deviceId, serviceType) -> VertxFuture.succeededFuture(Map.of());
+		return (userId, deviceId, serviceType) -> ContextualFuture.succeededFuture(Map.of());
 	}
 
 	@Override

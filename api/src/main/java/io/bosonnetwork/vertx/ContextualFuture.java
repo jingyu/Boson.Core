@@ -46,7 +46,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 
 /**
- * VertxFuture is a {@link CompletableFuture}-compatible wrapper around Vert.x's {@link io.vertx.core.Future}.
+ * ContextualFuture is a {@link CompletableFuture}-compatible wrapper around Vert.x's {@link io.vertx.core.Future}.
  * <p>
  * It provides interoperability between the Vert.x asynchronous programming model and the Java
  * {@link CompletableFuture}/{@link CompletionStage} APIs. This allows developers to:
@@ -61,18 +61,21 @@ import io.vertx.core.Vertx;
  *
  * @param <T> the result type
  */
-public class VertxFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
+public class ContextualFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
 	/** The underlying Vert.x Future being wrapped. */
 	Future<T> future;
 
 	/**
-	 * Wraps an existing Vert.x {@link Future} into a VertxFuture.
+	 * Wraps an existing Vert.x {@link Future} into a ContextualFuture.
 	 * Updates the internal state of this CompletableFuture whenever the Vert.x Future completes.
 	 *
 	 * @param future the Vert.x Future to wrap
 	 */
-	protected VertxFuture(Future<T> future) {
-		this.future = future.andThen(ar -> {
+	protected ContextualFuture(Future<T> future) {
+		// Keep the original future (so a Promise-backed one stays completable via complete());
+		// register the state-sync handler for the inherited CompletableFuture machinery.
+		this.future = future;
+		future.andThen(ar -> {
 			// update the internal state of CompletableFuture
 			if (ar.succeeded())
 				super.complete(ar.result());
@@ -82,75 +85,75 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	/**
-	 * Creates a VertxFuture wrapper around an existing Vert.x Future.
+	 * Creates a ContextualFuture wrapper around an existing Vert.x Future.
 	 *
 	 * @param future the Vert.x Future
-	 * @return a new VertxFuture wrapping the given future
-	 * @param <T> the type of the VertxFuture result
+	 * @return a new ContextualFuture wrapping the given future
+	 * @param <T> the type of the ContextualFuture result
 	 */
-	public static <T> VertxFuture<T> of(Future<T> future) {
-		return new VertxFuture<>(future);
+	public static <T> ContextualFuture<T> of(Future<T> future) {
+		return new ContextualFuture<>(future);
 	}
 
 	/**
-	 * Converts a {@link CompletableFuture} into a {@link VertxFuture}.
-	 * If the provided {@link CompletableFuture} is already an instance of {@link VertxFuture},
+	 * Converts a {@link CompletableFuture} into a {@link ContextualFuture}.
+	 * If the provided {@link CompletableFuture} is already an instance of {@link ContextualFuture},
 	 * it is directly returned after being cast to the appropriate type.
-	 * Otherwise, a new {@link VertxFuture} is created.
+	 * Otherwise, a new {@link ContextualFuture} is created.
 	 *
 	 * @param <T> the type of the result in the future
 	 * @param future the {@link CompletableFuture} to be converted
-	 * @return a {@link VertxFuture} representing the same computation or result as the provided {@link CompletableFuture}
+	 * @return a {@link ContextualFuture} representing the same computation or result as the provided {@link CompletableFuture}
 	 */
 	@SuppressWarnings("unchecked")
-	public static <T> VertxFuture<T> of(CompletableFuture<T> future) {
-		if (future instanceof VertxFuture<?> vf)
-			return (VertxFuture<T>) vf;
+	public static <T> ContextualFuture<T> of(CompletableFuture<T> future) {
+		if (future instanceof ContextualFuture<?> vf)
+			return (ContextualFuture<T>) vf;
 
-		return new VertxFuture<>(Future.fromCompletionStage(future));
+		return new ContextualFuture<>(Future.fromCompletionStage(future));
 	}
 
 	/**
-	 * Creates a failed VertxFuture from a Throwable.
+	 * Creates a failed ContextualFuture from a Throwable.
 	 *
 	 * @param cause the cause of the failure
-	 * @return a new VertxFuture with a failure cause
-	 * @param <U> the type of the VertxFuture Future result
+	 * @return a new ContextualFuture with a failure cause
+	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> VertxFuture<U> failedFuture(Throwable cause) {
-		return new VertxFuture<>(Future.failedFuture(cause));
+	public static <U> ContextualFuture<U> failedFuture(Throwable cause) {
+		return new ContextualFuture<>(Future.failedFuture(cause));
 	}
 
 	/**
-	 * Creates a failed VertxFuture from an error message.
+	 * Creates a failed ContextualFuture from an error message.
 	 *
 	 * @param cause the error message of the failure
-	 * @return a new VertxFuture with a failure cause as a String.
-	 * @param <U> the type of the VertxFuture Future result
+	 * @return a new ContextualFuture with a failure cause as a String.
+	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> VertxFuture<U> failedFuture(String cause) {
-		return new VertxFuture<>(Future.failedFuture(cause));
+	public static <U> ContextualFuture<U> failedFuture(String cause) {
+		return new ContextualFuture<>(Future.failedFuture(cause));
 	}
 
 	/**
-	 * Creates a successfully completed VertxFuture with a {@code null} result.
+	 * Creates a successfully completed ContextualFuture with a {@code null} result.
 	 *
-	 * @return a new VertxFuture with a {@code null} result.
-	 * @param <U> the type of the VertxFuture Future result
+	 * @return a new ContextualFuture with a {@code null} result.
+	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> VertxFuture<U> succeededFuture() {
-		return new VertxFuture<>(Future.succeededFuture());
+	public static <U> ContextualFuture<U> succeededFuture() {
+		return new ContextualFuture<>(Future.succeededFuture());
 	}
 
 	/**
-	 * Creates a successfully completed VertxFuture with the given result.
+	 * Creates a successfully completed ContextualFuture with the given result.
 	 *
 	 * @param result the result of the future
-	 * @return a new VertxFuture with the given result
-	 * @param <U> the type of the VertxFuture Future result
+	 * @return a new ContextualFuture with the given result
+	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> VertxFuture<U> succeededFuture(U result) {
-		return new VertxFuture<>(Future.succeededFuture(result));
+	public static <U> ContextualFuture<U> succeededFuture(U result) {
+		return new ContextualFuture<>(Future.succeededFuture(result));
 	}
 
 	@Override
@@ -167,18 +170,18 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenApply(Function<? super T, ? extends U> fn) {
+	public <U> ContextualFuture<U> thenApply(Function<? super T, ? extends U> fn) {
 		Future<U> mapper = future.map(fn::apply);
 		return of(mapper);
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn) {
+	public <U> ContextualFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn) {
 		return thenApplyAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn, Executor executor) {
+	public <U> ContextualFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn, Executor executor) {
 		Future <U> composer = future.compose(t -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
@@ -196,7 +199,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> thenAccept(Consumer<? super T> action) {
+	public ContextualFuture<Void> thenAccept(Consumer<? super T> action) {
 		return thenApply(t -> {
 			action.accept(t);
 			return null;
@@ -204,12 +207,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> thenAcceptAsync(Consumer<? super T> action) {
+	public ContextualFuture<Void> thenAcceptAsync(Consumer<? super T> action) {
 		return thenAcceptAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<Void> thenAcceptAsync(Consumer<? super T> action, Executor executor) {
+	public ContextualFuture<Void> thenAcceptAsync(Consumer<? super T> action, Executor executor) {
 		return thenApplyAsync(t -> {
 			action.accept(t);
 			return null;
@@ -217,7 +220,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> thenRun(Runnable action) {
+	public ContextualFuture<Void> thenRun(Runnable action) {
 		return thenApply(t -> {
 			action.run();
 			return null;
@@ -225,12 +228,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> thenRunAsync(Runnable action) {
+	public ContextualFuture<Void> thenRunAsync(Runnable action) {
 		return thenRunAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<Void> thenRunAsync(Runnable action, Executor executor) {
+	public ContextualFuture<Void> thenRunAsync(Runnable action, Executor executor) {
 		return thenApplyAsync(t -> {
 			action.run();
 			return null;
@@ -238,8 +241,8 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U, V> VertxFuture<V> thenCombine(CompletionStage<? extends U> other,
-			BiFunction<? super T, ? super U, ? extends V> fn) {
+	public <U, V> ContextualFuture<V> thenCombine(CompletionStage<? extends U> other,
+	                                              BiFunction<? super T, ? super U, ? extends V> fn) {
 		Future<? extends U> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<V> mapper = Future.all(future, otherFuture).map(cf -> {
@@ -252,14 +255,14 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U, V> VertxFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
-			BiFunction<? super T, ? super U, ? extends V> fn) {
+	public <U, V> ContextualFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
+	                                                   BiFunction<? super T, ? super U, ? extends V> fn) {
 		return thenCombineAsync(other, fn, defaultExecutor());
 	}
 
 	@Override
-	public <U, V> VertxFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
-			BiFunction<? super T, ? super U, ? extends V> fn, Executor executor) {
+	public <U, V> ContextualFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
+	                                                   BiFunction<? super T, ? super U, ? extends V> fn, Executor executor) {
 		Future<? extends U> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<V> composer = Future.all(future, otherFuture).compose(cf -> {
@@ -281,8 +284,8 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<Void> thenAcceptBoth(CompletionStage<? extends U> other,
-			BiConsumer<? super T, ? super U> action) {
+	public <U> ContextualFuture<Void> thenAcceptBoth(CompletionStage<? extends U> other,
+	                                                 BiConsumer<? super T, ? super U> action) {
 		return thenCombine(other, (t, u) -> {
 			action.accept(t, u);
 			return null;
@@ -290,14 +293,14 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
-			BiConsumer<? super T, ? super U> action) {
+	public <U> ContextualFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
+	                                                      BiConsumer<? super T, ? super U> action) {
 		return thenAcceptBothAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public <U> VertxFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
-			BiConsumer<? super T, ? super U> action, Executor executor) {
+	public <U> ContextualFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
+	                                                      BiConsumer<? super T, ? super U> action, Executor executor) {
 		return thenCombineAsync(other, (t, u) -> {
 			action.accept(t, u);
 			return null;
@@ -305,7 +308,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterBoth(CompletionStage<?> other, Runnable action) {
+	public ContextualFuture<Void> runAfterBoth(CompletionStage<?> other, Runnable action) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<Void> mapper = Future.all(future, otherFuture).map(cf -> {
@@ -317,12 +320,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action) {
+	public ContextualFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action) {
 		return runAfterBothAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action, Executor executor) {
+	public ContextualFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action, Executor executor) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<Void> composer = Future.all(future, otherFuture).compose(cf -> {
@@ -341,48 +344,67 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		return of(composer);
 	}
 
-	@Override
-	public <U> VertxFuture<U> applyToEither(CompletionStage<? extends T> other, Function<? super T, U> fn) {
-		Future<? extends T> otherFuture = Future.fromCompletionStage(other);
-		Future<U> mapper = Future.any(future, otherFuture).map(cf -> {
-			for (int i = 0; i < cf.size(); i++) {
-		        if (cf.succeeded(i)) {
-		            T t = cf.resultAt(i);
-					return fn.apply(t);
-		        }
-		    }
-
-			// This should never happen
-			throw new IllegalStateException("No successful result");
+	/**
+	 * Completes with the outcome of whichever of {@code this}/{@code other} settles first — normally
+	 * <em>or</em> exceptionally — matching {@link CompletableFuture}'s "either" semantics. (Note this
+	 * differs from {@link Future#any} which waits for the first <em>success</em>.)
+	 */
+	private Future<T> either(Future<? extends T> other) {
+		Promise<T> settled = Promise.promise();
+		future.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete(ar.result());
+			else
+				settled.tryFail(ar.cause());
 		});
+		other.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete(ar.result());
+			else
+				settled.tryFail(ar.cause());
+		});
+		return settled.future();
+	}
 
+	/** Like {@link #either(Future)} but value-agnostic: settles on the first of the two to complete. */
+	private static Future<Void> eitherSettled(Future<?> a, Future<?> b) {
+		Promise<Void> settled = Promise.promise();
+		a.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete();
+			else
+				settled.tryFail(ar.cause());
+		});
+		b.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete();
+			else
+				settled.tryFail(ar.cause());
+		});
+		return settled.future();
+	}
+
+	@Override
+	public <U> ContextualFuture<U> applyToEither(CompletionStage<? extends T> other, Function<? super T, U> fn) {
+		Future<? extends T> otherFuture = Future.fromCompletionStage(other);
+		Future<U> mapper = either(otherFuture).map(fn::apply);
 		return of(mapper);
 	}
 
 	@Override
-	public <U> VertxFuture<U> applyToEitherAsync(CompletionStage<? extends T> other, Function<? super T, U> fn) {
+	public <U> ContextualFuture<U> applyToEitherAsync(CompletionStage<? extends T> other, Function<? super T, U> fn) {
 		return applyToEitherAsync(other, fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> VertxFuture<U> applyToEitherAsync(CompletionStage<? extends T> other,
-			Function<? super T, U> fn, Executor executor) {
+	public <U> ContextualFuture<U> applyToEitherAsync(CompletionStage<? extends T> other,
+	                                                  Function<? super T, U> fn, Executor executor) {
 		Future<? extends T> otherFuture = Future.fromCompletionStage(other);
-		Future<U> composer = Future.any(future, otherFuture).compose(cf -> {
+		Future<U> composer = either(otherFuture).compose(t -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
-					for (int i = 0; i < cf.size(); i++) {
-				        if (cf.succeeded(i)) {
-				            T t = cf.resultAt(i);
-							U u = fn.apply(t);
-							promise.complete(u);
-							return;
-				        }
-				    }
-
-					// This should never happen
-					promise.fail(new IllegalStateException("No successful result"));
+					promise.complete(fn.apply(t));
 				} catch (Throwable e) {
 					promise.fail(e);
 				}
@@ -394,7 +416,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> acceptEither(CompletionStage<? extends T> other, Consumer<? super T> action) {
+	public ContextualFuture<Void> acceptEither(CompletionStage<? extends T> other, Consumer<? super T> action) {
 		return applyToEither(other, (t) -> {
 			action.accept(t);
 			return null;
@@ -402,13 +424,13 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action) {
+	public ContextualFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action) {
 		return acceptEitherAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action,
-			Executor executor) {
+	public ContextualFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action,
+	                                                Executor executor) {
 		return applyToEitherAsync(other, (t) -> {
 			action.accept(t);
 			return null;
@@ -416,10 +438,9 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterEither(CompletionStage<?> other, Runnable action) {
+	public ContextualFuture<Void> runAfterEither(CompletionStage<?> other, Runnable action) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
-		// The behavior of Future.any is similar to CompletableFuture.thenCombine...
-		Future<Void> mapper = Future.any(future, otherFuture).map(cf -> {
+		Future<Void> mapper = eitherSettled(future, otherFuture).map(v -> {
 			action.run();
 			return null;
 		});
@@ -428,14 +449,14 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action) {
+	public ContextualFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action) {
 		return runAfterEitherAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action, Executor executor) {
+	public ContextualFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action, Executor executor) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
-		Future<Void> composer = Future.any(future, otherFuture).compose(cf -> {
+		Future<Void> composer = eitherSettled(future, otherFuture).compose(v -> {
 			Promise<Void> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
@@ -452,19 +473,19 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenCompose(Function<? super T, ? extends CompletionStage<U>> fn) {
+	public <U> ContextualFuture<U> thenCompose(Function<? super T, ? extends CompletionStage<U>> fn) {
 		Future<U> composer = future.compose(t -> Future.fromCompletionStage(fn.apply(t)));
 		return of(composer);
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn) {
+	public <U> ContextualFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn) {
 		return thenComposeAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> VertxFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn,
-			Executor executor) {
+	public <U> ContextualFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn,
+	                                                Executor executor) {
 		Future <U> composer = future.compose(t -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
@@ -487,7 +508,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<U> handle(BiFunction<? super T, Throwable, ? extends U> fn) {
+	public <U> ContextualFuture<U> handle(BiFunction<? super T, Throwable, ? extends U> fn) {
 		Future<U> handle = future.transform(ar -> {
 			U u = fn.apply(ar.result(), ar.cause());
 			return Future.succeededFuture(u);
@@ -497,12 +518,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn) {
+	public <U> ContextualFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn) {
 		return handleAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> VertxFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn, Executor executor) {
+	public <U> ContextualFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn, Executor executor) {
 		Future<U> handle = future.transform(ar -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
@@ -520,7 +541,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action) {
+	public ContextualFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action) {
 		// Reference: API doc of CompletableFuture.whenComplete
 		//
 		// Unlike method handle, this method is not designed to translate completion
@@ -548,12 +569,12 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action) {
+	public ContextualFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action) {
 		return whenCompleteAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action, Executor executor) {
+	public ContextualFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action, Executor executor) {
 		// Reference: API doc of CompletableFuture.whenCompleteAsync
 		//
 		// Unlike method handle, this method is not designed to translate completion
@@ -584,19 +605,19 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> exceptionally(Function<Throwable, ? extends T> fn) {
+	public ContextualFuture<T> exceptionally(Function<Throwable, ? extends T> fn) {
 		Future<T> otherwise = future.otherwise(fn::apply);
 
 		return of(otherwise);
 	}
 
 	@Override
-	public VertxFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn) {
+	public ContextualFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn) {
 		return exceptionallyAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn, Executor executor) {
+	public ContextualFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn, Executor executor) {
 		Future <T> mapper = future.recover(e -> {
 			Promise<T> promise = Promise.promise();
 			executor.execute(() -> {
@@ -614,20 +635,20 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> exceptionallyCompose(Function<Throwable, ? extends CompletionStage<T>> fn) {
+	public ContextualFuture<T> exceptionallyCompose(Function<Throwable, ? extends CompletionStage<T>> fn) {
 		Future <T> mapper = future.recover(e -> Future.fromCompletionStage(fn.apply(e)));
 
 		return of(mapper);
 	}
 
 	@Override
-	public VertxFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn) {
+	public ContextualFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn) {
 		return exceptionallyComposeAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public VertxFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn,
-			Executor executor) {
+	public ContextualFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn,
+	                                                     Executor executor) {
 		Future <T> mapper = future.recover(e -> {
 			Promise<T> promise = Promise.promise();
 			executor.execute(() -> {
@@ -650,7 +671,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public <U> VertxFuture<U> newIncompleteFuture() {
+	public <U> ContextualFuture<U> newIncompleteFuture() {
 		Promise<U> promise = Promise.promise();
 		return of(promise.future());
 	}
@@ -803,15 +824,17 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean complete(T value) {
+		// Only a Promise-backed (incomplete) future can be completed here; otherwise the underlying
+		// Vert.x future is controlled elsewhere, so report "not completed" rather than throwing.
 		if (future instanceof Promise<?>) {
 			Promise<T> promise = (Promise<T>) future;
 			return promise.tryComplete(value);
 		} else
-			throw new IllegalStateException();
+			return false;
 	}
 
 	@Override
-	public VertxFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
+	public ContextualFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
 		if (supplier == null || executor == null)
 			throw new NullPointerException();
 		executor.execute(() -> complete(supplier.get()));
@@ -819,7 +842,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> completeAsync(Supplier<? extends T> supplier) {
+	public ContextualFuture<T> completeAsync(Supplier<? extends T> supplier) {
 		return completeAsync(supplier, defaultExecutor());
 	}
 
@@ -831,11 +854,11 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 		if (future instanceof Promise<?> promise)
 			return promise.tryFail(ex);
 		else
-			throw new IllegalStateException();
+			return false;
 	}
 
 	@Override
-	public VertxFuture<T> orTimeout(long timeout, TimeUnit unit) {
+	public ContextualFuture<T> orTimeout(long timeout, TimeUnit unit) {
 		if (unit == null)
 			throw new NullPointerException();
 		Future<T> f = future.timeout(timeout, unit);
@@ -843,7 +866,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
+	public ContextualFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
 		if (unit == null)
 			throw new NullPointerException();
 
@@ -868,7 +891,7 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	@Override
-	public VertxFuture<T> copy() {
+	public ContextualFuture<T> copy() {
 		Promise<T> promise = Promise.promise();
 		future.andThen(promise);
 		return of(promise.future());
@@ -880,61 +903,61 @@ public class VertxFuture<T> extends CompletableFuture<T> implements java.util.co
 	}
 
 	/**
-	 * Returns a new VertxFuture that is completed when all the given futures complete.
+	 * Returns a new ContextualFuture that is completed when all the given futures complete.
 	 *
 	 * @param futures the futures to wait for
-	 * @return a new VertxFuture that is completed when all the given futures complete
+	 * @return a new ContextualFuture that is completed when all the given futures complete
 	 */
-	public static VertxFuture<Void> allOf(VertxFuture<?>... futures) {
+	public static ContextualFuture<Void> allOf(ContextualFuture<?>... futures) {
 		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
 		Future<Void> cf = Future.all(vfs).mapEmpty();
 		return of(cf);
 	}
 
 	/**
-	 * Returns a new VertxFuture that is completed when all the given futures complete.
+	 * Returns a new ContextualFuture that is completed when all the given futures complete.
 	 *
 	 * @param futures the collection of futures to wait for
-	 * @return a new VertxFuture that is completed when all the given futures complete
+	 * @return a new ContextualFuture that is completed when all the given futures complete
 	 */
-	public static VertxFuture<Void> allOf(Collection<VertxFuture<?>> futures) {
+	public static ContextualFuture<Void> allOf(Collection<ContextualFuture<?>> futures) {
 		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
 		Future<Void> cf = Future.all(vfs).mapEmpty();
 		return of(cf);
 	}
 
 	/**
-	 * Returns a new VertxFuture that is completed when any of the given futures succeed.
+	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
 	 *
 	 * @param futures the futures to wait for
-	 * @return a new VertxFuture that is completed when any of the given futures succeed
+	 * @return a new ContextualFuture that is completed when any of the given futures succeed
 	 */
-	public static VertxFuture<Void> anyOf(VertxFuture<?>... futures) {
+	public static ContextualFuture<Void> anyOf(ContextualFuture<?>... futures) {
 		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
 		Future<Void> cf = Future.any(vfs).mapEmpty();
 		return of(cf);
 	}
 
 	/**
-	 * Returns a new VertxFuture that is completed when any of the given futures succeed.
+	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
 	 *
 	 * @param futures the collection of futures to wait for
-	 * @return a new VertxFuture that is completed when any of the given futures succeed
+	 * @return a new ContextualFuture that is completed when any of the given futures succeed
 	 */
-	public static VertxFuture<Void> anyOf(Collection<VertxFuture<?>> futures) {
+	public static ContextualFuture<Void> anyOf(Collection<ContextualFuture<?>> futures) {
 		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
 		Future<Void> cf = Future.any(vfs).mapEmpty();
 		return of(cf);
 	}
 
 	/**
-	 * A reduced view of VertxFuture that exposes only {@link CompletionStage} operations,
+	 * A reduced view of ContextualFuture that exposes only {@link CompletionStage} operations,
 	 * disabling mutation methods such as {@code complete()}, {@code cancel()}, etc.
 	 * <p>
 	 * This is used by {@link #minimalCompletionStage()} to comply with the
 	 * {@link CompletableFuture#minimalCompletionStage()} contract.
 	 */
-	static final class MinimalStage<T> extends VertxFuture<T> {
+	static final class MinimalStage<T> extends ContextualFuture<T> {
 		MinimalStage(Future<T> future) {
 			super(future);
 		}

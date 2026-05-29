@@ -34,7 +34,7 @@ import io.bosonnetwork.kademlia.shell.StorageCommand.ListPeerCommand;
 import io.bosonnetwork.kademlia.shell.StorageCommand.ListValueCommand;
 import io.bosonnetwork.kademlia.shell.StorageCommand.PeerCommand;
 import io.bosonnetwork.kademlia.shell.StorageCommand.ValueCommand;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * @hidden
@@ -58,7 +58,7 @@ public class StorageCommand {
 		public Integer call() throws Exception {
 			DataStorage storage = Main.getBosonNode().getStorage();
 
-			VertxFuture.of(storage.getValues().map(values -> {
+			ContextualFuture.of(storage.getValues().map(values -> {
 				values.forEach(v -> {
 					System.out.printf("%44s, %s\n", v.getId(), v.isMutable() ? "mutable" : "immutable");
 				});
@@ -90,7 +90,7 @@ public class StorageCommand {
 			}
 
 			DataStorage storage = Main.getBosonNode().getStorage();
-			VertxFuture.of(storage.getValue(valueId).map(value -> {
+			ContextualFuture.of(storage.getValue(valueId).map(value -> {
 				if (value != null)
 					System.out.println(value);
 				else
@@ -114,7 +114,7 @@ public class StorageCommand {
 		public Integer call() throws Exception {
 			DataStorage storage = Main.getBosonNode().getStorage();
 
-			VertxFuture.of(storage.getPeers().map(peers -> {
+			ContextualFuture.of(storage.getPeers().map(peers -> {
 				peers.forEach(p -> {
 					System.out.printf("%s:%s\n", p.getId(), p.getNodeId());
 				});
@@ -147,7 +147,7 @@ public class StorageCommand {
 
 			DataStorage storage = Main.getBosonNode().getStorage();
 
-			VertxFuture.of(storage.getPeers(peerId).map(peers -> {
+			ContextualFuture.of(storage.getPeers(peerId).map(peers -> {
 				peers.forEach(System.out::println);
 				System.out.println("Total " + peers.size() + " peers.");
 				return null;

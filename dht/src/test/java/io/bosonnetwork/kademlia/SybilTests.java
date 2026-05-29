@@ -52,7 +52,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCallListener;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.FileUtils;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 public class SybilTests {
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "SybilTests");
@@ -91,7 +91,7 @@ public class SybilTests {
 	void tearDown() throws Exception {
 		target.stop().get();
 
-		VertxFuture.of(vertx.close()).get();
+		ContextualFuture.of(vertx.close()).get();
 
 		FileUtils.deleteFile(testDir);
 	}

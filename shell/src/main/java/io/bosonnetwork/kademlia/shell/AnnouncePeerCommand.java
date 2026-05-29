@@ -33,7 +33,7 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.vertx.VertxFuture;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * @hidden
@@ -96,7 +96,7 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 		PeerInfo peer = pb.build();
 
 		if (localOnly)
-			VertxFuture.of(Main.getBosonNode().getStorage().putPeer(peer)).get();
+			ContextualFuture.of(Main.getBosonNode().getStorage().putPeer(peer)).get();
 		else
 			Main.getBosonNode().announcePeer(peer, persistent).get();
 
