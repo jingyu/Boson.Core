@@ -71,7 +71,7 @@ public class IdSerializer extends StdSerializer<Id> {
 		Boolean attr = (Boolean) provider.getAttribute(DIDConstants.BOSON_ID_FORMAT_W3C);
 		boolean w3cDID = attr != null && attr;
 		if (DataFormat.isBinary(gen))
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.bytes(), 0, Id.BYTES);
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.bytesUnsafe(), 0, Id.BYTES);
 		else
 			gen.writeString(w3cDID ? value.toDIDString() : value.toBase58String());
 	}

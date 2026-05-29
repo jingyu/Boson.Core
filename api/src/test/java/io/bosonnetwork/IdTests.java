@@ -70,7 +70,7 @@ public class IdTests {
 	}
 
 	@Test
-	void testOfBytes() {
+	void testOfBytesUnsafe() {
 		var binId = new byte[Id.BYTES];
 		new Random().nextBytes(binId);
 
@@ -544,7 +544,7 @@ public class IdTests {
 		assertEquals(0x58, cborValue[0]);
 		// length of the byte string
 		assertEquals(32, cborValue[1]);
-		assertArrayEquals(id.bytes(), Arrays.copyOfRange(cborValue, 2, 34));
+		assertArrayEquals(id.bytesUnsafe(), Arrays.copyOfRange(cborValue, 2, 34));
 
 		Id id1 = Json.parse(cborValue, Id.class);
 		assertEquals(id, id1);

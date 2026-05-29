@@ -96,9 +96,9 @@ public class UserProfile {
 		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
 		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
-			name = String.valueOf(claims.get(NAME));
-			avatar = String.valueOf(claims.get(AVATAR));
-			bio = String.valueOf(claims.get(BIO));
+			name = (String) claims.get(NAME);
+			avatar = (String) claims.get(AVATAR);
+			bio = (String) claims.get(BIO);
 
 			Object value = claims.get(HOME_NODE);
 			if (value != null) {
@@ -217,7 +217,7 @@ public class UserProfile {
 		 */
 		public Builder name(String name) {
 			this.name = name;
-			 return this;
+			return this;
 		}
 
 		/**
@@ -239,7 +239,7 @@ public class UserProfile {
 		 */
 		public Builder bio(String bio) {
 			this.bio = bio;
-			 return this;
+			return this;
 		}
 
 		/**
@@ -261,7 +261,7 @@ public class UserProfile {
 		 */
 		public Builder messagingHomePeer(Id messagingHomePeer) {
 			this.messagingHomePeer = messagingHomePeer;
-			 return this;
+			return this;
 		}
 
 		/**

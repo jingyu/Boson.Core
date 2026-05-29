@@ -65,7 +65,7 @@ import io.bosonnetwork.utils.Hex;
 
 public class PeerInfo {
 	/** The number of bytes in the nonce. */
-	public static int NONCE_BYTES = 24;
+	public static final int NONCE_BYTES = 24;
 
 	/** Attribute key to omit the peer ID in the peer info used in JsonContext. */
 	public static final Object ATTRIBUTE_OMIT_PEER_ID = new Object();
@@ -106,7 +106,7 @@ public class PeerInfo {
 		this.nonce = nonce == null ? null : nonce.clone();
 		this.sequenceNumber = sequenceNumber;
 		this.nodeId = nodeId;
-		this.nodeSig = nodeSig;
+		this.nodeSig = nodeSig == null ? null : nodeSig.clone();
 		this.signature = signature == null ? null : signature.clone();
 		this.fingerprint = fingerprint;
 		this.endpoint = endpoint;
@@ -149,14 +149,16 @@ public class PeerInfo {
 	 */
 	public static PeerInfo of(Id peerId, byte[] privateKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
 							  byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
-		if (peerId == null)
-			throw new IllegalArgumentException("Invalid peer id: must not be null");
+		Objects.requireNonNull(peerId, "peerId");
+		Objects.requireNonNull(nonce, "nonce");
+		Objects.requireNonNull(signature, "signature");
+		Objects.requireNonNull(endpoint, "endpoint");
 
 		// noinspection DuplicatedCode
 		if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
 			throw new IllegalArgumentException("Invalid private key: incorrect length");
 
-		if (nonce == null || nonce.length != NONCE_BYTES)
+		if (nonce.length != NONCE_BYTES)
 			throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
 
 		if (sequenceNumber < 0)
@@ -170,11 +172,11 @@ public class PeerInfo {
 				throw new IllegalArgumentException("Invalid node signature: must be null when nodeId is null");
 		}
 
-		if (signature == null || signature.length != Signature.BYTES)
+		if (signature.length != Signature.BYTES)
 			throw new IllegalArgumentException("Invalid signature: incorrect length");
 
-		if (endpoint == null || endpoint.isEmpty())
-			throw new IllegalArgumentException("Invalid endpoint: must not be null or empty");
+		if (endpoint.isEmpty())
+			throw new IllegalArgumentException("Invalid endpoint: must not be empty");
 
 		endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
 
@@ -212,7 +214,7 @@ public class PeerInfo {
 		byte[] nodeSig;
 		if (node != null) {
 			nodeId = node.getId();
-			byte[] digest = Hash.sha256(publicKey.bytes(), nodeId.bytes(), nonce);
+			byte[] digest = Hash.sha256(publicKey.bytesUnsafe(), nodeId.bytesUnsafe(), nonce);
 			nodeSig = node.sign(digest);
 		} else {
 			nodeId = null;
@@ -286,7 +288,7 @@ public class PeerInfo {
 	 * @return the node signature
 	 */
 	public byte[] getNodeSignature() {
-		return nodeSig;
+		return nodeSig == null ? null : nodeSig.clone();
 	}
 
 	/**
@@ -379,11 +381,11 @@ public class PeerInfo {
 	private static byte[] computeDigest(Id publicKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
 										long fingerprint, String endpoint, byte[] extraData) {
 		MessageDigest sha = Hash.sha256();
-		sha.update(publicKey.bytes());
+		sha.update(publicKey.bytesUnsafe());
 		sha.update(nonce);
 		sha.update(Bytes.fromInteger(sequenceNumber));
 		if (nodeId != null) {
-			sha.update(nodeId.bytes());
+			sha.update(nodeId.bytesUnsafe());
 			sha.update(nodeSig);
 		}
 		sha.update(Bytes.fromLong(fingerprint));
@@ -424,7 +426,7 @@ public class PeerInfo {
 				return false;
 
 			Signature.PublicKey nodePk = nodeId.toSignatureKey();
-			byte[] digest = Hash.sha256(publicKey.bytes(), nodeId.bytes(), nonce);
+			byte[] digest = Hash.sha256(publicKey.bytesUnsafe(), nodeId.bytesUnsafe(), nonce);
 			if (!Signature.verify(digest, nodeSig, nodePk))
 				return false;
 		} else {

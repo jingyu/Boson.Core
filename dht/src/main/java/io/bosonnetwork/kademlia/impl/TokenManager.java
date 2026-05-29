@@ -66,10 +66,10 @@ public class TokenManager {
 
 	private int generateToken(Id nodeId, InetAddress address, int port, Id targetId, long timestamp) {
 		MessageDigest sha256 = Hash.sha256();
-		sha256.update(nodeId.bytes());
+		sha256.update(nodeId.bytesUnsafe());
 		sha256.update(address.getAddress());
 		sha256.update(Bytes.fromShort((short)port));
-		sha256.update(targetId.bytes());
+		sha256.update(targetId.bytesUnsafe());
 		sha256.update(Bytes.fromLong(timestamp));
 		sha256.update(sessionSecret);
 		byte[] digest = sha256.digest();

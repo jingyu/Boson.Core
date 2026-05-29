@@ -1,7 +1,30 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.crypto;
 
 import java.util.Arrays;
 import java.util.Objects;
+import javax.security.auth.Destroyable;
 
 import org.apache.tuweni.crypto.sodium.SodiumException;
 
@@ -14,10 +37,11 @@ import io.bosonnetwork.Identity;
  * Provides functionality for signing, verifying, encrypting, and decrypting data
  * using signature and encryption key pairs.
  */
-public class CryptoIdentity implements Identity {
+public class CryptoIdentity implements Identity, Destroyable {
 	private final Id id;
 	private final Signature.KeyPair keyPair;
 	private final CryptoBox.KeyPair encryptionKeyPair;
+	private boolean destroyed = false;
 
 	/**
 	 * Constructs a new {@code CryptoIdentity} with a randomly generated signature key pair.
@@ -77,14 +101,14 @@ public class CryptoIdentity implements Identity {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public byte[] encrypt(Id receiver, byte[] data) throws CryptoException {
-		Objects.requireNonNull(receiver, "receiver");
+	public byte[] encrypt(Id recipient, byte[] data) throws CryptoException {
+		Objects.requireNonNull(recipient, "recipient");
 		Objects.requireNonNull(data, "data");
 
 		try {
 			// TODO: how to avoid the memory copy?!
 			CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
-			CryptoBox.PublicKey pk = receiver.toEncryptionKey();
+			CryptoBox.PublicKey pk = recipient.toEncryptionKey();
 			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
 			byte[] cipher = CryptoBox.encrypt(data, pk, sk, nonce);
 
@@ -101,14 +125,14 @@ public class CryptoIdentity implements Identity {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public byte[] encrypt(Id receiver, byte[] nonce, byte[] data) throws CryptoException {
-		Objects.requireNonNull(receiver, "receiver");
+	public byte[] encrypt(Id recipient, byte[] nonce, byte[] data) throws CryptoException {
+		Objects.requireNonNull(recipient, "recipient");
 		Objects.requireNonNull(nonce, "nonce");
 		Objects.requireNonNull(data, "data");
 
 		try {
 			CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
-			CryptoBox.PublicKey pk = receiver.toEncryptionKey();
+			CryptoBox.PublicKey pk = recipient.toEncryptionKey();
 			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
 			return CryptoBox.encrypt(data, pk, sk, n);
 		} catch (SodiumException e) {
@@ -132,10 +156,6 @@ public class CryptoIdentity implements Identity {
 			byte[] n = Arrays.copyOfRange(data, 0, CryptoBox.Nonce.BYTES);
 			CryptoBox.Nonce nonce = CryptoBox.Nonce.fromBytes(n);
 
-			//if (lastPeerNonce != null && nonce.equals(lastPeerNonce))
-			//	throw new CryptoException("Duplicated nonce");
-
-			//	lastPeerNonce = nonce;
 			CryptoBox.PublicKey pk = sender.toEncryptionKey();
 			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
 			byte[] cipher = Arrays.copyOfRange(data, CryptoBox.Nonce.BYTES, data.length);
@@ -160,10 +180,6 @@ public class CryptoIdentity implements Identity {
 		try {
 			CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
 
-			//if (lastPeerNonce != null && nonce.equals(lastPeerNonce))
-			//	throw new CryptoException("Duplicated nonce");
-
-			//	lastPeerNonce = nonce;
 			CryptoBox.PublicKey pk = sender.toEncryptionKey();
 			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
 			return CryptoBox.decrypt(data, pk, sk, n);
@@ -220,5 +236,28 @@ public class CryptoIdentity implements Identity {
 			return this.id.equals(that.id);
 
 		return false;
+	}
+
+	/**
+	 * Destroys this identity, wiping the underlying signature and encryption key material.
+	 * After this call the identity must not be used for further cryptographic operations.
+	 */
+	@Override
+	public void destroy() {
+		if (!destroyed) {
+			keyPair.destroy();
+			encryptionKeyPair.destroy();
+			destroyed = true;
+		}
+	}
+
+	/**
+	 * Determine if this identity has been destroyed.
+	 *
+	 * @return true if this identity has been destroyed, false otherwise.
+	 */
+	@Override
+	public boolean isDestroyed() {
+		return destroyed;
 	}
 }

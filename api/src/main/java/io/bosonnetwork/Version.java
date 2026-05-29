@@ -23,7 +23,9 @@
 
 package io.bosonnetwork;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  *  A representation of a version information for a Boson node. A version information
@@ -37,6 +39,9 @@ public final class Version {
 	    "MK", "Meerkat"			// Native regular node
 	);
 
+	private Version() {
+	}
+
 	/**
 	 * Build a version from the software name and version number.
 	 *
@@ -45,12 +50,14 @@ public final class Version {
 	 * @return an integer that represent the version information
 	 */
 	public static int build(String name, int version) {
-		byte[] nameBytes = name.getBytes();
+		Objects.requireNonNull(name, "name");
+		byte[] nameBytes = name.getBytes(StandardCharsets.US_ASCII);
+		if (nameBytes.length < 2)
+			throw new IllegalArgumentException("Invalid name: must be at least 2 characters");
 
 		return Byte.toUnsignedInt(nameBytes[0]) << 24 |
 				Byte.toUnsignedInt(nameBytes[1]) << 16 |
-				(version & 0x0000FF00) |
-				(version & 0x000000FF);
+				(version & 0x0000FFFF);
 	}
 
 	/**
@@ -64,9 +71,8 @@ public final class Version {
 			return VERSION_NOT_AVAILABLE;
 
 		String n = new String(new byte[] { (byte)(version >>> 24),
-				(byte)((version & 0x00ff0000) >>> 16) });
-		String v = Integer.toString((version & 0x0000ff00) |
-				(version & 0x000000ff));
+				(byte)((version & 0x00ff0000) >>> 16) }, StandardCharsets.US_ASCII);
+		String v = Integer.toString(version & 0x0000ffff);
 
 		return names.getOrDefault(n, n) + "/" + v;
 	}

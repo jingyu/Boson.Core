@@ -75,7 +75,7 @@ public class Filter {
 	 * @return a Filter representing the equality condition
 	 */
 	public static Filter eq(String column, Object value) {
-		return eq(column, column, value);
+		return eq(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -101,7 +101,7 @@ public class Filter {
 	 * @return a Filter representing the non-equality condition
 	 */
 	public static Filter ne(String column, Object value) {
-		return ne(column, column, value);
+		return ne(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -127,7 +127,7 @@ public class Filter {
 	 * @return a Filter representing the less-than condition
 	 */
 	public static Filter lt(String column, Object value) {
-		return lt(column, column, value);
+		return lt(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -153,7 +153,7 @@ public class Filter {
 	 * @return a Filter representing the less-than-or-equal condition
 	 */
 	public static Filter lte(String column, Object value) {
-		return lte(column, column, value);
+		return lte(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -179,7 +179,7 @@ public class Filter {
 	 * @return a Filter representing the greater-than condition
 	 */
 	public static Filter gt(String column, Object value) {
-		return gt(column, column, value);
+		return gt(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -205,7 +205,7 @@ public class Filter {
 	 * @return a Filter representing the greater-than-or-equal condition
 	 */
 	public static Filter gte(String column, Object value) {
-		return gte(column, column, value);
+		return gte(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -231,7 +231,7 @@ public class Filter {
 	 * @return a Filter representing the <code>LIKE</code> condition
 	 */
 	public static Filter like(String column, Object value) {
-		return like(column, column, value);
+		return like(column, defaultParamName(column), value);
 	}
 
 	/**
@@ -270,6 +270,9 @@ public class Filter {
 		validateColumn(column);
 		if (params == null || params.isEmpty()) // empty IN always false
 			return new Raw(" 1 = 0");
+
+		for (String name : params.keySet())
+			validateParamName(name);
 
 		return new In(column, Collections.unmodifiableMap(params));
 	}
@@ -347,6 +350,30 @@ public class Filter {
 	}
 
 	/**
+	 * Validates that a bind-parameter name contains only safe characters. Parameter names are
+	 * interpolated into the {@code #{...}} placeholder of the SQL template (the bound value is
+	 * always parameterized), so the name itself must be a safe identifier.
+	 *
+	 * @param paramName the parameter name to validate
+	 * @throws IllegalArgumentException if the parameter name is invalid
+	 */
+	private static void validateParamName(String paramName) {
+		if (!paramName.matches("^[A-Za-z_][A-Za-z0-9_]*$"))
+			throw new IllegalArgumentException("Invalid SQL parameter name: " + paramName);
+	}
+
+	/**
+	 * Derives a safe default bind-parameter name from a column name. A qualified column such as
+	 * {@code table.col} is mapped to {@code table_col} so it is a valid parameter token.
+	 *
+	 * @param column the column name (already validated by the caller)
+	 * @return a valid parameter name, or {@code null} if {@code column} is {@code null}
+	 */
+	private static String defaultParamName(String column) {
+		return column == null ? null : column.replace('.', '_');
+	}
+
+	/**
 	 * WARNING: raw() is not parameter-safe. Use at your own risk.
 	 */
 	private static class Raw extends Filter {
@@ -394,6 +421,7 @@ public class Filter {
 		private final Object value;
 
 		private Binary(String column, String operator, String paramName, Object value) {
+			validateParamName(paramName);
 			this.column = column;
 			this.operator = operator;
 			this.paramName = paramName;

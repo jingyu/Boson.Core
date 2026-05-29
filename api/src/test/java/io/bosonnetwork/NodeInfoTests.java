@@ -59,13 +59,13 @@ public class NodeInfoTests {
 		Id id = Id.random();
 		InetAddress addr = InetAddress.getLoopbackAddress();
 
-		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(null, addr, 1234));
-		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, (InetAddress) null, 1234));
+		assertThrows(NullPointerException.class, () -> new NodeInfo(null, addr, 1234));
+		assertThrows(NullPointerException.class, () -> new NodeInfo(id, (InetAddress) null, 1234));
 		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, addr, 0));
 		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, addr, 65536));
 
-		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, (String) null, 1234));
-		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, (byte[]) null, 1234));
+		assertThrows(NullPointerException.class, () -> new NodeInfo(id, (String) null, 1234));
+		assertThrows(NullPointerException.class, () -> new NodeInfo(id, (byte[]) null, 1234));
 		assertThrows(IllegalArgumentException.class, () -> new NodeInfo(id, new byte[3], 1234)); // Invalid IP length
 	}
 

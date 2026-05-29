@@ -71,7 +71,7 @@ public class SignedCwtTests {
 				.notBeforeNow()
 				.expiration(Duration.ofDays(7))
 				.tokenId("test#01")
-				.scope(scope.bytes())
+				.scope(scope.bytesUnsafe())
 				.build();
 
 		System.out.println(Hex.encode(token));
@@ -80,9 +80,9 @@ public class SignedCwtTests {
 		assertNotNull(cwt);
 		System.out.println(cwt.toString());
 
-		assertArrayEquals(subject.bytes(), cwt.getClaim(Claim.SUBJECT.getValue()));
-		assertArrayEquals(audience.bytes(), cwt.getClaim(Claim.AUDIENCE.getValue()));
-		assertArrayEquals(scope.bytes(), cwt.getClaim(Claim.SCOPE.getValue()));
+		assertArrayEquals(subject.bytesUnsafe(), cwt.getClaim(Claim.SUBJECT.getValue()));
+		assertArrayEquals(audience.bytesUnsafe(), cwt.getClaim(Claim.AUDIENCE.getValue()));
+		assertArrayEquals(scope.bytesUnsafe(), cwt.getClaim(Claim.SCOPE.getValue()));
 		int notBefore = cwt.getClaim(Claim.NOT_BEFORE.getValue());
 		assertTrue(notBefore <= (System.currentTimeMillis() / 1000));
 		int expiration = cwt.getClaim(Claim.EXPIRATION.getValue());

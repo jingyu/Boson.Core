@@ -676,7 +676,7 @@ public class RpcServer implements Measured {
 		try {
 			byte[] encryptedMsg = identity.encrypt(message.getRemoteId(), message.toBytes());
 			buffer = Buffer.buffer(encryptedMsg.length + Id.BYTES);
-			buffer.appendBytes(message.getId().bytes());
+			buffer.appendBytes(message.getId().bytesUnsafe());
 			buffer.appendBytes(encryptedMsg);
 		} catch (CryptoException e) {
 			log.error("!!!INTERNAL ERROR: Failed to encrypt message", e);

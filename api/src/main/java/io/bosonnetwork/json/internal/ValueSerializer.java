@@ -74,7 +74,7 @@ public class ValueSerializer extends StdSerializer<Value> {
 			// public key
 			if (binaryFormat) {
 				gen.writeFieldName("k");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getPublicKey().bytes(), 0, Id.BYTES);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getPublicKey().bytesUnsafe(), 0, Id.BYTES);
 			} else {
 				gen.writeStringField("k", value.getPublicKey().toBase58String());
 			}
@@ -83,7 +83,7 @@ public class ValueSerializer extends StdSerializer<Value> {
 			if (value.getRecipient() != null) {
 				if (binaryFormat) {
 					gen.writeFieldName("rec");
-					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getRecipient().bytes(), 0, Id.BYTES);
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getRecipient().bytesUnsafe(), 0, Id.BYTES);
 				} else {
 					gen.writeStringField("rec", value.getRecipient().toBase58String());
 				}

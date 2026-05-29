@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.crypto;
 
 import java.security.MessageDigest;
@@ -6,8 +28,15 @@ import java.security.NoSuchAlgorithmException;
 /**
  * Utility class providing methods for generating SHA-256 and MD5 hashes.
  * Supports hashing single or multiple byte arrays, as well as performing double SHA-256 hashing.
+ * <p>
+ * <strong>Security note:</strong> MD5 is cryptographically broken (not collision-resistant) and
+ * is provided only for non-cryptographic uses such as legacy checksums and interop. Never use the
+ * {@code md5*} methods for security-sensitive purposes; use the SHA-256 methods instead.
  */
 public class Hash {
+	private Hash() {
+	}
+
 	/**
 	 * Create a new SHA256 message digest object.
 	 *
@@ -116,8 +145,11 @@ public class Hash {
 
 	/**
 	 * Create a new MD5 message digest object.
+	 * <p>
+	 * <strong>Security note:</strong> MD5 is not collision-resistant; use only for
+	 * non-cryptographic purposes. Prefer {@link #sha256()} for anything security-related.
 	 *
-	 * @return the current thread's MD5 {@code MessageDigest}
+	 * @return a new MD5 {@code MessageDigest} instance
 	 */
 	public static MessageDigest md5() {
 		try {

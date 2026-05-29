@@ -77,7 +77,7 @@ public class NodeInfoSerializer extends StdSerializer<NodeInfo> {
 		gen.writeStartArray();
 
 		if (DataFormat.isBinary(gen)) {
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
+			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytesUnsafe(), 0, Id.BYTES);
 			if (value.getAddress().isUnresolved()) {
 				// not attempting to do name resolution
 				gen.writeString(value.getAddress().getHostString());

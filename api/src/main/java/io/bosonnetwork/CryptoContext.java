@@ -34,8 +34,9 @@ import io.bosonnetwork.crypto.CryptoException;
 /**
  * <p>
  * CryptoContext provides a cryptographic context for encrypting and decrypting messages
- * using public-key authenticated encryption. It manages nonce generation and validation
- * to ensure message uniqueness and replay protection.
+ * using public-key authenticated encryption. It manages nonce generation for outgoing messages
+ * and provides a basic safeguard against immediate reuse of the previous incoming nonce
+ * (see {@link #decrypt(byte[])} for the precise, limited guarantee).
  * </p>
  * <p>
  * <b>Thread Safety:</b> The nonce generation for outgoing messages is synchronized to ensure
@@ -138,14 +139,16 @@ public class CryptoContext {
     /**
      * Decrypts the given data, verifying and extracting the prepended nonce.
      * <p>
-     * This method checks for nonce reuse to prevent replay attacks. If the nonce
-     * is duplicated (i.e., the same as the last received nonce), a {@link CryptoException}
-     * is thrown.
+     * As a basic safeguard this rejects an exact repeat of the <em>immediately previous</em>
+     * peer nonce (throwing {@link CryptoException}). This is <strong>not</strong> full replay
+     * protection: it does not detect reuse of any earlier nonce, and the check is not thread-safe
+     * (concurrent {@code decrypt} calls may race). Callers that need strong replay protection must
+     * track seen nonces themselves.
      * </p>
      *
      * @param data The encrypted data, with the nonce prepended (nonce || ciphertext).
      * @return The decrypted plaintext data.
-     * @throws CryptoException If the input is invalid, the nonce is duplicated, or decryption fails.
+     * @throws CryptoException If the input is invalid, the nonce repeats the previous one, or decryption fails.
      * @throws NullPointerException if {@code data} is {@code null}.
      */
 	public byte[] decrypt(byte[] data) throws CryptoException {

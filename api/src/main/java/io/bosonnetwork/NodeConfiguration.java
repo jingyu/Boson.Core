@@ -122,7 +122,7 @@ public interface NodeConfiguration {
 	/**
 	 * Provides the URL for database storage used by the DHT node.
 	 *
-	 * @return the external database URL as a string, or {@code null} if not configured.
+	 * @return the database URL as a string; defaults to {@code "jdbc:sqlite:node.db"}.
 	 */
 	default String databaseUri() {
 		return "jdbc:sqlite:node.db";

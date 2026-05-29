@@ -317,7 +317,7 @@ public class NodeSyncTests {
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
-				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
+				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
 				assertTrue(v.isMutable());
 				assertTrue(v.isValid());
 				assertEquals(v, result);
@@ -377,7 +377,7 @@ public class NodeSyncTests {
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
-				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytes());
+				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
 				assertTrue(v.isMutable());
 				assertTrue(v.isEncrypted());
 				assertTrue(v.isValid());

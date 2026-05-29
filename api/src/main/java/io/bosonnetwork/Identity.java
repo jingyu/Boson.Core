@@ -63,29 +63,30 @@ public interface Identity {
 	boolean verify(byte[] data, byte[] signature);
 
 	/**
-	 * Encrypts the provided data for the specified receiver using a one-shot encryption
+	 * Encrypts the provided data for the specified recipient using a one-shot encryption
 	 * operation. Random nonce is generated and prefixed to the encrypted data to ensure
 	 * uniqueness and prevent replay attacks.
 	 *
-	 * @param receiver the {@link Id} of the intended receiver for whom the data is encrypted
+	 * @param recipient the {@link Id} of the intended recipient for whom the data is encrypted
 	 * @param data the plaintext data to encrypt
 	 * @return the encrypted data as a byte array, prefixed with a random nonce
 	 * @throws CryptoException if the encryption process fails due to cryptographic errors
 	 */
-	byte[] encrypt(Id receiver, byte[] data) throws CryptoException;
+	byte[] encrypt(Id recipient, byte[] data) throws CryptoException;
 
 	/**
-	 * Encrypts the provided data for the specified receiver using a one-shot encryption
-	 * operation. The encryption process may also incorporate the supplied nonce to ensure
-	 * data uniqueness and prevent replay attacks.
+	 * Encrypts the provided data for the specified recipient using a one-shot encryption
+	 * operation with the caller-supplied nonce. Unlike {@link #encrypt(Id, byte[])}, the nonce is
+	 * provided by the caller and is <strong>not</strong> prepended to the returned ciphertext;
+	 * the caller is responsible for ensuring the nonce is unique per key and message.
 	 *
-	 * @param receiver the {@link Id} of the intended receiver for whom the data is encrypted
-	 * @param nonce the byte array used as nonce for the encryption process, ensuring uniqueness
+	 * @param recipient the {@link Id} of the intended recipient for whom the data is encrypted
+	 * @param nonce the byte array used as nonce for the encryption process; must be unique per key/message
 	 * @param data the plaintext data to encrypt
 	 * @return the encrypted data as a byte array
 	 * @throws CryptoException if the encryption fails due to cryptographic errors or invalid parameters
 	 */
-	byte[] encrypt(Id receiver, byte[] nonce, byte[] data) throws CryptoException;
+	byte[] encrypt(Id recipient, byte[] nonce, byte[] data) throws CryptoException;
 
 	/**
 	 * Decrypts the provided encrypted data sent by the specified sender using a one-shot decryption operation.

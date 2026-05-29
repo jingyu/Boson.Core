@@ -53,7 +53,7 @@ import io.bosonnetwork.utils.Hex;
  */
 public class Value {
 	/** The number of bytes in the nonce. */
-	public static int NONCE_BYTES = 24;
+	public static final int NONCE_BYTES = 24;
 
 	/** The public key for mutable values. */
 	private final Id publicKey;
@@ -122,18 +122,21 @@ public class Value {
 			if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
 				throw new IllegalArgumentException("Invalid private key: incorrect length");
 
-			if (nonce == null || nonce.length != NONCE_BYTES)
+			Objects.requireNonNull(nonce, "nonce");
+			if (nonce.length != NONCE_BYTES)
 				throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
 
 			if (sequenceNumber < 0)
 				throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
-			if (signature == null || signature.length != Signature.BYTES)
+			Objects.requireNonNull(signature, "signature");
+			if (signature.length != Signature.BYTES)
 				throw new IllegalArgumentException("Invalid signature: incorrect length");
 		}
 
-		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data: must not be null or empty");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
 
 		return new Value(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 	}
@@ -175,6 +178,11 @@ public class Value {
 	 * @return The new Value instance.
 	 */
 	public static Value of(Id id, byte[] data) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
+
 		return new Value(id, data);
 	}
 
@@ -489,9 +497,9 @@ public class Value {
 	private static byte[] computeDigest(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] data) {
 		MessageDigest sha = Hash.sha256();
 		if (publicKey != null) {
-			sha.update(publicKey.bytes());
+			sha.update(publicKey.bytesUnsafe());
 			if (recipient != null)
-				sha.update(recipient.bytes());
+				sha.update(recipient.bytesUnsafe());
 			sha.update(nonce);
 			sha.update(Bytes.fromInteger(sequenceNumber));
 		}
@@ -621,7 +629,7 @@ public class Value {
 
 		private Identity identity = null;
 		private boolean keepPrivateKey;
-		Id recipient = null;
+		private Id recipient = null;
 		private int sequenceNumber = 0;
 		private byte[] data = null;
 

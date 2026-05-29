@@ -479,7 +479,7 @@ public class KBucketEntry extends NodeInfo {
 	Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<>();
 
-		map.put("id", getId().bytes());
+		map.put("id", getId().bytesUnsafe());
 		map.put("addr", getIpAddress().getAddress());
 		map.put("port", getPort());
 		if (created > 0)

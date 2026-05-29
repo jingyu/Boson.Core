@@ -562,7 +562,7 @@ public class RoutingTable {
 		try (OutputStream out = Files.newOutputStream(tempFile)) {
 			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			gen.writeStartObject();
-			gen.writeBinaryField("nodeId", localId.bytes());
+			gen.writeBinaryField("nodeId", localId.bytesUnsafe());
 			gen.writeNumberField("timestamp", now);
 
 			gen.writeFieldName("entries");

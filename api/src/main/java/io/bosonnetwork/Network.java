@@ -69,7 +69,7 @@ public enum Network {
 	 * Checks if the specified socket address can apply for this network.
 	 *
 	 * @param addr the socket address to check.
-	 * @return true is the address can apply for this network, otherwise false.
+	 * @return true if the address can apply for this network, otherwise false.
 	 */
 	public boolean canUseSocketAddress(InetSocketAddress addr) {
 		return canUseAddress(addr.getAddress());
@@ -79,7 +79,7 @@ public enum Network {
 	 * Checks if the specified IP address can apply for this network.
 	 *
 	 * @param addr the IP address to check.
-	 * @return true is the address can apply for this network, otherwise false.
+	 * @return true if the address can apply for this network, otherwise false.
 	 */
 	public boolean canUseAddress(InetAddress addr) {
 		return preferredAddressType.isInstance(addr);

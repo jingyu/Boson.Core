@@ -125,7 +125,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Getting value with id: {}", id);
 		return withConnection(c ->
 				SqlTemplate.forQuery(c, getDialect().selectValue())
-						.execute(Map.of("id", id.bytes()))
+						.execute(Map.of("id", id.bytesUnsafe()))
 						.map(rows -> findUnique(rows, DatabaseStorage::rowToValue))
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("getValue failed", cause))
@@ -186,7 +186,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		long now = System.currentTimeMillis();
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().updateValueAnnounced())
-						.execute(Map.of("id", id.bytes(), "updated", now))
+						.execute(Map.of("id", id.bytesUnsafe(), "updated", now))
 						.map(r -> r.rowCount() > 0 ? now : 0L)
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("updateValueAnnouncedTime failed", cause))
@@ -198,7 +198,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Removing value with id: {}", id);
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deleteValue())
-						.execute(Map.of("id", id.bytes()))
+						.execute(Map.of("id", id.bytesUnsafe()))
 						.map(this::hasAffectedRows)
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("removeValue failed", cause))
@@ -243,7 +243,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Getting peer with id: {} @ {}", id, nodeId);
 		return withConnection(c ->
 				SqlTemplate.forQuery(c, getDialect().selectPeersByIdAndNodeId())
-						.execute(Map.of("id", id.bytes(), "nodeId", nodeId.bytes()))
+						.execute(Map.of("id", id.bytesUnsafe(), "nodeId", nodeId.bytesUnsafe()))
 						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("getPeers/id&nodeId failed", cause))
@@ -255,7 +255,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Getting peers with id: {}", id);
 		return withConnection(c ->
 				SqlTemplate.forQuery(c, getDialect().selectPeersById())
-						.execute(Map.of("id", id.bytes()))
+						.execute(Map.of("id", id.bytesUnsafe()))
 						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("getPeers/id failed", cause))
@@ -267,7 +267,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Getting peers with id: {}, expectedSequenceNumber: {}, limit{}", id, expectedSequenceNumber, limit);
 		return withConnection(c ->
 				SqlTemplate.forQuery(c, getDialect().selectPeersByIdAndSequenceNumberWithLimit())
-						.execute(Map.of("id", id.bytes(),
+						.execute(Map.of("id", id.bytesUnsafe(),
 								"expectedSequenceNumber", expectedSequenceNumber,
 								"limit", limit))
 						.map(rows -> findMany(rows, DatabaseStorage::rowToPeer))
@@ -330,7 +330,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		long now = System.currentTimeMillis();
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().updatePeerAnnounced())
-						.execute(Map.of("id", id.bytes(), "fingerprint", fingerprint, "updated", now))
+						.execute(Map.of("id", id.bytesUnsafe(), "fingerprint", fingerprint, "updated", now))
 						.map(r -> r.rowCount() > 0 ? now : 0L)
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("updatePeerAnnouncedTime failed", cause))
@@ -341,7 +341,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	public Future<PeerInfo> getPeer(Id id, long fingerprint) {
 		return withConnection(c ->
 				SqlTemplate.forQuery(c, getDialect().selectPeer())
-						.execute(Map.of("id", id.bytes(), "fingerprint", fingerprint))
+						.execute(Map.of("id", id.bytesUnsafe(), "fingerprint", fingerprint))
 						.map(rows -> findUnique(rows, DatabaseStorage::rowToPeer))
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("getPeer failed", cause))
@@ -353,7 +353,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Removing peer with id: {}:{}", id, fingerprint);
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deletePeer())
-						.execute(Map.of("id", id.bytes(), "fingerprint", fingerprint))
+						.execute(Map.of("id", id.bytesUnsafe(), "fingerprint", fingerprint))
 						.map(this::hasAffectedRows)
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("removePeer failed", cause))
@@ -365,7 +365,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		getLogger().debug("Removing peers with id: {}", id);
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deletePeersById())
-						.execute(Map.of("id", id.bytes()))
+						.execute(Map.of("id", id.bytesUnsafe()))
 						.map(this::hasAffectedRows)
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("removePeers/id failed", cause))
@@ -374,10 +374,10 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 
 	protected static Map<String, Object> valueToMap(Value value, boolean persistent) {
 		Map<String, Object> map = new HashMap<>();
-		map.put("id", value.getId().bytes());
-		map.put("publicKey", value.getPublicKey() != null ? value.getPublicKey().bytes() : null);
+		map.put("id", value.getId().bytesUnsafe());
+		map.put("publicKey", value.getPublicKey() != null ? value.getPublicKey().bytesUnsafe() : null);
 		map.put("privateKey", value.getPrivateKey());
-		map.put("recipient", value.getRecipient() != null ? value.getRecipient().bytes() : null);
+		map.put("recipient", value.getRecipient() != null ? value.getRecipient().bytesUnsafe() : null);
 		map.put("nonce", value.getNonce());
 		map.put("sequenceNumber", value.getSequenceNumber());
 		map.put("signature", value.getSignature());
@@ -403,13 +403,13 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 
 	protected static Map<String, Object> peerToMap(PeerInfo peerInfo, boolean persistent) {
 		Map<String, Object> map = new HashMap<>();
-		map.put("id", peerInfo.getId().bytes());
+		map.put("id", peerInfo.getId().bytesUnsafe());
 		map.put("fingerprint", peerInfo.getFingerprint());
 		map.put("privateKey", peerInfo.getPrivateKey());
 		map.put("nonce", peerInfo.getNonce());
 		map.put("sequenceNumber", peerInfo.getSequenceNumber());
 		if (peerInfo.isAuthenticated()) {
-			map.put("nodeId", peerInfo.getNodeId().bytes());
+			map.put("nodeId", peerInfo.getNodeId().bytesUnsafe());
 			map.put("nodeSignature", peerInfo.getNodeSignature());
 		} else {
 			map.put("nodeId", null);

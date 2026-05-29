@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import io.vertx.core.Future;
 import io.vertx.ext.auth.User;
@@ -60,7 +61,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 
 	private CwtAuthHandler(CwtAuthHandler base, List<String> scopes, String delimiter) {
 		super(base.authProvider, Type.BEARER, base.realm);
-		this.scopes = Objects.requireNonNull(scopes, "scopes cannot be null");;
+		this.scopes = Objects.requireNonNull(scopes, "scopes cannot be null");
 		this.delimiter = Objects.requireNonNull(delimiter, "delimiter cannot be null");
 	}
 
@@ -103,7 +104,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 
 			return authProvider.authenticate(credentials)
 					.andThen(op -> audit.audit(Marker.AUTHENTICATION, op.succeeded()))
-					.recover(err -> Future.failedFuture(new HttpException(401, err.getMessage())));
+					.recover(err -> Future.failedFuture(new HttpException(401, "Unauthorized", err)));
 		});
 	}
 
@@ -132,7 +133,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 			}
 
 			// Use a Set for faster lookups
-			String[] ss = scope.split(delimiter);
+			String[] ss = scope.split(Pattern.quote(delimiter));
 			if (ss.length == 0) {
 				ctx.fail(403, new HttpException(403, "Invalid authorization token: scope undefined"));
 				return;
@@ -199,7 +200,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 	/**
 	 * Sets the delimiter used to split the scope claim string.
 	 * Default is space " ".
-	 * 
+	 *
 	 * @param delimiter the delimiter string
 	 * @return self
 	 */

@@ -80,7 +80,7 @@ public class PeerInfoSerializer extends StdSerializer<PeerInfo> {
 		if (!omitPeerId) {
 			if (binaryFormat) {
 				gen.writeFieldName("id");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytes(), 0, Id.BYTES);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytesUnsafe(), 0, Id.BYTES);
 			} else {
 				gen.writeStringField("id", value.getId().toBase58String());
 			}
@@ -100,7 +100,7 @@ public class PeerInfoSerializer extends StdSerializer<PeerInfo> {
 		if (value.getNodeId() != null) {
 			if (binaryFormat) {
 				gen.writeFieldName("o");
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getNodeId().bytes(), 0, Id.BYTES);
+				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getNodeId().bytesUnsafe(), 0, Id.BYTES);
 			} else {
 				gen.writeStringField("o", value.getNodeId().toBase58String());
 			}

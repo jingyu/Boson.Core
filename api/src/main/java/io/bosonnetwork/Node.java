@@ -41,6 +41,12 @@ import io.bosonnetwork.crypto.CryptoException;
  *     <li>Storing values and announcing peers (optionally persistent)</li>
  *     <li>Cryptographic operations: sign, verify, encrypt, decrypt</li>
  * </ul>
+ * <p>
+ * <b>Lookup result conventions:</b> {@link #findNode} returns a {@link Result} that may carry the
+ * node's IPv4 and/or IPv6 address (either side may be {@code null}). Single-result lookups
+ * ({@link #findValue}, the single-result {@link #findPeer(Id)}) complete with {@code null} when
+ * nothing is found, while collection lookups ({@link #getPeers}, {@link #findPeer(Id, int, int, LookupOption)})
+ * complete with an empty list.
  */
 public interface Node extends Identity {
 	/** The maximum age for a peer (2 hours). */
@@ -243,10 +249,10 @@ public interface Node extends Identity {
 	CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent);
 
 	/**
-	 * Finds peers in the network by ID using the default lookup option.
+	 * Finds a peer in the network by ID using the default lookup option.
 	 *
 	 * @param id the {@link Id} to find peers for
-	 * @return a {@link CompletableFuture} containing the list of {@link PeerInfo}
+	 * @return a {@link CompletableFuture} containing the {@link PeerInfo}, or {@code null} if not found
 	 */
 	default CompletableFuture<PeerInfo> findPeer(Id id) {
 		return findPeer(id, -1, 1, null)
@@ -451,7 +457,7 @@ public interface Node extends Identity {
 	CryptoContext createCryptoContext(Id id) throws CryptoException;
 
 	/**
-	 * Creates and initializes a new KadNode instance using the provided configuration.
+	 * Creates and initializes a new {@link Node} instance using the provided configuration.
 	 * <p>
 	 * The concrete implementation is discovered via the {@link ServiceLoader} mechanism,
 	 * looking up a registered {@link NodeFactory} provider (the Kademlia DHT node is

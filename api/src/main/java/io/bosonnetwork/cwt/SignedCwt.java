@@ -490,7 +490,7 @@ public class SignedCwt {
 
 			if (expected instanceof Id id) {
 				if (claim instanceof byte[] bc)
-					return Arrays.equals(id.bytes(), bc);
+					return Arrays.equals(id.bytesUnsafe(), bc);
 				if (claim instanceof String s)
 					return id.toString().equals(s);
 			}
@@ -580,7 +580,7 @@ public class SignedCwt {
 				throw new InvalidIssuerKeyException("Invalid issuer key");
 
 			if (expectedIssuer != null) {
-				if (!Arrays.equals(issuer, expectedIssuer.bytes()))
+				if (!Arrays.equals(issuer, expectedIssuer.bytesUnsafe()))
 					throw new InvalidClaimException("Issuer mismatch");
 			}
 
@@ -671,7 +671,7 @@ public class SignedCwt {
 			this.claims = new LinkedHashMap<>();
 
 			protectedHeaders.put(Header.ALG.getValue(), Algorithm.EDDSA.getValue());
-			claims.put(Claim.ISSUER.getValue(), issuer.getId().bytes());
+			claims.put(Claim.ISSUER.getValue(), issuer.getId().bytesUnsafe());
 		}
 
 		/**
@@ -722,7 +722,7 @@ public class SignedCwt {
 		 */
 		public Builder subject(Id subject) {
 			Objects.requireNonNull(subject);
-			claims.put(Claim.SUBJECT.getValue(), subject.bytes());
+			claims.put(Claim.SUBJECT.getValue(), subject.bytesUnsafe());
 			return this;
 		}
 
@@ -746,7 +746,7 @@ public class SignedCwt {
 		 */
 		public Builder audience(Id audience) {
 			Objects.requireNonNull(audience);
-			claims.put(Claim.AUDIENCE.getValue(), audience.bytes());
+			claims.put(Claim.AUDIENCE.getValue(), audience.bytesUnsafe());
 			return this;
 		}
 

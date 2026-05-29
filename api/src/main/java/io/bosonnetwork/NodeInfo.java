@@ -29,7 +29,7 @@ import java.net.UnknownHostException;
 import java.util.Objects;
 
 /**
- * THis class represent the node information in the Boson network, it contains
+ * This class represents the node information in the Boson network; it contains
  * basic node network information.
  */
 public class NodeInfo {
@@ -44,12 +44,8 @@ public class NodeInfo {
 	 * @param addr the node socket address.
 	 */
 	public NodeInfo(Id id, InetSocketAddress addr) {
-		if (id == null)
-			throw new IllegalArgumentException("Invalid node id: null");
-
-		if (addr == null)
-			throw new IllegalArgumentException("Invalid socket address: null");
-
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(addr, "addr");
 		if (addr.getPort() <= 0 || addr.getPort() > 65535)
 			throw new IllegalArgumentException("Invalid port: " + addr.getPort());
 
@@ -65,12 +61,8 @@ public class NodeInfo {
 	 * @param port the node port number.
 	 */
 	public NodeInfo(Id id, InetAddress addr, int port) {
-		if (id == null)
-			throw new IllegalArgumentException("Invalid node id: null");
-
-		if (addr == null)
-			throw new IllegalArgumentException("Invalid socket address: null");
-
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(addr, "addr");
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
@@ -86,12 +78,8 @@ public class NodeInfo {
 	 * @param port the node port number.
 	 */
 	public NodeInfo(Id id, String host, int port) {
-		if (id == null)
-			throw new IllegalArgumentException("Invalid node id: null");
-
-		if (host == null)
-			throw new IllegalArgumentException("Invalid socket address: null");
-
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(host, "host");
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
@@ -107,10 +95,8 @@ public class NodeInfo {
 	 * @param port the node port number.
 	 */
 	public NodeInfo(Id id, byte[] addr, int port) {
-		if (id == null)
-			throw new IllegalArgumentException("Invalid node id: null");
-		if (addr == null)
-			throw new IllegalArgumentException("Invalid socket address: null");
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(addr, "addr");
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
@@ -129,8 +115,7 @@ public class NodeInfo {
 	 * @param ni another node info object.
 	 */
 	protected NodeInfo(NodeInfo ni) {
-		if (ni == null)
-			throw new IllegalArgumentException("Invalid node info: null");
+		Objects.requireNonNull(ni, "ni");
 
 		this.id = ni.id;
 		this.addr = ni.addr;
@@ -202,10 +187,12 @@ public class NodeInfo {
 	}
 
 	/**
-	 * Checks if the node information is identical with the other one.
+	 * Checks whether this node info conflicts with another, i.e. they share the same id
+	 * <em>or</em> the same socket address. This is a partial match used to detect identity/address
+	 * collisions, not full equality (see {@link #equals(Object)}).
 	 *
 	 * @param other another node info object to check
-	 * @return true if the other node info object is identical with this, false otherwise.
+	 * @return true if this and {@code other} share the same id or the same address, false otherwise.
 	 */
 	public boolean matches(NodeInfo other) {
 		if (other != null)
@@ -216,7 +203,7 @@ public class NodeInfo {
 
 	@Override
 	public int hashCode() {
-		return 0x6030A + Objects.hash(id, addr, version);
+		return 0x6030A + Objects.hash(id, addr);
 	}
 
 	@Override

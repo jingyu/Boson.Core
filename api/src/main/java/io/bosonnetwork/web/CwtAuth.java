@@ -250,7 +250,7 @@ public class CwtAuth implements AuthenticationProvider {
 		if (clientId != null)
 			cwtBuilder.clientId(clientId);
 		if (sessionId != null)
-			cwtBuilder.claim(Claim.SESSION_ID.getValue(), sessionId.bytes());
+			cwtBuilder.claim(Claim.SESSION_ID.getValue(), sessionId.bytesUnsafe());
 
 		return cwtBuilder.buildToString();
 	}

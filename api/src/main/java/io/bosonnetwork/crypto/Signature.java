@@ -79,7 +79,7 @@ public class Signature {
 			if (bytes == null)
 				bytes = key.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 		/**
@@ -179,15 +179,15 @@ public class Signature {
 		}
 
 		/**
-		 * Provides the bytes of this key.
+		 * Provides the bytes of this secret key.
 		 *
-		 * @return the bytes of this key.
+		 * @return the bytes of this secret key.
 		 */
 		public byte[] bytes() {
 			if (bytes == null)
 				bytes = key.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 
@@ -200,21 +200,7 @@ public class Signature {
 		 * @return a newly derived {@code PrivateKey} created using the specified subkey ID and context.
 		 */
 		public PrivateKey derive(long subKeyId, String context) {
-			Objects.requireNonNull(context, "context");
-			if (context.isEmpty())
-				throw new IllegalArgumentException("context must not be empty");
-
-			final int len = KeyDerivation.contextLength(); // 8 bytes
-			byte[] contextBytes = new byte[len];
-			try {
-				MessageDigest md = MessageDigest.getInstance("MD5");
-				byte[] hashBytes = md.digest(context.getBytes(StandardCharsets.UTF_8));
-				for (int i = 0; i < len; i++)
-					contextBytes[i] = (byte) (hashBytes[i] + hashBytes[i + 8]);
-			} catch (NoSuchAlgorithmException e) {
-				throw new RuntimeException(e);
-			}
-
+			byte[] contextBytes = deriveContextBytes(context);
 			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(bytes(), 0, 32));
 			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
 			return PrivateKey.fromSeed(subSeed);
@@ -293,7 +279,7 @@ public class Signature {
 	/**
 	 * The signing(Ed25519) key pair.
 	 */
-	public static class KeyPair {
+	public static class KeyPair implements Destroyable {
 		/**
 		 * The seed length in bytes.
 		 */
@@ -302,6 +288,7 @@ public class Signature {
 		private final org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
 		private PublicKey pk;
 		private PrivateKey sk;
+		private boolean destroyed = false;
 
 		private KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair) {
 			this.keyPair = keyPair;
@@ -391,21 +378,7 @@ public class Signature {
 		 * @return the derived {@code KeyPair} instance.
 		 */
 		public KeyPair derive(long subKeyId, String context) {
-			Objects.requireNonNull(context, "context");
-			if (context.isEmpty())
-				throw new IllegalArgumentException("context must not be empty");
-
-			final int len = KeyDerivation.contextLength(); // 8 bytes
-			byte[] contextBytes = new byte[len];
-			try {
-				MessageDigest md = MessageDigest.getInstance("MD5");
-				byte[] hashBytes = md.digest(context.getBytes(StandardCharsets.UTF_8));
-				for (int i = 0; i < len; i++)
-					contextBytes[i] = (byte) (hashBytes[i] + hashBytes[i + 8]);
-			} catch (NoSuchAlgorithmException e) {
-				throw new RuntimeException(e);
-			}
-
+			byte[] contextBytes = deriveContextBytes(context);
 			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(privateKey().bytes(), 0, 32));
 			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
 			return KeyPair.fromSeed(subSeed);
@@ -442,6 +415,28 @@ public class Signature {
 		public int hashCode() {
 			return 0x6030A + keyPair.hashCode();
 		}
+
+		/**
+		 * Destroys this key pair, wiping the underlying public and private key material.
+		 */
+		@Override
+		public void destroy() {
+			if (!destroyed) {
+				publicKey().destroy();
+				privateKey().destroy();
+				destroyed = true;
+			}
+		}
+
+		/**
+		 * Determine if this key pair has been destroyed.
+		 *
+		 * @return true if this key pair has been destroyed, false otherwise.
+		 */
+		@Override
+		public boolean isDestroyed() {
+			return destroyed;
+		}
 	}
 
 	// Can not access internal method
@@ -450,6 +445,37 @@ public class Signature {
 	 * The number of bytes used to represent a signature.
 	 */
 	public static final int BYTES = 64;
+
+	/**
+	 * Derives the fixed-length (8-byte) libsodium key-derivation context from a context string.
+	 * <p>
+	 * The string is hashed with SHA-256 and the 32-byte digest is folded down to the 8 bytes
+	 * required by {@link KeyDerivation#contextLength()}.
+	 * <p>
+	 * <strong>Note:</strong> the 8-byte context is a lossy reduction (libsodium's fixed context
+	 * size), so distinct context strings can still collide and, for the same sub-key id, derive the
+	 * same key. Use distinct sub-key ids when strong domain separation is required.
+	 *
+	 * @param context the context string; must not be null or empty
+	 * @return the 8-byte derivation context
+	 */
+	private static byte[] deriveContextBytes(String context) {
+		Objects.requireNonNull(context, "context");
+		if (context.isEmpty())
+			throw new IllegalArgumentException("context must not be empty");
+
+		final int len = KeyDerivation.contextLength(); // 8 bytes
+		byte[] contextBytes = new byte[len];
+		try {
+			MessageDigest sha = MessageDigest.getInstance("SHA-256");
+			byte[] hashBytes = sha.digest(context.getBytes(StandardCharsets.UTF_8));
+			for (int i = 0; i < hashBytes.length; i++)
+				contextBytes[i % len] += hashBytes[i];
+		} catch (NoSuchAlgorithmException e) {
+			throw new RuntimeException(e);
+		}
+		return contextBytes;
+	}
 
 	/**
 	 * Signs a message with a given key.

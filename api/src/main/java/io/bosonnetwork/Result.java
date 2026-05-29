@@ -131,11 +131,8 @@ public class Result<T> {
 	 */
 	protected void setValue(Network network, T value) {
 		switch (network) {
-		case IPv4:
-			v4 = value;
-
-		case IPv6:
-			v6 = value;
+		case IPv4 -> v4 = value;
+		case IPv6 -> v6 = value;
 		}
 	}
 

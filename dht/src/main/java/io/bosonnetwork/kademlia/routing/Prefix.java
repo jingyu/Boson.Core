@@ -189,9 +189,9 @@ public class Prefix extends Id {
 		final int branchDepth = depth + 1;
 		Prefix branch = new Prefix(this, branchDepth);
 		if (highBranch)
-			branch.bytes()[branchDepth / 8] |= (byte) (0x80 >> (branchDepth % 8));
+			branch.bytesUnsafe()[branchDepth / 8] |= (byte) (0x80 >> (branchDepth % 8));
 		else
-			branch.bytes()[branchDepth / 8] &= (byte) ~(0x80 >> (branchDepth % 8));
+			branch.bytesUnsafe()[branchDepth / 8] &= (byte) ~(0x80 >> (branchDepth % 8));
 
 		return branch;
 	}
@@ -240,8 +240,8 @@ public class Prefix extends Id {
 		if (ids == null || ids.isEmpty())
 			throw new IllegalArgumentException("ids cannot be null or empty");
 
-		final byte[] first = Collections.min(ids).bytes();
-		final byte[] last = Collections.max(ids).bytes();
+		final byte[] first = Collections.min(ids).bytesUnsafe();
+		final byte[] last = Collections.max(ids).bytesUnsafe();
 
 		byte[] prefixBytes = new byte[Id.BYTES];
 		int depth = -1;
@@ -289,7 +289,7 @@ public class Prefix extends Id {
 			if (this.depth != that.depth)
 				return false;
 
-			return Arrays.equals(this.bytes(), that.bytes());
+			return Arrays.equals(this.bytesUnsafe(), that.bytesUnsafe());
 		}
 		return false;
 	}
@@ -322,7 +322,7 @@ public class Prefix extends Id {
 		capacity += 4; // for "..." suffix
 
 		StringBuilder repr = new StringBuilder(capacity);
-		final byte[] bytes = bytes();
+		final byte[] bytes = bytesUnsafe();
 		final char[] bits = new char[8];
 
 		final int prefixBytes = (depth + 1) >>> 3;
@@ -365,6 +365,6 @@ public class Prefix extends Id {
 		if (depth == -1)
 			return "all";
 
-		return Hex.encode(bytes(), 0, (depth + 8) >>> 3) + "/" + depth;
+		return Hex.encode(bytesUnsafe(), 0, (depth + 8) >>> 3) + "/" + depth;
 	}
 }

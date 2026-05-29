@@ -245,7 +245,7 @@ public class JsonTests {
 
 		assertArrayEquals(bytes, (byte[])map3.get("bytes"));
 		assertEquals(now.getTime(), map3.get("date"));
-		assertArrayEquals(id.bytes(), (byte[])map3.get("id"));
+		assertArrayEquals(id.bytesUnsafe(), (byte[])map3.get("id"));
 		assertArrayEquals(ip4.getAddress(), (byte[])map3.get("ip4"));
 		assertArrayEquals(ip6.getAddress(), (byte[])map3.get("ip6"));
 		assertEquals(true, map3.get("bool"));

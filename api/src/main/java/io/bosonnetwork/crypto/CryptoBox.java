@@ -41,6 +41,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	public static final int MAC_BYTES = 16;
 
 	private final Box box;
+	private boolean destroyed = false;
 
 	/**
 	 * The crypto box public key object.
@@ -86,7 +87,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		}
 
 		/**
-		 * Get the raw bytes of this key.
+		 * Returns the raw bytes of this key.
 		 *
 		 * @return the raw bytes of this key.
 		 */
@@ -94,7 +95,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 			if (bytes == null)
 				bytes = key.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 		@Override
@@ -186,15 +187,15 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		}
 
 		/**
-		 * Get the raw bytes of this key.
+		 * Returns the raw bytes of this secret key.
 		 *
-		 * @return the raw bytes of this key.
+		 * @return the raw bytes of this secret key.
 		 */
 		public byte[] bytes() {
 			if (bytes == null)
 				bytes = key.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 		@Override
@@ -245,7 +246,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	/**
 	 * The crypto box key pair.
 	 */
-	public static class KeyPair {
+	public static class KeyPair implements Destroyable {
 		/**
 		 * The seed length in bytes.
 		 */
@@ -254,6 +255,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		private final Box.KeyPair keyPair;
 		private PublicKey pk;
 		private PrivateKey sk;
+		private boolean destroyed = false;
 
 		private KeyPair(Box.KeyPair keyPair) {
 			this.keyPair = keyPair;
@@ -361,6 +363,28 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		@Override
 		public int hashCode() {
 			return 0x6030A + keyPair.hashCode();
+		}
+
+		/**
+		 * Destroys this key pair, wiping the underlying public and private key material.
+		 */
+		@Override
+		public void destroy() {
+			if (!destroyed) {
+				publicKey().destroy();
+				privateKey().destroy();
+				destroyed = true;
+			}
+		}
+
+		/**
+		 * Determine if this key pair has been destroyed.
+		 *
+		 * @return true if this key pair has been destroyed, false otherwise.
+		 */
+		@Override
+		public boolean isDestroyed() {
+			return destroyed;
 		}
 	}
 
@@ -534,7 +558,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	public byte[] decrypt(byte[] cipher, Nonce nonce) throws CryptoException {
 		byte[] plain = box.decrypt(cipher, nonce.raw());
 		if (plain == null)
-			throw new CryptoException("crypto_box_open_easy_afternm: failed");
+			throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
 
 		return plain;
 	}
@@ -552,7 +576,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	public static byte[] decrypt(byte[] cipher, PublicKey sender, PrivateKey receiver, Nonce nonce) throws CryptoException {
 		byte[] plain = Box.decrypt(cipher, sender.raw(), receiver.raw(), nonce.raw());
 		if (plain == null)
-			throw new CryptoException("crypto_box_open_easy: failed");
+			throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
 
 		return plain;
 	}
@@ -569,7 +593,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	public static byte[] decryptSealed(byte[] cipher, PublicKey pk, PrivateKey sk) throws CryptoException {
 		byte[] plain = Box.decryptSealed(cipher, pk.raw(), sk.raw());
 		if (plain == null)
-			throw new CryptoException("crypto_box_seal_open: failed");
+			throw new CryptoException("Sealed-box decryption failed: invalid ciphertext or authentication failure");
 
 		return plain;
 	}
@@ -581,13 +605,15 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 
 	@Override
 	public void destroy() {
-		box.close();
+		if (!destroyed) {
+			box.close();
+			destroyed = true;
+		}
 	}
 
 	@Override
 	public boolean isDestroyed() {
-		// always return false as the inner box not exposed the isDestroyed() method
-		return false;
+		return destroyed;
 	}
 
 	static {
