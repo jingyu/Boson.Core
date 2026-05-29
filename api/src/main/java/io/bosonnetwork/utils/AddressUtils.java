@@ -33,8 +33,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URLConnection;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -222,44 +224,51 @@ public class AddressUtils {
 		}
 	}
 
+	private static final String BOGON_IPV4_URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv4.txt";
+	private static final String BOGON_IPV6_URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv6.txt";
+	private static final int BOGON_CONNECT_TIMEOUT = 10_000; // ms
+	private static final int BOGON_READ_TIMEOUT = 30_000;    // ms
+
 	/**
 	 * Updates Bogon ranges from external sources (e.g., Team Cymru).
 	 * Fetches the latest IPv4 and IPv6 Bogon lists and updates the internal subnet lists.
 	 * Should be called periodically to keep Bogon ranges current.
+	 * <p>
+	 * <strong>Note:</strong> this performs blocking network I/O (with connect/read timeouts), so it
+	 * must <em>not</em> be called on a Vert.x event loop thread. The internal lists are replaced
+	 * atomically only after both lists are fetched successfully.
 	 *
 	 * @throws RuntimeException if the update fails due to network or parsing errors
 	 */
 	public static void updateBogonRanges() {
-		List<Subnet> ipv4Subnets = new ArrayList<>();
-		List<Subnet> ipv6Subnets = new ArrayList<>();
-
 		try {
-			// Load IPv4 Bogon list
-			URL ipv4BogonUrl = new URL("https://www.team-cymru.org/Services/Bogons/fullbogons-ipv4.txt");
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(ipv4BogonUrl.openStream()))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					if (!line.startsWith("#") && !line.trim().isEmpty())
-						ipv4Subnets.add(Subnet.of(line.trim()));
-				}
-			}
+			List<Subnet> ipv4Subnets = loadBogonSubnets(BOGON_IPV4_URL);
+			List<Subnet> ipv6Subnets = loadBogonSubnets(BOGON_IPV6_URL);
 
-			// Load IPv6 Bogon list
-			URL ipv6BogonUrl = new URL("https://www.team-cymru.org/Services/Bogons/fullbogons-ipv6.txt");
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(ipv6BogonUrl.openStream()))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					if (!line.startsWith("#") && !line.trim().isEmpty())
-						ipv6Subnets.add(Subnet.of(line.trim()));
-				}
-			}
-
-			// Update static lists (thread-safe)
+			// Update static lists (thread-safe) only after both fetches succeed
 			bogonSubnetsIpv4 = List.copyOf(ipv4Subnets);
 			bogonSubnetsIpv6 = List.copyOf(ipv6Subnets);
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to update Bogon ranges", e);
 		}
+	}
+
+	private static List<Subnet> loadBogonSubnets(String url) throws IOException {
+		URLConnection conn = URI.create(url).toURL().openConnection();
+		conn.setConnectTimeout(BOGON_CONNECT_TIMEOUT);
+		conn.setReadTimeout(BOGON_READ_TIMEOUT);
+
+		List<Subnet> subnets = new ArrayList<>();
+		try (BufferedReader reader = new BufferedReader(
+				new InputStreamReader(conn.getInputStream(), StandardCharsets.US_ASCII))) {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				String trimmed = line.trim();
+				if (!trimmed.startsWith("#") && !trimmed.isEmpty())
+					subnets.add(Subnet.of(trimmed));
+			}
+		}
+		return subnets;
 	}
 
 	/**

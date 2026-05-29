@@ -24,12 +24,13 @@
 package io.bosonnetwork.utils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 /**
  * Utility to present ByteBuffer data as an InputStream.
  */
-public class ByteBufferInputStream {
+public class ByteBufferInputStream extends InputStream {
 	/**
 	 * The ByteBuffer object from which data is read.
 	 */

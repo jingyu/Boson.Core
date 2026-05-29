@@ -110,7 +110,8 @@ public class ObservableReadStream<T> implements ReadStream<T> {
 
 	@Override
 	public ObservableReadStream<T> fetch(long amount) {
-		delegate.fetch(amount);
+		if (!terminated)
+			delegate.fetch(amount);
 		return this;
 	}
 
