@@ -312,7 +312,8 @@ public class StaticClientContext implements ClientContext {
 				if (!existsUserSync(userId))
 					return CompletableFuture.completedFuture(false);
 
-				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
+				boolean isValid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && userId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
 			}
 
@@ -321,7 +322,8 @@ public class StaticClientContext implements ClientContext {
 				if (!existsDeviceSync(userId, deviceId))
 					return CompletableFuture.completedFuture(false);
 
-				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
+				boolean isValid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && deviceId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
 			}
 		};

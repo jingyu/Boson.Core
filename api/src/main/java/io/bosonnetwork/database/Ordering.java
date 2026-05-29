@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.database;
 
+import static io.bosonnetwork.database.SqlSafety.validateColumn;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +37,8 @@ import java.util.stream.Collectors;
  * Example:
  * <pre>
  * Ordering order = Ordering.by("name").asc()
- *                          .then("created").desc();
+ *                          .then("created").desc()
+ *                          .build();
  * String sql = order.toSql(); // " ORDER BY name ASC, created DESC"
  * </pre>
  */
@@ -157,8 +160,7 @@ public class Ordering {
 
 		private Builder(String column, Direction direction) {
 			Objects.requireNonNull(column);
-			validateColumn(column);
-			list.add(new Field(column, direction));  // default
+			list.add(new Field(validateColumn(column), direction));  // default
 		}
 
 		/**
@@ -190,8 +192,7 @@ public class Ordering {
 		 */
 		public Builder then(String column, Direction direction) {
 			Objects.requireNonNull(column);
-			validateColumn(column);
-			list.add(new Field(column, direction));
+			list.add(new Field(validateColumn(column), direction));
 			return this;
 		}
 
@@ -219,21 +220,5 @@ public class Ordering {
 		public Ordering build() {
 			return new Ordering(list);
 		}
-	}
-
-	/**
-	 * Validates that the column name contains only safe characters.
-	 * <p>
-	 * Only letters, digits, and underscores are allowed (safe for SQL identifiers).
-	 * Optionally supports qualified names with a single dot (e.g., "table.column").
-	 * </p>
-	 *
-	 * @param column the column name to validate
-	 * @throws IllegalArgumentException if the column name is invalid
-	 */
-	private static void validateColumn(String column) {
-		// Only letters, digits, and underscore allowed (safe for SQL identifiers)
-		if (!column.matches("^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?$"))
-			throw new IllegalArgumentException("Invalid SQL column name: " + column);
 	}
 }

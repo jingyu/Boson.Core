@@ -112,27 +112,37 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 			cryptoContexts.invalidateAll();
 	}
 
+	/**
+	 * Destroys this identity, first closing and clearing any cached {@link CryptoContext}
+	 * instances (each holds a native shared key) and then wiping the underlying key material.
+	 */
+	@Override
+	public void destroy() {
+		clearCache();
+		super.destroy();
+	}
+
 	private CryptoContext getContext(Id id) throws CryptoException {
 		return cryptoContexts != null ? cryptoContexts.get(id) : super.createCryptoContext(id);
 	}
 
 	/**
-	 * Performs one-shot encryption of the given data for the specified receiver.
+	 * Performs one-shot encryption of the given data for the specified recipient.
 	 * <p>
-	 * This operation leverages a cached {@link CryptoContext} instance associated with the receiver,
+	 * This operation leverages a cached {@link CryptoContext} instance associated with the recipient,
 	 * reducing the overhead of repeatedly computing cryptographic contexts.
 	 *
-	 * @param receiver the receiver's {@link Id}; must not be {@code null}
+	 * @param recipient the recipient's {@link Id}; must not be {@code null}
 	 * @param data the plaintext data to encrypt; must not be {@code null}
 	 * @return the encrypted data including the nonce prepended
-	 * @throws NullPointerException if {@code receiver} or {@code data} is {@code null}
+	 * @throws NullPointerException if {@code recipient} or {@code data} is {@code null}
 	 * @throws CryptoException if an error occurs during encryption
 	 */
 	@Override
-	public byte[] encrypt(Id receiver, byte[] data) throws CryptoException {
-		Objects.requireNonNull(receiver, "receiver");
+	public byte[] encrypt(Id recipient, byte[] data) throws CryptoException {
+		Objects.requireNonNull(recipient, "recipient");
 		Objects.requireNonNull(data, "data");
-		return getContext(receiver).encrypt(data);
+		return getContext(recipient).encrypt(data);
 	}
 
 	/**

@@ -29,7 +29,7 @@ import java.util.Map;
  * <p>
  * Example:
  * Pagination p = Pagination.page(3, 20); // pageIndex=3, pageSize=20
- * p.toSql();  // " OFFSET 40 LIMIT 20"
+ * p.toSql();  // " LIMIT 20 OFFSET 40"
  * </p>
  */
 public class Pagination {
@@ -88,7 +88,7 @@ public class Pagination {
 	/**
 	 * Generates the SQL LIMIT/OFFSET clause.
 	 *
-	 * @return SQL fragment like " OFFSET 40 LIMIT 20".
+	 * @return SQL fragment like " LIMIT 20 OFFSET 40".
 	 * If offset and limit are both 0, returns "" (meaning no limit applied).
 	 */
 	public String toSql() {
@@ -101,7 +101,7 @@ public class Pagination {
 	/**
 	 * Generates a parameterized SQL LIMIT/OFFSET clause.
 	 *
-	 * @return A SQL fragment like " OFFSET #{offset} LIMIT #{limit}".
+	 * @return A SQL fragment like " LIMIT #{limit} OFFSET #{offset}".
 	 * If offset and limit are both 0, returns an empty string to indicate no limit is applied.
 	 */
 	public String toSqlTemplate() {

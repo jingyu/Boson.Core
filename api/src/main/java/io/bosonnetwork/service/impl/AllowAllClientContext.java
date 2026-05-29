@@ -90,13 +90,15 @@ public class AllowAllClientContext implements ClientContext {
 		return new ClientAuthenticator() {
 			@Override
 			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
-				boolean isValid = nonce == null || signature == null || userId.toSignatureKey().verify(nonce, signature);
+				boolean isValid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && userId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
-				boolean isValid = nonce == null || signature == null || deviceId.toSignatureKey().verify(nonce, signature);
+				boolean isValid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && deviceId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
 			}
 		};

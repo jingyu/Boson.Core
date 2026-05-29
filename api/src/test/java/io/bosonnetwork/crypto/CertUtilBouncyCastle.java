@@ -62,6 +62,7 @@ import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
+import io.bosonnetwork.BosonException;
 import io.bosonnetwork.utils.Base58;
 
 /**
@@ -204,7 +205,7 @@ public class CertUtilBouncyCastle {
 	/**
 	 * Exception thrown when an error occurs during key conversion or certificate generation.
 	 */
-	public static class KeyConvertException extends Exception {
+	public static class KeyConvertException extends BosonException {
 		private static final long serialVersionUID = -5975318365528633648L;
 
 		/**

@@ -97,7 +97,8 @@ public interface FederationAuthenticator {
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
 				Objects.requireNonNull(nodeId, "nodeId");
 
-				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 
@@ -106,7 +107,8 @@ public interface FederationAuthenticator {
 				Objects.requireNonNull(nodeId, "nodeId");
 				Objects.requireNonNull(peerId, "peerId");
 
-				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 		};
@@ -137,7 +139,8 @@ public interface FederationAuthenticator {
 				if (!nodeServicesMap.containsKey(nodeId))
 					return VertxFuture.succeededFuture(false);
 
-				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 
@@ -149,7 +152,8 @@ public interface FederationAuthenticator {
 				if (!nodeServicesMap.containsKey(nodeId) || !nodeServicesMap.get(nodeId).contains(peerId))
 					return VertxFuture.succeededFuture(false);
 
-				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 		};

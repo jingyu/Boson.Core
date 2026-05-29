@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.database;
 
+import static io.bosonnetwork.database.SqlSafety.validateSchema;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -176,10 +178,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @return a new {@link VersionedSchema} instance configured for the provided parameters
 	 */
 	public static VersionedSchema init(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
-		if (schema != null && !schema.matches("[a-z][a-z0-9_]{0,31}"))
-			throw new IllegalArgumentException("Invalid schema name");
-
-		return new VersionedSchema(vertx, client, schema, migrationPath);
+		return new VersionedSchema(vertx, client, validateSchema(schema), migrationPath);
 	}
 
 	/**

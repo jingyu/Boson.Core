@@ -99,13 +99,15 @@ public class AllowAllFederationContext implements FederationContext {
 		return new FederationAuthenticator() {
 			@Override
 			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
-				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
-				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 		};

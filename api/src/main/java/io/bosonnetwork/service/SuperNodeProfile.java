@@ -98,10 +98,10 @@ public class SuperNodeProfile {
 		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
 		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
-			name = String.valueOf(claims.get("name"));
-			logo = String.valueOf(claims.get("logo"));
-			website = String.valueOf(claims.get("website"));
-			contact = String.valueOf(claims.get("contact"));
+			name = (String) claims.get("name");
+			logo = (String) claims.get("logo");
+			website = (String) claims.get("website");
+			contact = (String) claims.get("contact");
 		}
 
 		return new SuperNodeProfile(id, name, logo, website, contact, card);

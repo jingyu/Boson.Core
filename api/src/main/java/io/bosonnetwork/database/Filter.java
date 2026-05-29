@@ -22,6 +22,9 @@
 
 package io.bosonnetwork.database;
 
+import static io.bosonnetwork.database.SqlSafety.validateColumn;
+import static io.bosonnetwork.database.SqlSafety.validateParamName;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -63,8 +66,7 @@ public class Filter {
 	public static Filter eq(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, "=", paramName, value);
+		return new Binary(validateColumn(column), "=", paramName, value);
 	}
 
 	/**
@@ -89,8 +91,7 @@ public class Filter {
 	public static Filter ne(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, "<>", paramName, value);
+		return new Binary(validateColumn(column), "<>", paramName, value);
 	}
 
 	/**
@@ -115,8 +116,7 @@ public class Filter {
 	public static Filter lt(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, "<", paramName, value);
+		return new Binary(validateColumn(column), "<", paramName, value);
 	}
 
 	/**
@@ -141,8 +141,7 @@ public class Filter {
 	public static Filter lte(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, "<=", paramName, value);
+		return new Binary(validateColumn(column), "<=", paramName, value);
 	}
 
 	/**
@@ -167,8 +166,7 @@ public class Filter {
 	public static Filter gt(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, ">", paramName, value);
+		return new Binary(validateColumn(column), ">", paramName, value);
 	}
 
 	/**
@@ -193,8 +191,7 @@ public class Filter {
 	public static Filter gte(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, ">=", paramName, value);
+		return new Binary(validateColumn(column), ">=", paramName, value);
 	}
 
 	/**
@@ -219,8 +216,7 @@ public class Filter {
 	public static Filter like(String column, String paramName, Object value) {
 		Objects.requireNonNull(column);
 		Objects.requireNonNull(paramName);
-		validateColumn(column);
-		return new Binary(column, "LIKE", paramName, value);
+		return new Binary(validateColumn(column), "LIKE", paramName, value);
 	}
 
 	/**
@@ -242,8 +238,7 @@ public class Filter {
 	 */
 	public static Filter isNull(String column) {
 		Objects.requireNonNull(column);
-		validateColumn(column);
-		return new Unary(column, "IS NULL");
+		return new Unary(validateColumn(column), "IS NULL");
 	}
 
 	/**
@@ -254,8 +249,7 @@ public class Filter {
 	 */
 	public static Filter isNotNull(String column) {
 		Objects.requireNonNull(column);
-		validateColumn(column);
-		return new Unary(column, "IS NOT NULL");
+		return new Unary(validateColumn(column), "IS NOT NULL");
 	}
 
 	/**
@@ -267,12 +261,11 @@ public class Filter {
 	 */
 	public static Filter in(String column, Map<String, Object> params) {
 		Objects.requireNonNull(column);
-		validateColumn(column);
+		column = validateColumn(column);
 		if (params == null || params.isEmpty()) // empty IN always false
 			return new Raw(" 1 = 0");
 
-		for (String name : params.keySet())
-			validateParamName(name);
+		params.keySet().forEach(SqlSafety::validateParamName);
 
 		return new In(column, Collections.unmodifiableMap(params));
 	}
@@ -327,7 +320,6 @@ public class Filter {
 		return true;
 	}
 
-
 	/**
 	 * Returns the parameter bindings for this filter.
 	 *
@@ -335,31 +327,6 @@ public class Filter {
 	 */
 	public Map<String, Object> getParams() {
 		return Map.of();
-	}
-
-	/**
-	 * Validates that the column name contains only safe characters.
-	 *
-	 * @param column the column name to validate
-	 * @throws IllegalArgumentException if the column name is invalid
-	 */
-	private static void validateColumn(String column) {
-		// Only letters, digits, and underscore allowed (safe for SQL identifiers)
-		if (!column.matches("^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?$"))
-			throw new IllegalArgumentException("Invalid SQL column name: " + column);
-	}
-
-	/**
-	 * Validates that a bind-parameter name contains only safe characters. Parameter names are
-	 * interpolated into the {@code #{...}} placeholder of the SQL template (the bound value is
-	 * always parameterized), so the name itself must be a safe identifier.
-	 *
-	 * @param paramName the parameter name to validate
-	 * @throws IllegalArgumentException if the parameter name is invalid
-	 */
-	private static void validateParamName(String paramName) {
-		if (!paramName.matches("^[A-Za-z_][A-Za-z0-9_]*$"))
-			throw new IllegalArgumentException("Invalid SQL parameter name: " + paramName);
 	}
 
 	/**
@@ -421,10 +388,9 @@ public class Filter {
 		private final Object value;
 
 		private Binary(String column, String operator, String paramName, Object value) {
-			validateParamName(paramName);
 			this.column = column;
 			this.operator = operator;
-			this.paramName = paramName;
+			this.paramName = validateParamName(paramName);
 			this.value = value;
 		}
 

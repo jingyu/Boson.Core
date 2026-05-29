@@ -256,7 +256,9 @@ public interface VertxDatabase {
 	 * @return mapped value or the default
 	 */
 	default <T> T findUniqueOrDefault(RowSet<Row> rowSet, Function<Row, T> mapper, T defaultValue) {
-		return rowSet.size() != 0 ? mapper.apply(rowSet.iterator().next()) : defaultValue;
+		if (rowSet == null || rowSet.size() == 0)
+			return defaultValue;
+		return mapper.apply(rowSet.iterator().next());
 	}
 
 	/**
@@ -280,6 +282,8 @@ public interface VertxDatabase {
 	 * @return list of mapped values (possibly empty)
 	 */
 	default <T> List<T> findMany(RowSet<Row> rowSet, Function<Row, T> mapper) {
+		if (rowSet == null)
+			return List.of();
 		return rowSet.stream().map(mapper).collect(Collectors.toList());
 	}
 

@@ -46,12 +46,12 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
-import java.util.Random;
 import java.util.TimeZone;
 
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.PfxOptions;
 
+import io.bosonnetwork.BosonException;
 import io.bosonnetwork.utils.Base58;
 
 /**
@@ -327,7 +327,7 @@ public class CryptoUtil {
 
 		String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-+=<>?/|";
 		StringBuilder sb = new StringBuilder(length);
-		java.util.Random random = new Random();
+		SecureRandom random = new SecureRandom();
 		for (int i = 0; i < length; i++) {
 			int index = random.nextInt(characters.length());
 			sb.append(characters.charAt(index));
@@ -405,7 +405,7 @@ public class CryptoUtil {
 	/**
 	 * Exception thrown when an error occurs during key conversion or certificate generation.
 	 */
-	public static class KeyConvertException extends Exception {
+	public static class KeyConvertException extends BosonException {
 		private static final long serialVersionUID = -5975318365528633648L;
 
 		/**

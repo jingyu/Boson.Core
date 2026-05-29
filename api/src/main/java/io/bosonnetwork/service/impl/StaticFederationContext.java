@@ -379,7 +379,8 @@ public class StaticFederationContext implements FederationContext {
 				if (!existsNodeSync(nodeId))
 					return VertxFuture.succeededFuture(false);
 
-				boolean valid = nonce == null || signature == null || nodeId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 
@@ -388,7 +389,8 @@ public class StaticFederationContext implements FederationContext {
 				if (!existsServiceSync(peerId, nodeId))
 					return VertxFuture.succeededFuture(false);
 
-				boolean valid = nonce == null || signature == null || peerId.toSignatureKey().verify(nonce, signature);
+				boolean valid = (nonce == null && signature == null) ||
+						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
 				return VertxFuture.succeededFuture(valid);
 			}
 		};
