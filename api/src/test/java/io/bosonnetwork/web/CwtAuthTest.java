@@ -15,6 +15,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.auth.authentication.TokenCredentials;
+import io.vertx.ext.auth.authorization.RoleBasedAuthorization;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ import io.bosonnetwork.cwt.TokenExpiredException;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.Role;
 
 @ExtendWith(VertxExtension.class)
 @SuppressWarnings("CodeBlock2Expr")
@@ -443,5 +445,56 @@ public class CwtAuthTest {
 				context.completeNow();
 			});
 		});
+	}
+
+	@Test
+	void testTierAuthorizationNotEscalatedFromToken(VertxTestContext context) throws Exception {
+		// Alice self-issues a token that claims api:admin, but she is only entitled to api:client.
+		// The server must grant api:client and refuse api:admin, regardless of the token's claim.
+		String token = generateClientToken(aliceIdentity, alice.getId(), null,
+				superNodeIdentity.getId(), 0, "api:admin");
+
+		auth.authenticate(new TokenCredentials(token)).onComplete(context.succeeding(user -> {
+			context.verify(() -> {
+				assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.CLIENT.toString())));
+				assertFalse(user.authorizations().verify(RoleBasedAuthorization.create(Role.ADMIN.toString())));
+				assertFalse(user.authorizations().verify(RoleBasedAuthorization.create(Role.FEDERATION.toString())));
+				context.completeNow();
+			});
+		}));
+	}
+
+	@Test
+	void testAdminUserGrantedAdminAuthorization(VertxTestContext context) throws Exception {
+		final Identity adminIdentity = new CryptoIdentity();
+		final ClientUser admin = new TestClientUser(adminIdentity.getId(), "Admin", null, null, null, true);
+
+		CwtAuthOptions adminOptions = new CwtAuthOptions()
+				.setIdentity(superNodeIdentity)
+				.setExpectedAudience(superNodeIdentity.getId())
+				.setLeeway(0)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<?> getUser(Id userId) {
+						return userId.equals(admin.getId()) ?
+								Future.succeededFuture(admin) : Future.succeededFuture(null);
+					}
+
+					@Override
+					public Future<?> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(null);
+					}
+				});
+		CwtAuth adminAuth = CwtAuth.create(adminOptions);
+
+		// Server-issued token; the admin user is entitled to both client and admin tiers.
+		String token = adminAuth.generateToken(admin.getId(), "api:admin");
+		adminAuth.authenticate(new TokenCredentials(token)).onComplete(context.succeeding(user -> {
+			context.verify(() -> {
+				assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.CLIENT.toString())));
+				assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.ADMIN.toString())));
+				context.completeNow();
+			});
+		}));
 	}
 }

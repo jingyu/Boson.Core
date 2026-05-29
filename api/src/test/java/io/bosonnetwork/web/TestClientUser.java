@@ -11,8 +11,9 @@ public class TestClientUser implements ClientUser {
 	private final String bio;
 	private final long created;
 	private final long updated;
+	private final boolean admin;
 
-	public TestClientUser(Id id, String name, String avatar, String email, String bio) {
+	public TestClientUser(Id id, String name, String avatar, String email, String bio, boolean admin) {
 		this.id = id;
 		this.name = name;
 		this.avatar = avatar;
@@ -20,6 +21,11 @@ public class TestClientUser implements ClientUser {
 		this.bio = bio;
 		this.created = System.currentTimeMillis();
 		this.updated = created;
+		this.admin = admin;
+	}
+
+	public TestClientUser(Id id, String name, String avatar, String email, String bio) {
+		this(id, name, avatar, email, bio, false);
 	}
 
 	@Override
@@ -65,5 +71,10 @@ public class TestClientUser implements ClientUser {
 	@Override
 	public String getPlanName() {
 		return "Free";
+	}
+
+	@Override
+	public boolean isAdmin() {
+		return admin;
 	}
 }

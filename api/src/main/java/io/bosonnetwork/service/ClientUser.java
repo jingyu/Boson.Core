@@ -94,4 +94,13 @@ public interface ClientUser {
 	 * @return the plan name
 	 */
 	String getPlanName();
+
+	/**
+	 * Determines if the user has administrative privileges.
+	 *
+	 * @return {@code true} if the user is an administrator, {@code false} otherwise
+	 */
+	default boolean isAdmin() {
+		return false;
+	}
 }

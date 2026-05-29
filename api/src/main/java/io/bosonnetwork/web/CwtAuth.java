@@ -23,9 +23,11 @@
 package io.bosonnetwork.web;
 
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import io.vertx.core.Future;
 import io.vertx.core.json.JsonObject;
@@ -34,6 +36,10 @@ import io.vertx.ext.auth.authentication.AuthenticationProvider;
 import io.vertx.ext.auth.authentication.CredentialValidationException;
 import io.vertx.ext.auth.authentication.Credentials;
 import io.vertx.ext.auth.authentication.TokenCredentials;
+import io.vertx.ext.auth.authorization.Authorization;
+import io.vertx.ext.auth.authorization.RoleBasedAuthorization;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -42,8 +48,9 @@ import io.bosonnetwork.cwt.Claim;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.service.SuperNodeInfo;
+import io.bosonnetwork.service.Role;
 import io.bosonnetwork.service.ServiceInfo;
+import io.bosonnetwork.service.SuperNodeInfo;
 
 /**
  * A CBOR Web Token (CWT) authentication provider.
@@ -53,6 +60,8 @@ import io.bosonnetwork.service.ServiceInfo;
  * using CBOR and Base64Url encoding.
  */
 public class CwtAuth implements AuthenticationProvider {
+	private static final Logger log = LoggerFactory.getLogger(CwtAuth.class);
+
 	private final Identity identity;
 	private final ClientProvider clientProvider;
 	private final int defaultTtl;
@@ -66,8 +75,13 @@ public class CwtAuth implements AuthenticationProvider {
 		this.defaultScope = options.getDefaultScope();
 
 		this.cwtParser = SignedCwt.parser().setLeeway(options.getLeeway());
-		if (options.getExpectedAudience() != null)
+		if (options.getExpectedAudience() != null) {
 			this.cwtParser.requireAudience(options.getExpectedAudience());
+		} else {
+			log.warn("CwtAuth: no expected audience configured - tokens are accepted regardless of their " +
+					"'aud' claim, so a token minted for another server can be replayed against this one. " +
+					"Set CwtAuthOptions.setExpectedAudience(localNodeId) to restrict tokens to this server.");
+		}
 	}
 
 	/**
@@ -173,19 +187,26 @@ public class CwtAuth implements AuthenticationProvider {
 	private User createUser(Object client, String scope, SignedCwt cwt, String accessToken) {
 		final Id userId;
 		final Id clientId;
+		final Set<Authorization> authorizations = new HashSet<>();
 
 		if (client instanceof ClientUser u) {
 			userId = u.getId();
 			clientId = null;
+			authorizations.add(RoleBasedAuthorization.create(Role.CLIENT.toString()));
+			if (u.isAdmin())
+				authorizations.add(RoleBasedAuthorization.create(Role.ADMIN.toString()));
 		} else if (client instanceof ClientDevice d) {
 			userId = d.getUserId();
 			clientId = d.getId();
+			authorizations.add(RoleBasedAuthorization.create(Role.CLIENT.toString()));
 		} else if (client instanceof SuperNodeInfo n) {
 			userId = n.getId();
 			clientId = null;
+			authorizations.add(RoleBasedAuthorization.create(Role.FEDERATION.toString()));
 		} else if (client instanceof ServiceInfo s) {
 			userId = s.getNodeId();
 			clientId = s.getPeerId();
+			authorizations.add(RoleBasedAuthorization.create(Role.FEDERATION.toString()));
 		} else {
 			throw new IllegalStateException("Invalid client type: " + client.getClass().getName());
 		}
@@ -217,7 +238,10 @@ public class CwtAuth implements AuthenticationProvider {
 		map.put("sub", userId);
 		JsonObject attributes = new JsonObject(Map.copyOf(map));
 
-		return User.create(principal, attributes);
+		User user = User.create(principal, attributes);
+		user.authorizations().put("boson", authorizations);
+
+		return user;
 	}
 
 	/**

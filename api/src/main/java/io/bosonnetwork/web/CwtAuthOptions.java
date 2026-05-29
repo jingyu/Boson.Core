@@ -111,8 +111,14 @@ public class CwtAuthOptions {
 
 	/**
 	 * Sets the expected audience ID to enforce on received tokens.
+	 * <p>
+	 * Audience validation is <b>optional and opt-in</b>. When set, only tokens whose {@code aud}
+	 * claim equals this ID are accepted. When left {@code null} (the default), the {@code aud} claim
+	 * is not checked, so a token minted for another server can be replayed against this one;
+	 * {@link CwtAuth} logs a warning at construction time in that case. Production deployments should
+	 * set this to the local server (node or service) {@link Id}.
 	 *
-	 * @param expectedAudience the expected audience ID; if null, audience validation is bypassed
+	 * @param expectedAudience the expected audience ID; if null, audience validation is disabled
 	 * @return this CwtAuthOptions instance for method chaining
 	 */
 	public CwtAuthOptions setExpectedAudience(Id expectedAudience) {
