@@ -376,9 +376,26 @@ public class DIDDocumentTests {
 		assertEquals(identity.getId(), doc.getId());
 		assertTrue(doc.isGenuine());
 
-		doc.getProof().getProofValue()[0] = (byte) (doc.getProof().getProofValue()[0] + 1);
-		assertFalse(doc.isGenuine());
-		assertThrows(InvalidSignatureException.class, doc::validate);
+		// Corrupt the proof signature within the serialized form, then re-parse
+		byte[] tampered = doc.toBytes();
+		byte[] sig = doc.getProof().getProofValue();
+		int idx = -1;
+		for (int i = 0; idx < 0 && i <= tampered.length - sig.length; i++) {
+			boolean match = true;
+			for (int j = 0; j < sig.length; j++) {
+				if (tampered[i + j] != sig[j]) {
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				idx = i;
+		}
+		assertTrue(idx >= 0);
+		tampered[idx] ^= 0x01;
+		var tamperedDoc = DIDDocument.parse(tampered);
+		assertFalse(tamperedDoc.isGenuine());
+		assertThrows(InvalidSignatureException.class, tamperedDoc::validate);
 	}
 
 	@Test

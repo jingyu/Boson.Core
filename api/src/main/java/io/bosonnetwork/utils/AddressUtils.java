@@ -575,28 +575,28 @@ public class AddressUtils {
 		}
 	}
 
-	/*/
-	public static InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
-		try {
-			for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-				if (!nif.isUp() || nif.isLoopback() || nif.isVirtual())
-					continue;
-
-				for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
-					if (!type.isInstance(addr))
-						continue;
-					if (addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress())
-						continue;
-
-					return addr;
-				}
-			}
+	/**
+	 * Retrieves the default network interface associated with the specified address type.
+	 * The default network interface is determined by resolving the default routing
+	 * address for the provided address type.
+	 *
+	 * @param type the address class (Inet4Address or Inet6Address) used to determine
+	 *             the default network interface.
+	 * @return the default {@code NetworkInterface} for the specified address type,
+	 *         or {@code null} if no default interface is found.
+	 * @throws RuntimeException if there is an error retrieving the network interface.
+	 */
+	public static NetworkInterface getDefaultNetworkInterface(Class<? extends InetAddress> type) {
+		InetAddress defaultAddress = getDefaultRouteAddress(type);
+		if (defaultAddress == null)
 			return null;
+
+		try {
+			return NetworkInterface.getByInetAddress(defaultAddress);
 		} catch (SocketException e) {
-			throw new RuntimeException("Failed to get default router address", e);
+			throw new RuntimeException("Failed to get default network interface", e);
 		}
 	}
-	*/
 
 	/**
 	 * Converts a socket address to a readable string, with optional alignment.

@@ -62,7 +62,6 @@ import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
-import io.bosonnetwork.BosonException;
 import io.bosonnetwork.utils.Base58;
 
 /**
@@ -70,15 +69,6 @@ import io.bosonnetwork.utils.Base58;
  * using the Bouncy Castle library.
  */
 public class CertUtilBouncyCastle {
-	/**
-	 * Represents a pair of PEM-encoded certificate and private key.
-	 *
-	 * @param cert       the PEM-encoded certificate
-	 * @param privateKey the PEM-encoded private key
-	 */
-	public record PemCertificateAndKey(String cert, String privateKey) {
-	}
-
 	/**
 	 * Initializes the security provider.
 	 * Adds {@link BouncyCastleProvider} to the security providers.
@@ -94,12 +84,12 @@ public class CertUtilBouncyCastle {
 	 * @param ipAddress           the IP address to include in the Subject Alternative Name (SAN)
 	 * @param hostName            the host name to include in the Subject Alternative Name (SAN)
 	 * @param enableWildcard      whether to include a wildcard host name in the SAN
-	 * @return a {@link PemCertificateAndKey} containing the PEM-encoded certificate and private key
-	 * @throws KeyConvertException if an error occurs during key conversion or certificate generation
+	 * @return a {@link CryptoUtil.PemCertificateAndKey} containing the PEM-encoded certificate and private key
+	 * @throws CryptoUtil.KeyConvertException if an error occurs during key conversion or certificate generation
 	 */
-	public static PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey signaturePrivateKey,
+	public static CryptoUtil.PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey signaturePrivateKey,
 	                                                                          String ipAddress, String hostName, boolean enableWildcard)
-			throws KeyConvertException {
+			throws CryptoUtil.KeyConvertException {
 		try {
 			// Extract the 32-byte seed and public key from libsodium 64-byte SK
 			byte[] sodiumSecretKey = signaturePrivateKey.bytes();
@@ -156,7 +146,7 @@ public class CertUtilBouncyCastle {
 			if (ipAddress != null)
 				subjectAltNames.add(new GeneralName(GeneralName.iPAddress, ipAddress));
 			if (subjectAltNames.isEmpty())
-				throw new KeyConvertException("At least one SAN (hostname or IP) must be provided");
+				throw new CryptoUtil.KeyConvertException("At least one SAN (hostname or IP) must be provided");
 
 			// Ed25519 signatures don't use a hash — pass "Ed25519" directly
 			ContentSigner signer = new JcaContentSignerBuilder("Ed25519")
@@ -186,11 +176,11 @@ public class CertUtilBouncyCastle {
 			String keyPem = toPemString(privateKey);
 			String certPem = toPemString(certHolder);
 
-			return new PemCertificateAndKey(certPem, keyPem);
-		} catch (KeyConvertException e) {
+			return new CryptoUtil.PemCertificateAndKey(certPem, keyPem);
+		} catch (CryptoUtil.KeyConvertException e) {
 			throw e;
 		} catch (Exception e) {
-			throw new KeyConvertException("Failed to convert key to PEM format key and certificate", e);
+			throw new CryptoUtil.KeyConvertException("Failed to convert key to PEM format key and certificate", e);
 		}
 	}
 
@@ -200,31 +190,5 @@ public class CertUtilBouncyCastle {
 			writer.writeObject(obj);
 		}
 		return sw.toString();
-	}
-
-	/**
-	 * Exception thrown when an error occurs during key conversion or certificate generation.
-	 */
-	public static class KeyConvertException extends BosonException {
-		private static final long serialVersionUID = -5975318365528633648L;
-
-		/**
-		 * Constructs a new KeyConvertException with the specified detail message.
-		 *
-		 * @param message the detail message
-		 */
-		public KeyConvertException(String message) {
-			super(message);
-		}
-
-		/**
-		 * Constructs a new KeyConvertException with the specified detail message and cause.
-		 *
-		 * @param message the detail message
-		 * @param cause   the cause
-		 */
-		public KeyConvertException(String message, Throwable cause) {
-			super(message, cause);
-		}
 	}
 }

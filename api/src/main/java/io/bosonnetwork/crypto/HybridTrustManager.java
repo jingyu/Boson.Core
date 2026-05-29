@@ -57,7 +57,7 @@ public class HybridTrustManager implements X509TrustManager {
 	public HybridTrustManager(String expectedCn, byte[] expectedPublicKey) {
 		this.defaultTrustManager = getDefaultTrustManager();
 		this.expectedCn = expectedCn;
-		this.expectedPublicKey = expectedPublicKey;
+		this.expectedPublicKey = expectedPublicKey == null ? null : expectedPublicKey.clone();
 	}
 
 	private static X509TrustManager getDefaultTrustManager() {
@@ -121,9 +121,11 @@ public class HybridTrustManager implements X509TrustManager {
 			if (!cn.equals(expectedCn))
 				throw new CertificateException("CN mismatch");
 
-			// 4. Validate public key
+			// 4. Validate public key (Ed25519 raw key = last 32 bytes of the SPKI encoding)
 			PublicKey publicKey = cert.getPublicKey();
 			byte[] spki = publicKey.getEncoded();
+			if (spki == null || spki.length < 32)
+				throw new CertificateException("Unexpected public key encoding");
 			byte[] pk = Arrays.copyOfRange(spki, spki.length - 32, spki.length);
 			if (!Arrays.equals(pk, expectedPublicKey))
 				throw new CertificateException("Public key mismatch");

@@ -29,7 +29,7 @@ public class CryptoUtilTests {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 		String ipAddress = "127.0.0.1";
 
-		CertUtilBouncyCastle.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, null, false);
+		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, null, false);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -49,7 +49,7 @@ public class CryptoUtilTests {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 		String hostName = "localhost";
 
-		CertUtilBouncyCastle.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), null, hostName, true);
+		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), null, hostName, true);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -70,7 +70,7 @@ public class CryptoUtilTests {
 		String ipAddress = "127.0.0.1";
 		String hostName = "localhost";
 
-		CertUtilBouncyCastle.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
+		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -87,7 +87,7 @@ public class CryptoUtilTests {
 	public void testCertificateFromSignatureKeyBCNoSAN() {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 
-		assertThrows(CertUtilBouncyCastle.KeyConvertException.class, () ->
+		assertThrows(CryptoUtil.KeyConvertException.class, () ->
 				CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), null, null, false)
 		);
 	}
@@ -112,7 +112,7 @@ public class CryptoUtilTests {
 		assertTrue(result.privateKey().contains("-----BEGIN PRIVATE KEY-----"));
 
 		// Compare with reference implementation
-		CertUtilBouncyCastle.PemCertificateAndKey ref = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
+		CryptoUtil.PemCertificateAndKey ref = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
 
 		System.out.println("Reference Implementation Result:");
 		System.out.println(ref.cert());

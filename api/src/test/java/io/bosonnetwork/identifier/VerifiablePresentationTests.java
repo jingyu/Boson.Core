@@ -259,9 +259,26 @@ public class VerifiablePresentationTests {
 		assertEquals(identity.getId(), vp.getHolder());
 		assertTrue(vp.isGenuine());
 
-		vp.getProof().getProofValue()[0] = (byte) (vp.getProof().getProofValue()[0] + 1);
-		assertFalse(vp.isGenuine());
-		assertThrows(InvalidSignatureException.class, vp::validate);
+		// Corrupt the proof signature within the serialized form, then re-parse
+		byte[] tampered = vp.toBytes();
+		byte[] sig = vp.getProof().getProofValue();
+		int idx = -1;
+		for (int i = 0; idx < 0 && i <= tampered.length - sig.length; i++) {
+			boolean match = true;
+			for (int j = 0; j < sig.length; j++) {
+				if (tampered[i + j] != sig[j]) {
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				idx = i;
+		}
+		assertTrue(idx >= 0);
+		tampered[idx] ^= 0x01;
+		var tamperedVp = VerifiablePresentation.parse(tampered);
+		assertFalse(tamperedVp.isGenuine());
+		assertThrows(InvalidSignatureException.class, tamperedVp::validate);
 	}
 
 	@Test

@@ -129,7 +129,6 @@ public class Hex {
 
 		for (int i = 0; i < length; i++) {
 			int v = bytes[offset + i] & 0xFF;
-			//int v = bytes[offset + i];
 			chars[i << 1] = HEX_CHARS[(v >>> 4) & 0x0F];
 			chars[(i << 1) + 1] = HEX_CHARS[v & 0x0F];
 		}

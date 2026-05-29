@@ -120,7 +120,7 @@ public class Proof {
 		this.type = type;
 		this.created = created;
 		this.proofPurpose = proofPurpose;
-		this.proofValue = proofValue;
+		this.proofValue = proofValue.clone();
 		this.verificationMethod = verificationMethod;
 	}
 
@@ -166,7 +166,7 @@ public class Proof {
 	 * @return the proof value
 	 */
 	public byte[] getProofValue() {
-		return proofValue;
+		return proofValue.clone();
 	}
 
 	/**

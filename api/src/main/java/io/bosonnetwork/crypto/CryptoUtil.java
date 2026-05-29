@@ -43,6 +43,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
@@ -164,7 +165,7 @@ public class CryptoUtil {
 		tbs.addInt(serial);
 		tbs.addSeq(new DerBuilder().addOid("1.3.101.112")); // Algorithm: Ed25519
 		tbs.addSeq(new DerBuilder().addSet(new DerBuilder().addSeq(new DerBuilder().addOid("2.5.4.3").addPrintableString(cn)))); // Issuer
-		tbs.addSeq(new DerBuilder().addUtcTime(notBefore).addUtcTime(notAfter)); // Validity
+		tbs.addSeq(new DerBuilder().addTime(notBefore).addTime(notAfter)); // Validity
 		tbs.addSeq(new DerBuilder().addSet(new DerBuilder().addSeq(new DerBuilder().addOid("2.5.4.3").addPrintableString(cn)))); // Subject
 		tbs.addSeq(new DerBuilder().addSeq(new DerBuilder().addOid("1.3.101.112")).addBitString(pubKey)); // SubjectPublicKeyInfo
 
@@ -262,10 +263,18 @@ public class CryptoUtil {
 			return addTag((byte) 0x13, s.getBytes(StandardCharsets.US_ASCII));
 		}
 
-		public DerBuilder addUtcTime(Date d) throws IOException {
-			SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHHmmss'Z'");
-			sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-			return addTag((byte) 0x17, sdf.format(d).getBytes(StandardCharsets.US_ASCII));
+		// RFC 5280: encode dates before 2050 as UTCTime, and 2050 or later as GeneralizedTime.
+		public DerBuilder addTime(Date d) throws IOException {
+			int year = d.toInstant().atZone(ZoneOffset.UTC).getYear();
+			if (year < 2050) {
+				SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHHmmss'Z'");
+				sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+				return addTag((byte) 0x17, sdf.format(d).getBytes(StandardCharsets.US_ASCII)); // UTCTime
+			} else {
+				SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss'Z'");
+				sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+				return addTag((byte) 0x18, sdf.format(d).getBytes(StandardCharsets.US_ASCII)); // GeneralizedTime
+			}
 		}
 
 		public DerBuilder addBitString(byte[] b) throws IOException {

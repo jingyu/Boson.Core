@@ -216,6 +216,11 @@ public class VersionedSchema implements VertxDatabase {
 	 * <p>If an already-applied migration differs in version or checksum,
 	 * the migration process fails immediately.</p>
 	 *
+	 * <p><b>Concurrency:</b> this is not designed to run concurrently against the same database from
+	 * multiple instances. The {@code version} primary key prevents history corruption, but a losing
+	 * concurrent runner may fail with a duplicate-key error. Run migrations from a single instance,
+	 * or guard the call with an external lock.</p>
+	 *
 	 * @return a future that completes when all pending migrations have been applied,
 	 *         or fails if validation or execution fails
 	 */
@@ -494,9 +499,9 @@ public class VersionedSchema implements VertxDatabase {
 			while (i < line.length()) {
 				char c = line.charAt(i);
 
-				// Handle entering/exiting block comments
-				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && i + 1 < line.length()
-						&& line.charAt(i) == '/' && line.charAt(i + 1) == '*') {
+				// Handle entering/exiting block comments (not inside dollar-quoted blocks)
+				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && currentDollarTag == null
+						&& i + 1 < line.length() && line.charAt(i) == '/' && line.charAt(i + 1) == '*') {
 					inBlockComment = true;
 					i += 2;
 					continue;
@@ -511,9 +516,9 @@ public class VersionedSchema implements VertxDatabase {
 					continue;
 				}
 
-				// Handle line comments
-				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && i + 1 < line.length()
-						&& line.charAt(i) == '-' && line.charAt(i + 1) == '-') {
+				// Handle line comments (not inside dollar-quoted blocks)
+				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && currentDollarTag == null
+						&& i + 1 < line.length() && line.charAt(i) == '-' && line.charAt(i + 1) == '-') {
 					// the rest of the line is a comment
 					break;
 				}
@@ -742,7 +747,7 @@ public class VersionedSchema implements VertxDatabase {
 	private static final String createSchemaVersionTable = """
 			CREATE TABLE IF NOT EXISTS schema_versions(
 				version INTEGER PRIMARY KEY,
-				description VARCHAR(512) UNIQUE DEFAULT NULL,
+				description VARCHAR(512) DEFAULT NULL,
 				hash VARCHAR(128) NOT NULL,
 				applied_by VARCHAR(128),
 				applied_at BIGINT NOT NULL,
