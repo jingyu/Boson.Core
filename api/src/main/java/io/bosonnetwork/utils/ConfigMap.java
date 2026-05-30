@@ -116,9 +116,15 @@ public class ConfigMap implements Map<String, Object> {
 			return b ? 1 : 0;
 		else if (val instanceof String s)
 			try {
-				return Double.parseDouble(s);
-			} catch (NumberFormatException e) {
-				throw new IllegalArgumentException("Invalid number value - " + key + ": " + val);
+				// Try long first to preserve precision for integer-valued strings; fall back to
+				// double for true floating-point values.
+				return Long.parseLong(s);
+			} catch (NumberFormatException ignoreLong) {
+				try {
+					return Double.parseDouble(s);
+				} catch (NumberFormatException e) {
+					throw new IllegalArgumentException("Invalid number value - " + key + ": " + val);
+				}
 			}
 		else
 			throw new IllegalArgumentException("Invalid number value - " + key + ": " + val);
@@ -362,7 +368,11 @@ public class ConfigMap implements Map<String, Object> {
 
 				try {
 					long size = Long.parseLong(s, 0, idx, 10);
-					return size * weight;
+					try {
+						return Math.multiplyExact(size, (long) weight);
+					} catch (ArithmeticException e) {
+						throw new IllegalArgumentException("Size value out of range for long - " + key + ": " + s, e);
+					}
 				} catch (NumberFormatException e) {
 					throw new IllegalArgumentException("Invalid size value - " + key + ": " + s, e);
 				}
@@ -435,8 +445,14 @@ public class ConfigMap implements Map<String, Object> {
 
 			try {
 				long number = Long.parseLong(s, 0, idx, 10);
-				return Duration.ofMillis(number * unit.getDuration().toMillis());
-			} catch (Exception e) {
+				long unitMillis = unit.getDuration().toMillis();
+				try {
+					return Duration.ofMillis(Math.multiplyExact(number, unitMillis));
+				} catch (ArithmeticException e) {
+					throw new IllegalArgumentException("Duration value out of range for long milliseconds - "
+							+ key + ": " + s, e);
+				}
+			} catch (NumberFormatException e) {
 				throw new IllegalArgumentException("Invalid duration value - " + key + ": " + s, e);
 			}
 		} else {
@@ -558,9 +574,14 @@ public class ConfigMap implements Map<String, Object> {
 	 * <p>
 	 * The value must be a Map, which will be wrapped in a new ConfigMap instance.
 	 * </p>
+	 * <p>
+	 * <strong>Note:</strong> unlike the scalar getters, this returns {@code null} (rather than
+	 * throwing) when the key is absent. Nested sections are commonly optional, and callers can
+	 * idiomatically write {@code if (m.getObject("section") == null)} to detect that. Use
+	 * {@link #containsKey(Object)} first if you want to distinguish "absent" from "explicitly null."
 	 *
 	 * @param key the configuration key, key must not be null
-	 * @return a ConfigMap wrapping the nested configuration, or null if the key is not present
+	 * @return a ConfigMap wrapping the nested configuration, or {@code null} if the key is not present
 	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a Map
 	 */
@@ -583,10 +604,13 @@ public class ConfigMap implements Map<String, Object> {
 	 * <p>
 	 * The value must be a List. The returned list is cast to the specified type parameter.
 	 * </p>
+	 * <p>
+	 * <strong>Note:</strong> like {@link #getObject(String)}, this returns {@code null} (rather
+	 * than throwing) when the key is absent — list configuration sections are commonly optional.
 	 *
 	 * @param <T> the type of elements in the list
 	 * @param key the configuration key, key must not be null
-	 * @return the list value, or null if the key is not present
+	 * @return the list value, or {@code null} if the key is not present
 	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a List
 	 */

@@ -36,6 +36,8 @@ import java.util.function.Function;
  * @param <D> type for value d.
  */
 public class Quadruple<A, B, C, D> {
+	private static final Quadruple<?, ?, ?, ?> EMPTY = new Quadruple<>(null, null, null, null);
+
 	private final A a;
 	private final B b;
 	private final C c;
@@ -71,6 +73,20 @@ public class Quadruple<A, B, C, D> {
 	 */
 	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> of(A1 a, B1 b, C1 c, D1 d) {
 		return new Quadruple<>(a, b, c, d);
+	}
+
+	/**
+	 * Returns an immutable, empty Quadruple instance in which all four values are null.
+	 *
+	 * @param <A1> the type of the first value in the quadruple.
+	 * @param <B1> the type of the second value in the quadruple.
+	 * @param <C1> the type of the third value in the quadruple.
+	 * @param <D1> the type of the fourth value in the quadruple.
+	 * @return an empty Quadruple instance with null values.
+	 */
+	@SuppressWarnings("unchecked")
+	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> empty() {
+		return (Quadruple<A1, B1, C1, D1>) EMPTY;
 	}
 
 	/**

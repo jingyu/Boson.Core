@@ -34,7 +34,7 @@ import java.util.stream.Stream;
 /**
  * A mutable container object which may or may not contain a value.
  * Unlike {@link Optional}, {@code Variable} allows the contained value to be
- * changed after creation using {@link #set} or {@link #setNullable}.
+ * changed after creation using {@link #set} or {@link #setIfAbsent}.
  * If a value is present, it can be retrieved with {@link #get} or processed
  * using methods like {@link #ifPresent}, {@link #map}, or {@link #flatMap}.
  * If no value is present, certain methods provide default values or actions.
@@ -111,18 +111,16 @@ public class Variable<T> {
 	}
 
 	/**
-	 * Sets the value contained by this {@code Variable} to the specified value,
-	 * which may be {@code null}, only if no value is currently present.
-	 *
+	 * Sets the value to {@code value} only if no value is currently present. If a value is
+	 * already held, this method does nothing — the existing value is not replaced.
 	 * <p>
-	 * This method is useful for conditionally setting a value when the
-	 * {@code Variable} is empty. To unconditionally set a nullable value, use
-	 * the constructor or {@link #ofNullable}.
-	 * </p>
+	 * Equivalent to {@code Map.putIfAbsent} semantics, but applied to a single slot. The
+	 * argument may be {@code null}; passing {@code null} when the variable is already empty
+	 * is a no-op as well (the variable remains empty).
 	 *
 	 * @param value the new value, which may be {@code null}
 	 */
-	public void setNullable(T value) {
+	public void setIfAbsent(T value) {
 		if (this.value == null)
 			this.value = value;
 	}

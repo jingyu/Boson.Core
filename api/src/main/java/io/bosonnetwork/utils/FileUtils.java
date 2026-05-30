@@ -49,7 +49,25 @@ import java.util.Map;
  * <p>
  * All methods in this class are static and the class cannot be instantiated.
  */
-public class FileUtils {
+public final class FileUtils {
+	private FileUtils() {
+	}
+
+	/**
+	 * Returns the resolved XDG base directory for the given env var name, falling back to
+	 * {@code ~/relativeFallback} when the env var is absent or empty.
+	 *
+	 * @param envVar the XDG environment variable name (e.g. {@code XDG_CONFIG_HOME})
+	 * @param relativeFallback the fallback path under the user home if the env var is unset
+	 * @return the resolved path
+	 */
+	private static Path xdgPath(String envVar, String relativeFallback) {
+		String xdg = System.getenv(envVar);
+		if (xdg != null && !xdg.isEmpty())
+			return Path.of(xdg);
+		return Path.of(System.getProperty("user.home"), relativeFallback);
+	}
+
 	/**
 	 * Deletes the specified file or directory from the file system.
 	 * <p>
@@ -177,15 +195,10 @@ public class FileUtils {
 	 */
 	public static Path getUserConfigDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
-		if (osName.startsWith("windows")) {
+		if (osName.startsWith("windows"))
 			return Path.of(System.getenv("APPDATA"));
-		} else if (osName.startsWith("mac")) {
-			// return Path.of(System.getProperty("user.home"), "Library/Preferences");
-			return Path.of(System.getProperty("user.home"), ".config");
-		} else {
-			// Unix like OS
-			return Path.of(System.getProperty("user.home"), ".config");
-		}
+		// macOS uses XDG style here (intentionally — see class doc)
+		return xdgPath("XDG_CONFIG_HOME", ".config");
 	}
 
 	/**
@@ -236,15 +249,9 @@ public class FileUtils {
 	 */
 	public static Path getUserDataDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
-		if (osName.startsWith("windows")) {
+		if (osName.startsWith("windows"))
 			return Path.of(System.getenv("LOCALAPPDATA"));
-		} else if (osName.startsWith("mac")) {
-			//return Path.of(System.getProperty("user.home"), "Library/Application Support");
-			return Path.of(System.getProperty("user.home"), ".local/share");
-		} else {
-			// Unix like OS
-			return Path.of(System.getProperty("user.home"), ".local/share");
-		}
+		return xdgPath("XDG_DATA_HOME", ".local/share");
 	}
 
 	/**
@@ -293,15 +300,9 @@ public class FileUtils {
 	 */
 	public static Path getUserCacheDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
-		if (osName.startsWith("windows")) {
+		if (osName.startsWith("windows"))
 			return Path.of(System.getenv("LOCALAPPDATA"));
-		} else if (osName.startsWith("mac")) {
-			// return Path.of(System.getProperty("user.home"), "Library/Caches");
-			return Path.of(System.getProperty("user.home"), ".cache");
-		} else {
-			// Unix like OS
-			return Path.of(System.getProperty("user.home"), ".cache");
-		}
+		return xdgPath("XDG_CACHE_HOME", ".cache");
 	}
 
 	/**
@@ -350,21 +351,22 @@ public class FileUtils {
 	 */
 	public static Path getUserLogDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
-		if (osName.startsWith("windows")) {
+		if (osName.startsWith("windows"))
 			return Path.of(System.getenv("LOCALAPPDATA"));
-		} else if (osName.startsWith("mac")) {
-			// return Path.of(System.getProperty("user.home"), "Library/Logs");
-			return Path.of(System.getProperty("user.home"), ".local/state");
-		} else {
-			// Unix like OS
-			return Path.of(System.getProperty("user.home"), ".local/state");
-		}
+		return xdgPath("XDG_STATE_HOME", ".local/state");
 	}
 
 	/**
-	 * Converts a {@link URL} to a {@link Path}.
-	 * This method handles URLs with "jar" schemes and properly retrieves the corresponding
-	 * filesystem path for entries within JAR files.
+	 * Converts a {@link URL} to a {@link Path}, handling both regular file URLs and entries
+	 * inside JAR archives (the {@code jar:} scheme).
+	 * <p>
+	 * <strong>JAR FileSystem caching:</strong> for a {@code jar:} URL this method opens a JAR
+	 * {@link java.nio.file.FileSystem} lazily and caches it process-wide (subsequent calls for the
+	 * same archive return the same FileSystem via the {@code FileSystemAlreadyExistsException}
+	 * branch). The cached FileSystem is intentionally not closed — callers should not close the
+	 * returned Path's FileSystem either, since other callers may still hold derived Paths into the
+	 * same archive. In practice the number of distinct JARs is small (resource lookups), so this
+	 * is the desired behavior.
 	 *
 	 * @param url the {@link URL} to be converted to a {@link Path}, must not be null
 	 * @return the {@link Path} corresponding to the given {@link URL}

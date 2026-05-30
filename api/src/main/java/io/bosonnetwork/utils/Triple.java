@@ -35,6 +35,8 @@ import java.util.function.Function;
  * @param <C> type for value c.
  */
 public class Triple<A, B, C> {
+	private static final Triple<?, ?, ?> EMPTY = new Triple<>(null, null, null);
+
 	private final A a;
 	private final B b;
 	private final C c;
@@ -65,6 +67,19 @@ public class Triple<A, B, C> {
 	 */
 	public static <A1, B1, C1> Triple<A1, B1, C1> of(A1 a, B1 b, C1 c) {
 		return new Triple<>(a, b, c);
+	}
+
+	/**
+	 * Returns an immutable, empty Triple instance in which all three values are null.
+	 *
+	 * @param <A1> the type of the first value in the triple.
+	 * @param <B1> the type of the second value in the triple.
+	 * @param <C1> the type of the third value in the triple.
+	 * @return an empty Triple instance with null values.
+	 */
+	@SuppressWarnings("unchecked")
+	public static <A1, B1, C1> Triple<A1, B1, C1> empty() {
+		return (Triple<A1, B1, C1>) EMPTY;
 	}
 
 	/**

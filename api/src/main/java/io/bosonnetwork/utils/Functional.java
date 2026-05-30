@@ -28,7 +28,10 @@ import java.util.function.Consumer;
 /**
  * Some functional helper methods.
  */
-public class Functional {
+public final class Functional {
+	private Functional() {
+	}
+
 	/**
 	 * Feeds the object to the {@code Consumer} and return the object.
 	 *
@@ -95,10 +98,18 @@ public class Functional {
 	}
 
 	/**
-	 * Wrap the checked exception to unchecked exception.
+	 * Invokes {@code f} and returns its result; if {@code f} throws a checked exception, that
+	 * exception is rethrown without being declared.
+	 * <p>
+	 * <strong>This uses the "sneaky-throw" idiom</strong> — the original exception is rethrown
+	 * as-is using a generic-erasure trick, not wrapped in a {@code RuntimeException}. A caller's
+	 * {@code catch (IOException e)} clause will still match an {@code IOException} thrown from
+	 * {@code f}, even though this method's signature does not declare it. Use this only where
+	 * declaring the checked type is impossible (e.g. inside a {@code Function} / {@code Supplier})
+	 * and the caller is prepared for the actual exception type to surface.
 	 *
 	 * @param <T> the return type.
-	 * @param f the supplier function with throw exceptions.
+	 * @param f the supplier function, which may throw any {@link Throwable}.
 	 * @return the result from the supplier.
 	 */
 	public static <T> T unchecked(ThrowingSupplier<? extends T, ?> f) {

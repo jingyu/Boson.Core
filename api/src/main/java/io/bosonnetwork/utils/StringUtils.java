@@ -29,7 +29,10 @@ import java.util.Random;
 /**
  * Common String related utility functions
  */
-public class StringUtils {
+public final class StringUtils {
+	private StringUtils() {
+	}
+
 	private static final Random rnd = new SecureRandom();
 
 	/**

@@ -29,16 +29,13 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
-import java.lang.reflect.Field;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class AddressUtilsTests {
@@ -245,59 +242,6 @@ public class AddressUtilsTests {
 		// Invalid type
 		assertThrows(IllegalArgumentException.class, () -> AddressUtils.getDefaultRouteAddress(null),
 				"Unsupported type should throw IllegalArgumentException");
-	}
-
-	@Disabled
-	@Test
-	void testUpdateBogonRanges() {
-		// Store original subnets to restore after test
-		List<?> originalIpv4Subnets = null;
-		List<?> originalIpv6Subnets = null;
-
-		try {
-			Field ipv4Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv4");
-			Field ipv6Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv6");
-			ipv4Field.setAccessible(true);
-			ipv6Field.setAccessible(true);
-			originalIpv4Subnets = (List<?>) ipv4Field.get(null);
-			originalIpv6Subnets = (List<?>) ipv6Field.get(null);
-
-			// Mock network calls
-			AddressUtils.updateBogonRanges();
-
-			// Verify updated Bogon lists using reflection
-			ipv4Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv4");
-			ipv6Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv6");
-			ipv4Field.setAccessible(true);
-			ipv6Field.setAccessible(true);
-			List<?> ipv4Subnets = (List<?>) ipv4Field.get(null);
-			List<?> ipv6Subnets = (List<?>) ipv6Field.get(null);
-
-			// Verify updated Bogon lists
-			assertNotNull(ipv4Subnets, "IPv4 Bogon subnets should not be null");
-			assertNotNull(ipv6Subnets, "IPv6 Bogon subnets should not be null");
-			assertFalse(ipv4Subnets.isEmpty(), "IPv4 Bogon subnets should not be empty");
-			assertFalse(ipv6Subnets.isEmpty(), "IPv6 Bogon subnets should not be empty");
-
-			ipv4Subnets.forEach(System.out::println);
-			ipv6Subnets.forEach(System.out::println);
-		} catch (NoSuchFieldException | IllegalAccessException e) {
-			fail(e);
-		} finally {
-			// Restore original subnets
-			try {
-				Field ipv4Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv4");
-				Field ipv6Field = AddressUtils.class.getDeclaredField("bogonSubnetsIpv6");
-				ipv4Field.setAccessible(true);
-				ipv6Field.setAccessible(true);
-				if (originalIpv4Subnets != null)
-					ipv4Field.set(null, originalIpv4Subnets);
-				if (originalIpv6Subnets != null)
-					ipv6Field.set(null, originalIpv6Subnets);
-			} catch (NoSuchFieldException | IllegalAccessException e) {
-				fail(e);
-			}
-		}
 	}
 
 	@Test

@@ -24,11 +24,14 @@ package io.bosonnetwork.utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 
 /**
  * File based application instance exclusive lock, guarantee the application can only run
@@ -86,6 +89,16 @@ public class ApplicationLock implements AutoCloseable {
 			lock = fc.tryLock(0, Long.MAX_VALUE, false);
 			if (lock == null)
 				throw new IllegalStateException("Already locked by another instance.");
+			// Write owner metadata so a reader can answer "who is holding this?". Best-effort —
+			// failure to write the marker does not affect the lock itself.
+			try {
+				String marker = ProcessHandle.current().pid() + " " + Instant.now() + System.lineSeparator();
+				fc.truncate(0);
+				fc.write(ByteBuffer.wrap(marker.getBytes(StandardCharsets.UTF_8)));
+				fc.force(true);
+			} catch (IOException ignore) {
+				// Owner marker is informational only; the lock itself is held by the file lock.
+			}
 		} catch (IOException | RuntimeException | Error e) {
 			fc.close();
 			fc = null;
@@ -94,6 +107,10 @@ public class ApplicationLock implements AutoCloseable {
 	}
 
 	private void unlock() {
+		// Only delete the lock file if we are confident we still own it. Without this guard, a
+		// late-running close() after the OS released our file lock can end up deleting a successor
+		// process's lock file (the file name is the same but the OS-level lock has moved on).
+		boolean stillOwnsLock = lock != null && lock.isValid();
 		try {
 			if (lock != null) {
 				lock.close();
@@ -105,7 +122,8 @@ public class ApplicationLock implements AutoCloseable {
 				fc = null;
 			}
 
-			Files.deleteIfExists(lockFile);
+			if (stillOwnsLock)
+				Files.deleteIfExists(lockFile);
 		} catch (IOException ignore) {
 			// Ignore cleanup errors
 		} finally {

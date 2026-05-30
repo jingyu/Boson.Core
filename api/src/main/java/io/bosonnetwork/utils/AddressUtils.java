@@ -23,9 +23,7 @@
 
 package io.bosonnetwork.utils;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -33,10 +31,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.net.URI;
-import java.net.URLConnection;
 import java.net.UnknownHostException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -54,29 +49,37 @@ import io.vertx.core.net.SocketAddress;
  * @see <a href="https://en.wikipedia.org/wiki/Reserved_IP_addresses">Reserved IP addresses</a>
  * @see <a href="https://en.wikipedia.org/wiki/Martian_packet">Martian packet</a>
  */
-public class AddressUtils {
-	// IPv4 Bogon ranges (excludes ranges covered by InetAddress methods)
+public final class AddressUtils {
+	private AddressUtils() {
+	}
+
+	// IPv4 Bogon ranges. Some entries overlap with InetAddress.isSiteLocalAddress() /
+	// isLoopbackAddress() / isLinkLocalAddress() / isMulticastAddress() — kept here explicitly
+	// so the table reads as a self-contained list of RFC-classified non-routable ranges.
 	// Reference: RFC 1918, RFC 6890
 	private static final String[] IPV4_BOGON_RANGES = {
-			// "0.0.0.0/8",			// Any local
-			// "10.0.0.0/8",		// Site local
+			"0.0.0.0/8",            // Any local
+			"10.0.0.0/8",           // Site local
 			"100.64.0.0/10",        // Private network - shared address space (RFC 6598)
-			// "127.0.0.0/8",		// Loopback
-			// "169.254.0.0/16",	// Link local
-			// "172.16.0.0/12",		// Site local
+			"127.0.0.0/8",          // Loopback
+			"169.254.0.0/16",       // Link local
+			"172.16.0.0/12",        // Site local
 			"192.0.0.0/24",         // Reserved (IANA)
 			"192.0.2.0/24",         // Documentation (TEST-NET-1)
-			// "192.168.0.0/16",	// Site local
+			"192.168.0.0/16",       // Site local
 			"198.18.0.0/15",        // Benchmarking (RFC 2544)
 			"198.51.100.0/24",      // Documentation (TEST-NET-2)
 			"203.0.113.0/24",       // Documentation (TEST-NET-3)
-			// "224.0.0.0/4",		// Multicast
+			"224.0.0.0/4",          // Multicast
 			"233.252.0.0/24",       // Documentation
 			"240.0.0.0/4",          // Reserved (partially allocated)
-			"255.255.255.255/32"	// Broadcast
+			"255.255.255.255/32"    // Broadcast
 	};
 
-	// IPv6 Bogon ranges (excludes ranges covered by InetAddress methods)
+	// IPv6 Bogon ranges. Some entries overlap with InetAddress.isLinkLocalAddress() /
+	// isSiteLocalAddress() / isMulticastAddress(), and some are subsets of broader entries in this
+	// table (e.g. ::ffff:0:0/96 ⊂ ::/8; Teredo / Benchmarking / ORCHID ⊂ 2001::/23) — kept here
+	// explicitly so the table reads as a self-contained list of RFC-classified non-routable ranges.
 	// Reference: RFC 4291, RFC 6890
 	private static final String[] IPV6_BOGON_RANGES = {
 			"::/8",                 // Reserved
@@ -92,14 +95,14 @@ public class AddressUtils {
 			"3fff::/20",            // Documentation
 			"3ffe::/16",            // 6bone testing
 			"5f00::/16",            // Segment Routing (SRv6) SIDs
-			"fc00::/7"              // Unique local address (RFC 4193)
-			// "fe80::/10",			// Link local
-			// "fec0::/10",			// Site local
-			// "ff00::/8"			// Multicast
+			"fc00::/7",             // Unique local address (RFC 4193)
+			"fe80::/10",            // Link local
+			"fec0::/10",            // Site local
+			"ff00::/8"              // Multicast
 	};
 
-	private static List<Subnet> bogonSubnetsIpv4;
-	private static List<Subnet> bogonSubnetsIpv6;
+	private static final List<Subnet> bogonSubnetsIpv4;
+	private static final List<Subnet> bogonSubnetsIpv6;
 
 	static {
 		// Initialize Bogon subnets
@@ -183,7 +186,8 @@ public class AddressUtils {
 		}
 
 		private Subnet(byte[] network, int maskBits) {
-			this.network = network;
+			// defensive copy: callers should not be able to mutate our network bytes post-construction
+			this.network = network.clone();
 			this.maskBits = maskBits;
 		}
 
@@ -224,53 +228,6 @@ public class AddressUtils {
 		}
 	}
 
-	private static final String BOGON_IPV4_URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv4.txt";
-	private static final String BOGON_IPV6_URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv6.txt";
-	private static final int BOGON_CONNECT_TIMEOUT = 10_000; // ms
-	private static final int BOGON_READ_TIMEOUT = 30_000;    // ms
-
-	/**
-	 * Updates Bogon ranges from external sources (e.g., Team Cymru).
-	 * Fetches the latest IPv4 and IPv6 Bogon lists and updates the internal subnet lists.
-	 * Should be called periodically to keep Bogon ranges current.
-	 * <p>
-	 * <strong>Note:</strong> this performs blocking network I/O (with connect/read timeouts), so it
-	 * must <em>not</em> be called on a Vert.x event loop thread. The internal lists are replaced
-	 * atomically only after both lists are fetched successfully.
-	 *
-	 * @throws RuntimeException if the update fails due to network or parsing errors
-	 */
-	public static void updateBogonRanges() {
-		try {
-			List<Subnet> ipv4Subnets = loadBogonSubnets(BOGON_IPV4_URL);
-			List<Subnet> ipv6Subnets = loadBogonSubnets(BOGON_IPV6_URL);
-
-			// Update static lists (thread-safe) only after both fetches succeed
-			bogonSubnetsIpv4 = List.copyOf(ipv4Subnets);
-			bogonSubnetsIpv6 = List.copyOf(ipv6Subnets);
-		} catch (IOException e) {
-			throw new RuntimeException("Failed to update Bogon ranges", e);
-		}
-	}
-
-	private static List<Subnet> loadBogonSubnets(String url) throws IOException {
-		URLConnection conn = URI.create(url).toURL().openConnection();
-		conn.setConnectTimeout(BOGON_CONNECT_TIMEOUT);
-		conn.setReadTimeout(BOGON_READ_TIMEOUT);
-
-		List<Subnet> subnets = new ArrayList<>();
-		try (BufferedReader reader = new BufferedReader(
-				new InputStreamReader(conn.getInputStream(), StandardCharsets.US_ASCII))) {
-			String line;
-			while ((line = reader.readLine()) != null) {
-				String trimmed = line.trim();
-				if (!trimmed.startsWith("#") && !trimmed.isEmpty())
-					subnets.add(Subnet.of(trimmed));
-			}
-		}
-		return subnets;
-	}
-
 	/**
 	 * Checks if the socket address is a Bogon address or has an invalid port.
 	 * A Bogon address is an IP address that should not appear in public Internet routing tables.
@@ -290,7 +247,7 @@ public class AddressUtils {
 	 * @param addr the Vert.x socket address to check
 	 * @return true if the address is a Bogon address or the port is invalid (≤ 0 or > 65535), false otherwise
 	 * @throws IllegalArgumentException if the address is invalid
-	 * @throws NullPointerException if addr is null
+	 * @throws NullPointerException     if addr is null
 	 */
 	public static boolean isBogon(SocketAddress addr) {
 		Objects.requireNonNull(addr, "Socket address cannot be null");
@@ -328,37 +285,17 @@ public class AddressUtils {
 	public static boolean isBogon(InetAddress addr) {
 		Objects.requireNonNull(addr, "Address cannot be null");
 
-		// Check common Bogon types using InetAddress
-		if (addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress() ||
-				addr.isMulticastAddress() || addr.isSiteLocalAddress() || addr.isMCLinkLocal() ||
-				addr.isMCNodeLocal() || addr.isMCOrgLocal() || addr.isMCSiteLocal())
+		if (isSpecialUseAddress(addr))
 			return true;
 
-		// Handle IPv4-mapped addresses (::ffff:0:0/96)
-		if (addr instanceof Inet6Address) {
-			byte[] bytes = addr.getAddress();
-			if (bytes.length == 16 &&
-					bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 0 &&
-					bytes[4] == 0 && bytes[5] == 0 && bytes[6] == 0 && bytes[7] == 0 &&
-					bytes[8] == 0 && bytes[9] == 0 && bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff) {
-				try {
-					// Extract IPv4 part
-					byte[] ipv4Bytes = new byte[4];
-					System.arraycopy(bytes, 12, ipv4Bytes, 0, 4);
-					InetAddress ipv4Addr = InetAddress.getByAddress(ipv4Bytes);
-					// Check IPv4 Bogon ranges and properties
-					if (ipv4Addr.isAnyLocalAddress() || ipv4Addr.isLoopbackAddress() ||
-							ipv4Addr.isLinkLocalAddress() || ipv4Addr.isMulticastAddress() ||
-							ipv4Addr.isSiteLocalAddress())
-						return true;
-
-					for (Subnet subnet : bogonSubnetsIpv4) {
-						if (subnet.contains(ipv4Addr))
-							return true;
-					}
-				} catch (UnknownHostException e) {
-					return false; // Should not happen
-				}
+		// Handle IPv4-mapped addresses (::ffff:0:0/96) — check the embedded IPv4 surface too
+		InetAddress unmapped = unmapIPv4MappedIPv6(addr);
+		if (unmapped != null) {
+			if (isSpecialUseAddress(unmapped))
+				return true;
+			for (Subnet subnet : bogonSubnetsIpv4) {
+				if (subnet.contains(unmapped))
+					return true;
 			}
 		}
 
@@ -370,6 +307,44 @@ public class AddressUtils {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Returns {@code true} if the address falls into one of the InetAddress-classified
+	 * "special-use" categories: any-local, loopback, link-local, multicast (including all
+	 * MC scopes), and site-local. Shared between {@link #isBogon(InetAddress)} and
+	 * {@link #isMartian(InetAddress)} so the two stay in lockstep.
+	 */
+	private static boolean isSpecialUseAddress(InetAddress addr) {
+		return addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress() ||
+				addr.isMulticastAddress() || addr.isSiteLocalAddress() || addr.isMCLinkLocal() ||
+				addr.isMCNodeLocal() || addr.isMCOrgLocal() || addr.isMCSiteLocal();
+	}
+
+	/**
+	 * If {@code addr} is an IPv4-mapped IPv6 address ({@code ::ffff:0:0/96}), returns the
+	 * embedded IPv4 address; otherwise returns {@code null}. Lets classification routines
+	 * apply IPv4 rules to the mapped form.
+	 */
+	private static InetAddress unmapIPv4MappedIPv6(InetAddress addr) {
+		if (!(addr instanceof Inet6Address))
+			return null;
+		byte[] bytes = addr.getAddress();
+		if (bytes.length != 16)
+			return null;
+		for (int i = 0; i < 10; i++) {
+			if (bytes[i] != 0)
+				return null;
+		}
+		if (bytes[10] != (byte) 0xff || bytes[11] != (byte) 0xff)
+			return null;
+		try {
+			byte[] ipv4 = new byte[4];
+			System.arraycopy(bytes, 12, ipv4, 0, 4);
+			return InetAddress.getByAddress(ipv4);
+		} catch (UnknownHostException e) {
+			return null; // Should not happen
+		}
 	}
 
 	/**
@@ -389,9 +364,12 @@ public class AddressUtils {
 	 */
 	public static boolean isMartian(InetAddress addr) {
 		Objects.requireNonNull(addr, "Address cannot be null");
-		return addr.isAnyLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress() ||
-				addr.isMulticastAddress() || addr.isSiteLocalAddress() || addr.isMCLinkLocal() ||
-				addr.isMCNodeLocal() || addr.isMCOrgLocal() || addr.isMCSiteLocal();
+		if (isSpecialUseAddress(addr))
+			return true;
+		// Apply the same check on the IPv4 surface of an IPv4-mapped IPv6 address, so an address
+		// like ::ffff:127.0.0.1 is classified the same way isBogon() classifies it.
+		InetAddress unmapped = unmapIPv4MappedIPv6(addr);
+		return unmapped != null && isSpecialUseAddress(unmapped);
 	}
 
 	/**
@@ -464,6 +442,37 @@ public class AddressUtils {
 	}
 
 	/**
+	 * Checks if the IP address is a private (non-globally-routable) address.
+	 * <p>
+	 * Returns true for:
+	 * <ul>
+	 *   <li>IPv4 site-local (RFC 1918: {@code 10/8}, {@code 172.16/12}, {@code 192.168/16}) via
+	 *       {@link InetAddress#isSiteLocalAddress()};</li>
+	 *   <li>IPv4 shared address space (RFC 6598 / CGN, {@code 100.64.0.0/10}) — not covered by
+	 *       {@code isSiteLocalAddress()};</li>
+	 *   <li>IPv6 site-local ({@code fec0::/10}, deprecated) via {@code isSiteLocalAddress()};</li>
+	 *   <li>IPv6 Unique Local Addresses (RFC 4193, {@code fc00::/7}).</li>
+	 * </ul>
+	 *
+	 * @param addr the IP address to check
+	 * @return true if the address is private, false otherwise
+	 * @throws NullPointerException if addr is null
+	 */
+	public static boolean isPrivate(InetAddress addr) {
+		Objects.requireNonNull(addr, "Address cannot be null");
+		if (addr.isSiteLocalAddress())
+			return true;
+		byte[] b = addr.getAddress();
+		if (addr instanceof Inet4Address)
+			// RFC 6598: 100.64.0.0/10 — first byte 0x64 (100), top 2 bits of second byte = 01
+			return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 0x40;
+		if (addr instanceof Inet6Address)
+			// RFC 4193: fc00::/7 — top 7 bits = 1111110 (0xfc or 0xfd in the leading byte)
+			return (b[0] & 0xfe) == 0xfc;
+		return false;
+	}
+
+	/**
 	 * Checks if the IP address is a unicast address.
 	 * <p>
 	 * References:
@@ -509,7 +518,7 @@ public class AddressUtils {
 	public static Stream<InetAddress> getNonlocalAddresses() {
 		return getAllAddresses().filter(addr ->
 				!addr.isAnyLocalAddress() && !addr.isLoopbackAddress() &&
-				!addr.isLinkLocalAddress() && !addr.isMulticastAddress());
+						!addr.isLinkLocalAddress() && !addr.isMulticastAddress());
 	}
 
 	/**
@@ -555,22 +564,29 @@ public class AddressUtils {
 
 	/**
 	 * Gets the IP address of the default routing interface for the specified address type.
-	 * Uses a test connection to a public address (e.g., 8.8.8.8 for IPv4, 2001:4860:4860::8888 for IPv6).
+	 * <p>
+	 * Uses the well-known UDP-{@code connect} trick: opening an unbound {@link DatagramSocket}
+	 * and {@code connect}ing it to a public address forces the kernel to pick the local address
+	 * the OS would use to reach that destination — without actually sending any packets. The
+	 * targets are Google DNS ({@code 8.8.8.8} for IPv4, {@code 2001:4860:4860::8888} for IPv6),
+	 * which the kernel only needs to be able to route to, not to talk to.
 	 *
 	 * @param type the address class (Inet4Address or Inet6Address)
-	 * @return the address of the default routing interface, or null if not found
+	 * @return the address of the default routing interface, or {@code null} if no such route
+	 * exists (e.g. IPv6 unconfigured, host offline) or the resolved local address is the
+	 * wildcard
 	 * @throws IllegalArgumentException if the type is not supported
 	 */
 	public static InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
+		if (type != Inet4Address.class && type != Inet6Address.class)
+			throw new IllegalArgumentException("Unsupported type: " + type);
+
 		try (DatagramSocket socket = new DatagramSocket()) {
 			InetAddress target;
-
 			if (type == Inet4Address.class)
 				target = InetAddress.getByAddress(new byte[]{8, 8, 8, 8});
-			else if (type == Inet6Address.class)
-				target = InetAddress.getByName("2001:4860:4860::8888");
 			else
-				throw new IllegalArgumentException("Unsupported type: " + type);
+				target = InetAddress.getByName("2001:4860:4860::8888");
 
 			socket.connect(new InetSocketAddress(target, 53));
 			InetAddress local = socket.getLocalAddress();
@@ -578,6 +594,9 @@ public class AddressUtils {
 			if (type.isInstance(local) && !local.isAnyLocalAddress())
 				return local;
 
+			return null;
+		} catch (SocketException | UnknownHostException e) {
+			// "No route", "address family not supported", offline, etc. — not a programming error.
 			return null;
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to get default route address", e);
@@ -592,7 +611,7 @@ public class AddressUtils {
 	 * @param type the address class (Inet4Address or Inet6Address) used to determine
 	 *             the default network interface.
 	 * @return the default {@code NetworkInterface} for the specified address type,
-	 *         or {@code null} if no default interface is found.
+	 * or {@code null} if no default interface is found.
 	 * @throws RuntimeException if there is an error retrieving the network interface.
 	 */
 	public static NetworkInterface getDefaultNetworkInterface(Class<? extends InetAddress> type) {
@@ -611,7 +630,7 @@ public class AddressUtils {
 	 * Converts a socket address to a readable string, with optional alignment.
 	 * IPv6 addresses are enclosed in square brackets.
 	 *
-	 * @param addr the socket address to convert
+	 * @param addr  the socket address to convert
 	 * @param align whether to align the output (e.g., fixed width for IPv4/IPv6)
 	 * @return the formatted string representation of the socket address
 	 * @throws NullPointerException if sockAddr is null
