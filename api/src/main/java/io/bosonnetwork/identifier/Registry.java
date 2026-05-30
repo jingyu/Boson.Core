@@ -27,33 +27,62 @@ import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Vertx;
 
+import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.Node;
 
 /**
- * The {@code Registry} interface defines the contract for registering and resolving Boson {@link Card}s.
+ * Publishes and resolves Boson {@link Card}s.
  * <p>
- * Implementations of this interface are responsible for securely registering {@code Card} identities
- * and providing mechanisms for their asynchronous resolution. All registration and initialization
- * operations are performed asynchronously using {@link CompletableFuture}, enabling non-blocking workflows.
+ * <strong>Persistence semantics are backend-specific.</strong> The two typical models:
+ * <ul>
+ *   <li><strong>Lease/TTL backends (e.g. DHT).</strong> A published entry is held for a fixed TTL
+ *       (~2 hours for the built-in DHT registry) and must be re-published periodically to remain
+ *       resolvable. To "remove" an entry, stop re-publishing it and let the lease expire.</li>
+ *   <li><strong>Append-only backends (e.g. blockchain).</strong> Each call is a new transaction;
+ *       entries do not auto-expire. Updates supersede prior versions ordered by the
+ *       {@code version} sequence number. Removal, if supported at all, is backend-specific
+ *       (e.g. publishing a tombstone record).</li>
+ * </ul>
  * <p>
- * This interface also exposes a default Distributed Hash Table (DHT) based registry implementation
- * via the static DHTRegistry(...) method.
+ * What this interface intentionally <em>does not</em> include:
+ * <ul>
+ *   <li><strong>No {@code unregister}/{@code remove}.</strong> Removal is a backend concern (TTL
+ *       expiry, tombstone, etc.), not a publication-API concern.</li>
+ *   <li><strong>No {@code exists} probe.</strong> Existence is whatever
+ *       {@link Resolver#resolve(Id)} reports right now; resolve and inspect the
+ *       {@link Resolver.ResolutionStatus status}.</li>
+ *   <li><strong>No registration receipt.</strong> {@code register} returns
+ *       {@code CompletableFuture<Void>}; successful completion is the receipt, and the caller
+ *       already knows the {@code version} it submitted.</li>
+ * </ul>
+ * <p>
+ * All operations are asynchronous via {@link CompletableFuture}. The built-in DHT-based
+ * implementation is reachable through the {@link #DHTRegistry(Node) DHTRegistry(...)} factories.
  */
 public interface Registry {
 	/**
-	 * Registers the {@code Card} as Value in the Distributed Hash Table (DHT).
+	 * Publishes a signed {@link Card} so it can be resolved by its {@link Id}. The persistence
+	 * model is backend-specific (see the {@linkplain Registry class Javadoc}):
+	 * <ul>
+	 *   <li>On a <em>lease/TTL backend</em> (DHT) the published entry expires after the transport's
+	 *       TTL unless the owner calls {@code register} again periodically; reusing the same
+	 *       {@code version} refreshes the lease, a larger {@code version} publishes updated contents.</li>
+	 *   <li>On an <em>append-only backend</em> (blockchain) the call appends a transaction; entries
+	 *       do not expire and {@code version} (a sequence number) orders updates per the backend's rules.</li>
+	 * </ul>
+	 * Implementations should reject the call when the card is not genuine
+	 * ({@link Card#isGenuine()}) or when {@code identity.getId() != card.getId()}; both indicate
+	 * caller misuse.
 	 * <p>
-	 * The registration is performed asynchronously and requires a cryptographic
-	 * signature to ensure the authenticity and integrity of the {@code Card} data.
-	 * The {@code nonce} and {@code version} parameters provide replay protection and versioning.
-	 * </p>
+	 * No receipt is returned: successful completion of the future is the receipt, and the caller
+	 * already knows the {@code version} it submitted.
 	 *
-	 * @param identity the {@code Identity} to register, representing the entity owning the {@code Card}
-	 * @param card the {@code Card} containing cryptographic data and metadata to be stored
-	 * @param version the version number associated with the {@code Card}; must be a positive integer
-	 * @return a {@code CompletableFuture<Void>} indicating the completion of the registration process,
-	 *         which resolves successfully when the {@code Card} is stored or exceptionally if an error occurs
+	 * @param identity the identity that owns the card (must match {@code card.getId()})
+	 * @param card the signed {@code Card} to publish
+	 * @param version the publication sequence number ({@code >= 0}; backend-specific ordering rules apply)
+	 * @return a future that completes successfully when the card is published, or completes
+	 *         exceptionally if the backend fails
 	 */
 	CompletableFuture<Void> register(Identity identity, Card card, int version);
 
@@ -72,10 +101,10 @@ public interface Registry {
 	 *
 	 * @param node the {@code Node} instance representing the local DHT node; must not be null
 	 * @param vertx the {@code Vertx} instance to be used for asynchronous operations; may be null.
-	 * @param persistentCache the {@code ResolverCache} implementation to be used for caching resolved entries; may be null
+	 * @param persistentCache the {@code ResolutionCache} implementation to be used for caching resolved entries; may be null
 	 * @return a new instance of a DHT-based {@code Registry}
 	 */
-	static Registry DHTRegistry(Node node, Vertx vertx, ResolverCache persistentCache) {
+	static Registry DHTRegistry(Node node, Vertx vertx, ResolutionCache persistentCache) {
 		Objects.requireNonNull(node, "node");
 		return new DHTRegistry(node, vertx, persistentCache);
 	}
@@ -84,10 +113,10 @@ public interface Registry {
 	 * Creates a new instance of a Distributed Hash Table (DHT)-based {@code Registry}.
 	 *
 	 * @param node the {@code Node} instance representing the local DHT node; must not be null
-	 * @param persistentCache the {@code ResolverCache} implementation to be used for caching resolved entries; may be null
+	 * @param persistentCache the {@code ResolutionCache} implementation to be used for caching resolved entries; may be null
 	 * @return a new instance of a DHT-based {@code Registry}
 	 */
-	static Registry DHTRegistry(Node node, ResolverCache persistentCache) {
+	static Registry DHTRegistry(Node node, ResolutionCache persistentCache) {
 		return new DHTRegistry(node, null, persistentCache);
 	}
 

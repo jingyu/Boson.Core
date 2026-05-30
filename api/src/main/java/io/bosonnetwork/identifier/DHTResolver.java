@@ -91,13 +91,13 @@ public class DHTResolver implements Resolver {
 		// Ensure the id is not null
 		Objects.requireNonNull(id, "id");
 
-		LookupOption lookupOption = options != null && options.usingCache() ?
+		LookupOption lookupOption = options != null && options.useCache() ?
 				LookupOption.ARBITRARY : LookupOption.OPTIMISTIC;
 
 		return lookup(id, lookupOption).thenApply(value -> {
 			// If no value found in DHT, return the not found result
 			if (value == null)
-				return ResolutionResult.notfound();
+				return ResolutionResult.notFound();
 
 			// Check that the id matches the public key in the retrieved value
 			if (!Objects.equals(id, value.getPublicKey()))
@@ -112,6 +112,11 @@ public class DHTResolver implements Resolver {
 				return ResolutionResult.invalid();
 			}
 
+			// The resolved card must be for the requested id (defense-in-depth: isGenuine() already
+			// binds the card to its own subject, and the value's public key was checked above).
+			if (!id.equals(card.getId()))
+				return ResolutionResult.invalid();
+
 			// Verify the Card's signature and integrity
 			if (!card.isGenuine())
 				return ResolutionResult.invalid();
@@ -120,7 +125,7 @@ public class DHTResolver implements Resolver {
 			int version = value.getSequenceNumber();
 
 			// Return a successful resolution result with metadata including signature timestamps and version
-			return new ResolutionResult<>(card, new ResolutionResultMetadata(
+			return new ResolutionResult<>(card, new ResolutionMetadata(
 					card.getSignedAt(), card.getSignedAt(), new Date(), false, version));
 		});
 	}

@@ -56,6 +56,12 @@ public class DIDConstants {
 	/** The default fragment ID for verification methods in DID Documents. */
 	protected static final String DEFAULT_VERIFICATION_METHOD_FRAGMENT = "default";
 
-	/** Marker object used internally to indicate W3C DID format for Boson IDs. */
+	/**
+	 * Internal marker used as a Jackson per-call context-attribute key to select the W3C DID
+	 * representation of a Boson {@code Id} during (de)serialization. Not intended for application use.
+	 */
 	public static final Object BOSON_ID_FORMAT_W3C = new Object();
+
+	private DIDConstants() {
+	}
 }

@@ -258,9 +258,11 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 		if (claims.isEmpty())
 			throw new IllegalStateException("Credential must contain at least one claim");
 
+		// Stamp signedAt before signing so it is covered by the signature.
+		Date signedAt = now();
 		Credential unsigned = new Credential(id, types, name, description, identity.getId(), validFrom, validUntil,
-				subject, claims, null, null);
+				subject, claims, signedAt, null);
 		byte[] signature = identity.sign(unsigned.getSignData());
-		return new Credential(unsigned, now(), signature);
+		return new Credential(unsigned, signature);
 	}
 }

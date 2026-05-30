@@ -23,7 +23,7 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -505,11 +505,14 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	public DIDDocument build() {
 		DIDDocument unsigned = new DIDDocument(contexts, identity.getId(), new ArrayList<>(verificationMethods.values()),
 				new ArrayList<>(authentications.values()), new ArrayList<>(assertions.values()),
-				credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(credentials.values()),
-				services.isEmpty() ? Collections.emptyList() : new ArrayList<>(services.values()));
+				credentials.isEmpty() ? List.of() : new ArrayList<>(credentials.values()),
+				services.isEmpty() ? List.of() : new ArrayList<>(services.values()));
 
-		byte[] signature = identity.sign(unsigned.getSignData());
-		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(), defaultMethodRef,
+		// Stamp signedAt before signing so it is covered by the signature, and use the same
+		// timestamp as the proof's `created` value so verification reconstructs the same bytes.
+		Date signedAt = now();
+		byte[] signature = identity.sign(new DIDDocument.CardView(unsigned, signedAt).getSignData());
+		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, signedAt, defaultMethodRef,
 				Proof.Purpose.assertionMethod, signature);
 
 		return new DIDDocument(unsigned, proof);

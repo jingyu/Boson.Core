@@ -23,7 +23,7 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -361,10 +361,12 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	 */
 	@Override
 	public Card build() {
-		List<Credential> credentials = this.credentials.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.credentials.values());
-		List<Card.Service> services = this.services.isEmpty() ? Collections.emptyList() : new ArrayList<>(this.services.values());
-		Card unsigned = new Card(identity.getId(), credentials, services);
+		List<Credential> credentials = this.credentials.isEmpty() ? List.of() : new ArrayList<>(this.credentials.values());
+		List<Card.Service> services = this.services.isEmpty() ? List.of() : new ArrayList<>(this.services.values());
+		// Stamp signedAt before signing so it is covered by the signature.
+		Date signedAt = now();
+		Card unsigned = new Card(identity.getId(), credentials, services, signedAt);
 		byte[] signature = identity.sign(unsigned.getSignData());
-		return new Card(unsigned, now(), signature);
+		return new Card(unsigned, signature);
 	}
 }

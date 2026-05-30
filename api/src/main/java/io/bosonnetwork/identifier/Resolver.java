@@ -116,17 +116,17 @@ public interface Resolver {
 	 */
 	class ResolutionOptions {
 		// Default options: use cache, no TTL (0 disables TTL).
-		private static final ResolutionOptions DEFAULT = new ResolutionOptions(true, 0); // no cache
+		private static final ResolutionOptions DEFAULT = new ResolutionOptions(true, 0);
 
-		private final boolean usingCache;
+		private final boolean useCache;
 		private final long validTTL;
 
 		/**
-		 * @param usingCache whether to use cached results if available
+		 * @param useCache whether to use cached results if available
 		 * @param validTTL time-to-live for the cached result in milliseconds (0 disables TTL)
 		 */
-		public ResolutionOptions(boolean usingCache, long validTTL) {
-			this.usingCache = usingCache;
+		public ResolutionOptions(boolean useCache, long validTTL) {
+			this.useCache = useCache;
 			this.validTTL = validTTL;
 		}
 
@@ -134,8 +134,8 @@ public interface Resolver {
 		 * Whether to use cached results if available.
 		 * @return true if cache should be used, false otherwise
 		 */
-		public boolean usingCache() {
-			return usingCache;
+		public boolean useCache() {
+			return useCache;
 		}
 
 		/**
@@ -160,7 +160,7 @@ public interface Resolver {
 	 * Metadata describing the resolved result, such as creation date, update date, resolution time,
 	 * deactivation status, and version.
 	 */
-	class ResolutionResultMetadata {
+	class ResolutionMetadata {
 		@JsonProperty("created")
 		private final Date created;
 		@JsonProperty("updated")
@@ -179,7 +179,7 @@ public interface Resolver {
 		 * @param deactivated whether the resource is deactivated
 		 * @param version version number of the resource
 		 */
-		public ResolutionResultMetadata(Date created, Date updated, Date resolved, boolean deactivated, int version) {
+		public ResolutionMetadata(Date created, Date updated, Date resolved, boolean deactivated, int version) {
 			this.created = created;
 			this.updated = updated;
 			this.resolved = resolved;
@@ -239,7 +239,7 @@ public interface Resolver {
 		@JsonProperty("result")
 		private final T result;
 		@JsonProperty("resultMetadata")
-		private final ResolutionResultMetadata metadata;
+		private final ResolutionMetadata metadata;
 
 		/**
 		 * Constructs a resolution result with the given status, result, and metadata.
@@ -247,7 +247,7 @@ public interface Resolver {
 		 * @param result the resolved object, or null if not found or invalid
 		 * @param metadata metadata about the resolved object
 		 */
-		public ResolutionResult(ResolutionStatus status, T result, ResolutionResultMetadata metadata) {
+		public ResolutionResult(ResolutionStatus status, T result, ResolutionMetadata metadata) {
 			this.status = status;
 			this.result = result;
 			this.metadata = metadata;
@@ -258,7 +258,7 @@ public interface Resolver {
 		 * @param result the resolved object
 		 * @param metadata metadata about the resolved object
 		 */
-		public ResolutionResult(T result, ResolutionResultMetadata metadata) {
+		public ResolutionResult(T result, ResolutionMetadata metadata) {
 			this(ResolutionStatus.SUCCESS, result, metadata);
 		}
 
@@ -279,7 +279,7 @@ public interface Resolver {
 		/**
 		 * @return metadata about the resolved object
 		 */
-		public ResolutionResultMetadata getResultMetadata() {
+		public ResolutionMetadata getResultMetadata() {
 			return metadata;
 		}
 
@@ -303,7 +303,7 @@ public interface Resolver {
 		 * @return a not found result
 		 */
 		@SuppressWarnings("unchecked")
-		public static <T> ResolutionResult<T> notfound() {
+		public static <T> ResolutionResult<T> notFound() {
 			return (ResolutionResult<T>) NOT_FOUND;
 		}
 
@@ -348,7 +348,7 @@ public interface Resolver {
 	 * @param options options controlling caching and TTL
 	 * @return a future containing the resolution result (status, DID document, and metadata)
 	 */
-	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDID(Id id, ResolutionOptions options) {
+	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDocument(Id id, ResolutionOptions options) {
 		Objects.requireNonNull(id, "id");
 
 		// First resolve the Card, then map to a DIDDocument if successful
@@ -367,8 +367,8 @@ public interface Resolver {
 	 * @param id the Boson ID to resolve
 	 * @return a future containing the resolution result (status, DID document, and metadata)
 	 */
-	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDID(Id id) {
+	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDocument(Id id) {
 		// Use default options (cache enabled, no TTL) if not specified.
-		return resolveDID(id, ResolutionOptions.defaultOptions());
+		return resolveDocument(id, ResolutionOptions.defaultOptions());
 	}
 }

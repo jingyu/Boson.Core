@@ -310,7 +310,7 @@ public abstract class VerificationMethod {
 	 */
 	static class Reference extends VerificationMethod {
 		private final String id;
-		private VerificationMethod entity;
+		private volatile VerificationMethod entity;
 
 		/**
 		 * Constructs a reference to a verification method by its ID.

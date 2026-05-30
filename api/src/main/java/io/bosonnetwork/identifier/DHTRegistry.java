@@ -50,15 +50,15 @@ class DHTRegistry implements Registry {
 	private static final Logger log = LoggerFactory.getLogger(DHTRegistry.class);
 
 	/**
-	 * Constructs a new instance of {@code DHTRegistry}, initializing it with the provided Vert.x instance,
-	 * local DHT node, and a persistent cache for resolving values.
+	 * Constructs a new {@code DHTRegistry} backed by the given DHT node, with an optional Vert.x
+	 * context and an optional persistent cache for resolution results.
 	 *
-	 * @param node the local DHT node used for storing and retrieving values; must not be null
-	 * @param vertx the Vert.x instance used for asynchronous operations; must be null
-	 * @param persistentCache the cache instance used to persist resolver data; can be null depending on caching needs
-	 * @throws NullPointerException if {@code vertx} or {@code node} is null
+	 * @param node the local DHT node used for publishing and looking up card values; must not be null
+	 * @param vertx the Vert.x instance used for asynchronous operations; may be null
+	 * @param persistentCache the cache used to persist resolution results across runs; may be null
+	 * @throws NullPointerException if {@code node} is null
 	 */
-	protected DHTRegistry(Node node, Vertx vertx, ResolverCache persistentCache) {
+	protected DHTRegistry(Node node, Vertx vertx, ResolutionCache persistentCache) {
 		Objects.requireNonNull(node);
 
 		this.node = node;

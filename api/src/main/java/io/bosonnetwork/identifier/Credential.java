@@ -149,7 +149,7 @@ public class Credential {
 		Objects.requireNonNull(signature, "signature");
 
 		this.id = id;
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
 		this.issuer = issuer;
@@ -157,7 +157,7 @@ public class Credential {
 		this.validUntil = validUntil;
 		this.subject = subject;
 		this.signedAt = signedAt;
-		this.signature = signature;
+		this.signature = signature.clone();
 
 		// Ensure the subject's id is consistent with the issuer if implicit
 		this.subject.implicitCheck(issuer);
@@ -182,7 +182,7 @@ public class Credential {
 	protected Credential(String id, List<String> types, String name, String description, Id issuer, Date validFrom,
 						 Date validUntil, Id subject, Map<String, Object> claims, Date signedAt, byte[] signature) {
 		this.id = id;
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
 		this.issuer = issuer;
@@ -200,10 +200,9 @@ public class Credential {
 	 * Internal constructor used by CredentialBuilder to create a copy with new signedAt and signature.
 	 *
 	 * @param cred Original credential
-	 * @param signedAt Signature timestamp (should be trimmed of milliseconds)
 	 * @param signature Cryptographic signature bytes
 	 */
-	protected Credential(Credential cred, Date signedAt, byte[] signature) {
+	protected Credential(Credential cred, byte[] signature) {
 		this.id = cred.id;
 		this.types = cred.types;
 		this.name = cred.name;
@@ -213,7 +212,7 @@ public class Credential {
 		this.validUntil = cred.validUntil;
 		this.subject = cred.subject;
 
-		this.signedAt = signedAt; // signedAt should be trimmed the milliseconds
+		this.signedAt = cred.signedAt; // signedAt should be trimmed the milliseconds
 		this.signature = signature;
 	}
 
@@ -292,6 +291,10 @@ public class Credential {
 
 	/**
 	 * Gets the signature timestamp.
+	 * <p>
+	 * Note: {@code signedAt} is metadata and is <em>not</em> covered by the signature (the signed
+	 * data excludes it), so it is not cryptographically authenticated. The credential's validity
+	 * window ({@link #getValidFrom()}/{@link #getValidUntil()}) <em>is</em> signed.
 	 *
 	 * @return Signed at date
 	 */
@@ -305,17 +308,16 @@ public class Credential {
 	 * @return Signature byte array
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature == null ? null : signature.clone();
 	}
 
 	/**
-	 * Determines if the credential is self-issued.
-	 * A credential is self-issued if the subject's id is null or equals the issuer.
+	 * Determines if the credential is self-issued, i.e. the subject is the same as the issuer.
 	 *
 	 * @return True if self-issued, false otherwise
 	 */
 	public boolean selfIssued() {
-		return subject.getId() == null || subject.getId().equals(issuer);
+		return Objects.equals(subject.getId(), getIssuer());
 	}
 
 	/**
@@ -378,9 +380,11 @@ public class Credential {
 	 * @return Byte array of the data to be signed or verified
 	 */
 	protected byte[] getSignData() {
-		if (signature != null)	// already signed
-			return new Credential(this, null,null).toBytes();
-		else 					// unsigned
+		if (signature != null) // already signed
+			// Rebuild the bytes that were signed: everything except the signature itself.
+			// signedAt is part of the signed data so that the signing timestamp is authenticated.
+			return new Credential(this, null).toBytes();
+		else // unsigned
 			return toBytes();
 	}
 
@@ -517,7 +521,7 @@ public class Credential {
 		private final Map<String, Object> claims;
 
 		/** Flag indicating if the subject id is implicit (same as issuer) */
-		boolean implicit = false;
+		private boolean implicit = false;
 
 		/**
 		 * Internal constructor used by CredentialBuilder.
@@ -529,7 +533,7 @@ public class Credential {
 		 */
 		protected Subject(Id id, Map<String, Object> claims) {
 			this.id = id;
-			this.claims = claims == null ? Collections.emptyMap() : claims;
+			this.claims = claims == null || claims.isEmpty() ? Map.of() : new LinkedHashMap<>(claims);
 		}
 
 		/**

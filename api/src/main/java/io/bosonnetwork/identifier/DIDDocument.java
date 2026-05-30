@@ -24,6 +24,7 @@ package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +53,9 @@ import io.bosonnetwork.InvalidSignatureException;
  */
 @JsonPropertyOrder({"@context", "id", "verificationMethod", "authentication", "assertion", "verifiableCredential", "service", "proof"})
 public class DIDDocument extends W3CDIDFormat {
+	/** The list of JSON-LD context URIs associated with this DID Document. */
 	@JsonProperty("@context")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	/** The list of JSON-LD context URIs associated with this DID Document. */
 	private final List<String> contexts;
 	/** The unique identifier (DID) for this document. */
 	@JsonProperty("id")
@@ -85,9 +86,9 @@ public class DIDDocument extends W3CDIDFormat {
 	private final Proof proof;
 
 	/**
-	 * The internal BosonCard adapter for this document, used for signature/serialization.
+	 * The internal CardView adapter for this document, used for signature/serialization.
 	 */
-	private transient BosonCard bosonCard;
+	private transient volatile CardView cardView;
 
 	/**
 	 * Constructs a DIDDocument by deserializing all fields.
@@ -116,7 +117,7 @@ public class DIDDocument extends W3CDIDFormat {
 		Objects.requireNonNull(verificationMethods, "verificationMethods");
 		Objects.requireNonNull(proof, "proof");
 
-		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
+		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
 
 		// Validate that verificationMethods contains only concrete methods (no references)
@@ -175,11 +176,11 @@ public class DIDDocument extends W3CDIDFormat {
 			}
 		}
 
-		this.verificationMethods = methods.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(methods);
-		this.authentications = auths.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(auths);
-		this.assertions = as.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(as);
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
-		this.services = services == null || services.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(services);
+		this.verificationMethods = methods.isEmpty() ? List.of() : List.copyOf(methods);
+		this.authentications = auths.isEmpty() ? List.of() : List.copyOf(auths);
+		this.assertions = as.isEmpty() ? List.of() : List.copyOf(as);
+		this.credentials = credentials == null || credentials.isEmpty() ? List.of() : List.copyOf(credentials);
+		this.services = services == null || services.isEmpty() ? List.of() : List.copyOf(services);
 		this.proof = proof;
 	}
 
@@ -200,11 +201,11 @@ public class DIDDocument extends W3CDIDFormat {
 						  List<VerifiableCredential> credentials, List<Service> services) {
 		this.contexts = contexts;
 		this.id = id;
-		this.verificationMethods = verificationMethods.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(verificationMethods);
-		this.authentications = authentications == null || authentications.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(authentications);
-		this.assertions = assertions == null || assertions.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(assertions);
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
-		this.services = services == null || services.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(services);
+		this.verificationMethods = verificationMethods.isEmpty() ? List.of() : List.copyOf(verificationMethods);
+		this.authentications = authentications == null || authentications.isEmpty() ? List.of() : List.copyOf(authentications);
+		this.assertions = assertions == null || assertions.isEmpty() ? List.of() : List.copyOf(assertions);
+		this.credentials = credentials == null || credentials.isEmpty() ? List.of() : List.copyOf(credentials);
+		this.services = services == null || services.isEmpty() ? List.of() : List.copyOf(services);
 		this.proof = null;
 	}
 
@@ -256,8 +257,9 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return List of matching verification methods
 	 */
 	public List<VerificationMethod> getVerificationMethods(VerificationMethod.Type type) {
+		Objects.requireNonNull(type, "type");
 		return verificationMethods.stream()
-				.filter(vm -> vm.getType()== type)
+				.filter(vm -> vm.getType() == type)
 				.collect(Collectors.toList());
 	}
 
@@ -459,6 +461,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return List of matching services
 	 */
 	public List<Service> getServices(String type) {
+		Objects.requireNonNull(type, "type");
 		return services.stream()
 				.filter(service -> service.getType().equals(type))
 				.collect(Collectors.toList());
@@ -560,10 +563,10 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return The Card representation of this DID Document
 	 */
 	public Card toCard() {
-		if (bosonCard == null)
-			bosonCard = new BosonCard(this);
+		if (cardView == null)
+			cardView = new CardView(this);
 
-		return bosonCard;
+		return cardView;
 	}
 
 	/**
@@ -577,7 +580,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 */
 	public static DIDDocument fromCard(Card card, List<String> documentContexts,
 									   Map<String, List<String>> vcTypeContexts) {
-		if (card instanceof BosonCard bc)
+		if (card instanceof CardView bc)
 			return bc.getDocument();
 
 		List<String> contexts = new ArrayList<>();
@@ -604,7 +607,7 @@ public class DIDDocument extends W3CDIDFormat {
 				new Proof(Proof.Type.Ed25519Signature2020, card.getSignedAt(), defaultMethodRef,
 						Proof.Purpose.assertionMethod, card.getSignature()));
 
-		doc.bosonCard = new BosonCard(card, doc);
+		doc.cardView = new CardView(card, doc);
 		return doc;
 	}
 
@@ -632,8 +635,11 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return Byte array of signable data
 	 */
 	protected byte[] getSignData() {
-		BosonCard unsigned = bosonCard != null ? bosonCard : new BosonCard(this, true);
-		return unsigned.getSignData();
+		// At verification time the proof is non-null and provides the signed-at timestamp,
+		// so the CardView view rebuilds the exact bytes the underlying Card signature covers
+		// (id, credentials, services, sat).
+		CardView view = cardView != null ? cardView : new CardView(this);
+		return view.getSignData();
 	}
 
 	@Override
@@ -691,15 +697,15 @@ public class DIDDocument extends W3CDIDFormat {
 	 * Internal adapter class that wraps a DIDDocument as a {@link Card}.
 	 * Used for signature and serialization compatibility with Boson cards.
 	 */
-	protected static class BosonCard extends Card {
+	protected static class CardView extends Card {
 		/** The wrapped DIDDocument instance. */
 		private final DIDDocument doc;
 
 		/**
-		 * Constructs a BosonCard from a DIDDocument (signed).
+		 * Constructs a CardView from a DIDDocument (signed).
 		 * @param doc The DIDDocument to wrap
 		 */
-		protected BosonCard(DIDDocument doc) {
+		protected CardView(DIDDocument doc) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
 					doc.services.stream().map(s -> new Card.Service(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
@@ -710,26 +716,32 @@ public class DIDDocument extends W3CDIDFormat {
 		}
 
 		/**
-		 * Constructs a BosonCard from a DIDDocument (unsigned).
-		 * @param doc The DIDDocument to wrap
-		 * @param unsigned Unused marker parameter
+		 * Constructs a sat-stamped, unsigned CardView view of a DIDDocument.
+		 * <p>
+		 * Used at sign time by {@link DIDDocumentBuilder} to compute the bytes the signature will
+		 * cover. {@code signedAt} must be set so that it is part of the signed data; the resulting
+		 * proof's {@code created} value should be the same timestamp.
+		 *
+		 * @param doc the DIDDocument to wrap
+		 * @param signedAt the signing timestamp to embed in the signed bytes
 		 */
-		protected BosonCard(DIDDocument doc, boolean unsigned) {
+		protected CardView(DIDDocument doc, Date signedAt) {
 			super(doc.id,
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
 					doc.services.stream().map(s -> new Card.Service(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
-							.collect(Collectors.toList()));
+							.collect(Collectors.toList()),
+					signedAt);
 
 			this.doc = doc;
 		}
 
 		/**
-		 * Constructs a BosonCard from an existing Card and DIDDocument.
+		 * Constructs a CardView from an existing Card and DIDDocument.
 		 * @param card The Card to wrap
 		 * @param doc The associated DIDDocument
 		 */
-		protected BosonCard(Card card, DIDDocument doc) {
-			super(card, card.getSignedAt(), card.getSignature());
+		protected CardView(Card card, DIDDocument doc) {
+			super(card, card.getSignature());
 			this.doc = doc;
 		}
 
@@ -798,7 +810,7 @@ public class DIDDocument extends W3CDIDFormat {
 			this.id = id;
 			this.type = type;
 			this.endpoint = endpoint;
-			this.properties = properties == null || properties.isEmpty() ? Collections.emptyMap() : properties;
+			this.properties = properties == null || properties.isEmpty() ? Map.of() : new LinkedHashMap<>(properties);
 		}
 
 		/**

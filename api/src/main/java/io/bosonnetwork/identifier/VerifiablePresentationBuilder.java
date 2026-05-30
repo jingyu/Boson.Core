@@ -23,6 +23,7 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -343,10 +344,11 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 		List<VerifiableCredential> credentials = new ArrayList<>(this.credentials.values());
 		// Create unsigned VerifiablePresentation object
 		VerifiablePresentation unsigned = new VerifiablePresentation(contexts, id, types, identity.getId(), credentials);
-		// Sign the presentation data with holder's identity key
-		byte[] signature = identity.sign(unsigned.getSignData());
-		// Create cryptographic proof object with signature
-		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(),
+		// Stamp signedAt before signing so it is covered by the signature, and use the same
+		// timestamp as the proof's `created` value so verification reconstructs the same bytes.
+		Date signedAt = now();
+		byte[] signature = identity.sign(new VerifiablePresentation.VouchView(unsigned, signedAt).getSignData());
+		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, signedAt,
 				VerificationMethod.defaultReferenceOf(identity.getId()),
 				Proof.Purpose.assertionMethod, signature);
 

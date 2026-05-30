@@ -222,8 +222,26 @@ public class CardTests {
 		assertEquals(identity.getId(), card.getId());
 		assertTrue(card.isGenuine());
 
-		card.getSignature()[0] = (byte) (card.getSignature()[0] + 1);
-		assertFalse(card.isGenuine());
-		assertThrows(InvalidSignatureException.class, card::validate);
+		// Corrupt the signature within the serialized form, then re-parse
+		// (getSignature() returns a defensive copy, so mutating it does not affect the card).
+		byte[] tampered = card.toBytes();
+		byte[] sig = card.getSignature();
+		int idx = -1;
+		for (int i = 0; idx < 0 && i <= tampered.length - sig.length; i++) {
+			boolean match = true;
+			for (int j = 0; j < sig.length; j++) {
+				if (tampered[i + j] != sig[j]) {
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				idx = i;
+		}
+		assertTrue(idx >= 0);
+		tampered[idx] ^= 0x01;
+		var tamperedCard = Card.parse(tampered);
+		assertFalse(tamperedCard.isGenuine());
+		assertThrows(InvalidSignatureException.class, tamperedCard::validate);
 	}
 }

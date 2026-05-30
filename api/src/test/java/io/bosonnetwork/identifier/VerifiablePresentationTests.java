@@ -73,8 +73,8 @@ public class VerifiablePresentationTests {
 
 		assertEquals(1, vouch.getCredentials().size());
 
-		assertInstanceOf(VerifiablePresentation.BosonVouch.class, vouch);
-		assertSame(vp, ((VerifiablePresentation.BosonVouch) vouch).getVerifiablePresentation());
+		assertInstanceOf(VerifiablePresentation.VouchView.class, vouch);
+		assertSame(vp, ((VerifiablePresentation.VouchView) vouch).getVerifiablePresentation());
 		assertSame(vp, VerifiablePresentation.fromVouch(vouch,
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"))));
 
@@ -179,8 +179,8 @@ public class VerifiablePresentationTests {
 
 		assertEquals(3, vouch.getCredentials().size());
 
-		assertInstanceOf(VerifiablePresentation.BosonVouch.class, vouch);
-		assertSame(vp, ((VerifiablePresentation.BosonVouch) vouch).getVerifiablePresentation());
+		assertInstanceOf(VerifiablePresentation.VouchView.class, vouch);
+		assertSame(vp, ((VerifiablePresentation.VouchView) vouch).getVerifiablePresentation());
 		assertSame(vp, VerifiablePresentation.fromVouch(vouch,
 				Map.of("TestPresentation", List.of("https://example.com/presentations/test/v1"),
 						"BosonProfile", List.of("https://example.com/credentials/profile/v1"),

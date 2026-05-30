@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.vertx.core.Context;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
@@ -68,7 +69,7 @@ public class CachedResolver implements Resolver {
 	 * This cache is used to retrieve and store resolved {@link Card} objects to provide longer-lived caching
 	 * across application restarts or multiple instances.
 	 */
-	private final ResolverCache persistentCache;
+	private final ResolutionCache persistentCache;
 
 	private final static Logger log = LoggerFactory.getLogger(CachedResolver.class);
 
@@ -81,20 +82,21 @@ public class CachedResolver implements Resolver {
 	 * @param resolver the underlying resolver used for resolving identifiers, must not be null
 	 * @param vertx the Vert.x instance used for integration with Vert.x asynchronous features,
 	 *              may be null if Vert.x support is not required
-	 * @param persistentCache an optional persistent cache implementation for storing resolved values,
+	 * @param persistentCache an optional persistent cache for resolution results;
 	 *                        may be null if no persistent storage is needed
 	 */
-	public CachedResolver(Resolver resolver, Vertx vertx, ResolverCache persistentCache) {
+	public CachedResolver(Resolver resolver, Vertx vertx, ResolutionCache persistentCache) {
 		this.resolver = Objects.requireNonNull(resolver, "resolver");
 
 		this.persistentCache = persistentCache;
 
 		if (vertx == null) {
-			try {
-				Class.forName("io.vertx.core.Vertx");
-				vertx = Vertx.currentContext().owner();
-			} catch (ClassNotFoundException ignored) {
-			}
+			// Adopt the current Vert.x context's owner if we are running on an event loop;
+			// otherwise fall back to a plain Caffeine cache. Vertx.currentContext() returns
+			// null off a Vert.x thread, so it must be null-checked before calling owner().
+			Context ctx = Vertx.currentContext();
+			if (ctx != null)
+				vertx = ctx.owner();
 		}
 
 		Caffeine<Object, Object> caffeine = vertx == null ?
@@ -146,12 +148,13 @@ public class CachedResolver implements Resolver {
 		ResolutionOptions opts = options == null ? ResolutionOptions.defaultOptions() : options;
 
 		// If caching is disabled, directly resolve and update caches
-		if (!opts.usingCache()) {
+		if (!opts.useCache()) {
 			log().debug("Resolver cache is disabled, force to resolve: {}", id);
 
 			return resolver.resolve(id, options).thenApply(result -> {
-				// Update persistent cache if available
-				if (persistentCache != null) {
+				// Only persist successful results; negative results (not found / invalid) carry no
+				// metadata and should not be cached as if they were authoritative.
+				if (persistentCache != null && result.succeeded()) {
 					try {
 						persistentCache.put(id, result);
 					} catch (Exception e) {
@@ -175,8 +178,10 @@ public class CachedResolver implements Resolver {
 				if (persistentCache != null) {
 					try {
 						ResolutionResult<Card> result = persistentCache.get(id);
-						// Check if the Card exists in the persistent cache and it's valid
-						if (result != null && result.getResultMetadata().getResolved().getTime() > System.currentTimeMillis() - opts.validTTL()) {
+						// Only honor a cached successful result that is still within the requested TTL.
+						// Negative results carry null metadata, so guard against it explicitly.
+						if (result != null && result.succeeded() && result.getResultMetadata() != null
+								&& result.getResultMetadata().getResolved().getTime() > System.currentTimeMillis() - opts.validTTL()) {
 							promise.complete(result);
 							return;
 						}
@@ -188,8 +193,8 @@ public class CachedResolver implements Resolver {
 				// Perform actual resolution if no valid cache found
 				resolver.resolve(id, options).whenComplete((result, error) -> {
 					if (error == null) {
-						// Update the persistent cache with the result
-						if (persistentCache != null) {
+						// Persist successful results only (negative results carry no metadata)
+						if (persistentCache != null && result.succeeded()) {
 							try {
 								persistentCache.put(id, result);
 							} catch (Exception e) {

@@ -99,8 +99,8 @@ public class VerifiableCredentialTests {
 		System.out.println(bc.toPrettyString());
 		System.out.println(Hex.encode(bc.toBytes()));
 
-		assertInstanceOf(VerifiableCredential.BosonCredential.class, bc);
-		assertSame(vc, ((VerifiableCredential.BosonCredential) bc).getVerifiableCredential());
+		assertInstanceOf(VerifiableCredential.CredentialView.class, bc);
+		assertSame(vc, ((VerifiableCredential.CredentialView) bc).getVerifiableCredential());
 		assertSame(vc, VerifiableCredential.fromCredential(bc, Map.of()));
 
 		assertEquals(canonicalId.getFragment(), bc.getId());
@@ -224,8 +224,8 @@ public class VerifiableCredentialTests {
 		System.out.println(bc.toPrettyString());
 		System.out.println(Hex.encode(bc.toBytes()));
 
-		assertInstanceOf(VerifiableCredential.BosonCredential.class, bc);
-		assertSame(vc, ((VerifiableCredential.BosonCredential) bc).getVerifiableCredential());
+		assertInstanceOf(VerifiableCredential.CredentialView.class, bc);
+		assertSame(vc, ((VerifiableCredential.CredentialView) bc).getVerifiableCredential());
 		assertSame(vc, VerifiableCredential.fromCredential(bc, Map.of()));
 
 		assertEquals(canonicalId.getFragment(), bc.getId());

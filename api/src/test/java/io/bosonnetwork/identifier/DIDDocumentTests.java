@@ -122,8 +122,8 @@ public class DIDDocumentTests {
 		assertEquals(1, card.getCredentials().size());
 		assertEquals(1, card.getServices().size());
 
-		assertInstanceOf(DIDDocument.BosonCard.class, card);
-		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertInstanceOf(DIDDocument.CardView.class, card);
+		assertSame(doc, ((DIDDocument.CardView) card).getDocument());
 		assertSame(doc, DIDDocument.fromCard(card, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"))));
 
@@ -246,8 +246,8 @@ public class DIDDocumentTests {
 		assertEquals(3, card.getCredentials().size());
 		assertEquals(3, card.getServices().size());
 
-		assertInstanceOf(DIDDocument.BosonCard.class, card);
-		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertInstanceOf(DIDDocument.CardView.class, card);
+		assertSame(doc, ((DIDDocument.CardView) card).getDocument());
 		assertSame(doc, DIDDocument.fromCard(card, List.of(),
 				Map.of("BosonProfile", List.of("https://example.com/credentials/profile/v1"),
 						"Passport", List.of("https://example.com/credentials/passport/v1"),
@@ -315,8 +315,8 @@ public class DIDDocumentTests {
 		assertTrue(card.isGenuine());
 		assertDoesNotThrow(card::validate);
 
-		assertInstanceOf(DIDDocument.BosonCard.class, card);
-		assertSame(doc, ((DIDDocument.BosonCard) card).getDocument());
+		assertInstanceOf(DIDDocument.CardView.class, card);
+		assertSame(doc, ((DIDDocument.CardView) card).getDocument());
 		assertSame(doc, DIDDocument.fromCard(card, null, null));
 
 		var card2 = Card.parse(card.toBytes());

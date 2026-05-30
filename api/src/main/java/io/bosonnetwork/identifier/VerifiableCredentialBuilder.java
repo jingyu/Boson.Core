@@ -282,8 +282,11 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 
 		VerifiableCredential unsigned = new VerifiableCredential(contexts, idUrl.toString(), types,
 				name, description, issuer, validFrom, validUntil, subject, claims);
-		byte[] signature = identity.sign(unsigned.getSignData());
-		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, now(),
+		// Stamp signedAt before signing so it is covered by the signature, and use the same
+		// timestamp as the proof's `created` value so verification reconstructs the same bytes.
+		Date signedAt = now();
+		byte[] signature = identity.sign(new VerifiableCredential.CredentialView(unsigned, signedAt).getSignData());
+		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, signedAt,
 				VerificationMethod.defaultReferenceOf(issuer), Proof.Purpose.assertionMethod, signature);
 
 		return new VerifiableCredential(unsigned, proof);

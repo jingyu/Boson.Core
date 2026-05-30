@@ -202,7 +202,7 @@ public class DHTRegistryTest {
 			}
 		};
 
-		registry = Registry.DHTRegistry(node, vertx, ResolverCache.fileSystem());
+		registry = Registry.DHTRegistry(node, vertx, ResolutionCache.fileSystem());
 	}
 
 	@AfterAll

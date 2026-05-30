@@ -121,9 +121,9 @@ public class VerifiableCredential extends W3CDIDFormat {
 	private final Proof proof;
 
 	/**
-	 * A transient BosonCredential representation of this verifiable credential.
+	 * A transient CredentialView representation of this verifiable credential.
 	 */
-	private transient BosonCredential bosonCredential;
+	private transient volatile CredentialView credentialView;
 
 	/**
 	 * Internal constructor used by JSON deserializer.
@@ -156,9 +156,9 @@ public class VerifiableCredential extends W3CDIDFormat {
 		Objects.requireNonNull(subject, "subject");
 		Objects.requireNonNull(proof, "proof");
 
-		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
+		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
-		this.types = types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
 		this.issuer = issuer;
@@ -185,9 +185,9 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 */
 	protected VerifiableCredential(List<String> contexts, String id, List<String> types, String name, String description,
 								   Id issuer, Date validFrom, Date validUntil, Id subject, Map<String, Object> claims) {
-		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
+		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
-		this.types = types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
 		this.issuer = issuer;
@@ -307,12 +307,12 @@ public class VerifiableCredential extends W3CDIDFormat {
 	}
 
 	/**
-	 * Determines if this credential is self-issued, i.e., the subject is the same as the issuer or subject id is null.
+	 * Determines if this credential is self-issued, i.e., the subject is the same as the issuer.
 	 *
 	 * @return true if self-issued, false otherwise
 	 */
 	public boolean selfIssued() {
-		return subject.getId() == null || subject.getId().equals(issuer);
+		return Objects.equals(subject.getId(), issuer);
 	}
 
 	/**
@@ -344,8 +344,14 @@ public class VerifiableCredential extends W3CDIDFormat {
 		if (proof == null)
 			return false;
 
-		// Verify the proof using the issuer's identity and signing data
-		return proof.verify(issuer, getSignData());
+		try {
+			// Verify the proof using the issuer's identity and signing data
+			return proof.verify(issuer, getSignData());
+		} catch (RuntimeException e) {
+			// A malformed id (e.g. a non-DID-URL "id") makes the sign-data reconstruction throw;
+			// treat that as "not genuine" rather than propagating an exception from verification.
+			return false;
+		}
 	}
 
 	/**
@@ -373,10 +379,10 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @return the Credential object
 	 */
 	public Credential toCredential() {
-		if (bosonCredential == null)
-			bosonCredential = new BosonCredential(this);
+		if (credentialView == null)
+			credentialView = new CredentialView(this);
 
-		return bosonCredential;
+		return credentialView;
 	}
 
 	/**
@@ -388,7 +394,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 */
 	public static VerifiableCredential fromCredential(Credential credential, Map<String, List<String>> typeContexts) {
 		Objects.requireNonNull(credential, "credential");
-		if (credential instanceof BosonCredential vcCard)
+		if (credential instanceof CredentialView vcCard)
 			return vcCard.vc;
 
 		List<String> contexts = new ArrayList<>();
@@ -425,7 +431,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 						VerificationMethod.defaultReferenceOf(credential.getIssuer()), Proof.Purpose.assertionMethod,
 						credential.getSignature()));
 
-		vc.bosonCredential = new BosonCredential(credential, vc);
+		vc.credentialView = new CredentialView(credential, vc);
 		return vc;
 	}
 
@@ -445,7 +451,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @return the byte array of sign data
 	 */
 	protected byte[] getSignData() {
-		BosonCredential unsigned = bosonCredential != null ? bosonCredential : new BosonCredential(this);
+		CredentialView unsigned = credentialView != null ? credentialView : new CredentialView(this);
 		return unsigned.getSignData();
 	}
 
@@ -536,7 +542,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 */
 		protected CredentialSubject(Id id, Map<String, Object> claims) {
 			this.id = id;
-			this.claims = claims == null ? Collections.emptyMap() : claims;
+			this.claims = claims == null || claims.isEmpty() ? Map.of() : new LinkedHashMap<>(claims);
 		}
 
 		/**
@@ -603,15 +609,15 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * <p>
 	 * This class is used internally to optimize storage and signing operations.
 	 */
-	protected static class BosonCredential extends Credential {
+	protected static class CredentialView extends Credential {
 		private final VerifiableCredential vc;
 
 		/**
-		 * Constructs a BosonCredential from a VerifiableCredential.
+		 * Constructs a CredentialView from a VerifiableCredential.
 		 *
 		 * @param vc the source verifiable credential
 		 */
-		protected BosonCredential(VerifiableCredential vc) {
+		protected CredentialView(VerifiableCredential vc) {
 			super(DIDURL.create(vc.id).getFragment(),
 					vc.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VC_TYPE)).collect(Collectors.toList()),
 					vc.name, vc.description, vc.issuer, vc.validFrom, vc.validUntil,
@@ -623,13 +629,32 @@ public class VerifiableCredential extends W3CDIDFormat {
 		}
 
 		/**
-		 * Constructs a BosonCredential from a Credential and associates it with a VerifiableCredential.
+		 * Constructs a CredentialView from a Credential and associates it with a VerifiableCredential.
 		 *
 		 * @param cred the source credential
 		 * @param vc   the associated verifiable credential
 		 */
-		protected BosonCredential(Credential cred, VerifiableCredential vc) {
-			super(cred, cred.getSignedAt(), cred.getSignature());
+		protected CredentialView(Credential cred, VerifiableCredential vc) {
+			super(cred, cred.getSignature());
+			this.vc = vc;
+		}
+
+		/**
+		 * Constructs a sat-stamped, unsigned CredentialView view of a VerifiableCredential.
+		 * <p>
+		 * Used at sign time by {@link VerifiableCredentialBuilder} to compute the bytes the
+		 * signature will cover. {@code signedAt} must be set so that it is part of the signed
+		 * data; the resulting proof's {@code created} value should be the same timestamp.
+		 *
+		 * @param vc the source verifiable credential (proof may be null)
+		 * @param signedAt the signing timestamp to embed in the signed bytes
+		 */
+		protected CredentialView(VerifiableCredential vc, Date signedAt) {
+			super(DIDURL.create(vc.id).getFragment(),
+					vc.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VC_TYPE)).collect(Collectors.toList()),
+					vc.name, vc.description, vc.issuer, vc.validFrom, vc.validUntil,
+					vc.subject.id, vc.subject.claims,
+					signedAt, null);
 			this.vc = vc;
 		}
 

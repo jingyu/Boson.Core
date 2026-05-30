@@ -23,11 +23,14 @@
 package io.bosonnetwork.identifier;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Duration;
 import java.util.Objects;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,7 +41,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.json.Json;
 
 /**
- * A file system-based implementation of {@link ResolverCache} that provides persistent storage
+ * A file system-based implementation of {@link ResolutionCache} that provides persistent storage
  * for resolver results. This cache stores each entry as a file in a specified directory, supports
  * configurable expiration (TTL), and provides methods for inserting, retrieving, cleaning up expired
  * entries, and clearing the cache.
@@ -47,8 +50,8 @@ import io.bosonnetwork.json.Json;
  * named after the associated {@link Id}.
  * </p>
  */
-class FileSystemResolverCache implements ResolverCache {
-	private static final long DEFAULT_EXPIRATION = 24 * 60 * 60;
+class FileSystemResolutionCache implements ResolutionCache {
+	private static final long DEFAULT_EXPIRATION = Duration.ofHours(24).toSeconds();
 
 	/**
 	 * The directory where cache entries are stored. Each cache entry is a file in this directory,
@@ -61,47 +64,47 @@ class FileSystemResolverCache implements ResolverCache {
 	 */
 	private final long expiration; 	// expiration time after write, in seconds
 
-	private static final Logger log = LoggerFactory.getLogger(FileSystemResolverCache.class);
+	private static final Logger log = LoggerFactory.getLogger(FileSystemResolutionCache.class);
 
 	/**
-	 * Constructs a {@code FileSystemResolverCache} using a specified directory and expiration time.
+	 * Constructs a {@code FileSystemResolutionCache} using a specified directory and expiration time.
 	 * If the directory does not exist, it will be created. If the expiration time is non-positive,
 	 * a default TTL of 24 hours will be used.
 	 *
 	 * @param cacheDir   the directory in which to store cache files; must be a directory or creatable
 	 * @param expiration the expiration time (TTL) for cache entries in seconds; if {@code <= 0}, uses default
-	 * @throws IOException if the directory cannot be created or is not a directory
+	 * @throws ResolutionCacheException if the directory cannot be created or is not a directory
 	 */
-	public FileSystemResolverCache(Path cacheDir, long expiration) throws IOException {
+	public FileSystemResolutionCache(Path cacheDir, long expiration) throws ResolutionCacheException {
 		Objects.requireNonNull(cacheDir, "cacheDir");
 
 		if (Files.exists(cacheDir)) {
 			if (!Files.isDirectory(cacheDir)) {
 				log.error("Resolver cache path {} exists and is not a directory", cacheDir);
-				throw new IOException("Resolver cache path " + cacheDir + " exists and is not a directory");
+				throw new ResolutionCacheException("Resolver cache path " + cacheDir + " exists and is not a directory");
 			}
 		} else {
 			try {
 				Files.createDirectories(cacheDir);
 			} catch (IOException e) {
 				log.error("Resolver cache path {} can not be created", cacheDir);
-				throw new IOException("Resolver cache path " + cacheDir + " can not be created", e);
+				throw new ResolutionCacheException("Resolver cache path " + cacheDir + " can not be created", e);
 			}
 		}
 
 		this.cacheDir = cacheDir;
 		this.expiration = expiration <= 0 ? DEFAULT_EXPIRATION : expiration;
-		log.info("Resolver persistent cache created at {}, TTL: {}", cacheDir, expiration);
+		log.info("Resolver persistent cache created at {}, TTL: {}s", cacheDir, this.expiration);
 	}
 
 	/**
-	 * Constructs a {@code FileSystemResolverCache} with the default cache directory and default expiration time.
+	 * Constructs a {@code FileSystemResolutionCache} with the default cache directory and default expiration time.
 	 * The default directory is {@code ~/.cache/boson/identifier/resolver} if a home directory is available,
 	 * otherwise a directory in the system temporary directory.
 	 *
-	 * @throws IOException if the default cache directory cannot be created
+	 * @throws ResolutionCacheException if the default cache directory cannot be created
 	 */
-	public FileSystemResolverCache() throws IOException {
+	public FileSystemResolutionCache() throws ResolutionCacheException {
 		this(defaultCacheDir(), DEFAULT_EXPIRATION);
 	}
 
@@ -123,18 +126,25 @@ class FileSystemResolverCache implements ResolverCache {
 	 *
 	 * @param id     the identifier for the cache entry
 	 * @param result the resolution result to store
-	 * @throws IOException if writing to the cache file fails
+	 * @throws ResolutionCacheException if writing to the cache file fails
 	 */
 	@Override
-	public void put(Id id, Resolver.ResolutionResult<Card> result) throws IOException {
+	public void put(Id id, Resolver.ResolutionResult<Card> result) throws ResolutionCacheException {
 		try {
-			// Create or overwrite the cache file for the given Id
+			// Write to a temporary file, then atomically move it into place, so a concurrent reader
+			// never observes a partially written entry.
 			Path file = cacheDir.resolve(id.toString());
-			Json.cborMapper().writeValue(file.toFile(), result);
+			Path tmp = cacheDir.resolve(id + ".tmp");
+			Json.cborMapper().writeValue(tmp.toFile(), result);
+			try {
+				Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+			}
 			log.debug("Resolver persistent cache entry updated: {}", id);
 		} catch (IOException e) {
 			log.error("Resolver persistent cache entry update failed: {}", id, e);
-			throw e;
+			throw new ResolutionCacheException("Resolver persistent cache entry update failed", e);
 		}
 	}
 
@@ -144,10 +154,10 @@ class FileSystemResolverCache implements ResolverCache {
 	 *
 	 * @param id the identifier for the cache entry
 	 * @return the cached resolution result, or {@code null} if not found or expired
-	 * @throws IOException if reading from the cache file fails
+	 * @throws ResolutionCacheException if reading from the cache file fails
 	 */
 	@Override
-	public Resolver.ResolutionResult<Card> get(Id id) throws IOException {
+	public Resolver.ResolutionResult<Card> get(Id id) throws ResolutionCacheException {
 		try {
 			Path file = cacheDir.resolve(id.toString());
 			// Check if the cache file exists for this Id
@@ -161,16 +171,28 @@ class FileSystemResolverCache implements ResolverCache {
 			// If the file is older than the expiration threshold, delete and evict it
 			if (attrs.lastModifiedTime().toMillis() < System.currentTimeMillis() - expiration * 1000) {
 				Files.delete(file);
+				// noinspection LoggingSimilarMessage
 				log.debug("Resolver persistent cache entry expired and evicted: {}", id);
 				return null;
 			}
 
-			// Cache hit: read and return the cached result
+			// Cache hit: read the cached result
+			Resolver.ResolutionResult<Card> result = Json.cborMapper().readValue(file.toFile(),
+					new TypeReference<Resolver.ResolutionResult<Card>>() { });
+
+			// Re-verify on read: the cache file is a trust boundary (a local actor with write access
+			// to the cache directory could tamper with it), so a successful entry must still verify.
+			if (result != null && result.succeeded() && result.getResult() != null && !result.getResult().isGenuine()) {
+				Files.delete(file);
+				log.warn("Resolver persistent cache entry failed integrity check and was evicted: {}", id);
+				return null;
+			}
+
 			log.debug("Resolver persistent cache hit: {}", id);
-			return Json.cborMapper().readValue(file.toFile(), new TypeReference<Resolver.ResolutionResult<Card>>() { });
+			return result;
 		} catch (IOException e) {
 			log.error("Resolver persistent cache entry read failed: {}", id, e);
-			throw e;
+			throw new ResolutionCacheException("Resolver persistent cache entry read failed", e);
 		}
 	}
 
@@ -178,41 +200,52 @@ class FileSystemResolverCache implements ResolverCache {
 	 * Removes all expired entries from the cache directory. Each file is checked for expiration based
 	 * on its last modified time and the configured TTL. Expired files are deleted and a debug log is emitted.
 	 *
-	 * @throws IOException if an error occurs while accessing or deleting files
+	 * @throws ResolutionCacheException if an error occurs while accessing or deleting files
 	 */
 	@Override
-	public void cleanup() throws IOException {
-		Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
-			@Override
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				// Check if the file is expired according to TTL
-				if (attrs.lastModifiedTime().toMillis() < System.currentTimeMillis() - expiration * 1000) {
-					Files.delete(file);
-					log.debug("Resolver persistent cache entry expired and evicted: {}", file);
-				}
+	public void evictExpired() throws ResolutionCacheException {
+		try {
+			Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
+				@Override
+				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+					// Check if the file is expired, according to TTL
+					if (attrs.lastModifiedTime().toMillis() < System.currentTimeMillis() - expiration * 1000) {
+						Files.delete(file);
+						// noinspection LoggingSimilarMessage
+						log.debug("Resolver persistent cache entry expired and evicted: {}", file);
+					}
 
-				return FileVisitResult.CONTINUE;
-			}
-		});
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException e) {
+			log.error("Resolver persistent cache cleanup failed", e);
+			throw new ResolutionCacheException("Resolver persistent cache cleanup failed", e);
+		}
 	}
 
 	/**
 	 * Removes all entries from the cache directory, regardless of age or expiration. All cache files
 	 * are deleted, and an info log is emitted after clearing.
 	 *
-	 * @throws Exception if an error occurs while deleting files
+	 * @throws ResolutionCacheException if an error occurs while deleting files
 	 */
 	@Override
-	public void clear() throws Exception {
-		Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
-			@Override
-			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				// Delete every file in the cache directory
-				Files.delete(file);
-				return FileVisitResult.CONTINUE;
-			}
-		});
+	public void clear() throws ResolutionCacheException {
+		try {
+			Files.walkFileTree(cacheDir, new SimpleFileVisitor<>() {
+				@Override
+				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+					// Delete every file in the cache directory
+					Files.delete(file);
+					return FileVisitResult.CONTINUE;
+				}
+			});
 
-		log.info("Resolver persistent cache cleared");
+			log.info("Resolver persistent cache cleared");
+		} catch (IOException e) {
+			log.error("Resolver persistent cache clear failed", e);
+			throw new ResolutionCacheException("Resolver persistent cache clear failed", e);
+		}
 	}
 }

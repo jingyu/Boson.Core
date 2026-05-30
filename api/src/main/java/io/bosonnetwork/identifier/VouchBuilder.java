@@ -23,6 +23,7 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -312,11 +313,10 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 			throw new IllegalStateException("Vouch must include at least one credential");
 
 		List<Credential> credentials = new ArrayList<>(this.credentials.values());
-		// Create an unsigned Vouch with the collected data
-		Vouch unsigned = new Vouch(id, types, identity.getId(), new ArrayList<>(credentials));
-		// Sign the Vouch's data with the identity's private key
+		// Stamp signedAt before signing so it is covered by the signature.
+		Date signedAt = now();
+		Vouch unsigned = new Vouch(id, types, identity.getId(), new ArrayList<>(credentials), signedAt);
 		byte[] signature = identity.sign(unsigned.getSignData());
-		// Return a new signed Vouch with timestamp and signature
-		return new Vouch(unsigned, now(), signature);
+		return new Vouch(unsigned, signature);
 	}
 }

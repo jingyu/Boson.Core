@@ -23,7 +23,7 @@
 package io.bosonnetwork.identifier;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,7 +73,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	private final Proof proof;
 
 	/** Transient compact Boson Vouch representation */
-	private transient BosonVouch bosonVouch;
+	private transient volatile VouchView vouchView;
 
 	/**
 	 * Internal constructor used by JSON deserializer to create a VerifiablePresentation instance.
@@ -96,11 +96,11 @@ public class VerifiablePresentation extends W3CDIDFormat {
 		Objects.requireNonNull(credentials, "credentials");
 		Objects.requireNonNull(proof, "proof");
 
-		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
+		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.holder = holder;
-		this.credentials = Collections.unmodifiableList(credentials);
+		this.credentials = List.copyOf(credentials);
 		this.proof = proof;
 	}
 
@@ -115,11 +115,11 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @param credentials list of verifiable credentials
 	 */
 	protected VerifiablePresentation(List<String> contexts, String id, List<String> types, Id holder, List<VerifiableCredential> credentials) {
-		this.contexts = contexts == null || contexts.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(contexts);
+		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.holder = holder;
-		this.credentials = Collections.unmodifiableList(credentials);
+		this.credentials = List.copyOf(credentials);
 		this.proof = null;
 	}
 
@@ -241,8 +241,13 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	}
 
 	/**
-	 * Validates the cryptographic proof of the presentation.
-	 * Throws InvalidSignatureException if the proof is invalid or missing.
+	 * Validates the presentation: the holder's proof and the signature of every embedded
+	 * credential must all verify. Throws InvalidSignatureException if any of them is invalid
+	 * or the proof is missing.
+	 * <p>
+	 * Note: this verifies <em>signatures</em> only. The validity period (validFrom/validUntil)
+	 * of the embedded credentials is a caller policy and is NOT checked here; call
+	 * {@link VerifiableCredential#validate()} on the individual credentials if needed.
 	 *
 	 * @throws InvalidSignatureException if signature verification fails
 	 */
@@ -252,15 +257,29 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	}
 
 	/**
-	 * Checks whether the cryptographic proof is valid and genuine.
+	 * Checks whether this presentation is genuine: the holder's proof verifies <em>and</em> every
+	 * embedded {@link VerifiableCredential} is itself genuine. The holder's envelope signature
+	 * alone is not sufficient, since it does not attest to the authenticity of the contained
+	 * credentials.
+	 * <p>
+	 * This checks signatures only, not the validity period of the embedded credentials.
 	 *
-	 * @return true if the proof is present and verifies correctly; false otherwise
+	 * @return true if the holder proof and all embedded credential signatures verify; false otherwise
 	 */
 	public boolean isGenuine() {
 		if (proof == null)
 			return false;
 
-		return proof.verify(holder, getSignData());
+		try {
+			if (!proof.verify(holder, getSignData()))
+				return false;
+		} catch (RuntimeException e) {
+			// Malformed id makes sign-data reconstruction throw; treat as not genuine.
+			return false;
+		}
+
+		// The envelope is authentic; now require every embedded credential to be genuine too.
+		return credentials.stream().allMatch(VerifiableCredential::isGenuine);
 	}
 
 	/**
@@ -269,10 +288,10 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return Vouch representation of this presentation
 	 */
 	public Vouch toVouch() {
-		if (bosonVouch == null)
-			bosonVouch = new BosonVouch(this);
+		if (vouchView == null)
+			vouchView = new VouchView(this);
 
-		return bosonVouch;
+		return vouchView;
 	}
 
 	/**
@@ -285,7 +304,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 */
 	public static VerifiablePresentation fromVouch(Vouch vouch, Map<String, List<String>> typeContexts) {
 		Objects.requireNonNull(vouch, "vouch");
-		if (vouch instanceof BosonVouch bv)
+		if (vouch instanceof VouchView bv)
 			return bv.getVerifiablePresentation();
 
 		List<String> contexts = new ArrayList<>();
@@ -326,7 +345,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 						VerificationMethod.defaultReferenceOf(vouch.getHolder()),
 						Proof.Purpose.assertionMethod, vouch.getSignature()));
 
-		vp.bosonVouch = new BosonVouch(vouch, vp);
+		vp.vouchView = new VouchView(vouch, vp);
 		return vp;
 
 	}
@@ -337,9 +356,11 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return byte array of sign data
 	 */
 	protected byte[] getSignData() {
-		// Use existing bosonVouch if present, else create unsigned BosonVouch for signing
-		BosonVouch unsigned = bosonVouch != null ? bosonVouch : new BosonVouch(this, true);
-		return unsigned.getSignData();
+		// At verification time the proof is non-null and provides the signed-at timestamp,
+		// so the VouchView view rebuilds the exact bytes the underlying Vouch signature covers
+		// (id, types, holder, credentials, sat).
+		VouchView view = vouchView != null ? vouchView : new VouchView(this);
+		return view.getSignData();
 	}
 
 	@Override
@@ -400,16 +421,16 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * This nested class wraps the VP data into a simplified Vouch structure,
 	 * including types, holder, credentials, creation time, and signature.
 	 */
-	protected static class BosonVouch extends Vouch {
+	protected static class VouchView extends Vouch {
 		/** The wrapped VerifiablePresentation instance */
 		private final VerifiablePresentation vp;
 
 		/**
-		 * Constructs a BosonVouch from a VerifiablePresentation with proof.
+		 * Constructs a VouchView from a VerifiablePresentation with proof.
 		 *
 		 * @param vp the VerifiablePresentation instance (must have proof)
 		 */
-		protected BosonVouch(VerifiablePresentation vp) {
+		protected VouchView(VerifiablePresentation vp) {
 			super(vp.id == null ? null : DIDURL.create(vp.id).getFragment(),
 					// Filter out the default VP type from types list
 					vp.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VP_TYPE)).collect(Collectors.toList()),
@@ -422,29 +443,33 @@ public class VerifiablePresentation extends W3CDIDFormat {
 		}
 
 		/**
-		 * Constructs an unsigned BosonVouch from a VerifiablePresentation.
-		 * This constructor is used for signature generation where proof is absent.
+		 * Constructs a sat-stamped, unsigned VouchView view of a VerifiablePresentation.
+		 * <p>
+		 * Used at sign time by {@link VerifiablePresentationBuilder} to compute the bytes the
+		 * signature will cover. {@code signedAt} must be set so that it is part of the signed
+		 * data; the resulting proof's {@code created} value should be the same timestamp.
 		 *
-		 * @param vp the VerifiablePresentation instance
-		 * @param unsigned unused boolean flag to differentiate constructor
+		 * @param vp the VerifiablePresentation instance (proof may be null)
+		 * @param signedAt the signing timestamp to embed in the signed bytes
 		 */
-		protected BosonVouch(VerifiablePresentation vp, boolean unsigned) {
+		protected VouchView(VerifiablePresentation vp, Date signedAt) {
 			super(vp.id == null ? null : DIDURL.create(vp.id).getFragment(),
 					vp.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VP_TYPE)).collect(Collectors.toList()),
 					vp.holder,
-					vp.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()));
+					vp.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
+					signedAt);
 
 			this.vp = vp;
 		}
 
 		/**
-		 * Constructs a BosonVouch from an existing Vouch and associated VerifiablePresentation.
+		 * Constructs a VouchView from an existing Vouch and associated VerifiablePresentation.
 		 *
 		 * @param vouch the existing Vouch instance
 		 * @param vp the associated VerifiablePresentation
 		 */
-		protected BosonVouch(Vouch vouch, VerifiablePresentation vp) {
-			super(vouch, vouch.getSignedAt(), vouch.getSignature());
+		protected VouchView(Vouch vouch, VerifiablePresentation vp) {
+			super(vouch, vouch.getSignature());
 			this.vp = vp;
 		}
 

@@ -24,7 +24,6 @@ package io.bosonnetwork.identifier;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -43,17 +42,24 @@ import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.json.Json;
 
 /**
- * Represents the Boson compacted version of a Verifiable Presentation (VP).
+ * Boson's compact form of a {@link VerifiablePresentation}.
  * <p>
- * This class provides a compact form for transmitting and storing a Verifiable Presentation,
- * mapping the standard VP fields to short JSON/CBOR keys as follows:
+ * A <em>vouch</em> is the holder's signed affirmation — "I, the holder, vouch for these credentials"
+ * — packaged in a short, CBOR/JSON-friendly layout. It mirrors {@code VerifiablePresentation}
+ * (the W3C form) the same way {@link Card} mirrors {@link DIDDocument}: same content, shorter keys
+ * and no JSON-LD vocabulary, so it's cheap to ship over the wire or pin in storage.
+ * <p>
+ * Convert with {@link VerifiablePresentation#toVouch()} and {@link VerifiablePresentation#fromVouch(Vouch, java.util.Map)}.
+ * The signature covers everything except itself, including {@code signedAt}.
+ * <p>
+ * Compact key map:
  * <ul>
- *     <li>{@code id}  &rarr; {@code "id"}: The unique identifier for the presentation.</li>
- *     <li>{@code types}  &rarr; {@code "t"}: The types associated with the presentation.</li>
- *     <li>{@code holder}  &rarr; {@code "h"}: The identifier of the entity presenting the credentials.</li>
- *     <li>{@code credentials}  &rarr; {@code "c"}: The list of credentials included in the presentation.</li>
- *     <li>{@code signedAt}  &rarr; {@code "sat"}: The timestamp when the presentation was signed.</li>
- *     <li>{@code signature}  &rarr; {@code "sig"}: The signature over the presentation data.</li>
+ *     <li>{@code id}  &rarr; {@code "id"}: the unique identifier (optional).</li>
+ *     <li>{@code types}  &rarr; {@code "t"}: presentation types.</li>
+ *     <li>{@code holder}  &rarr; {@code "h"}: the holder's {@link Id}.</li>
+ *     <li>{@code credentials}  &rarr; {@code "c"}: the credentials being presented.</li>
+ *     <li>{@code signedAt}  &rarr; {@code "sat"}: when the holder signed.</li>
+ *     <li>{@code signature}  &rarr; {@code "sig"}: holder Ed25519 signature.</li>
  * </ul>
  */
 @JsonPropertyOrder({"id", "t", "h", "c", "sat", "sig"})
@@ -131,31 +137,33 @@ public class Vouch {
 		Objects.requireNonNull(signature, "signature");
 
 		this.id = id;
-		// Defensive: always wrap as unmodifiable list (or empty)
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		// Defensive: copy and wrap as unmodifiable list (or empty)
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.holder = holder;
-		this.credentials = Collections.unmodifiableList(credentials);
+		this.credentials = List.copyOf(credentials);
 		this.signedAt = signedAt;
-		this.signature = signature;
+		this.signature = signature.clone();
 	}
 
 	/**
-	 * Internal constructor used by {@link VouchBuilder}.
+	 * Internal constructor for a sat-stamped but unsigned Vouch.
 	 * <p>
-	 * The caller should transfer ownership of the collections to the new instance.
-	 * Used for building unsigned {@code Vouch} objects.
+	 * Used by the W3C adapter ({@link VerifiablePresentation.VouchView}) at sign time to build
+	 * the bytes the signature will cover. {@code signedAt} must be set before signing because it
+	 * is part of the signed data.
 	 *
-	 * @param id          the unique identifier for the presentation
-	 * @param types       the types associated with the presentation
-	 * @param holder      the identifier of the entity presenting the credentials
-	 * @param credentials the list of credentials included in the presentation
+	 * @param id          the unique identifier for the presentation (may be null)
+	 * @param types       the types associated with the presentation (may be null or empty)
+	 * @param holder      the holder identifier
+	 * @param credentials the list of credentials
+	 * @param signedAt    the signing timestamp to embed
 	 */
-	protected Vouch(String id, List<String> types, Id holder, List<Credential> credentials) {
+	protected Vouch(String id, List<String> types, Id holder, List<Credential> credentials, Date signedAt) {
 		this.id = id;
-		this.types = types == null || types.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(types);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.holder = holder;
-		this.credentials = Collections.unmodifiableList(credentials);
-		this.signedAt = null;
+		this.credentials = List.copyOf(credentials);
+		this.signedAt = signedAt;
 		this.signature = null;
 	}
 
@@ -163,15 +171,14 @@ public class Vouch {
 	 * Internal constructor used by {@link VouchBuilder} for copying and adding a signature.
 	 *
 	 * @param vouch     the original vouch to copy
-	 * @param signedAt  the timestamp at which the presentation was signed
 	 * @param signature the signature over the presentation data
 	 */
-	protected Vouch(Vouch vouch, Date signedAt, byte[] signature) {
+	protected Vouch(Vouch vouch, byte[] signature) {
 		this.id = vouch.id;
 		this.types = vouch.types;
 		this.holder = vouch.holder;
 		this.credentials = vouch.credentials;
-		this.signedAt = signedAt;
+		this.signedAt = vouch.signedAt;
 		this.signature = signature;
 	}
 
@@ -249,7 +256,8 @@ public class Vouch {
 	/**
 	 * Returns the timestamp at which this presentation was signed.
 	 * <p>
-	 * Mapped to the compact JSON/CBOR key {@code "sat"}.
+	 * Mapped to the compact JSON/CBOR key {@code "sat"}. Note: {@code signedAt} is metadata and is
+	 * <em>not</em> covered by the signature, so it is not cryptographically authenticated.
 	 *
 	 * @return the signing timestamp, or {@code null} if unsigned
 	 */
@@ -265,11 +273,16 @@ public class Vouch {
 	 * @return the signature byte array, or {@code null} if unsigned
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature == null ? null : signature.clone();
 	}
 
 	/**
-	 * Validates the signature of this presentation.
+	 * Validates this presentation: the holder's signature and the signature of every embedded
+	 * credential must all verify.
+	 * <p>
+	 * Note: this verifies <em>signatures</em> only. The validity period of the embedded
+	 * credentials is a caller policy and is NOT checked here; call {@link Credential#validate()}
+	 * on the individual credentials if needed.
 	 *
 	 * @throws InvalidSignatureException if the signature is invalid or not genuine
 	 */
@@ -279,17 +292,24 @@ public class Vouch {
 	}
 
 	/**
-	 * Checks if the signature of this presentation is genuine.
+	 * Checks if this presentation is genuine: the holder's signature verifies <em>and</em> every
+	 * embedded {@link Credential} is itself genuine. The holder's envelope signature alone is not
+	 * sufficient, since it does not attest to the authenticity of the contained credentials.
 	 *
-	 * @return {@code true} if the signature is valid and genuine, {@code false} otherwise
+	 * @return {@code true} if the holder signature and all embedded credential signatures verify,
+	 *         {@code false} otherwise
 	 */
 	public boolean isGenuine() {
 		// Signature must be present and of correct length
 		if (signature == null || signature.length != Signature.BYTES)
 			return false;
 
-		// Verify the signature against the sign data and holder's public key
-		return Signature.verify(getSignData(), signature, holder.toSignatureKey());
+		// Verify the holder's signature against the sign data and holder's public key
+		if (!Signature.verify(getSignData(), signature, holder.toSignatureKey()))
+			return false;
+
+		// The envelope is authentic; now require every embedded credential to be genuine too.
+		return credentials.stream().allMatch(Credential::isGenuine);
 	}
 
 	/**
@@ -301,10 +321,11 @@ public class Vouch {
 	 * @return the byte array to be signed or verified
 	 */
 	protected byte[] getSignData() {
-		// If already signed, strip signature/signedAt for sign data
-		if (signature != null)	// already signed
-			return new Vouch(this, null, null).toBytes();
-		else 					// unsigned
+		if (signature != null) // already signed
+			// Rebuild the bytes that were signed: everything except the signature itself.
+			// signedAt is part of the signed data so that the signing timestamp is authenticated.
+			return new Vouch(this, null).toBytes();
+		else // unsigned
 			return toBytes();
 	}
 

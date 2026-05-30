@@ -61,7 +61,7 @@ public class VouchTests {
 
 		var vb = new VouchBuilder(identity)
 				.id("testVouch")
-				.type("BosonVouch", "TestVouch");
+				.type("VouchView", "TestVouch");
 
 		vb.addCredential().id("profile")
 				.type("BosonProfile", "TestProfile")
@@ -86,7 +86,7 @@ public class VouchTests {
 
 		assertEquals("testVouch", vouch.getId());
 		assertEquals(2, vouch.getTypes().size());
-		assertEquals("BosonVouch", vouch.getTypes().get(0));
+		assertEquals("VouchView", vouch.getTypes().get(0));
 		assertEquals("TestVouch", vouch.getTypes().get(1));
 		assertEquals(identity.getId(), vouch.getHolder());
 
@@ -164,8 +164,26 @@ public class VouchTests {
 		assertEquals(identity.getId(), vouch.getHolder());
 		assertTrue(vouch.isGenuine());
 
-		vouch.getSignature()[0] = (byte) (vouch.getSignature()[0] + 1);
-		assertFalse(vouch.isGenuine());
-		assertThrows(InvalidSignatureException.class, vouch::validate);
+		// Corrupt the signature within the serialized form, then re-parse
+		// (getSignature() returns a defensive copy, so mutating it does not affect the vouch).
+		byte[] tampered = vouch.toBytes();
+		byte[] sig = vouch.getSignature();
+		int idx = -1;
+		for (int i = 0; idx < 0 && i <= tampered.length - sig.length; i++) {
+			boolean match = true;
+			for (int j = 0; j < sig.length; j++) {
+				if (tampered[i + j] != sig[j]) {
+					match = false;
+					break;
+				}
+			}
+			if (match)
+				idx = i;
+		}
+		assertTrue(idx >= 0);
+		tampered[idx] ^= 0x01;
+		var tamperedVouch = Vouch.parse(tampered);
+		assertFalse(tamperedVouch.isGenuine());
+		assertThrows(InvalidSignatureException.class, tamperedVouch::validate);
 	}
 }

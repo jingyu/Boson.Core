@@ -117,27 +117,31 @@ public class Card {
 		Objects.requireNonNull(signature, "signature");
 
 		this.id = id;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
-		this.services = services == null || services.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(services);
+		this.credentials = credentials == null || credentials.isEmpty() ? List.of() : List.copyOf(credentials);
+		this.services = services == null || services.isEmpty() ? List.of() : List.copyOf(services);
 		this.signedAt = signedAt;
-		this.signature = signature;
+		this.signature = signature.clone();
 	}
 
 	/**
-	 * Internal constructor used by CardBuilder.
-	 * The caller should transfer ownership of the credentials and services to the new instance.
+	 * Internal constructor for a sat-stamped but unsigned Card.
+	 * <p>
+	 * Used by the W3C adapter ({@link DIDDocument.CardView}) at sign time to build the bytes the
+	 * signature will cover. {@code signedAt} must be set before signing because it is part of the
+	 * signed data.
 	 *
-	 * @param id          the DID identifier
+	 * @param id          the DID identifier (required)
 	 * @param credentials list of credentials (maybe null or empty)
 	 * @param services    list of services (maybe null or empty)
+	 * @param signedAt    the signing timestamp to embed
 	 */
-	protected Card(Id id, List<Credential> credentials, List<Service> services) {
+	protected Card(Id id, List<Credential> credentials, List<Service> services, Date signedAt) {
 		Objects.requireNonNull(id, "id");
 
 		this.id = id;
-		this.credentials = credentials == null || credentials.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(credentials);
-		this.services = services == null || services.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(services);
-		this.signedAt = null;
+		this.credentials = credentials == null || credentials.isEmpty() ? List.of() : List.copyOf(credentials);
+		this.services = services == null || services.isEmpty() ? List.of() : List.copyOf(services);
+		this.signedAt = signedAt;
 		this.signature = null;
 	}
 
@@ -145,15 +149,14 @@ public class Card {
 	 * Internal copy constructor used to create a signed Card instance.
 	 *
 	 * @param profile   the unsigned Card instance
-	 * @param signedAt  timestamp of signature
 	 * @param signature digital signature bytes
 	 */
-	protected Card(Card profile, Date signedAt, byte[] signature) {
+	protected Card(Card profile, byte[] signature) {
 		this.id = profile.id;
 		this.credentials = profile.credentials;
 		this.services = profile.services;
 
-		this.signedAt = signedAt;
+		this.signedAt = profile.signedAt;
 		this.signature = signature;
 	}
 
@@ -237,6 +240,7 @@ public class Card {
 	 * @return list of services matching the specified type, never null
 	 */
 	public List<Service> getServices(String type) {
+		Objects.requireNonNull(type, "type");
 		return services.stream()
 				.filter(s -> s.getType().equals(type))
 				.collect(Collectors.toList());
@@ -266,6 +270,8 @@ public class Card {
 	 * @return the service matching the specified id and type, or null if no such service exists
 	 */
 	public Service getService(String id, String type) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(type, "type");
 		return services.stream()
 				.filter(s -> s.getId().equals(id) && s.getType().equals(type))
 				.findFirst()
@@ -274,6 +280,9 @@ public class Card {
 
 	/**
 	 * Returns the timestamp when this Card was signed.
+	 * <p>
+	 * Note: {@code signedAt} is metadata and is <em>not</em> covered by the signature, so it is not
+	 * cryptographically authenticated; do not rely on it for security decisions.
 	 *
 	 * @return the signature timestamp, or null if unsigned
 	 */
@@ -287,7 +296,7 @@ public class Card {
 	 * @return the signature bytes, or null if unsigned
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature == null ? null : signature.clone();
 	}
 
 	/**
@@ -328,9 +337,11 @@ public class Card {
 	 * @return byte array representing the signing data
 	 */
 	protected byte[] getSignData() {
-		if (signature != null)	// already signed
-			return new Card(this, null, null).toBytes();
-		else 					// unsigned
+		if (signature != null) // already signed
+			// Rebuild the bytes that were signed: {id, c, s, sat} (signature omitted).
+			// signedAt is part of the signed data so that the signing timestamp is authenticated.
+			return new Card(this, null).toBytes();
+		else // unsigned
 			return toBytes();
 	}
 
@@ -512,7 +523,7 @@ public class Card {
 			this.id = id;
 			this.type = type;
 			this.endpoint = endpoint;
-			this.properties = properties == null ? Collections.emptyMap() : properties;
+			this.properties = properties == null || properties.isEmpty() ? Map.of() : new LinkedHashMap<>(properties);
 		}
 
 		/**
