@@ -89,12 +89,12 @@ public interface FederationContext {
 	CompletableFuture<Boolean> existsNode(Id nodeId);
 
 	/**
-	 * Retrieves information about a specific service hosted by a federated node.
+	 * Retrieves the services hosted by a specific federated node for the given peer.
 	 *
-	 * @param nodeId the unique identifier of the node hosting the service
 	 * @param peerId the unique identifier of the service peer
+	 * @param nodeId the unique identifier of the federated node hosting the service
 	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo} if found,
-	 *         or completes exceptionally/with null if the service cannot be located
+	 *         an empty list if no services match, or completes exceptionally on error
 	 */
 	CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId);
 
@@ -154,38 +154,50 @@ public interface FederationContext {
 	CwtAuth getWebAuthenticator();
 
 	/**
-	 * Creates and returns a disabled instance of FederationContext.
-	 * This method is used to obtain a context object that represents
-	 * a disabled federation state.
+	 * Returns a federation context that reports the federation feature as turned off — for use
+	 * by services that do not federate. Lookup methods complete with empty/{@code null} results
+	 * (no node or service is ever found); {@link #getAuthenticator()} rejects every challenge; and
+	 * {@link #getWebAuthenticator()} returns {@code null}.
 	 *
-	 * @return a disabled FederationContext instance
+	 * @return a disabled {@link FederationContext}
 	 */
 	static FederationContext disabled() {
 		return new DisabledFederationContext();
 	}
 
 	/**
-	 * Creates and returns a {@link FederationContext} that allows all operations
-	 * without requiring web token authentication. This method is intended for use
-	 * in scenarios where unrestricted access is permitted, bypassing authentication mechanisms.
+	 * Returns an "allow-all" federation context — intended for development, smoke tests, and
+	 * bring-up where peer/service discovery is faked. Concretely:
+	 * <ul>
+	 *   <li>{@link #getNode(Id, boolean)} synthesizes a {@code SuperNodeInfo} for any requested id,
+	 *       and {@link #existsNode(Id)} always returns {@code true};</li>
+	 *   <li>{@link #getServices(Id, Id)} returns a single synthesized {@code ServiceInfo} for the
+	 *       requested peer/node pair; the federation-aware overloads behave the same;</li>
+	 *   <li>{@link #reportIncident(Id, Id, IncidentType, String) reportIncident} is a no-op;</li>
+	 *   <li>{@link #getAuthenticator()} verifies any non-null nonce/signature against the id's key
+	 *       and accepts the pre-authenticated mode;</li>
+	 *   <li>{@link #getWebAuthenticator()} returns a {@link CwtAuth} backed by the same synthesized
+	 *       provider; {@code nodeIdentity} must be non-null when this is called.</li>
+	 * </ul>
 	 *
-	 * @param nodeIdentity the {@link Identity} representing the node's identity in the federation context
-	 * @return a {@link FederationContext} instance that allows all operations while bypassing web token authentication
+	 * @param nodeIdentity the identity that will sign issued web tokens (required if
+	 *                     {@link #getWebAuthenticator()} will be called)
+	 * @return a permissive {@link FederationContext}
 	 */
 	static FederationContext allowAll(Identity nodeIdentity) {
 		return new AllowAllFederationContext(nodeIdentity);
 	}
 
 	/**
-	 * Creates and returns a static {@link FederationContext} instance that is based
-	 * on a specific node identity. This method is suitable for scenarios requiring
-	 * static federation configuration for a particular node without the need for
-	 * token-based authentication mechanisms.
+	 * Returns an in-memory federation context whose node and service registries are populated
+	 * imperatively at test/bring-up time
+	 * ({@link io.bosonnetwork.service.impl.StaticFederationContext} exposes
+	 * {@code addNode(...)}, {@code addService(...)}, etc.). {@link #getWebAuthenticator()} returns
+	 * a real {@link CwtAuth} backed by the registry and requires a non-null {@code nodeIdentity}.
 	 *
-	 * @param nodeIdentity the {@link Identity} representing the identity of the node
-	 *                     within the federation context.
-	 * @return a {@link FederationContext} instance configured to use the specified
-	 *         node identity and operate with a static federation configuration.
+	 * @param nodeIdentity the identity that will sign issued web tokens (required if
+	 *                     {@link #getWebAuthenticator()} will be called)
+	 * @return an in-memory {@link FederationContext}
 	 */
 	static FederationContext staticContext(Identity nodeIdentity) {
 		return new StaticFederationContext(nodeIdentity);

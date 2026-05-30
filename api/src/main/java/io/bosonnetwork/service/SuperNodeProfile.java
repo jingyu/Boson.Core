@@ -22,10 +22,8 @@
 
 package io.bosonnetwork.service;
 
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -247,6 +245,7 @@ public class SuperNodeProfile {
 	 * @return a new builder instance
 	 */
 	public static Builder builder(Identity identity) {
+		Objects.requireNonNull(identity, "Identity cannot be null");
 		return new Builder(identity);
 	}
 
@@ -265,6 +264,36 @@ public class SuperNodeProfile {
 		private Builder(Identity identity) {
 			this.identity = identity;
 			this.cardBuilder = Card.builder(identity);
+		}
+
+		/**
+		 * Validates that the endpoint URI is well-formed (has both a scheme and a host). Service
+		 * types in a {@code SuperNodeProfile} may use different protocols (e.g. {@code http(s)} for
+		 * the API and web gateway, {@code mqtts} for photon messaging), so this only enforces basic
+		 * URI structure — individual callers may impose stricter rules on top.
+		 *
+		 * @param endpoint the endpoint URI to validate
+		 * @throws IllegalArgumentException if the endpoint URI is missing a scheme or host
+		 */
+		private static void validateEndpoint(URI endpoint) {
+			if (endpoint.getScheme() == null || endpoint.getScheme().isEmpty()
+					|| endpoint.getHost() == null || endpoint.getHost().isEmpty())
+				throw new IllegalArgumentException("Invalid endpoint URI (missing scheme or host): " + endpoint);
+		}
+
+		/**
+		 * Validates that the endpoint URI is a well-formed {@code http} or {@code https} URL. Used
+		 * for service types that speak HTTP over the wire (super-node API, web gateway, ion store).
+		 *
+		 * @param endpoint the endpoint URI to validate
+		 * @throws IllegalArgumentException if the endpoint URI is missing a scheme or host, or its
+		 *                                  scheme is not {@code http} / {@code https}
+		 */
+		private static void validateHttpEndpoint(URI endpoint) {
+			validateEndpoint(endpoint);
+			String scheme = endpoint.getScheme();
+			if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+				throw new IllegalArgumentException("Invalid HTTP endpoint scheme (must be http or https): " + endpoint);
 		}
 
 		/**
@@ -321,13 +350,7 @@ public class SuperNodeProfile {
 		 */
 		public Builder apiService(URI endpoint) {
 			Objects.requireNonNull(endpoint);
-			try {
-				URL url = endpoint.toURL();
-				if (!url.getProtocol().equals("http") && !url.getProtocol().equals("https"))
-					throw new IllegalArgumentException("Invalid endpoint protocol");
-			} catch (MalformedURLException e) {
-				throw new IllegalArgumentException("Invalid endpoint URL", e);
-			}
+			validateHttpEndpoint(endpoint);
 			cardBuilder.addService(identity.getId().toBase58String(), SUPER_NODE_API_SERVICE_TYPE, endpoint.toString());
 			return this;
 		}
@@ -361,6 +384,7 @@ public class SuperNodeProfile {
 		public Builder webGatewayService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
+			validateHttpEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), WEB_GATEWAY_SERVICE_TYPE, endpoint.toString());
 			return this;
 		}
@@ -376,6 +400,7 @@ public class SuperNodeProfile {
 		public Builder ionStoreService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
+			validateHttpEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), ION_STORE_SERVICE_TYPE, endpoint.toString());
 			return this;
 		}
@@ -391,6 +416,7 @@ public class SuperNodeProfile {
 		public Builder photonMessagingService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
+			validateEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), PHOTON_MESSAGING_SERVICE_TYPE, endpoint.toString());
 			return this;
 		}
@@ -406,6 +432,7 @@ public class SuperNodeProfile {
 		public Builder activeProxyService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
+			validateEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), ACTIVE_PROXY_SERVICE_TYPE, endpoint.toString());
 			return this;
 		}
@@ -423,6 +450,7 @@ public class SuperNodeProfile {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(type);
 			Objects.requireNonNull(endpoint);
+			validateEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), type, endpoint.toString());
 			return this;
 		}
@@ -441,29 +469,33 @@ public class SuperNodeProfile {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(type);
 			Objects.requireNonNull(endpoint);
+			validateEndpoint(endpoint);
 			cardBuilder.addService(peerId.toBase58String(), type, endpoint.toString(), properties);
 			return this;
 		}
 
 		/**
 		 * Builds a {@link SuperNodeProfile} instance.
+		 * <p>
+		 * A display {@link #name(String) name} is mandatory — operators publishing a profile must
+		 * declare who they are. The {@code logo}, {@code website}, and {@code contact} fields are
+		 * optional and only emitted into the profile credential when set.
 		 *
 		 * @return a new super node profile
-		 * @throws IllegalStateException if no profile metadata (name, logo, website, or contact) was provided
+		 * @throws IllegalStateException if {@code name} has not been set
 		 */
 		public SuperNodeProfile build() {
+			if (name == null || name.isEmpty())
+				throw new IllegalStateException("Super node profile name is required");
+
 			Map<String, Object> claims = new LinkedHashMap<>();
-			if (name != null)
-				claims.put("name", name);
+			claims.put("name", name);
 			if (logo != null)
 				claims.put("logo", logo);
 			if (website != null)
 				claims.put("website", website);
 			if (contact != null)
 				claims.put("contact", contact);
-
-			if (claims.isEmpty())
-				throw new IllegalStateException("No profile data provided");
 
 			cardBuilder.addCredential(DEFAULT_PROFILE_CREDENTIAL_ID, DEFAULT_PROFILE_CREDENTIAL_TYPE, claims);
 			Card card = cardBuilder.build();

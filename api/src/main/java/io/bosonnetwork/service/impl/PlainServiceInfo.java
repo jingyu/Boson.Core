@@ -38,19 +38,19 @@ public class PlainServiceInfo implements ServiceInfo {
 	private final long fingerprint;
 	private final Id nodeId;
 	private final String endpoint;
-	private final String serviceId;
+	private final String serviceType;
 	private final String serviceName;
 
 	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint) {
 		this(peerId, fingerprint, nodeId, endpoint, null, null);
 	}
 
-	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, String serviceId, String serviceName) {
+	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, String serviceType, String serviceName) {
 		this.peerId = Objects.requireNonNull(peerId);
 		this.fingerprint = fingerprint;
 		this.nodeId = Objects.requireNonNull(nodeId);
 		this.endpoint = Objects.requireNonNull(endpoint);
-		this.serviceId = serviceId == null || serviceId.isEmpty() ? peerId.toString() : serviceId;
+		this.serviceType = serviceType == null || serviceType.isEmpty() ? peerId.toString() : serviceType;
 		this.serviceName = serviceName == null || serviceName.isEmpty() ? peerId.toAbbrBase58String() : serviceName;
 	}
 
@@ -91,7 +91,7 @@ public class PlainServiceInfo implements ServiceInfo {
 
 	@Override
 	public String getServiceType() {
-		return serviceId;
+		return serviceType;
 	}
 
 	@Override

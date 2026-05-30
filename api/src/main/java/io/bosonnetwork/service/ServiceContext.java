@@ -88,22 +88,23 @@ public interface ServiceContext {
 	Map<String, Object> getConfiguration();
 
 	/**
-	 * Set the service runtime property
+	 * Sets a service runtime property. Properties form an in-memory key/value side-channel that
+	 * outlives a single request but does not persist across restarts. Implementations should be
+	 * thread-safe.
 	 *
-	 * @param key the property key.
-	 * @param value the new value to be associated with the property name.
-	 * @return the previous value associated with {@code key}.
+	 * @param key the property name (non-null)
+	 * @param value the new value, or {@code null} to remove the mapping
+	 * @return the previous value associated with {@code key}, or {@code null} if there was none
 	 */
-	Object setProperty(Object key, Object value);
+	Object setProperty(String key, Object value);
 
 	/**
-	 * Returns the value to which the specified key is mapped, or {@code null} if the service
-	 * contains no property value for the key.
+	 * Returns the value associated with the specified property key, or {@code null} if no mapping
+	 * exists. The caller is responsible for the cast; this is a convenience for typed read.
 	 *
-	 * @param key the property key.
-	 * @param <T> the type of the property value.
-	 * @return the value of the specified property, or
-	 *         {@code null} if the service contains no mapping for the property.
+	 * @param key the property name (non-null)
+	 * @param <T> the expected type of the property value
+	 * @return the value of the specified property, or {@code null} if no mapping exists
 	 */
-	<T> T getProperty(Object key);
+	<T> T getProperty(String key);
 }

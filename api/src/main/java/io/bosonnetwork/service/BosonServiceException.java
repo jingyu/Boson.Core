@@ -66,7 +66,6 @@ public class BosonServiceException extends BosonException {
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public BosonServiceException(String message, Throwable cause) {
 		super(message, cause);
@@ -84,7 +83,6 @@ public class BosonServiceException extends BosonException {
 	 *		 {@link #getCause()} method).  (A {@code null} value is
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
-	 * @since  1.4
 	 */
 	public BosonServiceException(Throwable cause) {
 		super(cause);

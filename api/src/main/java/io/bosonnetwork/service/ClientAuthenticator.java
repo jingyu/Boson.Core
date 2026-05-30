@@ -29,55 +29,72 @@ import io.bosonnetwork.Id;
 /**
  * Interface for authenticating clients (users and devices) within the Boson network.
  * <p>
- * Implementations provide mechanisms to verify the identity of users and devices
- * typically using cryptographic challenges and signatures (e.g., Ed25519).
+ * Implementations verify the identity of users and devices, typically using cryptographic
+ * challenges and signatures (e.g., Ed25519).
+ * <p>
+ * <strong>Nonce/signature contract.</strong> The overloads that accept {@code (nonce, signature)}
+ * support three call shapes:
+ * <ul>
+ *   <li>Both {@code nonce} and {@code signature} non-null — the implementation MUST verify the
+ *       signature against the nonce using the id's signing key, and return the verification result.</li>
+ *   <li>Both {@code nonce} and {@code signature} null — "pre-authenticated" mode: the caller has
+ *       already verified the identity out of band (typically at the transport layer) and is asking
+ *       only whether the id is admissible. The implementation MUST NOT treat the absence of a
+ *       signature as a failure; it should apply its admission policy and return that. The no-nonce
+ *       default overloads delegate to this mode.</li>
+ *   <li>Exactly one of {@code nonce} / {@code signature} is null — caller bug; the implementation
+ *       MUST return {@code false}.</li>
+ * </ul>
  */
 public interface ClientAuthenticator {
 
 	/**
-	 * Authenticates a user based on their ID and a cryptographic signature.
+	 * Authenticates a user. See the {@linkplain ClientAuthenticator interface Javadoc} for the
+	 * nonce/signature contract.
 	 *
 	 * @param userId    the unique identifier of the user
-	 * @param nonce     the random challenge data (nonce) used for authentication
-	 * @param signature the digital signature of the nonce, generated using the user's private key
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the user is successfully authenticated,
+	 * @param nonce     the challenge data, or {@code null} for pre-authenticated mode
+	 * @param signature the signature over {@code nonce}, or {@code null} for pre-authenticated mode
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the user is admitted,
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature);
 
 	/**
-	 * Authenticates a user based on their unique identifier.
+	 * Convenience for pre-authenticated mode — equivalent to
+	 * {@link #authenticateUser(Id, byte[], byte[]) authenticateUser(userId, null, null)}.
 	 *
 	 * @param userId the unique identifier of the user to authenticate
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the user
-	 *         is successfully authenticated, or {@code false} otherwise
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the user is admitted,
+	 *         or {@code false} otherwise
 	 */
 	default CompletableFuture<Boolean> authenticateUser(Id userId) {
 		return authenticateUser(userId, null, null);
 	}
 
 	/**
-	 * Authenticates a specific device belonging to a user.
+	 * Authenticates a specific device belonging to a user. See the
+	 * {@linkplain ClientAuthenticator interface Javadoc} for the nonce/signature contract.
 	 *
 	 * @param userId    the unique identifier of the user who owns the device
 	 * @param deviceId  the unique identifier of the device attempting to authenticate
-	 * @param nonce     the random challenge data (nonce) used for authentication
-	 * @param signature the digital signature of the nonce, generated using the device's private key
+	 * @param nonce     the challenge data, or {@code null} for pre-authenticated mode
+	 * @param signature the signature over {@code nonce}, or {@code null} for pre-authenticated mode
 	 * @param address   the network address (e.g., IP address) from which the device is connecting
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is successfully authenticated,
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is admitted,
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address);
 
 	/**
-	 * Authenticates a specific device belonging to a user using the provided user ID, device ID,
-	 * and network address.
+	 * Convenience for pre-authenticated mode — equivalent to
+	 * {@link #authenticateDevice(Id, Id, byte[], byte[], String) authenticateDevice(userId, deviceId, null, null, address)}.
 	 *
 	 * @param userId   the unique identifier of the user who owns the device
 	 * @param deviceId the unique identifier of the device attempting to authenticate
 	 * @param address  the network address (e.g., IP address) from which the device is connecting
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is successfully
-	 *         authenticated, or {@code false} otherwise
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is admitted,
+	 *         or {@code false} otherwise
 	 */
 	default CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, String address) {
 		return authenticateDevice(userId, deviceId, null, null, address);

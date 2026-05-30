@@ -71,6 +71,14 @@ public class StaticClientContext implements ClientContext {
 
 	/**
 	 * Adds a new user to the user registry if they do not already exist.
+	 * <p>
+	 * <strong>Concurrency note:</strong> the up-front existence check and the
+	 * {@code computeIfAbsent} insert are not a single atomic step. Two threads calling
+	 * {@code addUser(sameId, ...)} concurrently can both observe "not present" and both return
+	 * {@code true}; the {@code computeIfAbsent} call still atomizes the actual write, so only one
+	 * {@link PlainUser} entry is inserted — the race is benign with respect to map state but the
+	 * boolean return may over-report success. This is a test/bring-up helper; this trade-off is
+	 * acceptable for that use.
 	 *
 	 * @param userId    The unique identifier of the user to be added. Must not be null.
 	 * @param name      The name of the user to be added.
@@ -130,6 +138,12 @@ public class StaticClientContext implements ClientContext {
 	/**
 	 * Adds a new device to the user registry for a specified user. If the device already exists
 	 * globally, the addition will fail and return false. The user must already exist in the registry.
+	 * <p>
+	 * <strong>Concurrency note:</strong> as with {@link #addUser(Id, String, String) addUser},
+	 * the up-front {@code existsDeviceSync} check and the subsequent {@code compute} insert are
+	 * not a single atomic step; concurrent {@code addDevice} calls for the same {@code deviceId}
+	 * can both return {@code true} even though only one entry is actually inserted. The race is
+	 * benign with respect to map state and acceptable for this test/bring-up helper.
 	 *
 	 * @param userId The unique identifier of the user to which the device will be added. Must not be null.
 	 * @param deviceId The global unique identifier of the device to be added. Must not be null.
@@ -300,8 +314,13 @@ public class StaticClientContext implements ClientContext {
 	}
 
 	@Override
+	public CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId) {
+		return ContextualFuture.succeededFuture(getDeviceSync(userId, deviceId));
+	}
+
+	@Override
 	public CompletableFuture<Boolean> existsDevice(Id userId, Id deviceId) {
-		return ContextualFuture.completedFuture(existsDeviceSync(userId, deviceId));
+		return ContextualFuture.succeededFuture(existsDeviceSync(userId, deviceId));
 	}
 
 	@Override
@@ -310,21 +329,21 @@ public class StaticClientContext implements ClientContext {
 			@Override
 			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
 				if (!existsUserSync(userId))
-					return CompletableFuture.completedFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean isValid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && userId.toSignatureKey().verify(nonce, signature));
-				return CompletableFuture.completedFuture(isValid);
+				return ContextualFuture.succeededFuture(isValid);
 			}
 
 			@Override
 			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
 				if (!existsDeviceSync(userId, deviceId))
-					return CompletableFuture.completedFuture(false);
+					return ContextualFuture.succeededFuture(false);
 
 				boolean isValid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && deviceId.toSignatureKey().verify(nonce, signature));
-				return CompletableFuture.completedFuture(isValid);
+				return ContextualFuture.succeededFuture(isValid);
 			}
 		};
 	}

@@ -34,14 +34,14 @@ public interface SuperNodeInfo {
 	/**
 	 * Gets the unique identifier of the federated node.
 	 *
-	 * @return the node {@link Id}
+	 * @return the node {@link Id}, never {@code null}
 	 */
 	Id getId();
 
 	/**
 	 * Gets the hostname or IP address of the node.
 	 *
-	 * @return the host string
+	 * @return the host string, never {@code null}
 	 */
 	String getHost();
 
@@ -55,56 +55,56 @@ public interface SuperNodeInfo {
 	/**
 	 * Gets the API endpoint URL for the node.
 	 *
-	 * @return the API endpoint string
+	 * @return the API endpoint string, or {@code null} if not set
 	 */
 	String getApiEndpoint();
 
 	/**
 	 * Gets the name of the software running on the node.
 	 *
-	 * @return the software name
+	 * @return the software name, or {@code null} if not advertised
 	 */
 	String getSoftware();
 
 	/**
 	 * Gets the version of the software running on the node.
 	 *
-	 * @return the software version
+	 * @return the software version, or {@code null} if not advertised
 	 */
 	String getVersion();
 
 	/**
 	 * Gets the display name of the node.
 	 *
-	 * @return the node name
+	 * @return the node name, or {@code null} if not set
 	 */
 	String getName();
 
 	/**
 	 * Gets the URL or identifier for the node's logo.
 	 *
-	 * @return the logo string
+	 * @return the logo string, or {@code null} if not set
 	 */
 	String getLogo();
 
 	/**
 	 * Gets the website URL associated with the node.
 	 *
-	 * @return the website URL
+	 * @return the website URL, or {@code null} if not set
 	 */
 	String getWebsite();
 
 	/**
 	 * Gets the contact information for the node administrator.
 	 *
-	 * @return the contact string
+	 * @return the contact string, or {@code null} if not set
 	 */
 	String getContact();
 
 	/**
 	 * Gets the description of the node.
 	 *
-	 * @return the node description
+	 * @return the node description, or {@code null} if not set
 	 */
 	String getDescription();
 
@@ -116,23 +116,25 @@ public interface SuperNodeInfo {
 	boolean isFederated();
 
 	/**
-	 * Gets the reputation score of the node.
+	 * Gets the reputation score of the node. Higher is better; the floor is zero, with no fixed
+	 * upper bound — implementations choose the scale (typical scoring functions accumulate
+	 * positive events and clamp negatives at zero).
 	 *
-	 * @return the reputation score as an integer
+	 * @return the reputation score, always {@code >= 0}
 	 */
 	int getReputation();
 
 	/**
 	 * Gets the timestamp when the node was added to the federation.
 	 *
-	 * @return the creation timestamp in milliseconds
+	 * @return the creation timestamp in milliseconds since the Unix epoch
 	 */
 	long getCreatedAt();
 
 	/**
 	 * Gets the timestamp when the node information was last updated.
 	 *
-	 * @return the last update timestamp in milliseconds
+	 * @return the last update timestamp in milliseconds since the Unix epoch
 	 */
 	long getUpdatedAt();
 }

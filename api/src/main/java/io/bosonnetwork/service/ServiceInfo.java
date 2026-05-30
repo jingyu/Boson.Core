@@ -69,16 +69,21 @@ public interface ServiceInfo {
 	boolean hasExtra();
 
 	/**
-	 * Gets the extra data.
+	 * Gets the extra data as a raw byte array.
+	 * <p>
+	 * Implementations MUST return a defensive copy — mutating the returned array MUST NOT affect
+	 * the internal state of this {@code ServiceInfo}.
 	 *
-	 * @return the extra data
+	 * @return a defensive copy of the extra data, or {@code null} if no extra data is present
 	 */
 	byte[] getExtraData();
 
 	/**
-	 * Gets the extra data as a map.
+	 * Gets the extra data parsed as a map.
+	 * <p>
+	 * The returned map is immutable; modification attempts result in {@link UnsupportedOperationException}.
 	 *
-	 * @return the extra data map
+	 * @return an immutable map of extra data, or an empty map if no extra data is present
 	 */
 	Map<String, Object> getExtra();
 

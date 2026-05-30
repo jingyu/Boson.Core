@@ -30,18 +30,40 @@ import io.bosonnetwork.Id;
 /**
  * Interface for authorizing client requests to access specific services.
  * <p>
- * Implementations of this interface define the logic to determine if a user on a specific device
- * is granted permission to use the requested service.
+ * Implementations decide whether a user, acting from a specific device, is permitted to use the
+ * requested service, and — on success — return any authorization details the service will need
+ * downstream (issued tokens, granted features, rate-limit overrides, etc.).
+ * <p>
+ * <strong>Result contract.</strong>
+ * <ul>
+ *   <li><strong>Authorized</strong> — the future completes successfully with a
+ *       {@code Map<String, Object>} carrying authorization details. The exact key set is
+ *       implementation-defined for now and may evolve; consumers should treat unknown keys as
+ *       opaque and missing keys as "not provided." An empty map means "authorized with no extra
+ *       details." {@code null} should not be returned.</li>
+ *   <li><strong>Denied or system error</strong> — the future completes <em>exceptionally</em> with
+ *       a {@link io.bosonnetwork.BosonException} (or a subtype). Implementations are encouraged
+ *       to distinguish denial from infrastructure failure through the exception subtype/message,
+ *       but both flow through the same exceptional-completion channel from the caller's
+ *       perspective.</li>
+ * </ul>
+ *
+ * <p>
+ * <strong>Stability:</strong> the map shape is intentionally untyped pending a refined
+ * {@code AuthorizationDecision} type; do not couple your code to specific keys without
+ * coordinating with the implementation you target.
  */
 public interface ClientAuthorizer {
 	/**
-	 * Authorizes the specified user and device for the given service.
+	 * Authorizes the specified user and device for the given service. See the
+	 * {@linkplain ClientAuthorizer interface Javadoc} for the success/failure contract.
 	 *
-	 * @param userId    the unique identifier of the user requesting access
-	 * @param deviceId  the unique identifier of the device used for the request
+	 * @param userId      the unique identifier of the user requesting access
+	 * @param deviceId    the unique identifier of the device used for the request
 	 * @param serviceType the identifier of the target service type to be accessed
-	 * @return a {@link CompletableFuture} that completes with a map containing authorization details
-	 *         (e.g., tokens, permissions) if successful, or completes exceptionally if authorization fails
+	 * @return a {@link CompletableFuture} that completes with the authorization-details map on
+	 *         success, or completes exceptionally with a {@link io.bosonnetwork.BosonException}
+	 *         on denial or system error
 	 */
 	CompletableFuture<Map<String, Object>> authorize(Id userId, Id deviceId, String serviceType);
 }

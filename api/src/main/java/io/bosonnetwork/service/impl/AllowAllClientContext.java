@@ -32,6 +32,7 @@ import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.ClientAuthenticator;
 import io.bosonnetwork.service.ClientAuthorizer;
 import io.bosonnetwork.service.ClientContext;
+import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
@@ -76,6 +77,11 @@ public class AllowAllClientContext implements ClientContext {
 	@Override
 	public CompletableFuture<Boolean> existsUser(Id userId) {
 		return ContextualFuture.succeededFuture(true);
+	}
+
+	@Override
+	public CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId) {
+		return ContextualFuture.succeededFuture(new PlainDevice(deviceId, userId));
 	}
 
 	@Override

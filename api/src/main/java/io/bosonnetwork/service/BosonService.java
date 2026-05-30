@@ -57,31 +57,38 @@ public interface BosonService {
 	String getName();
 
 	/**
-	 * Retrieves the host associated with the service.
+	 * Returns the <em>local</em> bind host of the service (the address the service listens on
+	 * locally — e.g. {@code 0.0.0.0}, {@code 127.0.0.1}, or a configured interface). This is
+	 * deployment configuration and is generally different from the publicly-reachable host
+	 * advertised in {@link #getPeerInfo()}.
 	 *
-	 * @return a string representing the host's address.
+	 * @return the local bind host.
 	 */
 	String getHost();
 
 	/**
-	 * Retrieves the port number associated with the service.
+	 * Returns the <em>local</em> bind port of the service. Deployment configuration; usually
+	 * different from any port advertised through {@link #getPeerInfo()}.
 	 *
-	 * @return an integer representing the port number.
+	 * @return the local bind port.
 	 */
 	int getPort();
 
 	/**
-	 * Retrieves the endpoint URL associated with the service.
+	 * Returns the <em>public</em> endpoint URL that remote clients should use to reach this
+	 * service. The endpoint encoded in {@link #getPeerInfo()} is normally the same value and is
+	 * what gets gossiped/published over the network.
 	 *
-	 * @return a string representing the service endpoint.
+	 * @return the public service endpoint URL.
 	 */
 	String getEndpoint();
 
 	/**
-	 * Retrieves detailed information about the peer associated with the service.
+	 * Returns the published peer information for this service — the public-facing identity, the
+	 * advertised endpoint, and any associated metadata. This is what federation peers see when
+	 * looking up the service.
 	 *
-	 * @return a {@link PeerInfo} object containing peer-related information, such as
-	 *         host, port, and other metadata.
+	 * @return the {@link PeerInfo} for this service.
 	 */
 	PeerInfo getPeerInfo();
 
@@ -95,7 +102,11 @@ public interface BosonService {
 	}
 
 	/**
-	 * Get the running status
+	 * Returns whether the service is currently running.
+	 * <p>
+	 * The contract is: {@code true} only between a successful completion of {@link #start()} and
+	 * the moment {@link #stop()} begins executing. While a {@code start()} or {@code stop()}
+	 * future is still pending, this returns {@code false}.
 	 *
 	 * @return true if the service is running, false otherwise.
 	 */
@@ -103,6 +114,10 @@ public interface BosonService {
 
 	/**
 	 * Initialize the service instance with the {@link ServiceContext} object.
+	 * <p>
+	 * <strong>Must not block.</strong> {@code init} is called on the Vert.x event loop (following
+	 * the standard Vert.x verticle init pattern); any I/O (config reads, schema setup, network
+	 * calls) must be deferred to {@link #start()} where it can be performed asynchronously.
 	 *
 	 * @param context the {@link ServiceContext} object to initialize the service.
 	 * @throws BosonServiceException if the error occurred during the initialization.

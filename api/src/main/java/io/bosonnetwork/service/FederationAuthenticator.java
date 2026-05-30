@@ -22,37 +22,49 @@
 
 package io.bosonnetwork.service;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * Interface for authenticating nodes and peers within a federation.
  * <p>
- * Implementations of this interface provide mechanisms to verify the identity of other nodes
- * in the federation using cryptographic challenges and signatures.
+ * Implementations verify the identity of other nodes in the federation using cryptographic
+ * challenges and signatures.
+ * <p>
+ * <strong>Nonce/signature contract.</strong> The {@code (id, nonce, signature)} overloads accept
+ * three argument shapes:
+ * <ul>
+ *   <li>Both {@code nonce} and {@code signature} non-null — the implementation MUST verify the
+ *       signature against the nonce using the id's signing key, and return the verification result.</li>
+ *   <li>Both {@code nonce} and {@code signature} null — "pre-authenticated" mode: the caller has
+ *       already verified the identity out of band (typically at the transport layer) and is asking
+ *       only whether the id is admissible. The implementation MUST NOT treat the absence of a
+ *       signature as a failure; it should apply its admission policy (membership, allow-list, etc.)
+ *       and return that. The no-nonce default overloads delegate to this mode.</li>
+ *   <li>Exactly one of {@code nonce} / {@code signature} is null — caller bug; the implementation
+ *       MUST return {@code false}.</li>
+ * </ul>
  */
 public interface FederationAuthenticator {
 	/**
-	 * Authenticates a node in the federation.
+	 * Authenticates a node in the federation. See the
+	 * {@linkplain FederationAuthenticator interface Javadoc} for the nonce/signature contract.
 	 *
 	 * @param nodeId    the unique identifier of the node to be authenticated
-	 * @param nonce     the random challenge data (nonce) used for authentication
-	 * @param signature the digital signature of the nonce, generated using the node's private key
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is successfully authenticated,
+	 * @param nonce     the challenge data, or {@code null} for pre-authenticated mode
+	 * @param signature the signature over {@code nonce}, or {@code null} for pre-authenticated mode
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is admitted,
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature);
 
 	/**
-	 * Authenticates a node in the federation.
+	 * Convenience for pre-authenticated mode — equivalent to
+	 * {@link #authenticateNode(Id, byte[], byte[]) authenticateNode(nodeId, null, null)}.
 	 *
-	 * @param nodeId    the unique identifier of the node to be authenticated
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is successfully authenticated,
+	 * @param nodeId the unique identifier of the node to be authenticated
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is admitted,
 	 *         or {@code false} otherwise
 	 */
 	default CompletableFuture<Boolean> authenticateNode(Id nodeId) {
@@ -60,102 +72,28 @@ public interface FederationAuthenticator {
 	}
 
 	/**
-	 * Authenticates a peer associated with a node in the federation.
+	 * Authenticates a peer associated with a node in the federation. See the
+	 * {@linkplain FederationAuthenticator interface Javadoc} for the nonce/signature contract.
 	 *
 	 * @param nodeId    the unique identifier of the node managing the peer
 	 * @param peerId    the unique identifier of the peer to be authenticated
-	 * @param nonce     the random challenge data (nonce) used for authentication
-	 * @param signature the digital signature of the nonce, generated using the peer's private key
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is successfully authenticated,
+	 * @param nonce     the challenge data, or {@code null} for pre-authenticated mode
+	 * @param signature the signature over {@code nonce}, or {@code null} for pre-authenticated mode
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is admitted,
 	 *         or {@code false} otherwise
 	 */
 	CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature);
 
 	/**
-	 * Authenticates a peer associated with a node in the federation.
+	 * Convenience for pre-authenticated mode — equivalent to
+	 * {@link #authenticatePeer(Id, Id, byte[], byte[]) authenticatePeer(nodeId, peerId, null, null)}.
 	 *
-	 * @param nodeId    the unique identifier of the node managing the peer
-	 * @param peerId    the unique identifier of the peer to be authenticated
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is successfully authenticated,
+	 * @param nodeId the unique identifier of the node managing the peer
+	 * @param peerId the unique identifier of the peer to be authenticated
+	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is admitted,
 	 *         or {@code false} otherwise
 	 */
 	default CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId) {
 		return authenticatePeer(nodeId, peerId, null, null);
-	}
-
-	/**
-	 * Provides a FederationAuthenticator implementation that allows all authentication attempts.
-	 * The returned authenticator verifies the provided signature against the corresponding
-	 * signature key derived from the node or peer ID, enabling universal authentication
-	 * acceptance when the signature is valid.
-	 *
-	 * @return a FederationAuthenticator instance that performs authentication by signature verification
-	 */
-	static FederationAuthenticator allowAll() {
-		return new FederationAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
-				Objects.requireNonNull(nodeId, "nodeId");
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
-				Objects.requireNonNull(nodeId, "nodeId");
-				Objects.requireNonNull(peerId, "peerId");
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-		};
-	}
-
-	/**
-	 * Provides a FederationAuthenticator implementation that restricts successful
-	 * authentication based on the supplied nodeServicesMap. The returned
-	 * FederationAuthenticator validates that the provided node or peer ID is
-	 * included in the nodeServicesMap and verifies the associated digital signature.
-	 *
-	 * @param nodeServicesMap a map where each key is a node ID, and each value is
-	 *                        a list of peer IDs associated with that node. This
-	 *                        map is used to determine whether a given node or
-	 *                        peer is authorized for authentication.
-	 * @return a FederationAuthenticator instance that authenticates nodes and peers
-	 *         according to the provided nodeServicesMap and performs signature
-	 *         verification.
-	 */
-	static FederationAuthenticator allow(Map<Id, List<Id>> nodeServicesMap) {
-		Objects.requireNonNull(nodeServicesMap, "nodeServicesMap");
-
-		return new FederationAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
-				Objects.requireNonNull(nodeId, "nodeId");
-
-				if (!nodeServicesMap.containsKey(nodeId))
-					return ContextualFuture.succeededFuture(false);
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
-				Objects.requireNonNull(nodeId, "nodeId");
-				Objects.requireNonNull(peerId, "peerId");
-
-				if (!nodeServicesMap.containsKey(nodeId) || !nodeServicesMap.get(nodeId).contains(peerId))
-					return ContextualFuture.succeededFuture(false);
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-		};
 	}
 }

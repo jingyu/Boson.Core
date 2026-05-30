@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.service;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -58,6 +57,16 @@ public interface ClientContext {
 	CompletableFuture<Boolean> existsUser(Id userId);
 
 	/**
+	 * Retrieves a device associated with the specified user.
+	 *
+	 * @param userId   the unique identifier of the user
+	 * @param deviceId the unique identifier of the device
+	 * @return a {@link CompletableFuture} that completes with the {@link ClientDevice} if it exists
+	 *         and belongs to the user, or completes with {@code null} otherwise
+	 */
+	CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId);
+
+	/**
 	 * Checks if a specific device exists and is associated with the specified user.
 	 *
 	 * @param userId   the unique identifier of the user
@@ -91,28 +100,38 @@ public interface ClientContext {
 	CwtAuth getWebAuthenticator();
 
 	/**
-	 * Returns a new client context configured to allow all clients with the specified node identity.
-	 * <p>
-	 * This configuration allows any request but associates them with a specific node identity,
-	 * depending on the implementation of {@link AllowAllClientContext}.
-	 * </p>
+	 * Returns an "allow-all" client context — intended for development, smoke tests, and bring-up
+	 * of a service that does not yet wire a real client store. Concretely:
+	 * <ul>
+	 *   <li>{@link #getUser(Id)} returns a fresh anonymous {@code PlainUser} for any id, and
+	 *       {@link #getDevice(Id, Id)} returns a fresh anonymous {@code PlainDevice};</li>
+	 *   <li>{@link #existsUser(Id)} and {@link #existsDevice(Id, Id)} always complete with
+	 *       {@code true};</li>
+	 *   <li>{@link #getAuthenticator()} accepts any caller (and, when a nonce/signature is supplied,
+	 *       verifies it against the id's key);</li>
+	 *   <li>{@link #getAuthorizer()} grants access with an empty details map;</li>
+	 *   <li>{@link #getWebAuthenticator()} returns a {@link CwtAuth} backed by the same allow-all
+	 *       provider, and therefore requires a non-null {@code nodeIdentity}.</li>
+	 * </ul>
 	 *
-	 * @param nodeIdentity the identity of the node allowing access; if null, generic allows-all behavior applies
-	 * @return a {@link ClientContext} instance configured with permissive access rules.
+	 * @param nodeIdentity the identity that will sign issued web tokens (required if
+	 *                     {@link #getWebAuthenticator()} will be called)
+	 * @return a permissive {@link ClientContext}
 	 */
 	static ClientContext allowAll(Identity nodeIdentity) {
 		return new AllowAllClientContext(nodeIdentity);
 	}
 
 	/**
-	 * Returns a new in-memory client context suitable for testing with Node Identity.
-	 * <p>
-	 * Provides an in-memory simulation environment configured with a specific node identity
-	 * but without Web Token Auth support.
-	 * </p>
+	 * Returns an in-memory client context whose user and device registries are populated
+	 * imperatively at test/bring-up time. {@link io.bosonnetwork.service.impl.StaticClientContext}
+	 * exposes {@code addUser(...)}, {@code addDevice(...)}, {@code removeUser(...)}, etc. for
+	 * fixture setup. {@link #getWebAuthenticator()} returns a real {@link CwtAuth} backed by the
+	 * registry and requires a non-null {@code nodeIdentity}.
 	 *
-	 * @param nodeIdentity the identity of the node to associate with this static context; if null, generic behavior applies
-	 * @return a {@link ClientContext} instance using an in-memory map store for simulation purposes.
+	 * @param nodeIdentity the identity that will sign issued web tokens (required if
+	 *                     {@link #getWebAuthenticator()} will be called)
+	 * @return an in-memory {@link ClientContext}
 	 */
 	static ClientContext staticContext(Identity nodeIdentity) {
 		return new StaticClientContext(nodeIdentity);
