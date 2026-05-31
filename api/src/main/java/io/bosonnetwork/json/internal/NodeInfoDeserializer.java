@@ -105,6 +105,10 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		if (p.nextToken() != JsonToken.END_ARRAY)
 			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
 
+		// Note: a textual host that is a hostname (not an IP literal) is resolved here, mirroring
+		// NodeInfo's own (Id, String, port) constructor. NodeInfo deserialization can therefore
+		// perform a blocking name resolution; avoiding that would require a NodeInfo-level change to
+		// retain unresolved addresses, which would also alter equality semantics.
 		InetSocketAddress isa = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
 		return new NodeInfo(id, isa);
 	}

@@ -94,7 +94,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @param value2 the second attribute value
 	 * @return a per-call context with the specified attributes
 	 */
-	static JsonContext perCall(Object key1, Object value1, Object key2, Object value2) {
+	public static JsonContext perCall(Object key1, Object value1, Object key2, Object value2) {
 		Map<Object, Object> m = new HashMap<>();
 		m.put(key1, value1);
 		m.put(key2, value2);
@@ -112,7 +112,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @param value3 the third attribute value
 	 * @return a per-call context with the specified attributes
 	 */
-	static JsonContext perCall(Object key1, Object value1, Object key2, Object value2, Object key3, Object value3) {
+	public static JsonContext perCall(Object key1, Object value1, Object key2, Object value2, Object key3, Object value3) {
 		Map<Object, Object> m = new HashMap<>();
 		m.put(key1, value1);
 		m.put(key2, value2);

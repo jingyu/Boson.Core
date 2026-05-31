@@ -66,6 +66,9 @@ public class InetAddressDeserializer extends StdDeserializer<InetAddress> {
 	 */
 	@Override
 	public InetAddress deserialize(JsonParser p, DeserializationContext ctx) throws IOException {
+		// getByName does not perform a DNS lookup for an IP-address literal (it parses it directly);
+		// resolution only happens for a genuine hostname. Serializers emit getHostAddress() (a
+		// literal), so deserializing Boson-produced data never triggers DNS.
 		return DataFormat.isBinary(p) || p.currentToken() != JsonToken.VALUE_STRING ?
 				InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) :
 				InetAddress.getByName(p.getText());

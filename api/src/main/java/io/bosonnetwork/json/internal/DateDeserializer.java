@@ -37,6 +37,10 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
  * Handles deserialization of Date objects from either ISO8601/RFC3339 string format or from epoch milliseconds,
  * depending on the input format. In text formats, expects ISO8601 or RFC3339 strings; in binary formats, expects
  * epoch milliseconds.
+ * <p>
+ * Although {@link DateSerializer} emits text dates at second precision, this deserializer is tolerant
+ * of both: it first parses the second-precision form and falls back to the millisecond-precision
+ * form ({@code yyyy-MM-dd'T'HH:mm:ss.SSS'Z'}), so millisecond-bearing strings still parse correctly.
  */
 public class DateDeserializer extends StdDeserializer<Date> {
 	private static final long serialVersionUID = -4252894239212420927L;

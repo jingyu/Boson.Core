@@ -87,7 +87,7 @@ import io.bosonnetwork.json.internal.ValueSerializer;
  *   <li>Context-aware serialization using {@link JsonContext} for configuration of serialization details.</li>
  * </ul>
  */
-public class Json {
+public final class Json {
 	private static final String BOSON_JSON_MODULE_NAME = "io.bosonnetwork.utils.json.module";
 
 	/** Pre-configured Base64 encoder for URL-safe encoding without padding. */
@@ -95,43 +95,147 @@ public class Json {
 	/** Pre-configured Base64 decoder for URL-safe decoding. */
 	public static final Base64.Decoder BASE64_DECODER = Base64.getUrlDecoder();
 
-	private static TypeReference<Map<String, Object>> _mapType;
+	private Json() {
+	}
 
-	private static SimpleModule _bosonJsonModule;
+	// The factories, module, mappers and shared type reference are singletons that are expensive to
+	// build and immutable once configured. They are published through the initialization-on-demand
+	// holder idiom: the JVM guarantees that a nested class is initialized lazily, exactly once, and
+	// with a happens-before edge to every thread that subsequently reads its static field — so these
+	// accessors are both lazy and thread-safe without explicit locking.
 
-	private static JsonFactory _jsonFactory;
-	private static CBORFactory _cborFactory;
+	private static final class ModuleHolder {
+		static final SimpleModule INSTANCE = buildBosonJsonModule();
+	}
 
-	private static ObjectMapper _objectMapper;
-	private static CBORMapper _cborMapper;
-	private static YAMLMapper _yamlMapper;
+	private static final class JsonFactoryHolder {
+		static final JsonFactory INSTANCE = buildJsonFactory();
+	}
+
+	private static final class CborFactoryHolder {
+		static final CBORFactory INSTANCE = buildCborFactory();
+	}
+
+	private static final class ObjectMapperHolder {
+		static final ObjectMapper INSTANCE = buildObjectMapper();
+	}
+
+	private static final class CborMapperHolder {
+		static final CBORMapper INSTANCE = buildCborMapper();
+	}
+
+	private static final class YamlMapperHolder {
+		static final YAMLMapper INSTANCE = buildYamlMapper();
+	}
+
+	private static final class MapTypeHolder {
+		static final TypeReference<Map<String, Object>> INSTANCE = new TypeReference<>() { };
+	}
+
+	private static SimpleModule buildBosonJsonModule() {
+		SimpleModule module = new SimpleModule(BOSON_JSON_MODULE_NAME);
+		module.addSerializer(Date.class, new DateSerializer());
+		module.addDeserializer(Date.class, new DateDeserializer());
+		module.addSerializer(Id.class, new IdSerializer());
+		module.addDeserializer(Id.class, new IdDeserializer());
+		module.addSerializer(InetAddress.class, new InetAddressSerializer());
+		module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
+
+		module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
+		module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
+		module.addSerializer(PeerInfo.class, new PeerInfoSerializer());
+		module.addDeserializer(PeerInfo.class, new PeerInfoDeserializer());
+		module.addSerializer(Value.class, new ValueSerializer());
+		module.addDeserializer(Value.class, new ValueDeserializer());
+
+		return module;
+	}
+
+	private static JsonFactory buildJsonFactory() {
+		JsonFactory factory = new JsonFactory();
+		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+		return factory;
+	}
+
+	private static CBORFactory buildCborFactory() {
+		CBORFactory factory = new CBORFactory();
+		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+		return factory;
+	}
+
+	private static ObjectMapper buildObjectMapper() {
+		return JsonMapper.builder(jsonFactory())
+				.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+				.disable(MapperFeature.AUTO_DETECT_CREATORS)
+				.disable(MapperFeature.AUTO_DETECT_FIELDS)
+				.disable(MapperFeature.AUTO_DETECT_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_SETTERS)
+				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+				.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
+				// .defaultDateFormat(getDateFormat())
+				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+				.addModule(bosonJsonModule())
+				.build();
+	}
+
+	private static CBORMapper buildCborMapper() {
+		return CBORMapper.builder(cborFactory())
+				.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+				.disable(MapperFeature.AUTO_DETECT_CREATORS)
+				.disable(MapperFeature.AUTO_DETECT_FIELDS)
+				.disable(MapperFeature.AUTO_DETECT_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_SETTERS)
+				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+				.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
+				// .defaultDateFormat(getDateFormat())
+				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+				.addModule(bosonJsonModule())
+				.build();
+	}
+
+	private static YAMLMapper buildYamlMapper() {
+		YAMLFactory factory = new YAMLFactory();
+		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+
+		return YAMLMapper.builder(factory)
+				.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+				.disable(MapperFeature.AUTO_DETECT_CREATORS)
+				.disable(MapperFeature.AUTO_DETECT_FIELDS)
+				.disable(MapperFeature.AUTO_DETECT_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
+				.disable(MapperFeature.AUTO_DETECT_SETTERS)
+				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+				.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
+				.disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+				.enable(YAMLGenerator.Feature.INDENT_ARRAYS)
+				.enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
+				//.defaultDateFormat(getDateFormat())
+				.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
+				.addModule(bosonJsonModule())
+				.build();
+	}
 
 	/**
 	 * Returns the Jackson module for Boson types.
 	 *
 	 * @return the {@link SimpleModule} object
 	 */
-	protected static SimpleModule bosonJsonModule() {
-		if (_bosonJsonModule == null) {
-			SimpleModule module = new SimpleModule(BOSON_JSON_MODULE_NAME);
-			module.addSerializer(Date.class, new DateSerializer());
-			module.addDeserializer(Date.class, new DateDeserializer());
-			module.addSerializer(Id.class, new IdSerializer());
-			module.addDeserializer(Id.class, new IdDeserializer());
-			module.addSerializer(InetAddress.class, new InetAddressSerializer());
-			module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
-
-			module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
-			module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
-			module.addSerializer(PeerInfo.class, new PeerInfoSerializer());
-			module.addDeserializer(PeerInfo.class, new PeerInfoDeserializer());
-			module.addSerializer(Value.class, new ValueSerializer());
-			module.addDeserializer(Value.class, new ValueDeserializer());
-
-			_bosonJsonModule = module;
-		}
-
-		return _bosonJsonModule;
+	private static SimpleModule bosonJsonModule() {
+		return ModuleHolder.INSTANCE;
 	}
 
 	/**
@@ -140,14 +244,7 @@ public class Json {
 	 * @return the {@link JsonFactory} object
 	 */
 	public static JsonFactory jsonFactory() {
-		if (_jsonFactory == null) {
-			JsonFactory factory = new JsonFactory();
-			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-			_jsonFactory = factory;
-		}
-
-		return _jsonFactory;
+		return JsonFactoryHolder.INSTANCE;
 	}
 
 	/**
@@ -156,105 +253,34 @@ public class Json {
 	 * @return the {@link CBORFactory} object
 	 */
 	public static CBORFactory cborFactory() {
-		if (_cborFactory == null) {
-			CBORFactory factory = new CBORFactory();
-			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-			_cborFactory = factory;
-		}
-
-		return _cborFactory;
+		return CborFactoryHolder.INSTANCE;
 	}
 
 	/**
-	 * Creates the Jackson object mapper, with basic Boson types support.
+	 * Returns the shared Jackson object mapper, with basic Boson types support.
 	 *
-	 * @return the new {@code ObjectMapper} object.
+	 * @return the {@code ObjectMapper} object.
 	 */
 	public static ObjectMapper objectMapper() {
-		if (_objectMapper == null) {
-			_objectMapper = JsonMapper.builder(jsonFactory())
-					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-					.disable(MapperFeature.AUTO_DETECT_CREATORS)
-					.disable(MapperFeature.AUTO_DETECT_FIELDS)
-					.disable(MapperFeature.AUTO_DETECT_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_SETTERS)
-					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
-					// .defaultDateFormat(getDateFormat())
-					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-					.addModule(bosonJsonModule())
-					.build();
-		}
-
-		return _objectMapper;
+		return ObjectMapperHolder.INSTANCE;
 	}
 
 	/**
-	 * Creates the Jackson CBOR mapper, with basic Boson types support.
+	 * Returns the shared Jackson CBOR mapper, with basic Boson types support.
 	 *
-	 * @return the new {@code CBORMapper} object.
+	 * @return the {@code CBORMapper} object.
 	 */
 	public static CBORMapper cborMapper() {
-		if (_cborMapper == null) {
-			_cborMapper = CBORMapper.builder(cborFactory())
-					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-					.disable(MapperFeature.AUTO_DETECT_CREATORS)
-					.disable(MapperFeature.AUTO_DETECT_FIELDS)
-					.disable(MapperFeature.AUTO_DETECT_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_SETTERS)
-					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
-					// .defaultDateFormat(getDateFormat())
-					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-					.addModule(bosonJsonModule())
-					.build();
-		}
-
-		return _cborMapper;
+		return CborMapperHolder.INSTANCE;
 	}
 
 	/**
-	 * Creates the Jackson YAML mapper, with basic Boson types support.
+	 * Returns the shared Jackson YAML mapper, with basic Boson types support.
 	 *
-	 * @return the new {@code YAMLMapper} object.
+	 * @return the {@code YAMLMapper} object.
 	 */
 	public static YAMLMapper yamlMapper() {
-		if (_yamlMapper == null) {
-			YAMLFactory factory = new YAMLFactory();
-			factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-			factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
-
-			_yamlMapper = YAMLMapper.builder(factory)
-					.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-					.disable(MapperFeature.AUTO_DETECT_CREATORS)
-					.disable(MapperFeature.AUTO_DETECT_FIELDS)
-					.disable(MapperFeature.AUTO_DETECT_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
-					.disable(MapperFeature.AUTO_DETECT_SETTERS)
-					.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
-					.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-					.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-					.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-					.disable(DeserializationFeature.FAIL_ON_MISSING_EXTERNAL_TYPE_ID_PROPERTY)
-					.disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
-					.enable(YAMLGenerator.Feature.INDENT_ARRAYS)
-					.enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
-					//.defaultDateFormat(getDateFormat())
-					.defaultBase64Variant(Base64Variants.MODIFIED_FOR_URL)
-					.addModule(bosonJsonModule())
-					.build();
-		}
-
-		return _yamlMapper;
+		return YamlMapperHolder.INSTANCE;
 	}
 
 	/**
@@ -366,10 +392,7 @@ public class Json {
 	 * @return the {@code TypeReference} for {@code Map<String, Object>}
 	 */
 	public static TypeReference<Map<String, Object>> mapType() {
-		if (_mapType == null)
-			_mapType = new TypeReference<>() { };
-
-		return _mapType;
+		return MapTypeHolder.INSTANCE;
 	}
 
 	/**
@@ -648,6 +671,11 @@ public class Json {
 
 	/**
 	 * Converts a byte array containing CBOR-encoded data into its equivalent JSON string representation.
+	 * <p>
+	 * This is a low-level structural transcoder operating on the raw factories: it copies the CBOR
+	 * token stream into JSON and does <em>not</em> apply the Boson type module or the URL-safe Base64
+	 * convention used by {@link #objectMapper()}/{@link #cborMapper()}. Binary CBOR fields are emitted
+	 * using Jackson's default Base64 variant.
 	 *
 	 * @param cbor the byte array containing CBOR-encoded data
 	 * @return a JSON string representation of the provided CBOR data
@@ -670,6 +698,10 @@ public class Json {
 
 	/**
 	 * Converts a JSON string to its CBOR (Concise Binary Object Representation) byte array representation.
+	 * <p>
+	 * This is a low-level structural transcoder operating on the raw factories: it copies the JSON
+	 * token stream into CBOR and does <em>not</em> apply the Boson type module or the URL-safe Base64
+	 * convention used by {@link #objectMapper()}/{@link #cborMapper()}.
 	 *
 	 * @param json the JSON string to be converted to CBOR format; must not be null
 	 * @return a byte array containing the CBOR encoded representation of the provided JSON string
@@ -691,12 +723,18 @@ public class Json {
 	}
 
 	/**
-	 * Initializes and registers the Boson JSON Jackson module with the global Jackson DatabindCodec mapper.
+	 * Initializes and registers the Boson JSON Jackson module with the global Vert.x
+	 * {@link DatabindCodec} mapper.
 	 * <p>
-	 * This method ensures the Boson JSON module is registered only once. If already registered,
-	 * the method returns immediately. The module adds support for Boson-specific types and serialization behaviors.
+	 * <b>Process-global side effect:</b> this mutates the singleton {@code DatabindCodec.mapper()}
+	 * shared by all Vert.x JSON handling in the JVM — it registers the Boson type module and enables
+	 * {@link DeserializationFeature#USE_BIG_DECIMAL_FOR_FLOATS} for every Vert.x JSON operation in
+	 * the process, not just Boson code. Call it once during application startup.
+	 * <p>
+	 * The method is idempotent and synchronized: the module is registered at most once even under
+	 * concurrent calls.
 	 */
-	public static void initializeBosonJsonModule() {
+	public static synchronized void initializeBosonJsonModule() {
 		if (DatabindCodec.mapper().getRegisteredModuleIds().stream()
 				.anyMatch(id -> id.equals(BOSON_JSON_MODULE_NAME)))
 			return; // already registered

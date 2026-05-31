@@ -34,6 +34,11 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
  * <p>
  * Handles serialization of Date objects to either ISO8601 string format (for text formats like JSON/YAML)
  * or to epoch milliseconds (for binary formats like CBOR), depending on the output format.
+ * <p>
+ * <b>Precision:</b> text output is intentionally truncated to <em>second</em> precision
+ * ({@code yyyy-MM-dd'T'HH:mm:ss'Z'}, matching RFC3339), so sub-second components are dropped in
+ * JSON/YAML. Binary (CBOR) output preserves full millisecond precision via epoch milliseconds. The
+ * matching {@link DateDeserializer} still accepts millisecond-precision strings on input.
  */
 public class DateSerializer extends StdSerializer<Date> {
 	private static final long serialVersionUID = 4759684498722016230L;

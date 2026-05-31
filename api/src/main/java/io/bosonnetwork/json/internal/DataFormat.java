@@ -40,7 +40,7 @@ public class DataFormat {
 	 * @return {@code true} if the parser is handling a binary format (CBOR), {@code false} otherwise
 	 */
 	public static boolean isBinary(JsonParser p) {
-		// Now we only sport JSON, CBOR and TOML formats; CBOR is the only binary format
+		// Now we only support JSON, CBOR and YAML formats; CBOR is the only binary format
 		return p instanceof CBORParser;
 	}
 
@@ -51,7 +51,7 @@ public class DataFormat {
 	 * @return {@code true} if the generator is handling a binary format (CBOR), {@code false} otherwise
 	 */
 	public static boolean isBinary(JsonGenerator gen) {
-		// Now we only sport JSON, CBOR and TOML formats; CBOR is the only binary format
+		// Now we only support JSON, CBOR and YAML formats; CBOR is the only binary format
 		return gen instanceof CBORGenerator;
 	}
 }

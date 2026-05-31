@@ -121,11 +121,11 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 						fingerprint = p.getLongValue();
 					break;
 				case "e":
-					if (p.currentToken() != JsonToken.VALUE_NULL)
+					if (token != JsonToken.VALUE_NULL)
 						endpoint = p.getValueAsString();
 					break;
 				case "ex":
-					if (p.currentToken() != JsonToken.VALUE_NULL)
+					if (token != JsonToken.VALUE_NULL)
 						extraData = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 					break;
 				default:
