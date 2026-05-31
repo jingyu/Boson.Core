@@ -22,6 +22,31 @@
  */
 
 /**
- * This package contains the public APIs and types for the Boson node.
+ * The core public API of the Boson network — the root types every other package and third-party
+ * SDK builds on.
+ *
+ * <h2>Node and identity</h2>
+ * {@link io.bosonnetwork.Node} is the DHT node abstraction (lookups, value/peer storage, encrypt /
+ * decrypt / sign), created via {@link io.bosonnetwork.NodeFactory} from a
+ * {@link io.bosonnetwork.NodeConfiguration}. {@link io.bosonnetwork.Identity} and
+ * {@link io.bosonnetwork.UserProfile} model cryptographic identities.
+ *
+ * <h2>Addressing and DHT records</h2>
+ * {@link io.bosonnetwork.Id} is the 256-bit Ed25519-based identifier used for nodes, values and
+ * peers. {@link io.bosonnetwork.Value} (mutable/immutable stored data),
+ * {@link io.bosonnetwork.PeerInfo} (announced peers) and {@link io.bosonnetwork.NodeInfo} /
+ * {@link io.bosonnetwork.Network} describe what lives in and around the DHT.
+ *
+ * <h2>Operations and results</h2>
+ * Lookups are tuned by {@link io.bosonnetwork.LookupOption} and return their outcome through
+ * {@link io.bosonnetwork.Result}. Errors surface as {@link io.bosonnetwork.BosonException} and its
+ * subtypes (e.g. {@link io.bosonnetwork.ExpiredException}), and {@link io.bosonnetwork.Version}
+ * carries node version metadata.
+ *
+ * <p>Supporting concerns live in subpackages: {@link io.bosonnetwork.crypto cryptography},
+ * {@link io.bosonnetwork.identifier DID/VC identity}, {@link io.bosonnetwork.cwt CWT tokens},
+ * {@link io.bosonnetwork.service layer-2 services}, {@link io.bosonnetwork.json serialization},
+ * {@link io.bosonnetwork.database database helpers}, {@link io.bosonnetwork.web web auth},
+ * {@link io.bosonnetwork.vertx Vert.x helpers} and {@link io.bosonnetwork.utils utilities}.
  */
 package io.bosonnetwork;

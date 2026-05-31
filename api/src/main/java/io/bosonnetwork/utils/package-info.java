@@ -22,6 +22,24 @@
  */
 
 /**
- * Contains the basic utility and support classes.
+ * Common, dependency-light utility and support classes used across Boson.
+ *
+ * <ul>
+ *   <li><strong>Encoding:</strong> {@link io.bosonnetwork.utils.Hex},
+ *       {@link io.bosonnetwork.utils.Base58}, {@link io.bosonnetwork.utils.Bytes} and
+ *       {@link io.bosonnetwork.utils.Sha256Hash} for byte/string conversion and hashing;</li>
+ *   <li><strong>Networking:</strong> {@link io.bosonnetwork.utils.AddressUtils} for classifying IP
+ *       addresses (bogon / martian / private / global-unicast) relevant to DHT routing;</li>
+ *   <li><strong>Configuration &amp; files:</strong> {@link io.bosonnetwork.utils.ConfigMap} (typed
+ *       config access), {@link io.bosonnetwork.utils.FileUtils} (XDG-aware paths) and
+ *       {@link io.bosonnetwork.utils.ApplicationLock} (single-instance file lock);</li>
+ *   <li><strong>Functional &amp; data holders:</strong> {@link io.bosonnetwork.utils.Functional}
+ *       (checked-exception lambda helpers), {@link io.bosonnetwork.utils.Variable} (a mutable
+ *       {@code Optional}-like cell), and the {@link io.bosonnetwork.utils.Pair} /
+ *       {@link io.bosonnetwork.utils.Triple} / {@link io.bosonnetwork.utils.Quadruple} tuples;</li>
+ *   <li><strong>Streams:</strong> {@link io.bosonnetwork.utils.ByteBufferInputStream} /
+ *       {@link io.bosonnetwork.utils.ByteBufferOutputStream} adapters, and string helpers in
+ *       {@link io.bosonnetwork.utils.StringUtils}.</li>
+ * </ul>
  */
 package io.bosonnetwork.utils;
