@@ -33,12 +33,12 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
@@ -135,12 +135,6 @@ public class VersionedSchema implements VertxDatabase {
 
 		@Override
 		public int compareTo(Migration that) {
-			if (this.version == that.version) {
-				log.error("Migration check: Migration file version must be unique. File names: {} and {}",
-						this.fileName(), that.fileName());
-				throw new IllegalStateException("Migration file version must be unique");
-			}
-
 			return Integer.compare(this.version, that.version);
 		}
 	}
@@ -192,9 +186,13 @@ public class VersionedSchema implements VertxDatabase {
 	}
 
 	/**
-	 * Returns the last successfully applied schema version, if any.
+	 * Returns the last successfully applied schema version.
+	 * <p>
+	 * Before any migration has been applied (or recorded), this returns the empty sentinel version
+	 * (version {@code 0}, with a {@code null} {@link SchemaVersion#hash()}) rather than {@code null}.
+	 * Use {@code getCurrentVersion().version() == 0} to detect the "no migrations applied" state.
 	 *
-	 * @return the current version or {@code null} if none recorded
+	 * @return the current schema version; never {@code null}
 	 */
 	public SchemaVersion getCurrentVersion() {
 		return currentVersion;
@@ -229,7 +227,7 @@ public class VersionedSchema implements VertxDatabase {
 			databaseProductName = name;
 			log.debug("Migration check: target database product {}", name);
 
-			if (!databaseProductName.toLowerCase().contains("postgres") && schema != null)
+			if (!databaseProductName.toLowerCase(Locale.ROOT).contains("postgres") && schema != null)
 				return Future.failedFuture(new IllegalStateException("Schema migration with custom schema is not supported for " + databaseProductName));
 
 			return Future.succeededFuture();
@@ -398,6 +396,19 @@ public class VersionedSchema implements VertxDatabase {
 			}
 
 			Collections.sort(migrations);
+
+			// Enforce unique versions. compareTo is a pure comparator; uniqueness is checked here,
+			// where adjacent entries with the same version are now neighbours after sorting.
+			for (int i = 1; i < migrations.size(); i++) {
+				Migration prev = migrations.get(i - 1);
+				Migration cur = migrations.get(i);
+				if (prev.version == cur.version) {
+					log.error("Migration check: Migration file version must be unique. File names: {} and {}",
+							prev.fileName(), cur.fileName());
+					throw new IllegalStateException("Migration file version must be unique");
+				}
+			}
+
 			return migrations;
 		}
 	}
@@ -609,22 +620,40 @@ public class VersionedSchema implements VertxDatabase {
 	 * @param migration the migration to apply
 	 * @return a future completing with the applied {@link SchemaVersion}
 	 */
+	/** Parsed migration script: an optional long description plus the ordered SQL statements. */
+	private record ParsedMigration(String description, List<String> statements) {}
+
+	/**
+	 * Reads and splits a migration file into individual SQL statements. This performs blocking
+	 * file I/O and lexing and therefore must be run off the Vert.x event loop (via executeBlocking).
+	 */
+	private static ParsedMigration parseMigration(Migration migration) throws IOException {
+		try (BufferedReader reader = Files.newBufferedReader(migration.path())) {
+			String description = readDescriptionComment(reader);
+			List<String> statements = new ArrayList<>();
+			String statement;
+			while ((statement = nextStatement(reader)) != null)
+				statements.add(statement);
+			return new ParsedMigration(description, statements);
+		}
+	}
+
 	private Future<SchemaVersion> applyMigration(Migration migration) {
 		log.info("Migration: applying migration version {} from {}...", migration.version, migration.fileName());
 
+		String appliedBy = appliedByIdentifier();
 		long begin = System.currentTimeMillis();
-		return withSchemaTransaction(connection -> {
-			Promise<SchemaVersion> promise = Promise.promise();
-			Future<Void> chain = Future.succeededFuture();
-			try (BufferedReader reader = Files.newBufferedReader(migration.path())) {
-				String longDescription = readDescriptionComment(reader);
-				if (longDescription != null)
-					migration.setDescription(longDescription);
 
-				String statement;
-				while ((statement = nextStatement(reader)) != null) {
+		// Parse the migration file off the event loop (blocking file I/O + lexing), then run the
+		// resulting statements within the schema transaction.
+		return vertx.executeBlocking(() -> parseMigration(migration)).compose(parsed -> {
+			if (parsed.description() != null)
+				migration.setDescription(parsed.description());
+
+			return withSchemaTransaction(connection -> {
+				Future<Void> chain = Future.succeededFuture();
+				for (String statement : parsed.statements()) {
 					final String sql = statement;
-
 					chain = chain.compose(vv -> {
 						log.trace("Migration: executing statement {}", sql);
 						return connection.query(sql).execute()
@@ -634,34 +663,30 @@ public class VersionedSchema implements VertxDatabase {
 								}).mapEmpty();
 					});
 				}
-			} catch (IOException e) {
-				return Future.failedFuture(new IllegalStateException("Failed to read migration file", e));
-			}
 
-			chain.compose(vv -> {
-				long duration = System.currentTimeMillis() - begin;
-				log.info("Migration: applied migration file {} in {} ms", migration.fileName(), duration);
-				log.debug("Migration: updating schema version...");
-				SchemaVersion newVersion = new SchemaVersion(migration.version, migration.description,
-						migration.hash, "", begin, duration, true);
-				return connection.preparedQuery(insertSchemaVersion())
-						.execute(
-								Tuple.of(newVersion.version,
-										newVersion.description,
-										newVersion.hash,
-										newVersion.appliedBy,
-										newVersion.appliedAt,
-										newVersion.consumedTime,
-										newVersion.success))
-						.map(newVersion);
-			}).andThen(ar -> {
-				if (ar.succeeded())
-					log.debug("Migration: schema version updated to version {}", migration.version);
-				else
-					log.error("Migration: failed to update schema version.", ar.cause());
-			}).onComplete(promise);
-
-			return promise.future();
+				return chain.compose(vv -> {
+					long duration = System.currentTimeMillis() - begin;
+					log.info("Migration: applied migration file {} in {} ms", migration.fileName(), duration);
+					log.debug("Migration: updating schema version...");
+					SchemaVersion newVersion = new SchemaVersion(migration.version, migration.description,
+							migration.hash, appliedBy, begin, duration, true);
+					return connection.preparedQuery(insertSchemaVersion())
+							.execute(
+									Tuple.of(newVersion.version,
+											newVersion.description,
+											newVersion.hash,
+											newVersion.appliedBy,
+											newVersion.appliedAt,
+											newVersion.consumedTime,
+											newVersion.success))
+							.map(newVersion);
+				}).andThen(ar -> {
+					if (ar.succeeded())
+						log.debug("Migration: schema version updated to version {}", migration.version);
+					else
+						log.error("Migration: failed to update schema version.", ar.cause());
+				});
+			});
 		});
 	}
 
@@ -691,6 +716,27 @@ public class VersionedSchema implements VertxDatabase {
 		return value instanceof Boolean b ? b :
 				(value instanceof Number n ? n.intValue() != 0 :
 						(value instanceof String s && Boolean.parseBoolean(s)));
+	}
+
+	/**
+	 * Builds the {@code applied_by} identifier as {@code user@host}, truncated to fit the
+	 * {@code schema_versions.applied_by} column. Falls back to {@code "unknown"} for either part if
+	 * it cannot be determined.
+	 */
+	private static String appliedByIdentifier() {
+		String user = System.getProperty("user.name");
+		if (user == null || user.isEmpty())
+			user = "unknown";
+
+		String host;
+		try {
+			host = java.net.InetAddress.getLocalHost().getHostName();
+		} catch (Exception e) {
+			host = "unknown";
+		}
+
+		String identifier = user + "@" + host;
+		return identifier.length() > 128 ? identifier.substring(0, 128) : identifier;
 	}
 
 	private String sha256(Path path) throws IOException {
@@ -738,7 +784,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @return parameterized INSERT SQL suitable for the target database
 	 */
 	protected String insertSchemaVersion() {
-		if (databaseProductName.toLowerCase().contains("postgres"))
+		if (databaseProductName.toLowerCase(Locale.ROOT).contains("postgres"))
 			return insertSchemaVersionWithIndexedParameters;
 		else
 			return insertSchemaVersionWithQuestionMarks;

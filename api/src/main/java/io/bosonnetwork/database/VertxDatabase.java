@@ -118,9 +118,10 @@ public interface VertxDatabase {
 	 * @return a future completing with the function result after commit, or failing after rollback
 	 */
 	default <T> Future<T> withTransaction(Function<SqlConnection, Future<T>> function) {
-		if (getClient() instanceof Pool p) {
+		final SqlClient client = getClient();
+		if (client instanceof Pool p) {
 			return p.withTransaction(c -> wrappedAsync(function).apply(c));
-		} else if (getClient() instanceof SqlConnection connection) {
+		} else if (client instanceof SqlConnection connection) {
 			return withTransaction(connection, c -> wrappedAsync(function).apply(c));
 		} else {
 			return Future.failedFuture(new IllegalStateException("Client must be an instance of SqlConnection or Pool"));
@@ -154,9 +155,10 @@ public interface VertxDatabase {
 	 * @return a future completing with the function result
 	 */
 	default <T> Future<T> withConnection(Function<SqlConnection, Future<T>> function) {
-		if (getClient() instanceof SqlConnection c) {
+		final SqlClient client = getClient();
+		if (client instanceof SqlConnection c) {
 			return wrappedAsync(function).apply(c);
-		} else if (getClient() instanceof Pool p) {
+		} else if (client instanceof Pool p) {
 			return p.withConnection(c -> wrappedAsync(function).apply(c));
 		} else {
 			return Future.failedFuture(new IllegalStateException("Client must be an instance of SqlConnection or Pool"));

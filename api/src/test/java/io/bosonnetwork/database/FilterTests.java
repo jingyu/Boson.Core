@@ -1,6 +1,7 @@
 package io.bosonnetwork.database;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
@@ -21,50 +22,66 @@ public class FilterTests {
 	@Test
 	void testEqual() {
 		Filter filter = Filter.eq("foo", "hello");
-		assertEquals(" foo = #{foo}", filter.toSqlTemplate());
-		assertEquals("hello", filter.getParams().get("foo"));
+		assertEquals(" foo = #{foo_eq}", filter.toSqlTemplate());
+		assertEquals("hello", filter.getParams().get("foo_eq"));
 	}
 
 	@Test
 	void testNotEqual() {
 		Filter filter = Filter.ne("foo", "world");
-		assertEquals(" foo <> #{foo}", filter.toSqlTemplate());
-		assertEquals("world", filter.getParams().get("foo"));
+		assertEquals(" foo <> #{foo_ne}", filter.toSqlTemplate());
+		assertEquals("world", filter.getParams().get("foo_ne"));
 	}
 
 	@Test
 	void testLessThan() {
 		Filter filter = Filter.lt("foo", 10);
-		assertEquals(" foo < #{foo}", filter.toSqlTemplate());
-		assertEquals(10, filter.getParams().get("foo"));
+		assertEquals(" foo < #{foo_lt}", filter.toSqlTemplate());
+		assertEquals(10, filter.getParams().get("foo_lt"));
 	}
 
 	@Test
 	void testLessThanOrEqual() {
 		Filter filter = Filter.lte("foo", 15);
-		assertEquals(" foo <= #{foo}", filter.toSqlTemplate());
-		assertEquals(15, filter.getParams().get("foo"));
+		assertEquals(" foo <= #{foo_lte}", filter.toSqlTemplate());
+		assertEquals(15, filter.getParams().get("foo_lte"));
 	}
 
 	@Test
 	void testGreaterThan() {
 		Filter filter = Filter.gt("foo", 20);
-		assertEquals(" foo > #{foo}", filter.toSqlTemplate());
-		assertEquals(20, filter.getParams().get("foo"));
+		assertEquals(" foo > #{foo_gt}", filter.toSqlTemplate());
+		assertEquals(20, filter.getParams().get("foo_gt"));
 	}
 
 	@Test
 	void testGreaterThanOrEqual() {
 		Filter filter = Filter.gte("foo", 25);
-		assertEquals(" foo >= #{foo}", filter.toSqlTemplate());
-		assertEquals(25, filter.getParams().get("foo"));
+		assertEquals(" foo >= #{foo_gte}", filter.toSqlTemplate());
+		assertEquals(25, filter.getParams().get("foo_gte"));
 	}
 
 	@Test
 	void testLike() {
 		Filter filter = Filter.like("foo", "ABC%");
-		assertEquals(" foo LIKE #{foo}", filter.toSqlTemplate());
-		assertEquals("ABC%", filter.getParams().get("foo"));
+		assertEquals(" foo LIKE #{foo_like}", filter.toSqlTemplate());
+		assertEquals("ABC%", filter.getParams().get("foo_like"));
+	}
+
+	@Test
+	void testRangeOnSameColumn() {
+		// A range query on a single column must not collide on the default param name.
+		Filter filter = Filter.and(Filter.gte("ts", 100), Filter.lte("ts", 200));
+		assertEquals(" ( ts >= #{ts_gte} AND ts <= #{ts_lte})", filter.toSqlTemplate());
+
+		Map<String, Object> params = filter.getParams();
+		assertEquals(2, params.size());
+		assertEquals(100, params.get("ts_gte"));
+		assertEquals(200, params.get("ts_lte"));
+
+		// Same column AND same operator still collides — surfaced with a clear message.
+		Filter colliding = Filter.and(Filter.eq("x", 1), Filter.eq("x", 2));
+		assertThrows(IllegalStateException.class, colliding::getParams);
 	}
 
 	@Test
@@ -101,7 +118,7 @@ public class FilterTests {
 		assertEquals(" 1 = 1", filter.toSqlTemplate());
 
 		filter = Filter.and(Filter.eq("foo", 10));
-		assertEquals(" foo = #{foo}", filter.toSqlTemplate());
+		assertEquals(" foo = #{foo_eq}", filter.toSqlTemplate());
 
 		Map<String, Object> inParams = new LinkedHashMap<>();
 		inParams.put("qux1", "QUX1");
@@ -114,13 +131,13 @@ public class FilterTests {
 				Filter.isNull("baz"),
 				Filter.in("qux", inParams));
 
-		assertEquals(" ( foo = #{foo} AND bar <= #{bar} AND baz IS NULL AND qux IN (#{qux1}, #{qux2}, #{qux3}))", filter.toSqlTemplate());
+		assertEquals(" ( foo = #{foo_eq} AND bar <= #{bar_lte} AND baz IS NULL AND qux IN (#{qux1}, #{qux2}, #{qux3}))", filter.toSqlTemplate());
 
 		Map<String, Object> params = filter.getParams();
 		System.out.println(Json.toPrettyString(params));
 		assertEquals(5, params.size());
-		assertEquals(10, params.get("foo"));
-		assertEquals(20, params.get("bar"));
+		assertEquals(10, params.get("foo_eq"));
+		assertEquals(20, params.get("bar_lte"));
 		assertEquals("QUX1", params.get("qux1"));
 		assertEquals("QUX2", params.get("qux2"));
 		assertEquals("QUX3", params.get("qux3"));
@@ -132,7 +149,7 @@ public class FilterTests {
 		assertEquals(" 1 = 1", filter.toSqlTemplate());
 
 		filter = Filter.and(Filter.eq("foo", "foobar"));
-		assertEquals(" foo = #{foo}", filter.toSqlTemplate());
+		assertEquals(" foo = #{foo_eq}", filter.toSqlTemplate());
 
 		Map<String, Object> inParams = new LinkedHashMap<>();
 		inParams.put("qux1", "QUX1");
@@ -145,13 +162,13 @@ public class FilterTests {
 				Filter.isNull("baz"),
 				Filter.in("qux", inParams));
 
-		assertEquals(" ( foo = #{foo} OR bar <= #{bar} OR baz IS NULL OR qux IN (#{qux1}, #{qux2}, #{qux3}))", filter.toSqlTemplate());
+		assertEquals(" ( foo = #{foo_eq} OR bar <= #{bar_lte} OR baz IS NULL OR qux IN (#{qux1}, #{qux2}, #{qux3}))", filter.toSqlTemplate());
 
 		Map<String, Object> params = filter.getParams();
 		System.out.println(Json.toPrettyString(params));
 		assertEquals(5, params.size());
-		assertEquals(10, params.get("foo"));
-		assertEquals(20, params.get("bar"));
+		assertEquals(10, params.get("foo_eq"));
+		assertEquals(20, params.get("bar_lte"));
 		assertEquals("QUX1", params.get("qux1"));
 		assertEquals("QUX2", params.get("qux2"));
 		assertEquals("QUX3", params.get("qux3"));

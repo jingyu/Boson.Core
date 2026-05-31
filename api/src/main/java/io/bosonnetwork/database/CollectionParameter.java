@@ -46,14 +46,16 @@ public class CollectionParameter<T> {
 	/**
 	 * Constructs a new CollectionParameter with the specified name and collection of values.
 	 *
-	 * @param name the name of the parameter; must not be null
+	 * @param name the name of the parameter; must not be null and must be a safe bind-parameter
+	 *             identifier (it is interpolated into {@code #{name_i}} template placeholders)
 	 * @param values the collection of values associated with the parameter; must not be null
 	 * @throws NullPointerException if {@code name} or {@code values} is null
+	 * @throws IllegalArgumentException if {@code name} is not a safe SQL bind-parameter identifier
 	 */
 	public CollectionParameter(String name, Collection<T> values) {
 		Objects.requireNonNull(name, "name");
 		Objects.requireNonNull(values, "values");
-		this.name = name;
+		this.name = SqlSafety.validateParamName(name);
 		this.values = List.copyOf(values);
 	}
 

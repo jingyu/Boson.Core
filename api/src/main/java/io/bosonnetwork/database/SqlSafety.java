@@ -37,7 +37,7 @@ public final class SqlSafety {
 	// Bind-parameter token: letters, digits and underscore.
 	private static final Pattern PARAM_NAME = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 	// Schema name: a lowercase letter followed by up to 31 lowercase letters, digits or underscores.
-	private static final Pattern SCHEMA_NAME = Pattern.compile("[a-z][a-z0-9_]{0,31}");
+	private static final Pattern SCHEMA_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,31}$");
 
 	private SqlSafety() {
 	}

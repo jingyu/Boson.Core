@@ -54,12 +54,18 @@ public class Pagination {
 	 * Create Pagination using explicit limit/offset.
 	 *
 	 * @param offset the number of rows to skip
-	 * @param limit  the maximum number of rows to return
-	 * @return a new Pagination instance
+	 * @param limit  the maximum number of rows to return; must be {@code > 0} unless both
+	 *               {@code offset} and {@code limit} are {@code 0} (which yields {@link #NONE})
+	 * @return a new Pagination instance, or {@link #NONE} if both arguments are {@code 0}
+	 * @throws IllegalArgumentException if {@code offset < 0}, or if {@code limit <= 0} while
+	 *         {@code offset > 0} (a zero limit would otherwise mean "return no rows")
 	 */
 	public static Pagination of(long offset, long limit) {
 		if (offset == 0 && limit == 0)
 			return NONE;
+
+		if (limit <= 0)
+			throw new IllegalArgumentException("limit must be > 0 for a paginated query");
 
 		return new Pagination(offset, limit);
 	}

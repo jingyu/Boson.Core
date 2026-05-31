@@ -77,7 +77,7 @@ public class Filter {
 	 * @return a Filter representing the equality condition
 	 */
 	public static Filter eq(String column, Object value) {
-		return eq(column, defaultParamName(column), value);
+		return eq(column, defaultParamName(column, "eq"), value);
 	}
 
 	/**
@@ -102,7 +102,7 @@ public class Filter {
 	 * @return a Filter representing the non-equality condition
 	 */
 	public static Filter ne(String column, Object value) {
-		return ne(column, defaultParamName(column), value);
+		return ne(column, defaultParamName(column, "ne"), value);
 	}
 
 	/**
@@ -127,7 +127,7 @@ public class Filter {
 	 * @return a Filter representing the less-than condition
 	 */
 	public static Filter lt(String column, Object value) {
-		return lt(column, defaultParamName(column), value);
+		return lt(column, defaultParamName(column, "lt"), value);
 	}
 
 	/**
@@ -152,7 +152,7 @@ public class Filter {
 	 * @return a Filter representing the less-than-or-equal condition
 	 */
 	public static Filter lte(String column, Object value) {
-		return lte(column, defaultParamName(column), value);
+		return lte(column, defaultParamName(column, "lte"), value);
 	}
 
 	/**
@@ -177,7 +177,7 @@ public class Filter {
 	 * @return a Filter representing the greater-than condition
 	 */
 	public static Filter gt(String column, Object value) {
-		return gt(column, defaultParamName(column), value);
+		return gt(column, defaultParamName(column, "gt"), value);
 	}
 
 	/**
@@ -202,7 +202,7 @@ public class Filter {
 	 * @return a Filter representing the greater-than-or-equal condition
 	 */
 	public static Filter gte(String column, Object value) {
-		return gte(column, defaultParamName(column), value);
+		return gte(column, defaultParamName(column, "gte"), value);
 	}
 
 	/**
@@ -227,7 +227,7 @@ public class Filter {
 	 * @return a Filter representing the <code>LIKE</code> condition
 	 */
 	public static Filter like(String column, Object value) {
-		return like(column, defaultParamName(column), value);
+		return like(column, defaultParamName(column, "like"), value);
 	}
 
 	/**
@@ -330,14 +330,20 @@ public class Filter {
 	}
 
 	/**
-	 * Derives a safe default bind-parameter name from a column name. A qualified column such as
-	 * {@code table.col} is mapped to {@code table_col} so it is a valid parameter token.
+	 * Derives a safe default bind-parameter name from a column name and the operator. A qualified
+	 * column such as {@code table.col} is mapped to {@code table_col} so it is a valid parameter
+	 * token, and the operator is appended (e.g. {@code col_gte}) so that distinct operators on the
+	 * same column do not collide when combined — for example
+	 * {@code and(gte("ts", lo), lte("ts", hi))} yields the distinct names {@code ts_gte} and
+	 * {@code ts_lte}. Combining two filters that use the <em>same</em> column and operator still
+	 * collides; use the explicit {@code paramName} overload to disambiguate those.
 	 *
 	 * @param column the column name (already validated by the caller)
+	 * @param op     the operator suffix (e.g. {@code "eq"}, {@code "gte"})
 	 * @return a valid parameter name, or {@code null} if {@code column} is {@code null}
 	 */
-	private static String defaultParamName(String column) {
-		return column == null ? null : column.replace('.', '_');
+	private static String defaultParamName(String column, String op) {
+		return column == null ? null : column.replace('.', '_') + '_' + op;
 	}
 
 	/**
@@ -463,7 +469,11 @@ public class Filter {
 			return Arrays.stream(filters)
 					.map(Filter::getParams)
 					.flatMap(m -> m.entrySet().stream())
-					.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+					.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+							(a, b) -> {
+								throw new IllegalStateException("Duplicate bind-parameter name in combined filter; " +
+										"use the explicit paramName overload to disambiguate conditions on the same column");
+							}));
 		}
 	}
 }
