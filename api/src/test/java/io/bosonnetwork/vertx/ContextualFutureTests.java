@@ -213,6 +213,41 @@ public class ContextualFutureTests {
 	}
 
 	@Test
+	void testWhenCompleteContract() {
+		// (1) success + action does not throw -> value passes through; action observes (value, null)
+		var observed = new java.util.concurrent.atomic.AtomicReference<String>();
+		Future<String> ok = ContextualFuture.<String>succeededFuture("v")
+				.whenComplete((val, err) -> observed.set(val + "/" + err))
+				.toVertxFuture();
+		assertTrue(ok.succeeded());
+		assertEquals("v", ok.result());
+		assertEquals("v/null", observed.get());
+
+		// (2) failure + action does not throw -> original cause propagates
+		RuntimeException boom = new RuntimeException("boom");
+		Future<String> failed = ContextualFuture.<String>failedFuture(boom)
+				.whenComplete((val, err) -> { })
+				.toVertxFuture();
+		assertTrue(failed.failed());
+		assertEquals(boom, failed.cause());
+
+		// (3) success + action throws -> result fails with the action's exception
+		RuntimeException actionEx = new RuntimeException("action");
+		Future<String> successActionThrows = ContextualFuture.<String>succeededFuture("v")
+				.whenComplete((val, err) -> { throw actionEx; })
+				.toVertxFuture();
+		assertTrue(successActionThrows.failed());
+		assertEquals(actionEx, successActionThrows.cause());
+
+		// (4) failure + action throws -> result keeps the ORIGINAL cause, not the action's
+		Future<String> failureActionThrows = ContextualFuture.<String>failedFuture(boom)
+				.whenComplete((val, err) -> { throw actionEx; })
+				.toVertxFuture();
+		assertTrue(failureActionThrows.failed());
+		assertEquals(boom, failureActionThrows.cause());
+	}
+
+	@Test
 	void testVertxCompletableFutureGetInVertxContext(Vertx vertx, VertxTestContext context) {
 		var ctx = vertx.getOrCreateContext();
 
@@ -225,7 +260,7 @@ public class ContextualFutureTests {
 
 			context.verify(() -> {
 				IllegalStateException exception = assertThrows(IllegalStateException.class, future::get);
-				assertEquals("Cannot not be called on vertx thread or event loop thread", exception.getMessage());
+				assertEquals("Cannot be called on a vertx thread or event loop thread", exception.getMessage());
 				context.completeNow();
 			});
 		});

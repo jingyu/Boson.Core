@@ -63,7 +63,7 @@ import io.vertx.core.Vertx;
  */
 public class ContextualFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
 	/** The underlying Vert.x Future being wrapped. */
-	Future<T> future;
+	final Future<T> future;
 
 	/**
 	 * Wraps an existing Vert.x {@link Future} into a ContextualFuture.
@@ -724,30 +724,27 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 */
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
-		if (future.isComplete()) {
-			if (future.succeeded())
-				return future.result();
-			else if (future.failed())
-				throw new ExecutionException(future.cause());
-			else
-				throw new InterruptedException("Context closed");
-		}
-
-		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
-			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
-
 		if (!future.isComplete()) {
+			if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
+				throw new IllegalStateException("Cannot be called on a vertx thread or event loop thread");
+
 			final CountDownLatch latch = new CountDownLatch(1);
 			future.andThen(ar -> latch.countDown());
 			latch.await();
 		}
 
+		return resultOrThrow();
+	}
+
+	/**
+	 * Returns the result of the now-complete future, or throws its failure wrapped in an
+	 * {@link ExecutionException}. A complete Vert.x future is always either succeeded or failed.
+	 */
+	private T resultOrThrow() throws ExecutionException {
 		if (future.succeeded())
 			return future.result();
-		else if (future.failed())
-			throw new ExecutionException(future.cause());
 		else
-			throw new InterruptedException("Context closed");
+			throw new ExecutionException(future.cause());
 	}
 
 	/**
@@ -765,31 +762,17 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 */
 	@Override
 	public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-		if (future.isComplete()) {
-			if (future.succeeded())
-				return future.result();
-			else if (future.failed())
-				throw new ExecutionException(future.cause());
-			else
-				throw new InterruptedException("Context closed");
-		}
-
-		if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
-			throw new IllegalStateException("Cannot not be called on vertx thread or event loop thread");
-
 		if (!future.isComplete()) {
+			if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
+				throw new IllegalStateException("Cannot be called on a vertx thread or event loop thread");
+
 			final CountDownLatch latch = new CountDownLatch(1);
 			future.andThen(ar -> latch.countDown());
 			if (!latch.await(timeout, unit))
 				throw new TimeoutException();
 		}
 
-		if (future.succeeded())
-			return future.result();
-		else if (future.failed())
-			throw new ExecutionException(future.cause());
-		else
-			throw new InterruptedException("Context closed");
+		return resultOrThrow();
 	}
 
 	@Override
@@ -826,6 +809,9 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	public boolean complete(T value) {
 		// Only a Promise-backed (incomplete) future can be completed here; otherwise the underlying
 		// Vert.x future is controlled elsewhere, so report "not completed" rather than throwing.
+		// This relies on the Vert.x contract that Promise.promise().future() returns an object that
+		// is itself a Promise (true on Vert.x 4.x/5.x), so the instanceof check identifies the
+		// wrappers we created from a Promise (see succeededFuture/newIncompleteFuture/copy).
 		if (future instanceof Promise<?>) {
 			Promise<T> promise = (Promise<T>) future;
 			return promise.tryComplete(value);

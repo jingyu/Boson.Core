@@ -23,6 +23,7 @@
 package io.bosonnetwork.vertx;
 
 import java.io.InputStream;
+import java.util.Objects;
 
 import io.vertx.core.buffer.Buffer;
 
@@ -60,6 +61,10 @@ public class BufferInputStream extends InputStream {
 	/** {@inheritDoc} */
 	@Override
 	public int read(byte[] b, int off, int len) {
+		Objects.checkFromIndexSize(off, len, b.length);
+		if (len == 0)
+			return 0;
+
 		if (pos >= limit)
 			return -1;
 

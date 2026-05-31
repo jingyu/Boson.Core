@@ -28,9 +28,7 @@ import io.vertx.core.Context;
 import io.vertx.core.Deployable;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
 
 /**
@@ -153,15 +151,13 @@ public abstract class BosonVerticle implements Deployable {
 	 */
 	public final Future<?> deploy(Context context) throws Exception {
 		prepare(context.owner(), context);
-		ContextInternal internal = (ContextInternal) context;
-		Promise<Void> promise = internal.promise();
 		try {
-			deploy().onComplete(promise);
+			return deploy();
 		} catch (Throwable t) {
-			if (!promise.tryFail(t))
-				internal.reportException(t);
+			// Translate a synchronous failure from deploy() into a failed future; an asynchronous
+			// failure is already carried by the returned future.
+			return Future.failedFuture(t);
 		}
-		return promise.future();
 	}
 
 	/**
@@ -174,15 +170,11 @@ public abstract class BosonVerticle implements Deployable {
 	 * @throws Exception if undeployment fails
 	 */
 	public final Future<?> undeploy(Context context) throws Exception {
-		ContextInternal internal = (ContextInternal) context;
-		Promise<Void> promise = internal.promise();
 		try {
-			undeploy().onComplete(promise);
+			return undeploy();
 		} catch (Throwable t) {
-			if (!promise.tryFail(t))
-				internal.reportException(t);
+			return Future.failedFuture(t);
 		}
-		return promise.future();
 	}
 
 	/**
