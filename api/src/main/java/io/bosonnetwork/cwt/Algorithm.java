@@ -23,24 +23,28 @@
 package io.bosonnetwork.cwt;
 
 /**
- * Enumeration of cryptographic algorithms supported by the CWT implementation.
- * The integer values correspond to the algorithm identifiers defined in RFC 8152.
+ * Enumeration of COSE algorithm identifiers (RFC 8152) referenced by this package.
+ * <p>
+ * <b>Note:</b> {@link SignedCwt} strictly enforces {@link #EDDSA} (Ed25519); it is the only
+ * algorithm accepted when signing or verifying. The {@code ES256}/{@code ES384}/{@code ES512}
+ * constants are defined for registry completeness and are <em>not</em> supported — a token using
+ * any of them is rejected during parsing.
  */
 public enum Algorithm {
 	/**
-	 * ECDSA w/ SHA-256
+	 * ECDSA w/ SHA-256. Defined for completeness; not supported by {@link SignedCwt}.
 	 */
 	ES256(-7),
 	/**
-	 * ECDSA w/ SHA-384
+	 * ECDSA w/ SHA-384. Defined for completeness; not supported by {@link SignedCwt}.
 	 */
 	ES384(-35),
 	/**
-	 * ECDSA w/ SHA-512
+	 * ECDSA w/ SHA-512. Defined for completeness; not supported by {@link SignedCwt}.
 	 */
 	ES512(-36),
 	/**
-	 * EdDSA / Ed25519
+	 * EdDSA / Ed25519 — the only algorithm supported by {@link SignedCwt}.
 	 */
 	EDDSA(-8);
 

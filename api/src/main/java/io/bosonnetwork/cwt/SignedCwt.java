@@ -50,6 +50,13 @@ import io.bosonnetwork.utils.Hex;
  * cryptographic {@link Identity} and {@link Id} system, ensuring that the {@code "iss"} (Issuer)
  * claim is intrinsically bound to the issuer's public key identifier.
  * <p>
+ * <b>Security — the issuer is self-asserted:</b> a token is verified against the Ed25519 public
+ * key carried in its own {@code "iss"} claim. A successful {@link #parse(byte[]) parse} therefore
+ * proves only that the token was signed by the holder of the key it names as issuer — it does
+ * <em>not</em> establish that this issuer is trusted. Callers MUST pin trust by configuring
+ * {@link Parser#requireIssuer(Id)} or by validating the {@code "iss"} claim against an allow-list
+ * after parsing. A valid signature alone is not authentication.
+ * <p>
  * <b>References:</b>
  * <ul>
  *   <li><a href="https://datatracker.ietf.org/doc/html/rfc8392">RFC 8392 - CBOR Web Token</a></li>
@@ -116,6 +123,8 @@ public class SignedCwt {
 	 * @param claim the integer key of the claim (e.g., from {@link Claim}).
 	 * @param <T>   the expected type of the claim value.
 	 * @return the claim value, or null if not present.
+	 * @throws ClassCastException if the stored value is not assignable to the inferred type {@code T}.
+	 *         The cast is unchecked and driven entirely by the caller's expected type.
 	 */
 	@SuppressWarnings("unchecked")
 	public <T> T getClaim(int claim) {
@@ -165,9 +174,12 @@ public class SignedCwt {
 	}
 
 	/**
-	 * Returns an unmodifiable map of all claims present in the CWT.
+	 * Returns an unmodifiable view of all claims present in the CWT.
+	 * <p>
+	 * The map itself is read-only, but {@code byte[]} claim values are returned by reference and
+	 * must not be mutated by the caller.
 	 *
-	 * @return a map of claims.
+	 * @return an unmodifiable view of the claims.
 	 */
 	public Map<Integer, Object> getClaims() {
 		return Collections.unmodifiableMap(claims);
@@ -176,10 +188,10 @@ public class SignedCwt {
 	/**
 	 * Retrieves the cryptographic signature of the CWT.
 	 *
-	 * @return the signature bytes.
+	 * @return a copy of the signature bytes.
 	 */
 	public byte[] getSignature() {
-		return signature;
+		return signature.clone();
 	}
 
 	/**
@@ -246,16 +258,6 @@ public class SignedCwt {
 				+ Json.toString(claims) + "."
 				+ Hex.encode(signature);
 	}
-
-	/*/
-	private static byte[] encode(Object o) {
-		try {
-			return Json.cborMapper().writeValueAsBytes(o);
-		} catch (IOException e) {
-			throw new IllegalStateException("INTERNAL ERROR: CWT data encode", e);
-		}
-	}
-	*/
 
 	// Due to the object mapper cannot create CBOR definite-length map and array,
 	// So we need to use low-level CBORGenerator to create the expected definite-length object
@@ -483,6 +485,8 @@ public class SignedCwt {
 			return this;
 		}
 
+		// Compares a single expected value against a single claim value. A multi-valued ("aud" as a
+		// CBOR array) claim is not supported and will not match.
 		@SuppressWarnings("BooleanMethodIsAlwaysInverted")
 		private boolean match(Object expected, Object claim) {
 			if (expected instanceof byte[] be && claim instanceof byte[] bc)
@@ -500,7 +504,12 @@ public class SignedCwt {
 
 		/**
 		 * Parses and validates the provided CBOR bytes according to the configured constraints.
-		 * 
+		 * <p>
+		 * <b>Security:</b> the signature is verified against the public key in the token's own
+		 * {@code "iss"} claim (self-asserted issuer). Unless {@link #requireIssuer(Id)} was
+		 * configured, a successful parse does not authenticate the issuer — validate {@code "iss"}
+		 * against a trust anchor yourself. See the {@link SignedCwt class documentation}.
+		 *
 		 * @param coseBytes the raw CBOR bytes of the CWT.
 		 * @return the parsed and verified {@code SignedCwt} object.
 		 * @throws CwtException if parsing, structural validation, or cryptographic verification fails.
@@ -520,7 +529,11 @@ public class SignedCwt {
 			 * but conveniently to check manually.
 			 */
 			Objects.requireNonNull(coseBytes);
+			if (coseBytes.length == 0)
+				throw new InvalidCborTagException("Empty token");
 
+			// Only the canonical single-byte encoding of CBOR tag 18 (0xD2) is accepted, matching
+			// what build() emits. Multi-byte tag encodings of the same value are not recognized.
 			int tag = Byte.toUnsignedInt(coseBytes[0]);
 			if (tag != COSE_SIGN_1_TAG)
 				throw new InvalidCborTagException("Unknown CBOR tag: " + tag);
@@ -548,6 +561,13 @@ public class SignedCwt {
 				throw new InvalidAlgorithmException("Invalid algorithm: " + value);
 			if (alg != Algorithm.EDDSA.getValue())
 				throw new InvalidAlgorithmException("Unsupported algorithm: " + value);
+
+			// RFC 8152/9052 §3.1: a recipient that does not understand a header listed in "crit"
+			// MUST reject the token. This implementation understands no critical extensions, so the
+			// mere presence of a (non-empty) "crit" header is a rejection.
+			Object crit = protectedHeaders.get(Header.CRIT.getValue());
+			if (crit != null && !(crit instanceof List<?> l && l.isEmpty()))
+				throw new InvalidCoseStructureException("Unsupported critical headers (crit) present");
 
 			if (!(sign1.get(1) instanceof Map<?, ?> uph))
 				throw new InvalidCoseStructureException("Unprotected headers should be a map");
@@ -647,7 +667,16 @@ public class SignedCwt {
 		 * @throws CwtException if there is an error during parsing
 		 */
 		public SignedCwt parse(String base64Token) throws CwtException {
-			return parse(Json.BASE64_DECODER.decode(base64Token));
+			if (base64Token == null)
+				throw new InvalidCoseStructureException("Token cannot be null");
+
+			byte[] coseBytes;
+			try {
+				coseBytes = Json.BASE64_DECODER.decode(base64Token);
+			} catch (IllegalArgumentException e) {
+				throw new InvalidCoseStructureException("Invalid base64 token", e);
+			}
+			return parse(coseBytes);
 		}
 	}
 
@@ -656,7 +685,6 @@ public class SignedCwt {
 	 */
 	public static class Builder {
 		private final Identity issuer;
-		private long leeway;
 
 		private final Map<Integer, Object> protectedHeaders;
 		private final Map<Integer, Object> unprotectedHeaders;
@@ -664,7 +692,6 @@ public class SignedCwt {
 
 		private Builder(Identity issuer) {
 			this.issuer = issuer;
-			this.leeway = 0;
 
 			this.protectedHeaders = new LinkedHashMap<>();
 			this.unprotectedHeaders = new LinkedHashMap<>();
@@ -763,17 +790,6 @@ public class SignedCwt {
 		}
 
 		/**
-		 * Sets the allowed clock skew leeway (in seconds) for time-based claims like expiration and not-before.
-		 *
-		 * @param leeway the leeway in seconds.
-		 * @return the builder instance.
-		 */
-		public Builder leeway(long leeway) {
-			this.leeway = leeway;
-			return this;
-		}
-
-		/**
 		 * Sets the "exp" (Expiration Time) claim.
 		 *
 		 * @param expiration the exact date of expiration.
@@ -781,7 +797,7 @@ public class SignedCwt {
 		 */
 		public Builder expiration(Date expiration) {
 			Objects.requireNonNull(expiration);
-			long exp = expiration.getTime() / 1000 + leeway;
+			long exp = expiration.getTime() / 1000;
 			claims.put(Claim.EXPIRATION.getValue(), exp);
 			return this;
 		}
@@ -794,7 +810,7 @@ public class SignedCwt {
 		 */
 		public Builder expiration(Duration expiration) {
 			Objects.requireNonNull(expiration);
-			long exp = (System.currentTimeMillis() + expiration.toMillis()) / 1000 + leeway;
+			long exp = (System.currentTimeMillis() + expiration.toMillis()) / 1000;
 			claims.put(Claim.EXPIRATION.getValue(), exp);
 			return this;
 		}
@@ -807,7 +823,7 @@ public class SignedCwt {
 		 */
 		public Builder notBefore(Date notBefore) {
 			Objects.requireNonNull(notBefore);
-			long nbf = notBefore.getTime() / 1000 - leeway;
+			long nbf = notBefore.getTime() / 1000;
 			claims.put(Claim.NOT_BEFORE.getValue(), nbf);
 			return this;
 		}
@@ -820,7 +836,7 @@ public class SignedCwt {
 		 */
 		public Builder notBefore(Duration notBefore) {
 			Objects.requireNonNull(notBefore);
-			long nbf = (System.currentTimeMillis() + notBefore.toMillis()) / 1000 - leeway;
+			long nbf = (System.currentTimeMillis() + notBefore.toMillis()) / 1000;
 			claims.put(Claim.NOT_BEFORE.getValue(), nbf);
 			return this;
 		}
@@ -831,7 +847,7 @@ public class SignedCwt {
 		 * @return the builder instance.
 		 */
 		public Builder notBeforeNow() {
-			long nbf = System.currentTimeMillis() / 1000 - leeway;
+			long nbf = System.currentTimeMillis() / 1000;
 			claims.put(Claim.NOT_BEFORE.getValue(), nbf);
 			return this;
 		}
@@ -929,7 +945,7 @@ public class SignedCwt {
 		 */
 		public Builder clientId(Id clientId) {
 			Objects.requireNonNull(clientId);
-			claims.put(Claim.CLIENT_ID.getValue(), clientId.getBytes());
+			claims.put(Claim.CLIENT_ID.getValue(), clientId.bytesUnsafe());
 			return this;
 		}
 

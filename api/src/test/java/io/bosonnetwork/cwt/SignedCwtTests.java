@@ -304,4 +304,29 @@ public class SignedCwtTests {
 		byte[] wrongTag = new byte[]{(byte) 0xd9, 0x01, 0x01}; // CBOR tag 257 instead of 18
 		assertThrows(InvalidCborTagException.class, () -> SignedCwt.parse(wrongTag));
 	}
+
+	@Test
+	public void testEmptyAndMalformedToken() {
+		// Empty byte[] must surface as CwtException, not ArrayIndexOutOfBoundsException
+		assertThrows(InvalidCborTagException.class, () -> SignedCwt.parse(new byte[0]));
+
+		// Null base64 string must surface as CwtException, not NullPointerException
+		assertThrows(InvalidCoseStructureException.class, () -> SignedCwt.parse((String) null));
+
+		// Malformed base64 must surface as CwtException, not IllegalArgumentException
+		assertThrows(InvalidCoseStructureException.class, () -> SignedCwt.parse("not valid base64 !!!"));
+	}
+
+	@Test
+	public void testCriticalHeadersRejected() throws Exception {
+		CryptoIdentity identity = new CryptoIdentity();
+
+		// A token that marks an (unknown) header as critical must be rejected per RFC 8152 §3.1
+		byte[] token = SignedCwt.builder(identity)
+				.subject(Id.random())
+				.protectedHeader(Header.CRIT.getValue(), java.util.List.of(99))
+				.build();
+
+		assertThrows(InvalidCoseStructureException.class, () -> SignedCwt.parse(token));
+	}
 }

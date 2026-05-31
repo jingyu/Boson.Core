@@ -58,7 +58,7 @@ public enum Claim {
 	 */
 	ISSUED_AT(6),
 	/**
-	 * cti (CWT ID) Claim。
+	 * cti (CWT ID) Claim
 	 */
 	CWT_ID(7),
 
@@ -103,9 +103,14 @@ public enum Claim {
 
 	/**
 	 * Retrieves the Claim enumeration corresponding to the given integer value.
+	 * <p>
+	 * Unlike {@link Header#valueOf(int)} and {@link Algorithm#valueOf(int)}, which throw on an
+	 * unknown value, this method is deliberately lenient: any unrecognized key maps to
+	 * {@link #APPLICATION_DEFINED}, since the CWT claim registry is open and tokens may legitimately
+	 * carry application- or future-defined claims.
 	 *
 	 * @param value the integer value of the claim.
-	 * @return the corresponding Claim enumeration.
+	 * @return the corresponding Claim enumeration, or {@link #APPLICATION_DEFINED} if unknown.
 	 */
 	public static Claim valueOf(int value) {
 		return switch (value) {
