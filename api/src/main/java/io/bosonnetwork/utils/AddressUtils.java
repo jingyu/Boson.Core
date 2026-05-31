@@ -23,7 +23,6 @@
 
 package io.bosonnetwork.utils;
 
-import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -598,7 +597,7 @@ public final class AddressUtils {
 		} catch (SocketException | UnknownHostException e) {
 			// "No route", "address family not supported", offline, etc. — not a programming error.
 			return null;
-		} catch (IOException e) {
+		} catch (Exception e) {
 			throw new RuntimeException("Failed to get default route address", e);
 		}
 	}
