@@ -129,4 +129,24 @@ public final class Functional {
 	private static <T extends Throwable> void asUnchecked(Throwable t) throws T {
 		throw (T) t;
 	}
+
+	
+	/**
+	 * Rethrows the {@code e} without being declared.
+	 * <p>
+	 * <strong>This uses the "sneaky-throw" idiom</strong> — the original exception is rethrown
+	 * as-is using a generic-erasure trick, not wrapped in a {@code RuntimeException}. A caller's
+	 * {@code catch (IOException e)} clause will still match an {@code IOException} thrown from
+	 * this method, even though this method's signature does not declare it. Use this only where
+	 * declaring the checked type is impossible (e.g. inside a {@code Function} / {@code Supplier})
+	 * and the caller is prepared for the actual exception type to surface.
+	 *
+	 * @param <E> the exception type
+	 * @param e the exception to throw
+	 * @throws E the exception
+	 */
+	@SuppressWarnings("unchecked")
+	public static <E extends Throwable> void sneakyThrow(Throwable e) throws E {
+		throw (E) e;
+	}
 }

@@ -839,6 +839,14 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
+	public <T> T unwrap(Class<T> clazz) {
+		if (clazz.isInstance(vertx))
+			return clazz.cast(vertx);
+
+		return null;
+	}
+
+	@Override
 	public String toString() {
 		return "Kademlia node: " + identity.getId().toString();
 	}

@@ -131,6 +131,11 @@ public class DHTRegistryTest {
 			}
 
 			@Override
+			public <T> T unwrap(Class<T> clazz) {
+				return null;
+			}
+
+			@Override
 			public CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option) {
 				return null;
 			}

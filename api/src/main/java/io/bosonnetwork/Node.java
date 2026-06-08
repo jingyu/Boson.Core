@@ -457,6 +457,15 @@ public interface Node extends Identity {
 	CryptoContext createCryptoContext(Id id) throws CryptoException;
 
 	/**
+	 * Unwraps the Node to provide the underlying infrastructure instance.
+	 *
+	 * @param clazz the type of the infrastructure component (e.g. io.vertx.core.Vertx)
+	 * @return the component instance, or null if not available or not supported
+	 * @param <T> the type parameter
+	 */
+	<T> T unwrap(Class<T> clazz);
+
+	/**
 	 * Creates and initializes a new {@link Node} instance using the provided configuration.
 	 * <p>
 	 * The concrete implementation is discovered via the {@link ServiceLoader} mechanism,
