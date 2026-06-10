@@ -58,7 +58,6 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 	 * @param context the Kademlia context, must not be null
 	 * @param peer    the peer information to announce, must be valid
 	 * @param expectedSequenceNumber the expected sequence number for the peer; -1 to disable
-	 * @throws IllegalArgumentException if the peer is invalid
 	 */
 	public PeerAnnounceTask(KadContext context, PeerInfo peer, int expectedSequenceNumber) {
 		super(context);

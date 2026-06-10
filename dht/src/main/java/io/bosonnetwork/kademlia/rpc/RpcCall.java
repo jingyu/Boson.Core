@@ -380,7 +380,7 @@ public class RpcCall {
 		State prev = this.state;
 		this.state = state;
 
-		// Call timeout handler for TIMEOUT state first
+		// Notify RpcServer first for timeout handling
 		if (state == State.TIMEOUT && timeoutHandler != null)
 			timeoutHandler.accept(this);
 
@@ -390,10 +390,11 @@ public class RpcCall {
 		listener.onStateChange(this, prev, state);
 		switch (state) {
 			case TIMEOUT -> {
+				/*/
 				// Notify RpcServer first for timeout handling
 				if (timeoutHandler != null)
 					timeoutHandler.accept(this);
-
+				*/
 				listener.onTimeout(this);
 			}
 			case STALLED -> listener.onStall(this);

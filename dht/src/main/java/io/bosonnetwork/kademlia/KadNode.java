@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 import io.vertx.core.Context;
@@ -58,6 +59,8 @@ public class KadNode extends BosonVerticle implements Node {
 	public static final int RE_ANNOUNCE_INTERVAL = 5 * 60 * 1000;        // 5 minutes in milliseconds
 	public static final int STORAGE_EXPIRE_INTERVAL = 10 * 60 * 1000;    // 10 minutes in milliseconds
 
+	private static final int DEFAULT_EXPECTED_PEER_COUNT = 8;
+
 	private final SimpleNodeConfiguration config;
 
 	private final CachedCryptoIdentity identity;
@@ -75,7 +78,8 @@ public class KadNode extends BosonVerticle implements Node {
 	private final List<Long> timers;
 
 	private volatile boolean running;
-	private ConnectionStatusListener connectionStatusListener;
+	private final Object listenersLock = new Object();
+	private volatile ConnectionStatusListener connectionStatusListener;
 
 	private static final Logger log = LoggerFactory.getLogger(KadNode.class);
 
@@ -167,30 +171,31 @@ public class KadNode extends BosonVerticle implements Node {
 		return defaultLookupOption;
 	}
 
-	public DHT getDHT(Network network) {
+	protected DHT getDHT(Network network) {
 		return network == Network.IPv4 ? dht4 : dht6;
 	}
 
 	@Override
 	public void addConnectionStatusListener(ConnectionStatusListener listener) {
-		assert (listener != null) : "Invalid listener";
-		if (this.connectionStatusListener == null) {
-			this.connectionStatusListener = listener;
-		} else {
-			if (this.connectionStatusListener instanceof ListenerArray listeners)
+		Objects.requireNonNull(listener, "listener cannot be null");
+		synchronized (listenersLock) {
+			if (connectionStatusListener instanceof ListenerArray listeners)
 				listeners.add(listener);
 			else
-				this.connectionStatusListener = new ListenerArray(this.connectionStatusListener, listener);
+				connectionStatusListener = new ListenerArray(listener);
 		}
 	}
 
 	@Override
 	public void removeConnectionStatusListener(ConnectionStatusListener listener) {
-		ConnectionStatusListener current = this.connectionStatusListener;
-		if (current == listener)
-			this.connectionStatusListener = null;
-		else if (current instanceof ListenerArray listeners)
-			listeners.remove(listener);
+		Objects.requireNonNull(listener, "listener cannot be null");
+		synchronized (listenersLock) {
+			if (connectionStatusListener instanceof ListenerArray listeners) {
+				listeners.remove(listener);
+				if (listeners.isEmpty())
+					connectionStatusListener = null;
+			}
+		}
 	}
 
 	@Override
@@ -242,29 +247,33 @@ public class KadNode extends BosonVerticle implements Node {
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
 
-		ConnectionStatusListener listener = new ConnectionStatusListener() {
+		ConnectionStatusListener proxy = new ConnectionStatusListener() {
 			@Override
 			public void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
-				if (connectionStatusListener != null)
-					runOnContext(unused -> connectionStatusListener.statusChanged(network, newStatus, oldStatus));
+				ConnectionStatusListener listener = connectionStatusListener;
+				if (listener != null)
+					runOnContext(unused -> listener.statusChanged(network, newStatus, oldStatus));
 			}
 
 			@Override
 			public void connecting(Network network) {
-				if (connectionStatusListener != null)
-					runOnContext(unused -> connectionStatusListener.connecting(network));
+				ConnectionStatusListener listener = connectionStatusListener;
+				if (listener != null)
+					runOnContext(unused -> listener.connecting(network));
 			}
 
 			@Override
 			public void connected(Network network) {
-				if (connectionStatusListener != null)
-					runOnContext(unused -> connectionStatusListener.connected(network));
+				ConnectionStatusListener listener = connectionStatusListener;
+				if (listener != null)
+					runOnContext(unused -> listener.connected(network));
 			}
 
 			@Override
 			public void disconnected(Network network) {
-				if (connectionStatusListener != null)
-					runOnContext(unused -> connectionStatusListener.disconnected(network));
+				ConnectionStatusListener listener = connectionStatusListener;
+				if (listener != null)
+					runOnContext(unused -> listener.disconnected(network));
 			}
 		};
 
@@ -276,7 +285,7 @@ public class KadNode extends BosonVerticle implements Node {
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
 
-				dht4.setConnectionStatusListener(listener);
+				dht4.setConnectionStatusListener(proxy);
 
 				Future<Void> future = vertx.deployVerticle(dht4).andThen(ar -> {
 					if (ar.failed())
@@ -292,7 +301,7 @@ public class KadNode extends BosonVerticle implements Node {
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
 
-				dht6.setConnectionStatusListener(listener);
+				dht6.setConnectionStatusListener(proxy);
 
 				Future<Void> future = vertx.deployVerticle(dht6).andThen(ar -> {
 					if (ar.failed())
@@ -304,6 +313,11 @@ public class KadNode extends BosonVerticle implements Node {
 			return Future.all(futures);
 		}).andThen(ar -> {
 			if (ar.succeeded()) {
+				if (dht4 != null && dht6 != null) {
+					dht4.setSibling(dht6);
+					dht6.setSibling(dht4);
+				}
+
 				long timer = vertx.setPeriodic(30_000, STORAGE_EXPIRE_INTERVAL, unused -> storage.purge());
 				timers.add(timer);
 
@@ -575,24 +589,26 @@ public class KadNode extends BosonVerticle implements Node {
 		if (!running)
 			throw new IllegalStateException("Node is not running");
 
+		final int expectedPeerCount = expectedCount == 0 ? DEFAULT_EXPECTED_PEER_COUNT : expectedCount;
+
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
 		runOnContext(v -> {
-			EligiblePeers eligible = new EligiblePeers(id, expectedSequenceNumber, expectedCount);
+			EligiblePeers eligible = new EligiblePeers(id, expectedSequenceNumber, expectedPeerCount);
 
-			storage.getPeers(id, expectedSequenceNumber, expectedCount).compose(peers -> {
+			storage.getPeers(id, expectedSequenceNumber, expectedPeerCount).compose(peers -> {
 				eligible.add(peers);
 
 				if (!eligible.isEmpty()) {
 					if (lookupOption == LookupOption.LOCAL)
 						return Future.succeededFuture(eligible);
 
-					if (lookupOption != LookupOption.CONSERVATIVE && expectedCount > 0 && eligible.reachedCapacity())
+					if (lookupOption != LookupOption.CONSERVATIVE && eligible.reachedCapacity())
 						return Future.succeededFuture(eligible);
 				}
 
-				return doFindPeer(id, expectedSequenceNumber, expectedCount, lookupOption, eligible)
+				return doFindPeer(id, expectedSequenceNumber, expectedPeerCount, lookupOption, eligible)
 						.map(eligible);
 			}).compose(el -> {
 				if (eligible.isEmpty())
@@ -851,33 +867,52 @@ public class KadNode extends BosonVerticle implements Node {
 		return "Kademlia node: " + identity.getId().toString();
 	}
 
-	private static class ListenerArray extends ArrayList<ConnectionStatusListener> implements ConnectionStatusListener {
+	private static class ListenerArray extends CopyOnWriteArrayList<ConnectionStatusListener> implements ConnectionStatusListener {
 		private static final long serialVersionUID = 2740228489813224483L;
 
-		public ListenerArray(ConnectionStatusListener existing, ConnectionStatusListener newListener) {
+		public ListenerArray(ConnectionStatusListener listener) {
 			super();
-			add(existing);
-			add(newListener);
+			add(listener);
 		}
 
 		public void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
-			for (ConnectionStatusListener listener : this)
-				listener.statusChanged(network, newStatus, oldStatus);
+			for (ConnectionStatusListener listener : this) {
+				try {
+					listener.statusChanged(network, newStatus, oldStatus);
+				} catch (Exception e) {
+					log.error("Error dispatching statusChanged to listener: {}", listener, e);
+				}
+			}
 		}
 
 		public void connecting(Network network) {
-			for (ConnectionStatusListener listener : this)
-				listener.connecting(network);
+			for (ConnectionStatusListener listener : this) {
+				try {
+					listener.connecting(network);
+				} catch (Exception e) {
+					log.error("Error dispatching connecting to listener: {}", listener, e);
+				}
+			}
 		}
 
 		public void connected(Network network) {
-			for (ConnectionStatusListener listener : this)
-				listener.connected(network);
+			for (ConnectionStatusListener listener : this) {
+				try {
+					listener.connected(network);
+				} catch (Exception e) {
+					log.error("Error dispatching connected to listener: {}", listener, e);
+				}
+			}
 		}
 
 		public void disconnected(Network network) {
-			for (ConnectionStatusListener listener : this)
-				listener.disconnected(network);
+			for (ConnectionStatusListener listener : this) {
+				try {
+					listener.disconnected(network);
+				} catch (Exception e) {
+					log.error("Error dispatching disconnected to listener: {}", listener, e);
+				}
+			}
 		}
 	}
 }

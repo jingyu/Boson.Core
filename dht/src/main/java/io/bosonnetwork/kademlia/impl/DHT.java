@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -68,12 +69,18 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.vertx.BosonVerticle;
 
 public class DHT extends BosonVerticle {
-	public static final int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;                // 4 minutes
-	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000;                // 30 minutes
-	public static final int ROUTING_TABLE_PERSIST_INTERVAL = 10 * 60 * 1000;    // 10 minutes
-	public static final int ROUTING_TABLE_MAINTENANCE_INTERVAL = 4 * 60 * 1000;    // 4 minutes
-	public static final int RANDOM_LOOKUP_INTERVAL = 10 * 60 * 1000;            // 10 minutes
-	public static final int RANDOM_PING_INTERVAL = 10 * 1000;                    // 10 seconds
+	public static final int DHT_UPDATE_INTERVAL = 30 * 1000;                        // 30 seconds
+	public static final int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;                 // 4 minutes
+	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000;                  // 30 minutes
+	public static final int ROUTING_TABLE_PERSIST_INITIAL_DELAY = 2 * 60 * 1000;    // 2 minutes
+	public static final int ROUTING_TABLE_PERSIST_INTERVAL = 10 * 60 * 1000;        // 10 minutes
+	public static final int ROUTING_TABLE_MAINTENANCE_INTERVAL = 4 * 60 * 1000;     // 4 minutes
+	public static final int RANDOM_LOOKUP_INTERVAL = 10 * 60 * 1000;                // 10 minutes
+	public static final int RANDOM_PING_INTERVAL = 10 * 1000;                       // 10 seconds
+
+	public static final int SUSPICIOUS_NODES_PURGE_INITIAL_DELAY = 60 * 1000;       // 60 seconds
+	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 30 * 1000;            // 30 seconds
+
 	public static final int BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
 	public static final int USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES = 8;
 
@@ -188,8 +195,11 @@ public class DHT extends BosonVerticle {
 		return routingTable;
 	}
 
-	protected void setSibling(DHT dht) {
-		assert (dht != null && dht != this);
+	public void setSibling(DHT dht) {
+		Objects.requireNonNull(dht);
+		if (dht == this)
+			throw new IllegalArgumentException("Can not set self as sibling");
+
 		this.sibling = dht;
 	}
 
@@ -319,7 +329,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	private void setupPeriodicTasks() {
-		long timer = kadContext.setPeriodic(30 * 1000, 30 * 1000, this::update);
+		long timer = kadContext.setPeriodic(DHT_UPDATE_INTERVAL, DHT_UPDATE_INTERVAL, this::update);
 		timers.add(timer);
 
 		// deep lookup to make ourselves known to random parts of the keyspace
@@ -331,12 +341,12 @@ public class DHT extends BosonVerticle {
 		timers.add(timer);
 
 		if (enableSuspiciousNodeTracking) {
-			timer = kadContext.setPeriodic(60 * 1000, 30 * 1000, unused -> suspiciousNodeDetector.purge());
+			timer = kadContext.setPeriodic(SUSPICIOUS_NODES_PURGE_INITIAL_DELAY, SUSPICIOUS_NODES_PURGE_INTERVAL, unused -> suspiciousNodeDetector.purge());
 			timers.add(timer);
 		}
 
 		if (persistFile != null) {
-			timer = kadContext.setPeriodic(120_000, ROUTING_TABLE_PERSIST_INTERVAL, this::persistRoutingTable);
+			timer = kadContext.setPeriodic(ROUTING_TABLE_PERSIST_INITIAL_DELAY, ROUTING_TABLE_PERSIST_INTERVAL, this::persistRoutingTable);
 			timers.add(timer);
 		}
 	}
@@ -605,7 +615,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	private void tryPingMaintenance(KBucket bucket, boolean checkAll, boolean removeOnTimeout, boolean probeReplacement, String name) {
-		if (rpcServer.isReachable())
+		if (!rpcServer.isReachable())
 			return;
 
 		if (maintenanceTasks.containsKey(bucket))
@@ -690,7 +700,7 @@ public class DHT extends BosonVerticle {
 		FindNodeRequest body = request.getBody();
 		Id target = body.getTarget();
 		int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-		int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+		int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
 		Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 
 		int token = body.doesWantToken() ?
@@ -713,7 +723,7 @@ public class DHT extends BosonVerticle {
 				response = Message.findValueResponse(request.getTxid(), value);
 			} else {
 				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
 				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 				response = Message.findValueResponse(request.getTxid(), closest.getV4(), closest.getV6());
 			}
@@ -788,7 +798,7 @@ public class DHT extends BosonVerticle {
 				response = Message.findPeerResponse(request.getTxid(), peers);
 			} else {
 				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
 				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
 				response = Message.findPeerResponse(request.getTxid(), closest.getV4(), closest.getV6());
 			}
@@ -1007,26 +1017,28 @@ public class DHT extends BosonVerticle {
 		if (v4 > 0) {
 			DHT dht4 = network == Network.IPv4 ? this : sibling;
 			if (dht4 != null) {
-				nodes4 = routingTable.getClosestNodes(target, v4)
-						.includeReplacements(routingTable.getNumberOfEntries() < v4)
+				RoutingTable table = dht4.routingTable;
+				nodes4 = table.getClosestNodes(target, v4)
+						.includeReplacements(table.getNumberOfEntries() < v4)
 						.fill()
 						.nodes();
 				// Add self to the list if needed
 				if (nodes4.size() < v4)
-					nodes4.add(nodeInfo);
+					nodes4.add(dht4.nodeInfo);
 			}
 		}
 
 		if (v6 > 0) {
 			DHT dht6 = network == Network.IPv6 ? this : sibling;
 			if (dht6 != null) {
-				nodes6 = routingTable.getClosestNodes(target, v6)
-						.includeReplacements(routingTable.getNumberOfEntries() < v6)
+				RoutingTable table = dht6.routingTable;
+				nodes6 = table.getClosestNodes(target, v6)
+						.includeReplacements(table.getNumberOfEntries() < v6)
 						.fill()
 						.nodes();
 				// Add self to the list if needed
 				if (nodes6.size() < v6)
-					nodes6.add(nodeInfo);
+					nodes6.add(dht6.nodeInfo);
 			}
 		}
 

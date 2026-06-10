@@ -36,6 +36,7 @@ import io.vertx.sqlclient.SqlConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.database.SqlSafety;
 import io.bosonnetwork.utils.FileUtils;
 
 public class PostgresStorage extends DatabaseStorage implements DataStorage {
@@ -52,7 +53,7 @@ public class PostgresStorage extends DatabaseStorage implements DataStorage {
 	protected PostgresStorage(String connectionUri, int poolSize, String schema) {
 		this.connectionUri = connectionUri;
 		this.poolSize = poolSize > 0 ? poolSize : 8;
-		this.schema = schema;
+		this.schema = SqlSafety.validateSchema(schema);
 	}
 
 	protected PostgresStorage(String connectionUri) {

@@ -603,8 +603,10 @@ public class RpcServer implements Measured {
 	 * @return a Future resolving to the sent RpcCall
 	 */
 	public Future<RpcCall> sendCall(RpcCall call) {
-		if (pendingCalls.size() >= MAX_ACTIVE_CALLS)
+		if (pendingCalls.size() >= MAX_ACTIVE_CALLS) {
+			call.fail(new IllegalStateException("Maximum active calls exceeded"));
 			return Future.failedFuture("Maximum active calls exceeded");
+		}
 
 		int delay = outboundThrottle.incrementAndEstimateDelay(call.getTarget().getIpAddress());
 		if (delay > 0) {

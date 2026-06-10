@@ -107,7 +107,6 @@ public interface DataStorage {
 	 * @param offset the starting index (non-negative)
 	 * @param limit  the maximum number of values to return (positive)
 	 * @return a {@link Future} containing a list of {@link Value}s
-	 * @throws IllegalArgumentException if offset is negative or limit is non-positive
 	 */
 	Future<List<Value>> getValues(int offset, int limit);
 
