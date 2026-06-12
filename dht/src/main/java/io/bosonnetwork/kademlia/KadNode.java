@@ -171,7 +171,7 @@ public class KadNode extends BosonVerticle implements Node {
 		return defaultLookupOption;
 	}
 
-	protected DHT getDHT(Network network) {
+	public DHT getDHT(Network network) {
 		return network == Network.IPv4 ? dht4 : dht6;
 	}
 
