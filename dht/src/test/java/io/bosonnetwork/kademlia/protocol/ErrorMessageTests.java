@@ -41,7 +41,7 @@ public class ErrorMessageTests extends MessageTests {
 	})
 	void testError(String errorMessage) throws Exception {
 		var nodeId = Id.random();
-		var txid = 0xF7654321;
+		var txid = 0xF7654321L; // unsigned 32-bit transaction id (positive long)
 		var code = 0x87654321;
 
 		var msg = Message.error(Message.Method.PING, txid, code, errorMessage);
