@@ -126,9 +126,11 @@ public class FileBlacklist implements Blacklist {
 		if (ids.containsKey(id))
 			return;
 
-		Map<Id, Boolean> newIds = new HashMap<>(ids);
-		newIds.put(id, Boolean.TRUE);
-		this.ids = Collections.unmodifiableMap(newIds);
+		synchronized (this) {
+			Map<Id, Boolean> newIds = new HashMap<>(ids);
+			newIds.put(id, Boolean.TRUE);
+			this.ids = Collections.unmodifiableMap(newIds);
+		}
 	}
 
 	/**
@@ -143,9 +145,11 @@ public class FileBlacklist implements Blacklist {
 		if (!hosts.containsKey(host))
 			return;
 
-		Map<String, Boolean> newHosts = new HashMap<>(hosts);
-		newHosts.remove(host);
-		this.hosts = Collections.unmodifiableMap(newHosts);
+		synchronized (this) {
+			Map<String, Boolean> newHosts = new HashMap<>(hosts);
+			newHosts.remove(host);
+			this.hosts = Collections.unmodifiableMap(newHosts);
+		}
 	}
 
 	/**
@@ -160,9 +164,11 @@ public class FileBlacklist implements Blacklist {
 		if (!ids.containsKey(id))
 			return;
 
-		Map<Id, Boolean> newIds = new HashMap<>(ids);
-		newIds.remove(id);
-		this.ids = Collections.unmodifiableMap(newIds);
+		synchronized (this) {
+			Map<Id, Boolean> newIds = new HashMap<>(ids);
+			newIds.remove(id);
+			this.ids = Collections.unmodifiableMap(newIds);
+		}
 	}
 
 	/**
