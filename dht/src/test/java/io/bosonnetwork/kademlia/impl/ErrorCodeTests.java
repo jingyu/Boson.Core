@@ -27,14 +27,14 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
-import io.bosonnetwork.kademlia.exceptions.InvalidPeer;
-import io.bosonnetwork.kademlia.exceptions.InvalidToken;
-import io.bosonnetwork.kademlia.exceptions.InvalidValue;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
+import io.bosonnetwork.kademlia.exceptions.InvalidPeerException;
+import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
+import io.bosonnetwork.kademlia.exceptions.InvalidValueException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
-import io.bosonnetwork.kademlia.exceptions.ProtocolError;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
+import io.bosonnetwork.kademlia.exceptions.ProtocolException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonicException;
 
 class ErrorCodeTests {
 	@Test
@@ -59,13 +59,13 @@ class ErrorCodeTests {
 
 	@Test
 	void fromErrorCodeMapsToTypedException() {
-		assertInstanceOf(InvalidToken.class, KadException.fromErrorCode(400, "t"));
-		assertInstanceOf(InvalidValue.class, KadException.fromErrorCode(401, "v"));
-		assertInstanceOf(InvalidPeer.class, KadException.fromErrorCode(402, "p"));
-		assertInstanceOf(ProtocolError.class, KadException.fromErrorCode(203, "x"));
-		assertInstanceOf(SequenceNotExpected.class, KadException.fromErrorCode(301, "cas"));
-		assertInstanceOf(SequenceNotMonotonic.class, KadException.fromErrorCode(302, "seq"));
-		assertInstanceOf(ImmutableSubstitutionFail.class, KadException.fromErrorCode(303, "imm"));
+		assertInstanceOf(InvalidTokenException.class, KadException.fromErrorCode(400, "t"));
+		assertInstanceOf(InvalidValueException.class, KadException.fromErrorCode(401, "v"));
+		assertInstanceOf(InvalidPeerException.class, KadException.fromErrorCode(402, "p"));
+		assertInstanceOf(ProtocolException.class, KadException.fromErrorCode(203, "x"));
+		assertInstanceOf(SequenceNotExpectedException.class, KadException.fromErrorCode(301, "cas"));
+		assertInstanceOf(SequenceNotMonotonicException.class, KadException.fromErrorCode(302, "seq"));
+		assertInstanceOf(ImmutableSubstitutionException.class, KadException.fromErrorCode(303, "imm"));
 	}
 
 	@Test
@@ -82,7 +82,7 @@ class ErrorCodeTests {
 	@Test
 	void errorBodyGetCauseProducesTypedException() {
 		var err = new io.bosonnetwork.kademlia.protocol.Error(400, "bad token");
-		assertInstanceOf(InvalidToken.class, err.getCause());
+		assertInstanceOf(InvalidTokenException.class, err.getCause());
 		assertEquals(400, err.getCause().getCode());
 	}
 
@@ -90,9 +90,9 @@ class ErrorCodeTests {
 	void protocolErrorAlwaysReportsProtocolErrorCode() {
 		// All ProtocolError constructors must report code 203, not InvalidPeer (402).
 		int expected = ErrorCode.ProtocolError.value();
-		assertEquals(expected, new ProtocolError().getCode());
-		assertEquals(expected, new ProtocolError("boom").getCode());
-		assertEquals(expected, new ProtocolError("boom", new RuntimeException()).getCode());
-		assertEquals(expected, new ProtocolError(new RuntimeException()).getCode());
+		assertEquals(expected, new ProtocolException().getCode());
+		assertEquals(expected, new ProtocolException("boom").getCode());
+		assertEquals(expected, new ProtocolException("boom", new RuntimeException()).getCode());
+		assertEquals(expected, new ProtocolException(new RuntimeException()).getCode());
 	}
 }

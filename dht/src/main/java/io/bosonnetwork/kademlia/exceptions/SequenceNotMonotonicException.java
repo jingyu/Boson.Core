@@ -26,18 +26,18 @@ package io.bosonnetwork.kademlia.exceptions;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
- * Signals that the expected sequence number not equals the value's current sequence number.
+ * Signals that the value's sequence number is less than the required.
  */
-public class SequenceNotExpected extends KadException {
-	private static final long serialVersionUID = 3450451642376582940L;
+public class SequenceNotMonotonicException extends KadException {
+	private static final long serialVersionUID = -7289165754320345609L;
 
 	/**
 	 * Constructs a new exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public SequenceNotExpected() {
-		super(ErrorCode.CasFail.value());
+	public SequenceNotMonotonicException() {
+		super(ErrorCode.SequenceNotMonotonic.value());
 	}
 
 	/**
@@ -48,8 +48,8 @@ public class SequenceNotExpected extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public SequenceNotExpected(String message) {
-		super(ErrorCode.CasFail.value(), message);
+	public SequenceNotMonotonicException(String message) {
+		super(ErrorCode.SequenceNotMonotonic.value(), message);
 	}
 
 	/**
@@ -66,8 +66,8 @@ public class SequenceNotExpected extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public SequenceNotExpected(String message, Throwable cause) {
-		super(ErrorCode.CasFail.value(), message, cause);
+	public SequenceNotMonotonicException(String message, Throwable cause) {
+		super(ErrorCode.SequenceNotMonotonic.value(), message, cause);
 	}
 
 	/**
@@ -84,7 +84,7 @@ public class SequenceNotExpected extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public SequenceNotExpected(Throwable cause) {
-		super(ErrorCode.CasFail.value(), cause);
+	public SequenceNotMonotonicException(Throwable cause) {
+		super(ErrorCode.SequenceNotMonotonic.value(), cause);
 	}
 }

@@ -32,9 +32,9 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.kademlia.exceptions.InvalidPeer;
-import io.bosonnetwork.kademlia.exceptions.InvalidToken;
-import io.bosonnetwork.kademlia.exceptions.InvalidValue;
+import io.bosonnetwork.kademlia.exceptions.InvalidPeerException;
+import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
+import io.bosonnetwork.kademlia.exceptions.InvalidValueException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
@@ -745,11 +745,11 @@ public class DHT extends BosonVerticle {
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteAddress(), value.getId())) {
 				log.warn("Received a store value request with invalid token from {}", request.getRemoteAddress());
-				throw new InvalidToken("Invalid token for STORE VALUE request");
+				throw new InvalidTokenException("Invalid token for STORE VALUE request");
 			}
 
 			if (!value.isValid())
-				throw new InvalidValue("Invalid value for STORE VALUE request");
+				throw new InvalidValueException("Invalid value for STORE VALUE request");
 
 			return value;
 		}).compose(value ->
@@ -807,11 +807,11 @@ public class DHT extends BosonVerticle {
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteAddress(), peer.getId())) {
 				log.warn("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
-				throw new InvalidToken("Invalid token for ANNOUNCE PEER request");
+				throw new InvalidTokenException("Invalid token for ANNOUNCE PEER request");
 			}
 
 			if (!peer.isValid())
-				throw new InvalidPeer("Invalid value for ANNOUNCE PEER request");
+				throw new InvalidPeerException("Invalid value for ANNOUNCE PEER request");
 
 			return peer;
 		}).compose(peer ->

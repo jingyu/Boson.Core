@@ -30,7 +30,7 @@ import java.util.function.LongSupplier;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.exceptions.ProtocolError;
+import io.bosonnetwork.kademlia.exceptions.ProtocolException;
 import io.bosonnetwork.kademlia.protocol.Error;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
@@ -544,7 +544,7 @@ public class RpcCall {
 	protected void respondWrongMethod(Message response) {
 		// Store response and set error cause for debugging
 		this.response = response;
-		this.cause = new ProtocolError("Got response with wrong method");
+		this.cause = new ProtocolException("Got response with wrong method");
 		// ERROR is a terminal state; stop the pending timeout timer (as fail()/respond() do).
 		cancelTimeoutTimer();
 		updateState(State.ERROR);

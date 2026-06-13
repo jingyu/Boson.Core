@@ -35,9 +35,9 @@ import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.SimpleNodeConfiguration;
 import io.bosonnetwork.kademlia.impl.TokenManager;
@@ -534,12 +534,12 @@ public class KadNode extends BosonVerticle implements Node {
 			// Immutable check
 			if (existing.isMutable() != value.isMutable()) {
 				log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
-				return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
+				return Future.failedFuture(new ImmutableSubstitutionException("Cannot replace mismatched mutable/immutable value"));
 			}
 
 			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 				log.warn("Rejecting value {}: sequence number not expected", value.getId());
-				return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+				return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
 			}
 
 			if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
@@ -668,7 +668,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
 				log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
-				return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+				return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
 			}
 
 			if (existing.hasPrivateKey() && !peer.hasPrivateKey()) {

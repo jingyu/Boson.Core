@@ -2,22 +2,22 @@ package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.kademlia.impl.ErrorCode;
 
-public class ProtocolError extends KadException {
+public class ProtocolException extends KadException {
 	private static final long serialVersionUID = 351835645866350822L;
 
-	public ProtocolError() {
+	public ProtocolException() {
 		super(ErrorCode.ProtocolError.value());
 	}
 
-	public ProtocolError(String message) {
+	public ProtocolException(String message) {
 		super(ErrorCode.ProtocolError.value(), message);
 	}
 
-	public ProtocolError(String message, Throwable cause) {
+	public ProtocolException(String message, Throwable cause) {
 		super(ErrorCode.ProtocolError.value(), message, cause);
 	}
 
-	public ProtocolError(Throwable cause) {
+	public ProtocolException(Throwable cause) {
 		super(ErrorCode.ProtocolError.value(), cause);
 	}
 }
