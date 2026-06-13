@@ -30,6 +30,31 @@ public class SuspiciousNodeDetectorTests {
 	}
 
 	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	public void testBanExpiresLazilyWithoutPurge() throws Exception {
+		// Short ban so the test is fast; high hit threshold replaced by a small one.
+		SuspiciousNodeDetector d = SuspiciousNodeDetector.create(60_000, 4, 500);
+		var addr = SocketAddress.inetSocketAddress(39001, "10.0.0.1");
+		for (var i = 0; i <= 4; i++)
+			d.inconsistent(addr, Id.random());
+
+		assertTrue(d.isBanned(addr.host()));
+		assertTrue(d.isSuspicious(addr));
+		assertEquals(1, d.getBannedSize());
+
+		// Wait past the ban duration but DO NOT purge.
+		Thread.sleep(700);
+
+		// Lazy expiry: the ban no longer takes effect even though purge() has not run and the entry remains.
+		assertFalse(d.isBanned(addr.host()), "ban must expire on read, independent of purge");
+		assertFalse(d.isSuspicious(addr));
+		assertEquals(1, d.getBannedSize(), "entry remains in the map until purge() — expiry is lazy on read");
+
+		d.purge();
+		assertEquals(0, d.getBannedSize());
+	}
+
+	@Test
 	@Timeout(value = 3, unit = TimeUnit.MINUTES)
 	public void testInconsistentId() throws Exception {
 		var addr1 = SocketAddress.inetSocketAddress(39001, "192.168.8.1");
