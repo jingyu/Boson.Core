@@ -25,8 +25,12 @@ package io.bosonnetwork;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
+
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.crypto.CryptoException;
 
@@ -44,10 +48,11 @@ import io.bosonnetwork.crypto.CryptoException;
  * <p>
  * <b>Lookup result conventions:</b> {@link #findNode} returns a {@link Result} that may carry the
  * node's IPv4 and/or IPv6 address (either side may be {@code null}). Single-result lookups
- * ({@link #findValue}, the single-result {@link #findPeer(Id)}) complete with {@code null} when
- * nothing is found, while collection lookups ({@link #getPeers}, {@link #findPeer(Id, int, int, LookupOption)})
- * complete with an empty list.
+ * ({@link #findValue}, {@link #getValue}, the single-result {@link #findPeer(Id)}, {@link #getPeer})
+ * complete with an {@link java.util.Optional} that is empty when nothing is found, while collection
+ * lookups ({@link #getPeers}, {@link #findPeer(Id, int, int, LookupOption)}) complete with an empty list.
  */
+@NullMarked
 public interface Node extends Identity {
 	/** The maximum age for a peer (2 hours). */
 	static final int MAX_PEER_AGE = 120 * 60 * 1000;             // 2 hours in milliseconds
@@ -160,7 +165,7 @@ public interface Node extends Identity {
 	 * @param option the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} containing the {@link Result} of the lookup
 	 */
-	CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option);
+	CompletableFuture<Result<NodeInfo>> findNode(Id id, @Nullable LookupOption option);
 
 	/**
 	 * Finds a value by its ID without the expected sequence number and default lookup option.
@@ -168,7 +173,7 @@ public interface Node extends Identity {
 	 * @param id the {@link Id} of the value to find
 	 * @return a {@link CompletableFuture} containing the {@link Value}
 	 */
-	default CompletableFuture<Value> findValue(Id id) {
+	default CompletableFuture<Optional<Value>> findValue(Id id) {
 		return findValue(id, -1, null);
 	}
 
@@ -180,7 +185,7 @@ public interface Node extends Identity {
 	 *                               use -1 if no specific sequence number is expected
 	 * @return a CompletableFuture containing the result value if found, or null if not found
 	 */
-	default CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber) {
+	default CompletableFuture<Optional<Value>> findValue(Id id, int expectedSequenceNumber) {
 		return findValue(id, expectedSequenceNumber, null);
 	}
 
@@ -191,7 +196,7 @@ public interface Node extends Identity {
 	 * @param option the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} that completes with the found value or null if not found
 	 */
-	default CompletableFuture<Value> findValue(Id id, LookupOption option) {
+	default CompletableFuture<Optional<Value>> findValue(Id id, @Nullable LookupOption option) {
 		return findValue(id, -1, option);
 	}
 
@@ -203,7 +208,7 @@ public interface Node extends Identity {
 	 * @param option the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} containing the {@link Value}
 	 */
-	CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option);
+	CompletableFuture<Optional<Value>> findValue(Id id, int expectedSequenceNumber, @Nullable LookupOption option);
 
 	/**
 	 * Stores a value in the network without persistence.
@@ -254,9 +259,9 @@ public interface Node extends Identity {
 	 * @param id the {@link Id} to find peers for
 	 * @return a {@link CompletableFuture} containing the {@link PeerInfo}, or {@code null} if not found
 	 */
-	default CompletableFuture<PeerInfo> findPeer(Id id) {
+	default CompletableFuture<Optional<PeerInfo>> findPeer(Id id) {
 		return findPeer(id, -1, 1, null)
-				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
+				.thenApply(peers -> peers.isEmpty() ? Optional.empty() : Optional.of(peers.get(0)));
 	}
 
 
@@ -268,9 +273,9 @@ public interface Node extends Identity {
 	 *                               use -1 if no specific sequence number is expected
 	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
 	 */
-	default CompletableFuture<PeerInfo> findPeer(Id id, int expectedSequenceNumber) {
+	default CompletableFuture<Optional<PeerInfo>> findPeer(Id id, int expectedSequenceNumber) {
 		return findPeer(id, expectedSequenceNumber, 1,null)
-				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
+				.thenApply(peers -> peers.isEmpty() ? Optional.empty() : Optional.of(peers.get(0)));
 	}
 
 	/**
@@ -280,9 +285,9 @@ public interface Node extends Identity {
 	 * @param option the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
 	 */
-	default CompletableFuture<PeerInfo> findPeer(Id id, LookupOption option) {
+	default CompletableFuture<Optional<PeerInfo>> findPeer(Id id, @Nullable LookupOption option) {
 		return findPeer(id, -1, 1, option)
-				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
+				.thenApply(peers -> peers.isEmpty() ? Optional.empty() : Optional.of(peers.get(0)));
 	}
 
 	/**
@@ -294,9 +299,9 @@ public interface Node extends Identity {
 	 * @param option                 the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} containing the {@link PeerInfo} or null if not found
 	 */
-	default CompletableFuture<PeerInfo> findPeer(Id id, int expectedSequenceNumber, LookupOption option) {
+	default CompletableFuture<Optional<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, @Nullable LookupOption option) {
 		return findPeer(id, expectedSequenceNumber, 1, option)
-				.thenApply(peers -> peers.isEmpty() ? null : peers.get(0));
+				.thenApply(peers -> peers.isEmpty() ? Optional.empty() : Optional.of(peers.get(0)));
 	}
 
 	/**
@@ -309,7 +314,7 @@ public interface Node extends Identity {
 	 * @param option                 the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} that will complete with a list of {@link PeerInfo} objects
 	 */
-	CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option);
+	CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, @Nullable LookupOption option);
 
 	/**
 	 * Announces a peer to the network without persistence.
@@ -361,7 +366,7 @@ public interface Node extends Identity {
 	 * @param valueId the {@link Id} of the value to retrieve.
 	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	CompletableFuture<Value> getValue(Id valueId);
+	CompletableFuture<Optional<Value>> getValue(Id valueId);
 
 	/**
 	 * Removes the value with the given ID from the node's local storage.
@@ -394,7 +399,7 @@ public interface Node extends Identity {
 	 * @param fingerprint the fingerprint of the peer to retrieve information for.
 	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	CompletableFuture<PeerInfo> getPeer(Id peerId, long fingerprint);
+	CompletableFuture<Optional<PeerInfo>> getPeer(Id peerId, long fingerprint);
 
 	/**
 	 * Removes the peer entry with the given ID and fingerprint from the node's local storage.

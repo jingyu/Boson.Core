@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -300,7 +301,7 @@ public class NodeAsyncTests {
 
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
-					var future = (ContextualFuture<PeerInfo>) node.findPeer(p.getId());
+					var future = ((ContextualFuture<Optional<PeerInfo>>) node.findPeer(p.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 						context.verify(() -> {
@@ -322,7 +323,7 @@ public class NodeAsyncTests {
 
 					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
-						var future = (ContextualFuture<PeerInfo>) node.findPeer(p.getId());
+						var future = ((ContextualFuture<Optional<PeerInfo>>) node.findPeer(p.getId())).thenApply(o -> o.orElse(null));
 						return future.thenAccept(result -> {
 							System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 							context.verify(() -> {
@@ -348,7 +349,7 @@ public class NodeAsyncTests {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-					var future = (ContextualFuture<Value>) node.findValue(v.getId());
+					var future = ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
@@ -377,7 +378,7 @@ public class NodeAsyncTests {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-					var future = (ContextualFuture<Value>) node.findValue(v.getId());
+					var future = ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
@@ -408,7 +409,7 @@ public class NodeAsyncTests {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-						return ((ContextualFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
+						return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
 							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 							context.verify(() -> {
 								assertNotNull(result);
@@ -444,7 +445,7 @@ public class NodeAsyncTests {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-					return ((ContextualFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
+					return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
 						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
@@ -480,7 +481,7 @@ public class NodeAsyncTests {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-						return ((ContextualFuture<Value>) node.findValue(v.getId())).thenAccept(result -> {
+						return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
 							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 							context.verify(() -> {
 								assertNotNull(result);

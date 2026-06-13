@@ -24,6 +24,7 @@
 package io.bosonnetwork.kademlia.exceptions;
 
 import io.bosonnetwork.BosonException;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
  * Signals that a Kademlia exception of some sort has occurred.
@@ -107,5 +108,34 @@ public class KadException extends BosonException {
 	 */
 	public int getCode() {
 		return code;
+	}
+
+	/**
+	 * Maps a wire error code (and optional message) to the corresponding {@code KadException}
+	 * subtype, allowing a remote {@code Error} response to be surfaced as a typed exception.
+	 * Codes without a dedicated subtype yield a plain {@code KadException} carrying the code.
+	 *
+	 * @param code    the numeric error code (see {@link ErrorCode}).
+	 * @param message the human-readable error message, may be {@code null}.
+	 * @return a {@code KadException} of the most specific matching type.
+	 */
+	public static KadException fromErrorCode(int code, String message) {
+		return switch (ErrorCode.valueOf(code)) {
+			case IOError -> new IOError(message);
+			case CryptoError -> new CryptoError(message);
+			case ValueNotExists -> new ValueNotExists(message);
+			case NotValueOwner -> new NotOwnerException(message);
+			case ValueNoRecipient -> new ValueNoRecipient(message);
+			case ProtocolError -> new ProtocolError(message);
+			case InvalidSignature -> new InvalidSignature(message);
+			case CasFail -> new SequenceNotExpected(message);
+			case SequenceNotMonotonic -> new SequenceNotMonotonic(message);
+			case ImmutableSubstitutionFail -> new ImmutableSubstitutionFail(message);
+			case InvalidToken -> new InvalidToken(message);
+			case InvalidValue -> new InvalidValue(message);
+			case InvalidPeer -> new InvalidPeer(message);
+			// GenericError, ServerError, MethodUnknown, MessageTooBig, SaltTooBig, Success, Unknown
+			default -> new KadException(code, message);
+		};
 	}
 }

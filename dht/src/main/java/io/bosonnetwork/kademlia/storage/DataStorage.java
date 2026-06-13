@@ -87,6 +87,21 @@ public interface DataStorage {
 	Future<Value> putValue(Value value, boolean persistent);
 
 	/**
+	 * Atomically validates and stores a value: the existence check, immutable/sequence/owner
+	 * validation, and the write are performed within a single transaction, eliminating the
+	 * read-then-write race when concurrent stores target the same id.
+	 *
+	 * @param value                  the value to store
+	 * @param expectedSequenceNumber CAS guard: if &gt;= 0, reject when the stored sequence number exceeds it
+	 * @param persistent             true to store persistently
+	 * @param failIfNotOwner         if the stored value is owned by this node (has a private key) and the
+	 *                               new value is not: when {@code true} fail with {@code NotOwnerException},
+	 *                               when {@code false} keep the existing value (no-op)
+	 * @return a {@link Future} of the effective stored {@link Value}
+	 */
+	Future<Value> putValue(Value value, int expectedSequenceNumber, boolean persistent, boolean failIfNotOwner);
+
+	/**
 	 * Retrieves a value from the local storage by its identifier.
 	 *
 	 * @param id the identifier of the value
@@ -164,6 +179,21 @@ public interface DataStorage {
 	 * @return a {@link Future} containing the stored {@link PeerInfo}
 	 */
 	Future<PeerInfo> putPeer(PeerInfo peerInfo, boolean persistent);
+
+	/**
+	 * Atomically validates and stores a peer: the existence check, sequence/owner validation, and the
+	 * write are performed within a single transaction, eliminating the read-then-write race when
+	 * concurrent announces target the same (id, fingerprint).
+	 *
+	 * @param peerInfo               the peer information to store
+	 * @param expectedSequenceNumber CAS guard: if &gt;= 0, reject when the stored sequence number exceeds it
+	 * @param persistent             true to store persistently
+	 * @param failIfNotOwner         if the stored peer is owned by this node and the new one is not:
+	 *                               when {@code true} fail with {@code NotOwnerException}, when {@code false}
+	 *                               keep the existing peer (no-op)
+	 * @return a {@link Future} of the effective stored {@link PeerInfo}
+	 */
+	Future<PeerInfo> putPeer(PeerInfo peerInfo, int expectedSequenceNumber, boolean persistent, boolean failIfNotOwner);
 
 	/**
 	 * Stores a list of peer information.

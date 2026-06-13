@@ -251,6 +251,18 @@ public class RpcCall {
 	}
 
 	/**
+	 * Gets the cause of failure for this call, if any.
+	 * <p>
+	 * For an {@link State#ERROR ERROR} response this is the typed {@link io.bosonnetwork.kademlia.exceptions.KadException}
+	 * translated from the remote {@link Error}; for a locally failed call it is the failure cause.
+	 *
+	 * @return the failure cause, or {@code null} if the call did not fail.
+	 */
+	public Throwable getCause() {
+		return cause;
+	}
+
+	/**
 	 * Checks if the RPC call is pending (i.e., not in a final state).
 	 *
 	 * @return true if the state is UNSENT, SENT, or STALLED, false otherwise
