@@ -534,7 +534,10 @@ public class RpcServer implements Measured {
 				if (message.getMethod() != call.getRequest().getMethod()) {
 					log.warn("Got response with wrong method {} from {}@{} for {}",
 							message.getMethod(), remoteId, remoteAddress, call.getRequest().getMethod());
-					call.respondWrongMethod(message);
+					// This is a terminal error for the call: remove it from the pending map
+					// (race-safe, mirroring the normal response path) so it is not leaked.
+					if (pendingCalls.remove(message.getTxid(), call))
+						call.respondWrongMethod(message);
 					suspiciousNodeDetector.malformedMessage(remoteAddress);
 					return;
 				}
