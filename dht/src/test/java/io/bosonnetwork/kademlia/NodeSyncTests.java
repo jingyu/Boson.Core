@@ -240,7 +240,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
-				var result = node.findPeer(p.getId(), 0).get();
+				var result = node.findPeer(p.getId(), 0).get().orElse(null);
 				System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
@@ -262,7 +262,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
-				var result = node.findPeer(p.getId()).get();
+				var result = node.findPeer(p.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
@@ -285,7 +285,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-				var result = node.findValue(v.getId()).get();
+				var result = node.findValue(v.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
@@ -313,7 +313,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-				var result = node.findValue(v.getId()).get();
+				var result = node.findValue(v.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
@@ -338,7 +338,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-				var result = node.findValue(v.getId()).get();
+				var result = node.findValue(v.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
@@ -373,7 +373,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-				var result = node.findValue(v.getId()).get();
+				var result = node.findValue(v.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
@@ -405,7 +405,7 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
-				var result = node.findValue(v.getId()).get();
+				var result = node.findValue(v.getId()).get().orElse(null);
 				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);

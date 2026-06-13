@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -454,7 +455,7 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
+	public ContextualFuture<Optional<Value>> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
 		Objects.requireNonNull(id, "Invalid value id");
 		checkRunning();
 
@@ -487,7 +488,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}).onComplete(promise);
 		});
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.of(promise.future().map(Optional::ofNullable));
 	}
 
 	private Future<Void> doFindValue(Id id, int expectedSequenceNumber, LookupOption option, EligibleValue result) {
@@ -772,10 +773,10 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<Value> getValue(Id valueId) {
+	public ContextualFuture<Optional<Value>> getValue(Id valueId) {
 		Objects.requireNonNull(valueId, "valueId");
 		checkRunning();
-		Future<Value> future = storage.getValue(valueId);
+		Future<Optional<Value>> future = storage.getValue(valueId).map(Optional::ofNullable);
 		return ContextualFuture.of(future);
 	}
 
@@ -804,10 +805,10 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
+	public ContextualFuture<Optional<PeerInfo>> getPeer(Id peerId, long fingerprint) {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
-		Future<PeerInfo> future = storage.getPeer(peerId, fingerprint);
+		Future<Optional<PeerInfo>> future = storage.getPeer(peerId, fingerprint).map(Optional::ofNullable);
 		return ContextualFuture.of(future);
 	}
 

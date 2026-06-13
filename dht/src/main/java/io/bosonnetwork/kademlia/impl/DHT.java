@@ -32,12 +32,10 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
-import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
 import io.bosonnetwork.kademlia.exceptions.InvalidPeer;
 import io.bosonnetwork.kademlia.exceptions.InvalidToken;
 import io.bosonnetwork.kademlia.exceptions.InvalidValue;
 import io.bosonnetwork.kademlia.exceptions.KadException;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.protocol.Error;
@@ -754,32 +752,11 @@ public class DHT extends BosonVerticle {
 				throw new InvalidValue("Invalid value for STORE VALUE request");
 
 			return value;
-		}).compose(value -> {
-			return storage.getValue(value.getId()).compose(existing -> {
-				if (existing != null) {
-					// Immutable check
-					if (existing.isMutable() != value.isMutable()) {
-						log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
-						return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
-					}
-
-					int expectedSequenceNumber = body.getExpectedSequenceNumber();
-					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
-						log.warn("Rejecting value {}: sequence number not expected", value.getId());
-						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
-					}
-
-					if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
-						// Skip update if the existing value is owned by this node and the new value is not.
-						// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
-						log.info("Skipping to update value for id {}: owned by this node", value.getId());
-						return Future.succeededFuture(existing);
-					}
-				}
-
-				return storage.putValue(value);
-			});
-		}).transform(ar -> {
+		}).compose(value ->
+			// Atomic validate-and-store: existence check + immutable/CAS/owner validation + write in one
+			// transaction (see DataStorage#putValue). failIfNotOwner=false: keep our own value on conflict.
+			storage.putValue(value, body.getExpectedSequenceNumber(), false, false)
+		).transform(ar -> {
 			Message response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
@@ -837,26 +814,10 @@ public class DHT extends BosonVerticle {
 				throw new InvalidPeer("Invalid value for ANNOUNCE PEER request");
 
 			return peer;
-		}).compose(peer -> {
-			return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
-				if (existing != null) {
-					int expectedSequenceNumber = body.getExpectedSequenceNumber();
-					if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
-						log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
-						return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
-					}
-
-					if (existing.hasPrivateKey() && !peer.hasPrivateKey()) {
-						// Skip update if the existing peer is owned by this node and the new peer is not.
-						// Should not throw NotOwnerException, just silently ignore to avoid disrupting valid operations.
-						log.info("Skipping to update peer for id {}: owned by this node", peer.getId());
-						return Future.succeededFuture(existing);
-					}
-				}
-
-				return storage.putPeer(peer);
-			});
-		}).transform(ar -> {
+		}).compose(peer ->
+			// Atomic validate-and-store (see DataStorage#putPeer). failIfNotOwner=false: keep our own peer on conflict.
+			storage.putPeer(peer, body.getExpectedSequenceNumber(), false, false)
+		).transform(ar -> {
 			Message response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());

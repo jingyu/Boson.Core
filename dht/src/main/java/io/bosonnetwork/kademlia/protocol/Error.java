@@ -60,8 +60,7 @@ public class Error implements Message.Body {
 	}
 
 	public KadException getCause() {
-		// TODO: convert the error message to the corresponding KadException
-		return null;
+		return KadException.fromErrorCode(code, message);
 	}
 
 	@Override

@@ -23,10 +23,18 @@
 package io.bosonnetwork.kademlia.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import org.junit.jupiter.api.Test;
 
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
+import io.bosonnetwork.kademlia.exceptions.InvalidPeer;
+import io.bosonnetwork.kademlia.exceptions.InvalidToken;
+import io.bosonnetwork.kademlia.exceptions.InvalidValue;
+import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.exceptions.ProtocolError;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotMonotonic;
 
 class ErrorCodeTests {
 	@Test
@@ -47,6 +55,35 @@ class ErrorCodeTests {
 	@Test
 	void valueOfUnknownCodeReturnsUnknown() {
 		assertEquals(ErrorCode.Unknown, ErrorCode.valueOf(99999));
+	}
+
+	@Test
+	void fromErrorCodeMapsToTypedException() {
+		assertInstanceOf(InvalidToken.class, KadException.fromErrorCode(400, "t"));
+		assertInstanceOf(InvalidValue.class, KadException.fromErrorCode(401, "v"));
+		assertInstanceOf(InvalidPeer.class, KadException.fromErrorCode(402, "p"));
+		assertInstanceOf(ProtocolError.class, KadException.fromErrorCode(203, "x"));
+		assertInstanceOf(SequenceNotExpected.class, KadException.fromErrorCode(301, "cas"));
+		assertInstanceOf(SequenceNotMonotonic.class, KadException.fromErrorCode(302, "seq"));
+		assertInstanceOf(ImmutableSubstitutionFail.class, KadException.fromErrorCode(303, "imm"));
+	}
+
+	@Test
+	void fromErrorCodeUnknownYieldsBaseExceptionPreservingCode() {
+		KadException e = KadException.fromErrorCode(201, "generic");
+		assertEquals(KadException.class, e.getClass());
+		assertEquals(201, e.getCode());
+
+		KadException e2 = KadException.fromErrorCode(99999, "weird");
+		assertEquals(KadException.class, e2.getClass());
+		assertEquals(99999, e2.getCode());
+	}
+
+	@Test
+	void errorBodyGetCauseProducesTypedException() {
+		var err = new io.bosonnetwork.kademlia.protocol.Error(400, "bad token");
+		assertInstanceOf(InvalidToken.class, err.getCause());
+		assertEquals(400, err.getCause().getCode());
 	}
 
 	@Test

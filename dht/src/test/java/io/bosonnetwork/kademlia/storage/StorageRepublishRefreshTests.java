@@ -26,6 +26,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -37,6 +40,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 
 /**
  * Regression tests for the upsert keep-alive semantics: re-announcing an existing value/peer
@@ -83,6 +88,56 @@ class StorageRepublishRefreshTests {
 			});
 			context.completeNow();
 		}));
+	}
+
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	void atomicPutValueRejectsStaleCas(Vertx vertx, VertxTestContext context) throws Exception {
+		Value v = Value.signedBuilder().sequenceNumber(5).data("v1".getBytes()).build();
+		Value newer = v.update().data("v2".getBytes()).build(); // sequence 6
+
+		newStorage(vertx)
+				.compose(storage -> storage.putValue(v, true).map(x -> storage))
+				// CAS: stored seq (5) exceeds expected (4) -> reject.
+				.compose(storage -> storage.putValue(newer, 4, false, true))
+				.onComplete(context.failing(err -> {
+					context.verify(() -> assertInstanceOf(SequenceNotExpected.class, err));
+					context.completeNow();
+				}));
+	}
+
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	void atomicPutValueOwnerSkipKeepsExisting(Vertx vertx, VertxTestContext context) throws Exception {
+		Value owned = Value.signedBuilder().data("owned".getBytes()).build();
+		Value notOwned = owned.withoutPrivateKey();
+
+		newStorage(vertx)
+				.compose(storage -> storage.putValue(owned, true).map(x -> storage))
+				// failIfNotOwner=false: a non-owner re-store must keep our owned copy (private key retained).
+				.compose(storage -> storage.putValue(notOwned, -1, false, false).map(x -> storage))
+				.compose(storage -> storage.getValue(owned.getId()))
+				.onComplete(context.succeeding(reloaded -> {
+					context.verify(() -> assertTrue(reloaded.hasPrivateKey(),
+							"owned value must be preserved on a non-owner re-store"));
+					context.completeNow();
+				}));
+	}
+
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	void atomicPutValueOwnerFailWhenRequested(Vertx vertx, VertxTestContext context) throws Exception {
+		Value owned = Value.signedBuilder().data("owned".getBytes()).build();
+		Value notOwned = owned.withoutPrivateKey();
+
+		newStorage(vertx)
+				.compose(storage -> storage.putValue(owned, true).map(x -> storage))
+				// failIfNotOwner=true: reject a non-owner overwrite of our owned value.
+				.compose(storage -> storage.putValue(notOwned, -1, false, true))
+				.onComplete(context.failing(err -> {
+					context.verify(() -> assertInstanceOf(NotOwnerException.class, err));
+					context.completeNow();
+				}));
 	}
 
 	@Test

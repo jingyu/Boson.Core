@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -141,8 +142,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Value> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
-				return ContextualFuture.succeededFuture(values.get(id));
+			public CompletableFuture<Optional<Value>> findValue(Id id, int expectedSequenceNumber, LookupOption option) {
+				return ContextualFuture.succeededFuture(Optional.ofNullable(values.get(id)));
 			}
 
 			@Override
@@ -172,8 +173,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Value> getValue(Id id) {
-				return ContextualFuture.succeededFuture(values.get(id));
+			public CompletableFuture<Optional<Value>> getValue(Id id) {
+				return ContextualFuture.succeededFuture(Optional.ofNullable(values.get(id)));
 			}
 
 			@Override
@@ -192,8 +193,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<PeerInfo> getPeer(Id peerId, long fingerprint) {
-				return ContextualFuture.succeededFuture(null);
+			public CompletableFuture<Optional<PeerInfo>> getPeer(Id peerId, long fingerprint) {
+				return ContextualFuture.succeededFuture(Optional.empty());
 			}
 
 			@Override

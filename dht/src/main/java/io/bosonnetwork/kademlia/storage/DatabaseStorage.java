@@ -39,6 +39,10 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.database.VersionedSchema;
 import io.bosonnetwork.database.VertxDatabase;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
+import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
 
 public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	protected long valueExpiration;
@@ -118,6 +122,40 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("putValue failed", cause))
 		);
+	}
+
+	@Override
+	public Future<Value> putValue(Value value, int expectedSequenceNumber, boolean persistent, boolean failIfNotOwner) {
+		getLogger().debug("Atomically putting value with id: {}, expectedSeq: {}, persistent: {}",
+				value.getId(), expectedSequenceNumber, persistent);
+		// Read, validate, and write within a single transaction so concurrent stores of the same id
+		// cannot interleave between the existence check and the write.
+		return withTransaction(c ->
+				SqlTemplate.forQuery(c, getDialect().selectValue())
+						.execute(Map.of("id", value.getId().bytesUnsafe()))
+						.map(rows -> findUnique(rows, DatabaseStorage::rowToValue))
+						.compose(existing -> {
+							if (existing != null) {
+								if (existing.isMutable() != value.isMutable())
+									return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
+
+								if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber)
+									return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+
+								if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
+									if (failIfNotOwner)
+										return Future.failedFuture(new NotOwnerException("new value no private key"));
+
+									// Owned by this node and the incoming value is not: keep the existing value.
+									return Future.succeededFuture(existing);
+								}
+							}
+
+							return SqlTemplate.forUpdate(c, getDialect().upsertValue())
+									.execute(valueToMap(value, persistent))
+									.map(v -> value);
+						})
+		).recover(DatabaseStorage::preserveKadException);
 	}
 
 	@Override
@@ -236,6 +274,42 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		).recover(cause ->
 				Future.failedFuture(new DataStorageException("putPeers failed", cause))
 		);
+	}
+
+	@Override
+	public Future<PeerInfo> putPeer(PeerInfo peerInfo, int expectedSequenceNumber, boolean persistent, boolean failIfNotOwner) {
+		getLogger().debug("Atomically putting peer with id: {}:{}, expectedSeq: {}, persistent: {}",
+				peerInfo.getId(), peerInfo.getFingerprint(), expectedSequenceNumber, persistent);
+		return withTransaction(c ->
+				SqlTemplate.forQuery(c, getDialect().selectPeer())
+						.execute(Map.of("id", peerInfo.getId().bytesUnsafe(), "fingerprint", peerInfo.getFingerprint()))
+						.map(rows -> findUnique(rows, DatabaseStorage::rowToPeer))
+						.compose(existing -> {
+							if (existing != null) {
+								if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber)
+									return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+
+								if (existing.hasPrivateKey() && !peerInfo.hasPrivateKey()) {
+									if (failIfNotOwner)
+										return Future.failedFuture(new NotOwnerException("new peer no private key"));
+
+									return Future.succeededFuture(existing);
+								}
+							}
+
+							return SqlTemplate.forUpdate(c, getDialect().upsertPeer())
+									.execute(peerToMap(peerInfo, persistent))
+									.map(v -> peerInfo);
+						})
+		).recover(DatabaseStorage::preserveKadException);
+	}
+
+	// Keep typed KadExceptions (e.g. SequenceNotExpected, ImmutableSubstitutionFail, NotOwnerException)
+	// intact so they map to the correct wire error codes; wrap only unexpected failures.
+	private static <T> Future<T> preserveKadException(Throwable cause) {
+		if (cause instanceof KadException)
+			return Future.failedFuture(cause);
+		return Future.failedFuture(new DataStorageException("atomic put failed", cause));
 	}
 
 	@Override

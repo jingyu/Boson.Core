@@ -24,6 +24,7 @@ package io.bosonnetwork.identifier;
 
 import java.util.Date;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -67,7 +68,7 @@ public class DHTResolver implements Resolver {
 	 *         given identifier, or {@code null} if no value is found.
 	 * @throws NullPointerException if {@code id} is {@code null}.
 	 */
-	protected CompletableFuture<Value> lookup(Id id, LookupOption option) {
+	protected CompletableFuture<Optional<Value>> lookup(Id id, LookupOption option) {
 		Objects.requireNonNull(id, "id");
 		return node.findValue(id, option);
 	}
@@ -94,11 +95,12 @@ public class DHTResolver implements Resolver {
 		LookupOption lookupOption = options != null && options.useCache() ?
 				LookupOption.ARBITRARY : LookupOption.OPTIMISTIC;
 
-		return lookup(id, lookupOption).thenApply(value -> {
+		return lookup(id, lookupOption).thenApply(v -> {
 			// If no value found in DHT, return the not found result
-			if (value == null)
+			if (v.isEmpty())
 				return ResolutionResult.notFound();
 
+			Value value = v.get();
 			// Check that the id matches the public key in the retrieved value
 			if (!Objects.equals(id, value.getPublicKey()))
 				return ResolutionResult.invalid();
