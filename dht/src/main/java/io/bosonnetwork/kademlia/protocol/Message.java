@@ -622,9 +622,9 @@ public class Message {
 					}
 					case "t":
 						txid = p.getLongValue();
-						if (txid == 0)
-							throw ctxt.weirdNumberException(txid, Integer.class,
-									"Invalid `[t]xid` field: should be non-zero integer");
+						if (txid <= 0)
+							throw ctxt.weirdNumberException(txid, Long.class,
+									"Invalid '[t]xid' field: should be a positive (unsigned) integer");
 						break;
 
 					case "q":
@@ -659,8 +659,21 @@ public class Message {
 				}
 			}
 
+			// 'y' carries both the message type and the RPC method; if it was absent,
+			// neither was resolved and the message is not a valid envelope.
+			if (type == null)
+				ctxt.reportInputMismatch(Message.class, "Missing or invalid '[y]' (type/method) field");
+
 			if (txid == 0)
 				ctxt.reportInputMismatch(Message.class, "Missing '[t]xid' field");
+
+			// A body is mandatory unless the message legitimately omits it:
+			//  - Void body: PING request/response, STORE_VALUE/ANNOUNCE_PEER responses.
+			//  - JsonNode body (UNKNOWN method): a forward-compatible catch-all that may carry
+			//    arbitrary content or none at all.
+			if (body == null && bodyClass != Void.class && bodyClass != JsonNode.class)
+				ctxt.reportInputMismatch(Message.class, "Missing '" + type.bodyFieldName()
+						+ "' body for " + method + " " + type + " message");
 
 			return new Message(type, method, txid, body, version);
 		}
