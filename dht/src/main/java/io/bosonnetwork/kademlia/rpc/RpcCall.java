@@ -533,6 +533,8 @@ public class RpcCall {
 		// Store response and set error cause for debugging
 		this.response = response;
 		this.cause = new ProtocolError("Got response with wrong method");
+		// ERROR is a terminal state; stop the pending timeout timer (as fail()/respond() do).
+		cancelTimeoutTimer();
 		updateState(State.ERROR);
 	}
 

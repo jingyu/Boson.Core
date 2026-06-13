@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.json.Json;
 
 class RoutingTableTests {
 	static final Faker faker = new Faker();
@@ -507,6 +510,40 @@ class RoutingTableTests {
 
 		System.out.println(tempFile);
 		//Files.delete(tempFile);
+	}
+
+	@Test
+	void testLoadMalformedFileMissingFields() throws Exception {
+		// A CBOR object that is a valid map but missing the required fields must be
+		// handled gracefully (logged & skipped), not crash startup with an NPE.
+		Map<String, Object> bad = new LinkedHashMap<>();
+		bad.put("foo", 1);
+		bad.put("entries", List.of());
+		Path tempFile = Files.createTempFile("malformedRoutingTable", ".cbor");
+		Files.write(tempFile, Json.cborMapper().writeValueAsBytes(bad));
+
+		RoutingTable loaded = new RoutingTable(localId);
+		loaded.load(tempFile); // must not throw
+		assertEquals(1, loaded.size());
+		assertEquals(0, loaded.getNumberOfEntries());
+
+		Files.delete(tempFile);
+	}
+
+	@Test
+	void testLoadGarbageFile() throws Exception {
+		// Arbitrary non-CBOR bytes must be handled gracefully.
+		byte[] garbage = new byte[256];
+		new Random(42).nextBytes(garbage);
+		Path tempFile = Files.createTempFile("garbageRoutingTable", ".cbor");
+		Files.write(tempFile, garbage);
+
+		RoutingTable loaded = new RoutingTable(localId);
+		loaded.load(tempFile); // must not throw
+		assertEquals(1, loaded.size());
+		assertEquals(0, loaded.getNumberOfEntries());
+
+		Files.delete(tempFile);
 	}
 
 	@Test

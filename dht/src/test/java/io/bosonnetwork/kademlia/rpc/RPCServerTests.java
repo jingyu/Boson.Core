@@ -24,6 +24,7 @@
 package io.bosonnetwork.kademlia.rpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.net.Inet4Address;
 import java.util.ArrayList;
@@ -33,6 +34,7 @@ import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
 import io.vertx.core.Context;
@@ -88,6 +90,7 @@ public class RPCServerTests {
 		private final NodeInfo nodeInfo;
 
 		private boolean simulateAbnormal;
+		private boolean simulateWrongMethod;
 
 		int sendFailed = 0;
 
@@ -153,6 +156,10 @@ public class RPCServerTests {
 			this.simulateAbnormal = simulateAbnormal;
 		}
 
+		public void setSimulateWrongMethod(boolean simulateWrongMethod) {
+			this.simulateWrongMethod = simulateWrongMethod;
+		}
+
 		protected void sendCall(RpcCall call) {
 			//noinspection CodeBlock2Expr
 			runOnContext(v -> {
@@ -195,6 +202,14 @@ public class RPCServerTests {
 		@SuppressWarnings("unchecked")
 		private void onRequest(Message message) {
 			Message response;
+
+			if (simulateWrongMethod) {
+				// Always reply with a response whose method differs from the request's method.
+				response = Message.message(Message.Type.RESPONSE, Message.Method.UNKNOWN, message.getTxid(), null);
+				response.setRemote(message.getId(), message.getRemoteAddress());
+				sendMessage(response);
+				return;
+			}
 
 			if (simulateAbnormal) {
 				double chance = Random.random().nextDouble();
@@ -661,6 +676,59 @@ public class RPCServerTests {
 			});
 
 			context.completeNow();
+		}));
+	}
+
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	public void testWrongMethodResponseDoesNotLeakPendingCalls(Vertx vertx, VertxTestContext context) {
+		final int CALLS = 50;
+		final AtomicInteger errors = new AtomicInteger();
+
+		TestNode node1 = new TestNode(localAddr, 8888);
+		TestNode node2 = new TestNode(localAddr, 8889);
+		// node2 always answers with a response whose method differs from the request.
+		node2.setSimulateWrongMethod(true);
+
+		Future.succeededFuture().compose(unused -> {
+			Future<String> future1 = vertx.deployVerticle(node1);
+			Future<String> future2 = vertx.deployVerticle(node2);
+			return Future.all(future1, future2);
+		}).compose(unused -> {
+			Promise<Void> promise = Promise.promise();
+			new Thread(() -> {
+				for (int i = 0; i < CALLS; i++) {
+					RpcCall call = new RpcCall(node2.getNodeInfo(), Message.pingRequest());
+					call.addListener((c, previous, current) -> {
+						if (current == RpcCall.State.ERROR)
+							errors.incrementAndGet();
+					});
+					node1.sendCall(call);
+					try {
+						Thread.sleep(10);
+					} catch (InterruptedException ignored) {
+					}
+				}
+
+				// Wait well under RPC_CALL_TIMEOUT_MAX (10s): with the leak fixed, the wrong-method
+				// calls are removed promptly; without the fix they would linger until timeout/shutdown.
+				try {
+					Thread.sleep(2000);
+				} catch (InterruptedException ignored) {
+				}
+				promise.complete();
+			}).start();
+			return promise.future();
+		}).onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertEquals(CALLS, errors.get(), "Every wrong-method response should yield an ERROR state");
+				assertFalse(node1.rpcServer.hasPendingCalls(),
+						"Wrong-method responses must not leak entries in pendingCalls");
+				assertEquals(0, node1.timeoutCalls, "Wrong-method calls must not be counted as timeouts");
+			});
+
+			Future.all(vertx.undeploy(node1.deploymentID()), vertx.undeploy(node2.deploymentID()))
+					.onComplete(ar -> context.completeNow());
 		}));
 	}
 

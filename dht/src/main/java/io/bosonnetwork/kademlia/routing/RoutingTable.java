@@ -469,22 +469,29 @@ public class RoutingTable {
 			if (root.isEmpty())
 				return;
 
-			Id nodeId = null;
+			// A corrupt or partial file may be missing required fields; guard against
+			// NullPointerException (which would escape the IOException handler below) by
+			// validating their presence explicitly.
+			JsonNode idNode = root.get("nodeId");
+			JsonNode timestampNode = root.get("timestamp");
+			if (idNode == null || timestampNode == null)
+				throw new IOException("Missing 'nodeId' or 'timestamp' field");
+
+			Id nodeId;
 			try {
-				byte[] idBytes = root.get("nodeId").binaryValue();
-				nodeId = Id.of(idBytes);
+				nodeId = Id.of(idNode.binaryValue());
 			} catch (IllegalArgumentException e) {
 				throw new IOException("Invalid nodeId", e);
 			}
 
 			boolean idMatched = nodeId.equals(localId);
-			long timestamp = root.get("timestamp").asLong();
+			long timestamp = timestampNode.asLong();
 			long age = System.currentTimeMillis() - timestamp;
 			boolean staled = age > MAX_AGE;
 
 			JsonNode nodes = root.get("entries");
-			if (!nodes.isArray())
-				throw new IOException("Invalid node entries");
+			if (nodes == null || !nodes.isArray())
+				throw new IOException("Missing or invalid node entries");
 
 			// Load and insert entries into the routing table
 			for (JsonNode node : nodes) {
