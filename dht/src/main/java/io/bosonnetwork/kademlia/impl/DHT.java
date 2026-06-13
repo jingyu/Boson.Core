@@ -79,7 +79,8 @@ public class DHT extends BosonVerticle {
 	public static final int RANDOM_PING_INTERVAL = 10 * 1000;                       // 10 seconds
 
 	public static final int SUSPICIOUS_NODES_PURGE_INITIAL_DELAY = 60 * 1000;       // 60 seconds
-	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 30 * 1000;            // 30 seconds
+	// Bans/observations expire lazily on read, so this only governs memory reclamation, not accuracy.
+	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 60 * 1000;            // 60 seconds
 
 	public static final int BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
 	public static final int USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES = 8;

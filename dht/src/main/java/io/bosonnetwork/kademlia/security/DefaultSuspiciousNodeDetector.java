@@ -45,8 +45,9 @@ import io.bosonnetwork.Id;
  * It should be used in a single-threaded environment or externally synchronized if used in a
  * multithreaded context.</p>
  *
- * <p>Usage note: The {@link #purge()} method should be called periodically (e.g., every 2 minutes) to
- * remove expired entries and promote nodes to the suspicious list.</p>
+ * <p>Bans and observations expire lazily on read ({@link #isBanned(String)}, {@link #isSuspicious(SocketAddress, Id)}),
+ * so their accuracy does not depend on how often {@link #purge()} runs. {@link #purge()} only reclaims
+ * memory by dropping already-expired entries; calling it roughly every minute is sufficient.</p>
  */
 public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	private static final int SUSPICIOUS_OBSERVATION_HITS = 8;
@@ -133,11 +134,12 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 */
 	@Override
 	public boolean isSuspicious(SocketAddress addr, Id expected) {
-		if (bannedNodes.containsKey(addr.hostAddress()))
+		if (isBanned(addr.hostAddress()))
 			return true;
 
 		ObservationRecord ob = observedNodes.get(addr);
-		if (ob == null)
+		// Lazy expiry: an observation past its period no longer counts, even if purge() hasn't run yet.
+		if (ob == null || System.currentTimeMillis() > ob.expirationTime)
 			return false;
 
 		if (expected != null)
@@ -167,7 +169,10 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 */
 	@Override
 	public boolean isBanned(String host) {
-		return bannedNodes.containsKey(host);
+		// Lazy expiry: a ban stops taking effect at its deadline regardless of when purge() runs,
+		// so ban accuracy does not depend on the purge interval. purge() only reclaims memory.
+		Long expiration = bannedNodes.get(host);
+		return expiration != null && System.currentTimeMillis() < expiration;
 	}
 
 	@Override
@@ -325,8 +330,9 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	/**
 	 * Removes expired entries and promotes nodes to the suspicious list if they exceed the hit threshold.
 	 *
-	 * <p><strong>Important:</strong> This method should be called periodically (recommended: every 2 minutes)
-	 * to maintain the detector's state and prevent memory leaks.</p>
+	 * <p><strong>Important:</strong> This method should be called periodically (recommended: every minute)
+	 * to reclaim memory. It is <em>not</em> required for ban/observation accuracy — those expire lazily on
+	 * read — so the exact interval only trades memory footprint against scan frequency.</p>
 	 */
 	public void purge() {
 		long now = System.currentTimeMillis();
