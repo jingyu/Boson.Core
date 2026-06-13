@@ -56,6 +56,8 @@ public enum ErrorCode {
 
 	Unknown(-1);
 
+	private static final ErrorCode[] VALUES = values();
+
 	private final int value;
 
 	private ErrorCode(int value) {
@@ -66,20 +68,20 @@ public enum ErrorCode {
 		return value;
 	}
 
+	/**
+	 * Returns the {@code ErrorCode} for the given numeric code, or {@link #Unknown}
+	 * if no constant matches. Derived from the declared constants so that newly added
+	 * codes (e.g. the {@code 400}-{@code 402} validation errors) are mapped automatically.
+	 *
+	 * @param code the numeric error code.
+	 * @return the matching {@code ErrorCode}, or {@link #Unknown} if none matches.
+	 */
 	public static ErrorCode valueOf(int code) {
-		return switch (code) {
-			case 0 -> Success;
-			case 201 -> GenericError;
-			case 202 -> ServerError;
-			case 203 -> ProtocolError;
-			case 204 -> MethodUnknown;
-			case 205 -> MessageTooBig;
-			case 206 -> InvalidSignature;
-			case 207 -> SaltTooBig;
-			case 301 -> CasFail;
-			case 302 -> SequenceNotMonotonic;
-			case 303 -> ImmutableSubstitutionFail;
-			default -> Unknown;
-		};
+		for (ErrorCode ec : VALUES) {
+			if (ec.value == code)
+				return ec;
+		}
+
+		return Unknown;
 	}
 }
