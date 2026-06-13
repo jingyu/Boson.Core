@@ -10,20 +10,24 @@ public interface SqlDialect {
 					#{id}, #{publicKey}, #{privateKey}, #{recipient}, #{nonce}, #{sequenceNumber},
 					#{signature}, #{data}, #{persistent}, #{created}, #{updated}
 				) ON CONFLICT(id) DO UPDATE SET
-					public_key = excluded.public_key,
+					-- Content is replaced only when the incoming value is newer (higher sequence number);
+					-- otherwise it is preserved. The `updated` timestamp is always refreshed so that
+					-- re-announcing an existing value (same sequence, or immutable values with seq 0)
+					-- keeps it alive against purge() — see Kademlia republish (paper 2.5).
+					public_key = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.public_key ELSE valores.public_key END,
 					private_key = CASE
 						WHEN excluded.private_key IS NOT NULL
 						THEN excluded.private_key
 						ELSE valores.private_key
 					END,
-					recipient = excluded.recipient,
-					nonce = excluded.nonce,
-					sequence_number = excluded.sequence_number,
-					signature = excluded.signature,
-					data = excluded.data,
-					persistent = excluded.persistent,
+					recipient = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.recipient ELSE valores.recipient END,
+					nonce = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.nonce ELSE valores.nonce END,
+					signature = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.signature ELSE valores.signature END,
+					data = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.data ELSE valores.data END,
+					sequence_number = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.sequence_number ELSE valores.sequence_number END,
+					-- Once persistent, stay persistent: an inbound (non-persistent) re-store must not downgrade it.
+					persistent = valores.persistent OR excluded.persistent,
 					updated = excluded.updated
-				WHERE valores.sequence_number < excluded.sequence_number
 				""";
 	}
 
@@ -78,21 +82,23 @@ public interface SqlDialect {
 					#{id}, #{fingerprint}, #{privateKey}, #{nonce}, #{sequenceNumber}, #{nodeId}, #{nodeSignature},
 					#{signature}, #{endpoint}, #{extra}, #{persistent}, #{created}, #{updated}
 				) ON CONFLICT(id, fingerprint) DO UPDATE SET
+					-- Content is replaced only when the incoming peer is newer (higher sequence number);
+					-- the `updated` timestamp is always refreshed so re-announcing keeps it alive against purge().
 					private_key = CASE
 						WHEN excluded.private_key IS NOT NULL
 						THEN excluded.private_key
 						ELSE peers.private_key
 					END,
-					nonce = excluded.nonce,
-					sequence_number = excluded.sequence_number,
-					node_id = excluded.node_id,
-					node_signature = excluded.node_signature,
-					signature = excluded.signature,
-					endpoint = excluded.endpoint,
-					extra = excluded.extra,
-					persistent = excluded.persistent,
+					nonce = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.nonce ELSE peers.nonce END,
+					node_id = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.node_id ELSE peers.node_id END,
+					node_signature = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.node_signature ELSE peers.node_signature END,
+					signature = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.signature ELSE peers.signature END,
+					endpoint = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.endpoint ELSE peers.endpoint END,
+					extra = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.extra ELSE peers.extra END,
+					sequence_number = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.sequence_number ELSE peers.sequence_number END,
+					-- Once persistent, stay persistent: an inbound (non-persistent) re-store must not downgrade it.
+					persistent = peers.persistent OR excluded.persistent,
 					updated = excluded.updated
-				WHERE peers.sequence_number < excluded.sequence_number
 				""";
 	}
 
