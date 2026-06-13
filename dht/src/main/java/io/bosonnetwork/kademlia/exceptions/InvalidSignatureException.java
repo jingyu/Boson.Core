@@ -26,18 +26,18 @@ package io.bosonnetwork.kademlia.exceptions;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
- * Signals that the value's sequence number is less than the required.
+ * Signals that the signature verification failed.
  */
-public class SequenceNotMonotonic extends KadException {
-	private static final long serialVersionUID = -7289165754320345609L;
+public class InvalidSignatureException extends KadException {
+	private static final long serialVersionUID = -5069409883215747477L;
 
 	/**
 	 * Constructs a new exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public SequenceNotMonotonic() {
-		super(ErrorCode.SequenceNotMonotonic.value());
+	public InvalidSignatureException() {
+		super(ErrorCode.InvalidSignature.value());
 	}
 
 	/**
@@ -48,8 +48,8 @@ public class SequenceNotMonotonic extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public SequenceNotMonotonic(String message) {
-		super(ErrorCode.SequenceNotMonotonic.value(), message);
+	public InvalidSignatureException(String message) {
+		super(ErrorCode.InvalidSignature.value(), message);
 	}
 
 	/**
@@ -66,8 +66,8 @@ public class SequenceNotMonotonic extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public SequenceNotMonotonic(String message, Throwable cause) {
-		super(ErrorCode.SequenceNotMonotonic.value(), message, cause);
+	public InvalidSignatureException(String message, Throwable cause) {
+		super(ErrorCode.InvalidSignature.value(), message, cause);
 	}
 
 	/**
@@ -84,7 +84,7 @@ public class SequenceNotMonotonic extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public SequenceNotMonotonic(Throwable cause) {
-		super(ErrorCode.SequenceNotMonotonic.value(), cause);
+	public InvalidSignatureException(Throwable cause) {
+		super(ErrorCode.InvalidSignature.value(), cause);
 	}
 }

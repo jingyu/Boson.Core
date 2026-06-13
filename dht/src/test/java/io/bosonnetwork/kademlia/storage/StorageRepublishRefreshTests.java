@@ -41,7 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 
 /**
  * Regression tests for the upsert keep-alive semantics: re-announcing an existing value/peer
@@ -101,7 +101,7 @@ class StorageRepublishRefreshTests {
 				// CAS: stored seq (5) exceeds expected (4) -> reject.
 				.compose(storage -> storage.putValue(newer, 4, false, true))
 				.onComplete(context.failing(err -> {
-					context.verify(() -> assertInstanceOf(SequenceNotExpected.class, err));
+					context.verify(() -> assertInstanceOf(SequenceNotExpectedException.class, err));
 					context.completeNow();
 				}));
 	}

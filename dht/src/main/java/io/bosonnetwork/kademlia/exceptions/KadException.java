@@ -123,17 +123,17 @@ public class KadException extends BosonException {
 		return switch (ErrorCode.valueOf(code)) {
 			case IOError -> new IOError(message);
 			case CryptoError -> new CryptoError(message);
-			case ValueNotExists -> new ValueNotExists(message);
+			case ValueNotExists -> new ValueNotExistsException(message);
 			case NotValueOwner -> new NotOwnerException(message);
-			case ValueNoRecipient -> new ValueNoRecipient(message);
-			case ProtocolError -> new ProtocolError(message);
-			case InvalidSignature -> new InvalidSignature(message);
-			case CasFail -> new SequenceNotExpected(message);
-			case SequenceNotMonotonic -> new SequenceNotMonotonic(message);
-			case ImmutableSubstitutionFail -> new ImmutableSubstitutionFail(message);
-			case InvalidToken -> new InvalidToken(message);
-			case InvalidValue -> new InvalidValue(message);
-			case InvalidPeer -> new InvalidPeer(message);
+			case ValueNoRecipient -> new ValueNoRecipientException(message);
+			case ProtocolError -> new ProtocolException(message);
+			case InvalidSignature -> new InvalidSignatureException(message);
+			case CasFail -> new SequenceNotExpectedException(message);
+			case SequenceNotMonotonic -> new SequenceNotMonotonicException(message);
+			case ImmutableSubstitutionFail -> new ImmutableSubstitutionException(message);
+			case InvalidToken -> new InvalidTokenException(message);
+			case InvalidValue -> new InvalidValueException(message);
+			case InvalidPeer -> new InvalidPeerException(message);
 			// GenericError, ServerError, MethodUnknown, MessageTooBig, SaltTooBig, Success, Unknown
 			default -> new KadException(code, message);
 		};

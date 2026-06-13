@@ -26,18 +26,18 @@ package io.bosonnetwork.kademlia.exceptions;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
- * Signals that the value does not have recipient property.
+ * Signals that the expected sequence number not equals the value's current sequence number.
  */
-public class ValueNoRecipient extends KadException {
-	private static final long serialVersionUID = -7161033634960228004L;
+public class SequenceNotExpectedException extends KadException {
+	private static final long serialVersionUID = 3450451642376582940L;
 
 	/**
 	 * Constructs a new exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public ValueNoRecipient() {
-		super(ErrorCode.ValueNoRecipient.value());
+	public SequenceNotExpectedException() {
+		super(ErrorCode.CasFail.value());
 	}
 
 	/**
@@ -48,8 +48,8 @@ public class ValueNoRecipient extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public ValueNoRecipient(String message) {
-		super(ErrorCode.ValueNoRecipient.value(), message);
+	public SequenceNotExpectedException(String message) {
+		super(ErrorCode.CasFail.value(), message);
 	}
 
 	/**
@@ -66,8 +66,8 @@ public class ValueNoRecipient extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ValueNoRecipient(String message, Throwable cause) {
-		super(ErrorCode.ValueNoRecipient.value(), message, cause);
+	public SequenceNotExpectedException(String message, Throwable cause) {
+		super(ErrorCode.CasFail.value(), message, cause);
 	}
 
 	/**
@@ -84,7 +84,7 @@ public class ValueNoRecipient extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ValueNoRecipient(Throwable cause) {
-		super(ErrorCode.ValueNoRecipient.value(), cause);
+	public SequenceNotExpectedException(Throwable cause) {
+		super(ErrorCode.CasFail.value(), cause);
 	}
 }

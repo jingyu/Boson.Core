@@ -28,7 +28,7 @@ import io.bosonnetwork.kademlia.impl.ErrorCode;
 /**
  * Signals that the target value not exists.
  */
-public class ValueNotExists extends KadException {
+public class ValueNotExistsException extends KadException {
 	private static final long serialVersionUID = 1286047880243439501L;
 
 	/**
@@ -36,7 +36,7 @@ public class ValueNotExists extends KadException {
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public ValueNotExists() {
+	public ValueNotExistsException() {
 		super(ErrorCode.ValueNotExists.value());
 	}
 
@@ -48,7 +48,7 @@ public class ValueNotExists extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public ValueNotExists(String message) {
+	public ValueNotExistsException(String message) {
 		super(ErrorCode.ValueNotExists.value(), message);
 	}
 
@@ -66,7 +66,7 @@ public class ValueNotExists extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ValueNotExists(String message, Throwable cause) {
+	public ValueNotExistsException(String message, Throwable cause) {
 		super(ErrorCode.ValueNotExists.value(), message, cause);
 	}
 
@@ -84,7 +84,7 @@ public class ValueNotExists extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ValueNotExists(Throwable cause) {
+	public ValueNotExistsException(Throwable cause) {
 		super(ErrorCode.ValueNotExists.value(), cause);
 	}
 }

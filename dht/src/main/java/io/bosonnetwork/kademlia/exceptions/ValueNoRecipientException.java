@@ -26,18 +26,18 @@ package io.bosonnetwork.kademlia.exceptions;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
 
 /**
- * Signals that the signature verification failed.
+ * Signals that the value does not have recipient property.
  */
-public class InvalidSignature extends KadException {
-	private static final long serialVersionUID = -5069409883215747477L;
+public class ValueNoRecipientException extends KadException {
+	private static final long serialVersionUID = -7161033634960228004L;
 
 	/**
 	 * Constructs a new exception with {@code null} as its detail message.
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public InvalidSignature() {
-		super(ErrorCode.InvalidSignature.value());
+	public ValueNoRecipientException() {
+		super(ErrorCode.ValueNoRecipient.value());
 	}
 
 	/**
@@ -48,8 +48,8 @@ public class InvalidSignature extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public InvalidSignature(String message) {
-		super(ErrorCode.InvalidSignature.value(), message);
+	public ValueNoRecipientException(String message) {
+		super(ErrorCode.ValueNoRecipient.value(), message);
 	}
 
 	/**
@@ -66,8 +66,8 @@ public class InvalidSignature extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public InvalidSignature(String message, Throwable cause) {
-		super(ErrorCode.InvalidSignature.value(), message, cause);
+	public ValueNoRecipientException(String message, Throwable cause) {
+		super(ErrorCode.ValueNoRecipient.value(), message, cause);
 	}
 
 	/**
@@ -84,7 +84,7 @@ public class InvalidSignature extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public InvalidSignature(Throwable cause) {
-		super(ErrorCode.InvalidSignature.value(), cause);
+	public ValueNoRecipientException(Throwable cause) {
+		super(ErrorCode.ValueNoRecipient.value(), cause);
 	}
 }

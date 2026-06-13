@@ -28,7 +28,7 @@ import io.bosonnetwork.kademlia.impl.ErrorCode;
 /**
  * Signals that the node try to update an immutable value.
  */
-public class ImmutableSubstitutionFail extends KadException {
+public class ImmutableSubstitutionException extends KadException {
 	private static final long serialVersionUID = 587617284550088252L;
 
 	/**
@@ -36,7 +36,7 @@ public class ImmutableSubstitutionFail extends KadException {
 	 * The cause is not initialized, and may subsequently be initialized by a
 	 * call to {@link #initCause}.
 	 */
-	public ImmutableSubstitutionFail() {
+	public ImmutableSubstitutionException() {
 		super(ErrorCode.ImmutableSubstitutionFail.value());
 	}
 
@@ -48,7 +48,7 @@ public class ImmutableSubstitutionFail extends KadException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public ImmutableSubstitutionFail(String message) {
+	public ImmutableSubstitutionException(String message) {
 		super(ErrorCode.ImmutableSubstitutionFail.value(), message);
 	}
 
@@ -66,7 +66,7 @@ public class ImmutableSubstitutionFail extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ImmutableSubstitutionFail(String message, Throwable cause) {
+	public ImmutableSubstitutionException(String message, Throwable cause) {
 		super(ErrorCode.ImmutableSubstitutionFail.value(), message, cause);
 	}
 
@@ -84,7 +84,7 @@ public class ImmutableSubstitutionFail extends KadException {
 	 *		 unknown.)
 	 * @since  1.4
 	 */
-	public ImmutableSubstitutionFail(Throwable cause) {
+	public ImmutableSubstitutionException(Throwable cause) {
 		super(ErrorCode.ImmutableSubstitutionFail.value(), cause);
 	}
 }

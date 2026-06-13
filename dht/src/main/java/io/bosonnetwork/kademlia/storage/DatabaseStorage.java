@@ -39,10 +39,10 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.database.VersionedSchema;
 import io.bosonnetwork.database.VertxDatabase;
-import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionFail;
+import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpected;
+import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 
 public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	protected long valueExpiration;
@@ -137,10 +137,10 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 						.compose(existing -> {
 							if (existing != null) {
 								if (existing.isMutable() != value.isMutable())
-									return Future.failedFuture(new ImmutableSubstitutionFail("Cannot replace mismatched mutable/immutable value"));
+									return Future.failedFuture(new ImmutableSubstitutionException("Cannot replace mismatched mutable/immutable value"));
 
 								if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber)
-									return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+									return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
 
 								if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
 									if (failIfNotOwner)
@@ -287,7 +287,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 						.compose(existing -> {
 							if (existing != null) {
 								if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber)
-									return Future.failedFuture(new SequenceNotExpected("Sequence number not expected"));
+									return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
 
 								if (existing.hasPrivateKey() && !peerInfo.hasPrivateKey()) {
 									if (failIfNotOwner)
@@ -304,7 +304,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		).recover(DatabaseStorage::preserveKadException);
 	}
 
-	// Keep typed KadExceptions (e.g. SequenceNotExpected, ImmutableSubstitutionFail, NotOwnerException)
+	// Keep typed KadExceptions (e.g. SequenceNotExpectedException, ImmutableSubstitutionException, NotOwnerException)
 	// intact so they map to the correct wire error codes; wrap only unexpected failures.
 	private static <T> Future<T> preserveKadException(Throwable cause) {
 		if (cause instanceof KadException)
