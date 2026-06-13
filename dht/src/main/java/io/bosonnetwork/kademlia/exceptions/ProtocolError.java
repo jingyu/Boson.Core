@@ -10,14 +10,14 @@ public class ProtocolError extends KadException {
 	}
 
 	public ProtocolError(String message) {
-		super(ErrorCode.InvalidPeer.value(), message);
+		super(ErrorCode.ProtocolError.value(), message);
 	}
 
 	public ProtocolError(String message, Throwable cause) {
-		super(ErrorCode.InvalidPeer.value(), message, cause);
+		super(ErrorCode.ProtocolError.value(), message, cause);
 	}
 
 	public ProtocolError(Throwable cause) {
-		super(ErrorCode.InvalidPeer.value(), cause);
+		super(ErrorCode.ProtocolError.value(), cause);
 	}
 }
