@@ -293,8 +293,13 @@ public class RoutingTable {
 	/**
 	 * Determines whether the given bucket needs to be split to accommodate a new entry.
 	 * <p>
-	 * Buckets are split only if they are splittable, full, and the new entry falls into the higher branch.
-	 * Also considers reachability and replacement policies.
+	 * A full, splittable bucket is split only when the new (reachable, not-yet-present) entry would fall
+	 * into the bucket's <em>high</em> branch. This is a deliberate Boson adaptation: unlike the original
+	 * Kademlia paper (§2.4), which splits only the bucket whose range contains the local node's own ID,
+	 * Boson lets density drive splitting and relies on {@link #mergeBuckets()} during maintenance to
+	 * coalesce any sibling pair whose combined effective size fits in a single bucket — so unproductive
+	 * splits are reclaimed rather than accumulating. The high-branch condition keeps the decision
+	 * deterministic and is covered by {@code RoutingTableTests#testNeedsSplitAndSplit}.
 	 *
 	 * @param bucket the bucket to check
 	 * @param newEntry the new entry to insert
@@ -307,7 +312,8 @@ public class RoutingTable {
 				bucket.needsReplacement())
 			return false;
 
-		// TODO: should we check branch of the existing entries?
+		// Existing entries need not be pre-checked for branch distribution: split() redistributes them by
+		// prefix, and any resulting under-filled sibling pair is merged back by mergeBuckets() (see above).
 
 		// Determine if the new entry belongs to the higher branch after split
 		Prefix highBranch = bucket.prefix().splitBranch(true);
@@ -364,31 +370,25 @@ public class RoutingTable {
 	private void mergeBuckets() {
 		log.debug("Trying to merge buckets({})... ", buckets.size());
 
-		// Perform bucket merge operations where possible
-		int i = 0;
-		while (true) {
-			++i;
-			if (i < 1)
-				continue;
-
-			if (i >= buckets.size())
-				break;
-
+		// Scan adjacent pairs (i-1, i); on a merge, step back one so the new bucket is re-checked
+		// against its (now-adjacent) predecessor, otherwise advance.
+		int i = 1;
+		while (i < buckets.size()) {
 			KBucket b1 = buckets.get(i - 1);
 			KBucket b2 = buckets.get(i);
 
-			// Only merge if buckets are siblings (i.e., share the same parent prefix)
+			// Only merge sibling buckets (same parent prefix) whose combined effective size fits one bucket.
+			// Effective size counts entries that cannot be dropped without a replacement, plus replacements
+			// eligible for the nodes list.
+			boolean merged = false;
 			if (b1.prefix().isSiblingOf(b2.prefix())) {
-				// Calculate effective size including entries that cannot be removed without replacement
 				int effectiveSize1 = (int) (b1.stream().filter(e -> !e.removableWithoutReplacement()).count()
 						+ b1.replacementStream().filter(KBucketEntry::eligibleForNodesList).count());
 				int effectiveSize2 = (int) (b2.stream().filter(e -> !e.removableWithoutReplacement()).count()
 						+ b2.replacementStream().filter(KBucketEntry::eligibleForNodesList).count());
 
-				// Merge only if combined effective size fits within bucket capacity
 				if (effectiveSize1 + effectiveSize2 <= KBucket.MAX_ENTRIES) {
 					log.debug("Merging buckets {} and {}...", b1.prefix(), b2.prefix());
-					// Create a new bucket with the parent prefix to hold merged entries
 					KBucket newBucket = new KBucket(b1.prefix().getParent(), this::isHomeBucket);
 
 					// Move all entries and replacements into the new bucket
@@ -398,10 +398,11 @@ public class RoutingTable {
 					b2.replacementStream().forEach(newBucket::put);
 
 					modify(List.of(b1, b2), List.of(newBucket));
-
-					i -= 2; // Adjust index to re-check after merge
+					merged = true;
 				}
 			}
+
+			i = merged ? Math.max(1, i - 1) : i + 1;
 		}
 
 		log.debug("Finished merge buckets({})... ", buckets.size());

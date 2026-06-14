@@ -28,6 +28,7 @@ import java.util.Collection;
 import java.util.Collections;
 
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.crypto.Signature;
 
@@ -52,7 +53,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the {@link Vertx} instance to use, or {@code null} to use the default instance.
 	 */
-	default Vertx vertx() {
+	default @Nullable Vertx vertx() {
 		return null;
 	}
 
@@ -64,7 +65,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the IPv4 address as a string, or {@code null} if IPv4 is disabled.
 	 */
-	default String host4() {
+	default @Nullable String host4() {
 		return null;
 	}
 
@@ -76,7 +77,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the IPv6 address as a string, or {@code null} if IPv6 is disabled.
 	 */
-	default String host6() {
+	default @Nullable String host6() {
 		return null;
 	}
 
@@ -102,7 +103,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the private key, or {@code null} if no key is set.
 	 */
-	default Signature.PrivateKey privateKey() {
+	default Signature.@Nullable PrivateKey privateKey() {
 		return null;
 	}
 
@@ -115,7 +116,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the storage directory path, or {@code null} to disable persistence.
 	 */
-	default Path dataDir() {
+	default @Nullable Path dataDir() {
 		return null;
 	}
 
@@ -146,7 +147,7 @@ public interface NodeConfiguration {
 	 *
 	 * @return the name of the database schema as a string, or {@code null} if no schema is specified.
 	 */
-	default String databaseSchemaName() {
+	default @Nullable String databaseSchemaName() {
 		return null;
 	}
 

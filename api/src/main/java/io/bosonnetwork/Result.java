@@ -25,8 +25,11 @@ package io.bosonnetwork;
 
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A generic class representing a result with values for IPv4 and IPv6 networks.
+ * Either side may be absent ({@code null}) when no value exists for that network.
  *
  * @param <T> The type of values stored in the result.
  */
@@ -42,7 +45,7 @@ public class Result<T> {
 	 * @param v4 the value for the IPv4 network.
 	 * @param v6 the value for the IPv6 network.
 	 */
-	public Result(T v4, T v6) {
+	public Result(@Nullable T v4, @Nullable T v6) {
 		this.v4 = v4;
 		this.v6 = v6;
 	}
@@ -55,7 +58,7 @@ public class Result<T> {
 	 * @param <T> the type of the values for the IPv4 and IPv6 networks.
 	 * @return a new {@code Result} instance containing the specified values.
 	 */
-	public static <T> Result<T> of(T v4, T v6) {
+	public static <T> Result<T> of(@Nullable T v4, @Nullable T v6) {
 		return new Result<>(v4, v6);
 	}
 
@@ -69,7 +72,7 @@ public class Result<T> {
 	 * @return a {@code Result} object containing the value for IPv4 if the network is IPv4,
 	 *         the value for IPv6 if the network is IPv6, or {@code null} for unsupported networks.
 	 */
-	public static <T> Result<T> ofNetwork(Network network, T v) {
+	public static <T> Result<T> ofNetwork(Network network, @Nullable T v) {
 		return new Result<>(network.isIPv4() ? v : null, network.isIPv6() ? v : null);
 	}
 
@@ -78,7 +81,7 @@ public class Result<T> {
 	 *
 	 * @return the value for the IPv4 network.
 	 */
-	public T getV4() {
+	public @Nullable T getV4() {
 		return v4;
 	}
 
@@ -87,7 +90,7 @@ public class Result<T> {
 	 *
 	 * @return the value for the IPv6 network.
 	 */
-	public T getV6() {
+	public @Nullable T getV6() {
 		return v6;
 	}
 
@@ -97,7 +100,7 @@ public class Result<T> {
 	 * @param preferred the preferred network type (IPv4 or IPv6).
 	 * @return the corresponding value for the specified network type.
 	 */
-	public T get(Network preferred) {
+	public @Nullable T get(Network preferred) {
 		Objects.requireNonNull(preferred, "preferred");
 
 		T value = getValue(preferred);
@@ -114,7 +117,7 @@ public class Result<T> {
 	 * @param network the network type (IPv4 or IPv6).
 	 * @return the corresponding value for the specified network type.
 	 */
-	public T getValue(Network network) {
+	public @Nullable T getValue(Network network) {
 		Objects.requireNonNull(network, "network");
 
 		return switch (network) {
@@ -129,7 +132,7 @@ public class Result<T> {
 	 * @param network the network type (IPv4 or IPv6).
 	 * @param value   the value to be set.
 	 */
-	protected void setValue(Network network, T value) {
+	protected void setValue(Network network, @Nullable T value) {
 		switch (network) {
 		case IPv4 -> v4 = value;
 		case IPv6 -> v6 = value;

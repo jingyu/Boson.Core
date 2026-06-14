@@ -32,6 +32,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
@@ -251,7 +253,7 @@ public class PeerInfo {
 	 *
 	 * @return The private key.
 	 */
-	public byte[] getPrivateKey() {
+	public byte @Nullable [] getPrivateKey() {
 		return privateKey == null ? null : privateKey.clone();
 	}
 
@@ -278,7 +280,7 @@ public class PeerInfo {
 	 *
 	 * @return The node ID.
 	 */
-	public Id getNodeId() {
+	public @Nullable Id getNodeId() {
 		return nodeId;
 	}
 
@@ -287,7 +289,7 @@ public class PeerInfo {
 	 *
 	 * @return the node signature
 	 */
-	public byte[] getNodeSignature() {
+	public byte @Nullable [] getNodeSignature() {
 		return nodeSig == null ? null : nodeSig.clone();
 	}
 
@@ -348,7 +350,7 @@ public class PeerInfo {
 	 *
 	 * @return the extra data
 	 */
-	public byte[] getExtraData() {
+	public byte @Nullable [] getExtraData() {
 		return extraData == null ? null : extraData.clone();
 	}
 
@@ -357,7 +359,7 @@ public class PeerInfo {
 	 *
 	 * @return the extra data map
 	 */
-	public Map<String, Object> getExtra() {
+	public @Nullable Map<String, Object> getExtra() {
 		if (extra == null) {
 			if (hasExtra()) {
 				try {

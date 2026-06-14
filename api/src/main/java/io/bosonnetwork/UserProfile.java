@@ -26,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.identifier.Card;
 import io.bosonnetwork.identifier.CardBuilder;
 import io.bosonnetwork.identifier.Credential;
@@ -142,7 +144,7 @@ public class UserProfile {
 	 *
 	 * @return the avatar string, or null if not set
 	 */
-	public String getAvatar() {
+	public @Nullable String getAvatar() {
 		return avatar;
 	}
 
@@ -151,7 +153,7 @@ public class UserProfile {
 	 *
 	 * @return the bio, or null if not set
 	 */
-	public String getBio() {
+	public @Nullable String getBio() {
 		return bio;
 	}
 
@@ -160,7 +162,7 @@ public class UserProfile {
 	 *
 	 * @return the home node id, or null if not set
 	 */
-	public Id getHomeNode() {
+	public @Nullable Id getHomeNode() {
 		return homeNode;
 	}
 
@@ -169,7 +171,7 @@ public class UserProfile {
 	 *
 	 * @return the messaging home peer id, or null if not set
 	 */
-	public Id getMessagingHomePeer() {
+	public @Nullable Id getMessagingHomePeer() {
 		return messagingHomePeer;
 	}
 

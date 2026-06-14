@@ -28,6 +28,8 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
@@ -308,7 +310,7 @@ public class Value {
 	 *
 	 * @return the public key of the value, or null for immutable values.
 	 */
-	public Id getPublicKey() {
+	public @Nullable Id getPublicKey() {
 		return publicKey;
 	}
 
@@ -326,7 +328,7 @@ public class Value {
 	 *
 	 * @return the private key of the value, or null if the node does not have the private key.
 	 */
-	public byte[] getPrivateKey() {
+	public byte @Nullable [] getPrivateKey() {
 		return privateKey != null ? privateKey.clone() : null;
 	}
 
@@ -335,7 +337,7 @@ public class Value {
 	 *
 	 * @return the recipient of the value, or null if no recipient.
 	 */
-	public Id getRecipient() {
+	public @Nullable Id getRecipient() {
 		return recipient;
 	}
 
@@ -344,7 +346,7 @@ public class Value {
 	 *
 	 * @return the nonce of the value, or null for immutable values.
 	 */
-	public byte[] getNonce() {
+	public byte @Nullable [] getNonce() {
 		return nonce != null ? nonce.clone() : null;
 	}
 
@@ -362,7 +364,7 @@ public class Value {
 	 *
 	 * @return the signature of the value, or null for immutable values.
 	 */
-	public byte[] getSignature() {
+	public byte @Nullable [] getSignature() {
 		return signature != null ? signature.clone() : null;
 	}
 

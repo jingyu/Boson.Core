@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.AddressUtils;
@@ -137,7 +138,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the Vert.x instance associated with this configuration, or null if not set.
 	 */
 	@Override
-	public Vertx vertx() {
+	public @Nullable Vertx vertx() {
 		return vertx;
 	}
 
@@ -159,7 +160,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the IPv4 address string for the DHT node, or null if disabled.
 	 */
 	@Override
-	public String host4() {
+	public @Nullable String host4() {
 		return host4;
 	}
 
@@ -168,7 +169,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the IPv6 address string for the DHT node, or null if disabled.
 	 */
 	@Override
-	public String host6() {
+	public @Nullable String host6() {
 		return host6;
 	}
 
@@ -186,7 +187,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the Base58-encoded private key string.
 	 */
 	@Override
-	public Signature.PrivateKey privateKey() {
+	public Signature.@Nullable PrivateKey privateKey() {
 		return privateKey;
 	}
 
@@ -195,7 +196,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the path to the persistent data directory, or null if persistence is disabled.
 	 */
 	@Override
-	public Path dataDir() {
+	public @Nullable Path dataDir() {
 		return dataDir;
 	}
 
@@ -214,7 +215,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	}
 
 	@Override
-	public String databaseSchemaName() {
+	public @Nullable String databaseSchemaName() {
 		return databaseSchemaName;
 	}
 

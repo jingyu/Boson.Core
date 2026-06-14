@@ -48,5 +48,12 @@
  * {@link io.bosonnetwork.service layer-2 services}, {@link io.bosonnetwork.json serialization},
  * {@link io.bosonnetwork.database database helpers}, {@link io.bosonnetwork.web web auth},
  * {@link io.bosonnetwork.vertx Vert.x helpers} and {@link io.bosonnetwork.utils utilities}.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} — every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork;
+
+import org.jspecify.annotations.NullMarked;

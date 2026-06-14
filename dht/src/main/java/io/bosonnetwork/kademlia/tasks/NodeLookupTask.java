@@ -217,21 +217,16 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 		}
 
 		Message response = call.getResponse();
-		// TODO: handle both IPv4 & IPv6 result
+		// This task runs on a single-protocol DHT instance, so it only requested and only consumes nodes
+		// for its own network (n4 for IPv4, n6 for IPv6) — the lookup is correct per stack.
+		// Known limitation (not a correctness issue): nodes of the sibling protocol that a dual-stack peer
+		// may also return are not cross-forwarded to the sibling DHT instance. Cross-pollinating v4/v6
+		// discovery between sibling instances is a future efficiency optimization.
 		List<NodeInfo> nodes = response.<FindNodeResponse>getBody().getNodes(getContext().getNetwork());
 		if (nodes.isEmpty()) {
 			log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
 			return;
 		}
-
-		// TODO: Check for sibling DHT4 (IPv4) or DHT6 (IPv6) network and forward nodes matching the sibling's protocol
-		/*/
-		if (!getContext().getNetwork().isIPv4() || !getContext().getNetwork().isIPv6()) {
-			log.debug("Handling {} nodes; IPv4={}, IPv6={}",
-					getContext().getNetwork().isIPv4() ? "IPv4" : "IPv6",
-					getContext().getNetwork().isIPv4(), getContext().getNetwork().isIPv6());
-		}
-		*/
 
 		log.debug("{}#{} adding {} candidates from response by {}", getName(), getId(), nodes.size(), call.getTargetId());
 		addCandidates(nodes);

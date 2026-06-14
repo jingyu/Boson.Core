@@ -42,6 +42,9 @@ import io.bosonnetwork.NodeInfo;
  * {@link LookupTask}, prioritizing nodes with closer distance then fewer ping attempts.
  * Processed nodes remain deduplicated to prevent re-addition. Designed for single-threaded
  * use in a Vert.x event loop; not thread-safe.
+ * <p>
+ * Contrast with {@link ClosestSet}: this is the queue of nodes still <em>to be queried</em>,
+ * whereas {@code ClosestSet} holds nodes that have <em>already responded</em> (the result set).
  */
 public class ClosestCandidates {
 	/** The target ID for distance comparisons. */

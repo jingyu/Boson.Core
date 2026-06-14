@@ -710,7 +710,9 @@ public class RpcServer implements Measured {
 				if (metrics != null)
 					metrics.messageSendFailed(remote, ar.cause());
 
-				// TODO: how to check the ENOBUFS error?
+				// A send failure (incl. transient socket-buffer exhaustion / ENOBUFS) drops this datagram
+				// and fails the associated RpcCall; the iterative tasks tolerate individual losses via their
+				// α-concurrency, so no retransmit is attempted here (UDP best-effort, matching Kademlia).
 				/*/
 				// Checking for specific errors by inspecting a generic IOException and its message is not ideal
 				if (ar.cause() != null && Objects.equals(ar.cause().getMessage(), "No buffer space available")) {

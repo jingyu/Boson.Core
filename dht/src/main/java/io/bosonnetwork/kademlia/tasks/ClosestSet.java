@@ -39,6 +39,10 @@ import io.bosonnetwork.Id;
  * Tracks insertion attempts to determine when the set is stable, used to terminate
  * lookup tasks ({@link NodeLookupTask}, {@link PeerLookupTask}, {@link ValueLookupTask}).
  * Designed for single-threaded use in a Vert.x event loop.
+ * <p>
+ * Contrast with {@link ClosestCandidates}: this set holds nodes that have <em>already responded</em>
+ * (the converging k-closest result), whereas {@code ClosestCandidates} is the queue of nodes still
+ * <em>to be queried</em>.
  */
 public class ClosestSet {
 	/** The target ID for distance comparisons. */

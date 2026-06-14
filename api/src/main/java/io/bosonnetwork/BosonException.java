@@ -23,6 +23,8 @@
 
 package io.bosonnetwork;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Represents a checked exception that may be thrown by the Boson library to indicate
  * an error condition specific to Boson operations.
@@ -47,7 +49,7 @@ public class BosonException extends Exception {
 	 *
 	 * @param message the detail message, which is saved for later retrieval by the {@link #getMessage()} method.
 	 */
-	public BosonException(String message) {
+	public BosonException(@Nullable String message) {
 		super(message);
 	}
 
@@ -62,7 +64,7 @@ public class BosonException extends Exception {
 	 * @param cause the cause, which is saved for later retrieval by {@link #getCause()}.
 	 *              A {@code null} value is permitted and indicates that the cause is nonexistent or unknown.
 	 */
-	public BosonException(String message, Throwable cause) {
+	public BosonException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -77,7 +79,7 @@ public class BosonException extends Exception {
 	 * @param cause the cause, saved for later retrieval by {@link #getCause()}.
 	 *              A {@code null} value is permitted and indicates that the cause is nonexistent or unknown.
 	 */
-	public BosonException(Throwable cause) {
+	public BosonException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

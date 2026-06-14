@@ -734,7 +734,9 @@ public class KadNode extends BosonVerticle implements Node {
 		log.info("Re-announce the persistent values and peers...");
 
 		long before = System.currentTimeMillis() - MAX_VALUE_AGE + RE_ANNOUNCE_INTERVAL * 2;
-		storage.getValues(true, before).map(values -> {
+		// Best-effort, fire-and-forget re-announce: each item's chain logs its own outcome; the periodic
+		// timer reruns regardless, so we don't aggregate/await the per-item futures.
+		storage.getValues(true, before).onSuccess(values -> {
 			for (Value value : values) {
 				log.debug("Re-announce the value: {}", value.getId());
 				doStoreValue(value, value.getSequenceNumber()).compose(v ->
@@ -746,14 +748,12 @@ public class KadNode extends BosonVerticle implements Node {
 						log.error("Re-announce the value {} failed", value.getId(), ar.cause());
 				});
 			}
-
-			return null;
 		}).onFailure(e ->
 				log.error("Failed to re-announce the values", e)
 		);
 
 		before = System.currentTimeMillis() - MAX_PEER_AGE + RE_ANNOUNCE_INTERVAL * 2;
-		storage.getPeers(true, before).map(peers -> {
+		storage.getPeers(true, before).onSuccess(peers -> {
 			for (PeerInfo peer : peers) {
 				log.debug("Re-announce the peer: {}", peer.getId());
 				doAnnouncePeer(peer, -1).compose(v ->
@@ -765,8 +765,6 @@ public class KadNode extends BosonVerticle implements Node {
 						log.error("Re-announce the peer {} failed", peer.getId(), ar.cause());
 				});
 			}
-
-			return null;
 		}).onFailure(e ->
 				log.error("Failed to re-announce the peers", e)
 		);
