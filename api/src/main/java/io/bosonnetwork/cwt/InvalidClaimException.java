@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when a CWT contains a claim that does not match the expected value (e.g. Issuer, Subject, Audience).
  */
@@ -33,7 +35,7 @@ public class InvalidClaimException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidClaimException(String message) {
+	public InvalidClaimException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidClaimException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidClaimException(String message, Throwable cause) {
+	public InvalidClaimException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

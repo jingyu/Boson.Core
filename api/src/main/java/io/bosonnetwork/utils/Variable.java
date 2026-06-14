@@ -31,6 +31,8 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A mutable container object which may or may not contain a value.
  * Unlike {@link Optional}, {@code Variable} allows the contained value to be
@@ -54,14 +56,14 @@ import java.util.stream.Stream;
  * @param <T> the type of value that may be contained
  */
 public class Variable<T> {
-	private T value;
+	private @Nullable T value;
 
 	/**
 	 * Constructs a {@code Variable} with the specified initial value.
 	 *
 	 * @param value the initial value, which may be {@code null}
 	 */
-	protected Variable(T value) {
+	protected Variable(@Nullable T value) {
 		this.value = value;
 	}
 
@@ -95,7 +97,7 @@ public class Variable<T> {
 	 * @param value the value to be contained, which may be {@code null}
 	 * @return a {@code Variable} containing the specified value
 	 */
-	public static <T> Variable<T> ofNullable(T value) {
+	public static <T> Variable<T> ofNullable(@Nullable T value) {
 		return new Variable<>(value);
 	}
 
@@ -112,7 +114,7 @@ public class Variable<T> {
 
 	/**
 	 * Sets the value to {@code value} only if no value is currently present. If a value is
-	 * already held, this method does nothing — the existing value is not replaced.
+	 * already held, this method does nothing - the existing value is not replaced.
 	 * <p>
 	 * Equivalent to {@code Map.putIfAbsent} semantics, but applied to a single slot. The
 	 * argument may be {@code null}; passing {@code null} when the variable is already empty
@@ -120,7 +122,7 @@ public class Variable<T> {
 	 *
 	 * @param value the new value, which may be {@code null}
 	 */
-	public void setIfAbsent(T value) {
+	public void setIfAbsent(@Nullable T value) {
 		if (this.value == null)
 			this.value = value;
 	}
@@ -331,7 +333,7 @@ public class Variable<T> {
 	 *        May be {@code null}.
 	 * @return the value, if present, otherwise {@code other}
 	 */
-	public T orElse(T other) {
+	public @Nullable T orElse(@Nullable T other) {
 		return value != null ? value : other;
 	}
 

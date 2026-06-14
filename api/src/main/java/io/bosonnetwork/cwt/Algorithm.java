@@ -27,7 +27,7 @@ package io.bosonnetwork.cwt;
  * <p>
  * <b>Note:</b> {@link SignedCwt} strictly enforces {@link #EDDSA} (Ed25519); it is the only
  * algorithm accepted when signing or verifying. The {@code ES256}/{@code ES384}/{@code ES512}
- * constants are defined for registry completeness and are <em>not</em> supported — a token using
+ * constants are defined for registry completeness and are <em>not</em> supported - a token using
  * any of them is rejected during parsing.
  */
 public enum Algorithm {
@@ -44,7 +44,7 @@ public enum Algorithm {
 	 */
 	ES512(-36),
 	/**
-	 * EdDSA / Ed25519 — the only algorithm supported by {@link SignedCwt}.
+	 * EdDSA / Ed25519 - the only algorithm supported by {@link SignedCwt}.
 	 */
 	EDDSA(-8);
 

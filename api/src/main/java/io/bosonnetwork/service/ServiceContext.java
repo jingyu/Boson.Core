@@ -26,6 +26,8 @@ package io.bosonnetwork.service;
 import java.nio.file.Path;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 
@@ -41,7 +43,7 @@ public interface ServiceContext {
 	 * @return the component instance, or null if not available or not supported
 	 * @param <T> the type parameter
 	 */
-	<T> T unwrap(Class<T> clazz);
+	<T> @Nullable T unwrap(Class<T> clazz);
 
 	/**
 	 * Gets the host Boson node object.
@@ -96,7 +98,7 @@ public interface ServiceContext {
 	 * @param value the new value, or {@code null} to remove the mapping
 	 * @return the previous value associated with {@code key}, or {@code null} if there was none
 	 */
-	Object setProperty(String key, Object value);
+	@Nullable Object setProperty(String key, @Nullable Object value);
 
 	/**
 	 * Returns the value associated with the specified property key, or {@code null} if no mapping
@@ -106,5 +108,5 @@ public interface ServiceContext {
 	 * @param <T> the expected type of the property value
 	 * @return the value of the specified property, or {@code null} if no mapping exists
 	 */
-	<T> T getProperty(String key);
+	<T> @Nullable T getProperty(String key);
 }

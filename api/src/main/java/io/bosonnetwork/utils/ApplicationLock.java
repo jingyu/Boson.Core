@@ -89,7 +89,7 @@ public class ApplicationLock implements AutoCloseable {
 			lock = fc.tryLock(0, Long.MAX_VALUE, false);
 			if (lock == null)
 				throw new IllegalStateException("Already locked by another instance.");
-			// Write owner metadata so a reader can answer "who is holding this?". Best-effort —
+			// Write owner metadata so a reader can answer "who is holding this?". Best-effort -
 			// failure to write the marker does not affect the lock itself.
 			try {
 				String marker = ProcessHandle.current().pid() + " " + Instant.now() + System.lineSeparator();

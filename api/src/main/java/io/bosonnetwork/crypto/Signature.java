@@ -33,6 +33,7 @@ import javax.security.auth.Destroyable;
 import org.apache.tuweni.crypto.sodium.KeyDerivation;
 import org.apache.tuweni.crypto.sodium.Signature.Seed;
 import org.apache.tuweni.crypto.sodium.Sodium;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Public-key(Ed25519) signatures.
@@ -48,7 +49,7 @@ public class Signature {
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.PublicKey.length();
 
 		private final org.apache.tuweni.crypto.sodium.Signature.PublicKey key;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private PublicKey(org.apache.tuweni.crypto.sodium.Signature.PublicKey key) {
 			this.key = key;
@@ -146,7 +147,7 @@ public class Signature {
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.SecretKey.length();
 
 		private final org.apache.tuweni.crypto.sodium.Signature.SecretKey key;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey key) {
 			this.key = key;
@@ -286,8 +287,8 @@ public class Signature {
 		public static final int SEED_BYTES = Seed.length();
 
 		private final org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
-		private PublicKey pk;
-		private PrivateKey sk;
+		private @Nullable PublicKey pk;
+		private @Nullable PrivateKey sk;
 		private boolean destroyed = false;
 
 		private KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair) {

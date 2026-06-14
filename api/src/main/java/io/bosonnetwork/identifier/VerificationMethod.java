@@ -38,6 +38,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -149,7 +151,7 @@ public abstract class VerificationMethod {
 	 *
 	 * @return The verification method {@link Type}, or null if this is a reference without loaded entity.
 	 */
-	public Type getType() {
+	public @Nullable Type getType() {
 		return null;
 	}
 
@@ -158,7 +160,7 @@ public abstract class VerificationMethod {
 	 *
 	 * @return The controller {@link Id}, or null if this is a reference without loaded entity.
 	 */
-	public Id getController() {
+	public @Nullable Id getController() {
 		return null;
 	}
 
@@ -167,7 +169,7 @@ public abstract class VerificationMethod {
 	 *
 	 * @return The public key multibase string, or null if this is a reference without loaded entity.
 	 */
-	public String getPublicKeyMultibase() {
+	public @Nullable String getPublicKeyMultibase() {
 		return null;
 	}
 
@@ -310,7 +312,7 @@ public abstract class VerificationMethod {
 	 */
 	static class Reference extends VerificationMethod {
 		private final String id;
-		private volatile VerificationMethod entity;
+		private volatile @Nullable VerificationMethod entity;
 
 		/**
 		 * Constructs a reference to a verification method by its ID.
@@ -367,19 +369,19 @@ public abstract class VerificationMethod {
 		}
 
 		@Override
-		public Type getType() {
+		public @Nullable Type getType() {
 			// Return type from cached entity if present, otherwise null
 			return entity == null ? null : entity.getType();
 		}
 
 		@Override
-		public Id getController() {
+		public @Nullable Id getController() {
 			// Return controller from cached entity if present, otherwise null
 			return entity == null ? null : entity.getController();
 		}
 
 		@Override
-		public String getPublicKeyMultibase() {
+		public @Nullable String getPublicKeyMultibase() {
 			// Return public key from cached entity if present, otherwise null
 			return entity == null ? null : entity.getPublicKeyMultibase();
 		}

@@ -27,6 +27,8 @@ import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Vertx;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.Node;
@@ -104,7 +106,7 @@ public interface Registry {
 	 * @param persistentCache the {@code ResolutionCache} implementation to be used for caching resolved entries; may be null
 	 * @return a new instance of a DHT-based {@code Registry}
 	 */
-	static Registry DHTRegistry(Node node, Vertx vertx, ResolutionCache persistentCache) {
+	static Registry DHTRegistry(Node node, @Nullable Vertx vertx, @Nullable ResolutionCache persistentCache) {
 		Objects.requireNonNull(node, "node");
 		return new DHTRegistry(node, vertx, persistentCache);
 	}
@@ -116,7 +118,7 @@ public interface Registry {
 	 * @param persistentCache the {@code ResolutionCache} implementation to be used for caching resolved entries; may be null
 	 * @return a new instance of a DHT-based {@code Registry}
 	 */
-	static Registry DHTRegistry(Node node, ResolutionCache persistentCache) {
+	static Registry DHTRegistry(Node node, @Nullable ResolutionCache persistentCache) {
 		return new DHTRegistry(node, null, persistentCache);
 	}
 

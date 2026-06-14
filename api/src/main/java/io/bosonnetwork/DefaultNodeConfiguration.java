@@ -74,13 +74,13 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * Vert.x instance used for the node's asynchronous operations.
 	 * May be null if not set.
 	 */
-	private Vertx vertx;
+	private @Nullable Vertx vertx;
 
 	/** IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4. */
-	private String host4;
+	private @Nullable String host4;
 
 	/** IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.*/
-	private String host6;
+	private @Nullable String host6;
 
 	/** The port number for the DHT node. */
 	private int port;
@@ -187,7 +187,7 @@ public class DefaultNodeConfiguration implements NodeConfiguration {
 	 * @return the Base58-encoded private key string.
 	 */
 	@Override
-	public Signature.@Nullable PrivateKey privateKey() {
+	public Signature.PrivateKey privateKey() {
 		return privateKey;
 	}
 

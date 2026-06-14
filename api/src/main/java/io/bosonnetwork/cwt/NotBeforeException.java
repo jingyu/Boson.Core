@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when a CWT is used before its "Not Before" (nbf) claim time.
  */
@@ -33,7 +35,7 @@ public class NotBeforeException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public NotBeforeException(String message) {
+	public NotBeforeException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class NotBeforeException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public NotBeforeException(String message, Throwable cause) {
+	public NotBeforeException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

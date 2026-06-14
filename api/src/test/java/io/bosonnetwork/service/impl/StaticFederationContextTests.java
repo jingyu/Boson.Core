@@ -38,12 +38,12 @@ public class StaticFederationContextTests {
 		assertTrue(context.existsNode(nodeId).get());
 		assertFalse(context.existsNode(Id.random()).get());
 
-		SuperNodeInfo node = context.getNode(nodeId, true).get();
+		SuperNodeInfo node = context.getNode(nodeId, true).get().orElseThrow();
 		assertNotNull(node);
 		assertEquals(nodeId, node.getId());
 		assertEquals("localhost", node.getHost());
 
-		assertNull(context.getNode(Id.random(), true).get());
+		assertTrue(context.getNode(Id.random(), true).get().isEmpty());
 	}
 
 	@Test

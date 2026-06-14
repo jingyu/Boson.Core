@@ -24,13 +24,15 @@ package io.bosonnetwork.service.impl;
 
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.service.SuperNodeInfo;
 
 /**
  * A basic implementation of the {@link SuperNodeInfo} interface, representing
  * a minimal federated node within a network.
- *
+ * <p>
  * This class provides a foundational implementation of the required
  * {@link SuperNodeInfo} methods. It uses a provided identifier and records
  * the creation timestamp at the time of instantiation.
@@ -46,7 +48,7 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 		this(nodeId, host, port, null);
 	}
 
-	PlainSuperNodeInfo(Id nodeId, String host, int port, String apiEndpoint) {
+	PlainSuperNodeInfo(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port");
 
@@ -79,37 +81,37 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 	}
 
 	@Override
-	public String getSoftware() {
+	public @Nullable String getSoftware() {
 		return null;
 	}
 
 	@Override
-	public String getVersion() {
+	public @Nullable String getVersion() {
 		return null;
 	}
 
 	@Override
-	public String getName() {
+	public @Nullable String getName() {
 		return null;
 	}
 
 	@Override
-	public String getLogo() {
+	public @Nullable String getLogo() {
 		return null;
 	}
 
 	@Override
-	public String getWebsite() {
+	public @Nullable String getWebsite() {
 		return null;
 	}
 
 	@Override
-	public String getContact() {
+	public @Nullable String getContact() {
 		return null;
 	}
 
 	@Override
-	public String getDescription() {
+	public @Nullable String getDescription() {
 		return null;
 	}
 

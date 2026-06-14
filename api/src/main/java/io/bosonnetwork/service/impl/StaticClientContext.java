@@ -26,10 +26,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.vertx.core.Future;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -38,7 +40,7 @@ import io.bosonnetwork.service.ClientAuthorizer;
 import io.bosonnetwork.service.ClientContext;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
-import io.bosonnetwork.utils.Pair;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
@@ -55,7 +57,9 @@ import io.bosonnetwork.web.CwtAuthOptions;
  */
 public class StaticClientContext implements ClientContext {
 	private final Identity nodeIdentity;
-	private final Map<Id, Pair<ClientUser, List<ClientDevice>>> userDevicesRegistry;
+	private final Map<Id, UserAndDevices> userDevicesRegistry;
+
+	private record UserAndDevices(ClientUser user, List<ClientDevice> devices) {}
 
 	/**
 	 * Constructs a new instance of {@code StaticClientContext}.
@@ -75,8 +79,8 @@ public class StaticClientContext implements ClientContext {
 	 * <strong>Concurrency note:</strong> the up-front existence check and the
 	 * {@code computeIfAbsent} insert are not a single atomic step. Two threads calling
 	 * {@code addUser(sameId, ...)} concurrently can both observe "not present" and both return
-	 * {@code true}; the {@code computeIfAbsent} call still atomizes the actual write, so only one
-	 * {@link PlainUser} entry is inserted — the race is benign with respect to map state but the
+	 * {@code true}; the {@code computeIfAbsent} call still atomizes the actual writing, so only one
+	 * {@link PlainUser} entry is inserted - the race is benign with respect to map state but the
 	 * boolean return may over-report success. This is a test/bring-up helper; this trade-off is
 	 * acceptable for that use.
 	 *
@@ -91,23 +95,23 @@ public class StaticClientContext implements ClientContext {
 		if (existsUserSync(userId))
 			return false;
 
-		userDevicesRegistry.computeIfAbsent(userId, k -> Pair.of(new PlainUser(userId, name, passphrase), List.of()));
+		userDevicesRegistry.computeIfAbsent(userId, k -> new UserAndDevices(new PlainUser(userId, name, passphrase), List.of()));
 		return true;
 	}
 
 	/**
 	 * Retrieves the {@code ClientUser} instance associated with the given unique user identifier.
-	 * If the user does not exist in the registry, this method will return {@code null}.
+	 * If the user does not exist in the registry, this method returns an empty {@link Optional}.
 	 *
 	 * @param userId The unique identifier of the user to retrieve. Must not be {@code null}.
-	 * @return The {@code ClientUser} instance associated with the given user identifier,
-	 *         or {@code null} if the user is not found.
+	 * @return an {@link Optional} containing the {@code ClientUser} associated with the given user
+	 *         identifier, or an empty {@code Optional} if the user is not found.
 	 * @throws NullPointerException if {@code userId} is {@code null}.
 	 */
-	public ClientUser getUserSync(Id userId) {
+	public Optional<ClientUser> getUserSync(Id userId) {
 		Objects.requireNonNull(userId);
-		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
-		return pair == null ? null : pair.a();
+		UserAndDevices uds = userDevicesRegistry.get(userId);
+		return uds == null ? Optional.empty() : Optional.of(uds.user());
 	}
 
 	/**
@@ -160,7 +164,7 @@ public class StaticClientContext implements ClientContext {
 		if (!existsUserSync(userId))
 			throw new IllegalArgumentException("User does not exist");
 
-		// device id should be global unique
+		// device id should be globally unique
 		if (existsDeviceSync(deviceId))
 			return false;
 
@@ -169,12 +173,12 @@ public class StaticClientContext implements ClientContext {
 				throw new IllegalStateException("User does not exist");
 
 			ClientDevice newDevice = new PlainDevice(deviceId, userId, deviceName, app);
-			if (v.b().isEmpty()) {
-				return Pair.of(v.a(), List.of(newDevice));
+			if (v.devices.isEmpty()) {
+				return new UserAndDevices(v.user, List.of(newDevice));
 			} else {
-				List<ClientDevice> devices = new ArrayList<>(v.b());
+				List<ClientDevice> devices = new ArrayList<>(v.devices);
 				devices.add(newDevice);
-				return Pair.of(v.a(), List.copyOf(devices));
+				return new UserAndDevices(v.user, List.copyOf(devices));
 			}
 		});
 
@@ -184,20 +188,20 @@ public class StaticClientContext implements ClientContext {
 	/**
 	 * Retrieves a {@code ClientDevice} instance with the specified unique device identifier.
 	 * The device is searched across all registered user devices.
-	 * If no matching device is found, this method returns {@code null}.
+	 * If no matching device is found, this method returns an empty {@link Optional}.
 	 *
 	 * @param deviceId The unique identifier of the device to retrieve. Must not be null.
-	 * @return The {@code ClientDevice} instance matching the given device identifier,
-	 *         or {@code null} if no such device is found.
+	 * @return an {@link Optional} containing the {@code ClientDevice} matching the given device
+	 *         identifier, or an empty {@code Optional} if no such device is found.
 	 * @throws NullPointerException if {@code deviceId} is null.
 	 */
-	private ClientDevice getDeviceSync(Id deviceId) {
+	private Optional<ClientDevice> getDeviceSync(Id deviceId) {
 		return userDevicesRegistry.values().stream()
-				.map(Pair::b)
+				.map(UserAndDevices::devices)
+				.filter(ds -> !ds.isEmpty())
 				.flatMap(List::stream)
 				.filter(d -> d.getId().equals(deviceId))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -208,7 +212,7 @@ public class StaticClientContext implements ClientContext {
 	 * @throws NullPointerException if the provided {@code deviceId} is null.
 	 */
 	private boolean existsDeviceSync(Id deviceId) {
-		return getDeviceSync(deviceId) != null;
+		return getDeviceSync(deviceId).isPresent();
 	}
 
 	/**
@@ -222,28 +226,27 @@ public class StaticClientContext implements ClientContext {
 	 */
 	public List<ClientDevice> getDevicesSync(Id userId) {
 		Objects.requireNonNull(userId);
-		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
-		return pair == null ? List.of() : pair.b();
+		UserAndDevices uds = userDevicesRegistry.get(userId);
+		return uds == null ? List.of() : uds.devices();
 	}
 
 	/**
 	 * Retrieves the {@code ClientDevice} associated with the specified user and device identifiers.
-	 * If the user or device does not exist in the registry, this method returns {@code null}.
+	 * If the user or device does not exist in the registry, this method returns an empty {@link Optional}.
 	 *
 	 * @param userId The unique identifier of the user whose device is to be retrieved. Must not be {@code null}.
 	 * @param deviceId The unique identifier of the device to be retrieved. Must not be {@code null}.
-	 * @return The {@code ClientDevice} instance matching the specified user and device identifiers,
-	 *         or {@code null} if no matching device is found.
+	 * @return an {@link Optional} containing the {@code ClientDevice} matching the specified user and
+	 *         device identifiers, or an empty {@code Optional} if no matching device is found.
 	 * @throws NullPointerException if {@code userId} or {@code deviceId} is {@code null}.
 	 */
-	public ClientDevice getDeviceSync(Id userId, Id deviceId) {
+	public Optional<ClientDevice> getDeviceSync(Id userId, Id deviceId) {
 		Objects.requireNonNull(userId);
 		Objects.requireNonNull(deviceId);
-		Pair<ClientUser, List<ClientDevice>> pair = userDevicesRegistry.get(userId);
-		return pair == null ? null : pair.b().stream()
+		UserAndDevices uds = userDevicesRegistry.get(userId);
+		return uds == null ? Optional.empty() : uds.devices.stream()
 				.filter(d -> d.getId().equals(deviceId))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -259,7 +262,7 @@ public class StaticClientContext implements ClientContext {
 	public boolean existsDeviceSync(Id userId, Id deviceId) {
 		Objects.requireNonNull(userId);
 		Objects.requireNonNull(deviceId);
-		return getDeviceSync(userId, deviceId) != null;
+		return getDeviceSync(userId, deviceId).isPresent();
 	}
 
 	/**
@@ -277,14 +280,14 @@ public class StaticClientContext implements ClientContext {
 
 		Variable<Boolean> removed = Variable.of(false);
 		userDevicesRegistry.computeIfPresent(userId, (k, v) -> {
-			if (v.b().isEmpty())
+			if (v.devices.isEmpty())
 				return v;
 
-			List<ClientDevice> devices = new ArrayList<>(v.b());
+			List<ClientDevice> devices = new ArrayList<>(v.devices);
 			boolean rm = devices.removeIf(d -> d.getId().equals(deviceId));
 			if (rm) {
 				removed.set(true);
-				return Pair.of(v.a(), List.copyOf(devices));
+				return new UserAndDevices(v.user, List.copyOf(devices));
 			} else {
 				// no change
 				return v;
@@ -304,7 +307,7 @@ public class StaticClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompletableFuture<ClientUser> getUser(Id userId) {
+	public CompletableFuture<Optional<ClientUser>> getUser(Id userId) {
 		return ContextualFuture.succeededFuture(getUserSync(userId));
 	}
 
@@ -314,7 +317,7 @@ public class StaticClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId) {
+	public CompletableFuture<Optional<ClientDevice>> getDevice(Id userId, Id deviceId) {
 		return ContextualFuture.succeededFuture(getDeviceSync(userId, deviceId));
 	}
 
@@ -327,7 +330,7 @@ public class StaticClientContext implements ClientContext {
 	public ClientAuthenticator getAuthenticator() {
 		return new ClientAuthenticator() {
 			@Override
-			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticateUser(Id userId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				if (!existsUserSync(userId))
 					return ContextualFuture.succeededFuture(false);
 
@@ -337,7 +340,7 @@ public class StaticClientContext implements ClientContext {
 			}
 
 			@Override
-			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
+			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte @Nullable [] nonce, byte @Nullable [] signature, String address) {
 				if (!existsDeviceSync(userId, deviceId))
 					return ContextualFuture.succeededFuture(false);
 
@@ -362,13 +365,15 @@ public class StaticClientContext implements ClientContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<ClientUser> getUser(Id userId) {
-						return Future.succeededFuture(getUserSync(userId));
+					public Future<Optional<Principal>> getUser(Id userId) {
+						Optional<Principal> principal = getUserSync(userId).map(Principal.class::cast);
+						return Future.succeededFuture(principal);
 					}
 
 					@Override
-					public Future<ClientDevice> getClient(Id userId, Id clientId) {
-						return Future.succeededFuture(getDeviceSync(userId, clientId));
+					public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
+						Optional<Principal> principal = getDeviceSync(userId, clientId).map(Principal.class::cast);
+						return Future.succeededFuture(principal);
 					}
 				});
 

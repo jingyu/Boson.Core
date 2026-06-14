@@ -23,6 +23,9 @@
 package io.bosonnetwork.crypto;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+
+import org.jspecify.annotations.Nullable;
+
 /**
  * Utility class for hashing passwords using different security levels and Argon2 algorithms.
  * <p>
@@ -120,7 +123,7 @@ public class PasswordHash {
 		public static final int BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.Salt.length();
 
 		private final org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt) {
 			this.salt = salt;
@@ -161,7 +164,7 @@ public class PasswordHash {
 			if (bytes == null)
 				bytes = salt.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 		@Override

@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.identifier;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.BosonException;
 
 /**
@@ -44,7 +46,7 @@ public class RegistryException extends BosonException {
 	 *
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}.
 	 */
-	public RegistryException(String message) {
+	public RegistryException(@Nullable String message) {
 		super(message);
 	}
 
@@ -55,7 +57,7 @@ public class RegistryException extends BosonException {
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}.
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}.
 	 */
-	public RegistryException(String message, Throwable cause) {
+	public RegistryException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -65,7 +67,7 @@ public class RegistryException extends BosonException {
 	 *
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}.
 	 */
-	public RegistryException(Throwable cause) {
+	public RegistryException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

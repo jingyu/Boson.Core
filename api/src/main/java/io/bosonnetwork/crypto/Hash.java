@@ -25,6 +25,8 @@ package io.bosonnetwork.crypto;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Utility class providing methods for generating SHA-256 and MD5 hashes.
  * Supports hashing single or multiple byte arrays, as well as performing double SHA-256 hashing.
@@ -86,7 +88,7 @@ public class Hash {
 	 *
 	 * @return the array of bytes for the resulting hash value.
 	 */
-	public static byte[] sha256(byte[]... inputs) {
+	public static byte[] sha256(byte @Nullable []... inputs) {
 		MessageDigest md = sha256();
 
 		for (byte[] input : inputs) {
@@ -132,7 +134,7 @@ public class Hash {
 	 * @param inputs the arrays of bytes to be double hashed.
 	 * @return the array of bytes for the resulting double hash value.
 	 */
-	public static byte[] sha256Twice(byte[]... inputs) {
+	public static byte[] sha256Twice(byte @Nullable []... inputs) {
 		MessageDigest md = sha256();
 
 		for (byte[] input : inputs) {
@@ -180,7 +182,7 @@ public class Hash {
 	 *
 	 * @return the array of bytes for the resulting hash value.
 	 */
-	public static byte[] md5(byte[]... inputs) {
+	public static byte[] md5(byte @Nullable []... inputs) {
 		MessageDigest md = md5();
 
 		for (byte[] input : inputs) {

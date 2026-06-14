@@ -36,6 +36,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Utility class for common file and directory operations.
  * <p>
@@ -108,7 +110,7 @@ public final class FileUtils {
 	 * @param path the {@link Path} to be normalized; can be null.
 	 * @return the normalized {@link Path}, or null if the input path is null.
 	 */
-	public static Path normalizePath(Path path) {
+	public static @Nullable Path normalizePath(@Nullable Path path) {
 		if (path != null) {
 			if (path.startsWith("~"))
 				path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
@@ -197,7 +199,7 @@ public final class FileUtils {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows"))
 			return Path.of(System.getenv("APPDATA"));
-		// macOS uses XDG style here (intentionally — see class doc)
+		// macOS uses XDG style here (intentionally - see class doc)
 		return xdgPath("XDG_CONFIG_HOME", ".config");
 	}
 
@@ -363,7 +365,7 @@ public final class FileUtils {
 	 * <strong>JAR FileSystem caching:</strong> for a {@code jar:} URL this method opens a JAR
 	 * {@link java.nio.file.FileSystem} lazily and caches it process-wide (subsequent calls for the
 	 * same archive return the same FileSystem via the {@code FileSystemAlreadyExistsException}
-	 * branch). The cached FileSystem is intentionally not closed — callers should not close the
+	 * branch). The cached FileSystem is intentionally not closed - callers should not close the
 	 * returned Path's FileSystem either, since other callers may still hold derived Paths into the
 	 * same archive. In practice the number of distinct JARs is small (resource lookups), so this
 	 * is the desired behavior.

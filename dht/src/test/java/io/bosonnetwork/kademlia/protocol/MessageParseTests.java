@@ -152,7 +152,7 @@ public class MessageParseTests extends MessageTests {
 
 	@Test
 	void parseBodyBeforeTypeThrows() throws Exception {
-		// 'q' appears before 'y' — the deserializer cannot select a body class yet.
+		// 'q' appears before 'y' - the deserializer cannot select a body class yet.
 		var fields = map();
 		fields.put("t", 123L);
 		fields.put("q", map());

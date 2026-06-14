@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when a CWT is used after its "Expiration" (exp) claim time.
  */
@@ -33,7 +35,7 @@ public class TokenExpiredException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public TokenExpiredException(String message) {
+	public TokenExpiredException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class TokenExpiredException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public TokenExpiredException(String message, Throwable cause) {
+	public TokenExpiredException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

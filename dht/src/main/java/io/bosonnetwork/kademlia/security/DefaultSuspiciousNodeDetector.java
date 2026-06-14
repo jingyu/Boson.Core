@@ -331,8 +331,8 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 * Removes expired entries and promotes nodes to the suspicious list if they exceed the hit threshold.
 	 *
 	 * <p><strong>Important:</strong> This method should be called periodically (recommended: every minute)
-	 * to reclaim memory. It is <em>not</em> required for ban/observation accuracy — those expire lazily on
-	 * read — so the exact interval only trades memory footprint against scan frequency.</p>
+	 * to reclaim memory. It is <em>not</em> required for ban/observation accuracy - those expire lazily on
+	 * read - so the exact interval only trades memory footprint against scan frequency.</p>
 	 */
 	public void purge() {
 		long now = System.currentTimeMillis();

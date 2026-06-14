@@ -36,6 +36,8 @@ import java.util.Objects;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.Signature;
@@ -50,9 +52,9 @@ import io.bosonnetwork.utils.Hex;
  * cryptographic {@link Identity} and {@link Id} system, ensuring that the {@code "iss"} (Issuer)
  * claim is intrinsically bound to the issuer's public key identifier.
  * <p>
- * <b>Security — the issuer is self-asserted:</b> a token is verified against the Ed25519 public
+ * <b>Security - the issuer is self-asserted:</b> a token is verified against the Ed25519 public
  * key carried in its own {@code "iss"} claim. A successful {@link #parse(byte[]) parse} therefore
- * proves only that the token was signed by the holder of the key it names as issuer — it does
+ * proves only that the token was signed by the holder of the key it names as issuer - it does
  * <em>not</em> establish that this issuer is trusted. Callers MUST pin trust by configuring
  * {@link Parser#requireIssuer(Id)} or by validating the {@code "iss"} claim against an allow-list
  * after parsing. A valid signature alone is not authentication.
@@ -100,7 +102,7 @@ public class SignedCwt {
 	 * @return the header value, or null if not present.
 	 */
 	@SuppressWarnings("unchecked")
-	public <T> T getHeader(int header) {
+	public <T> @Nullable T getHeader(int header) {
 		if (protectedHeaders.containsKey(header))
 			return (T) protectedHeaders.get(header);
 
@@ -127,7 +129,7 @@ public class SignedCwt {
 	 *         The cast is unchecked and driven entirely by the caller's expected type.
 	 */
 	@SuppressWarnings("unchecked")
-	public <T> T getClaim(int claim) {
+	public <T> @Nullable T getClaim(int claim) {
 		return (T) claims.get(claim);
 	}
 
@@ -139,7 +141,7 @@ public class SignedCwt {
 	 * @param claim the integer key of the claim to retrieve
 	 * @return the claim value as a string, or null if the claim is not present
 	 */
-	public String getClaimAsString(int claim) {
+	public @Nullable String getClaimAsString(int claim) {
 		Object value = claims.get(claim);
 		if (value == null)
 			return null;
@@ -160,7 +162,7 @@ public class SignedCwt {
 	 * @return the claim value as an {@code Id}, or {@code null} if the claim is not present.
 	 * @throws IllegalStateException if the claim value cannot be mapped to an {@code Id}.
 	 */
-	public Id getClaimAsId(int claim) {
+	public @Nullable Id getClaimAsId(int claim) {
 		Object value = claims.get(claim);
 		if (value == null)
 			return null;
@@ -377,9 +379,9 @@ public class SignedCwt {
 	 * Builder class for parsing and validating a {@link SignedCwt}.
 	 */
 	public static class Parser {
-		private Id expectedIssuer;
-		private Object expectedSubject;
-		private Object expectedAudience;
+		private @Nullable Id expectedIssuer;
+		private @Nullable Object expectedSubject;
+		private @Nullable Object expectedAudience;
 		private boolean ignoreExpiration = false;
 		private boolean ignoreNotBefore = false;
 		private boolean ignoreIssuedAt = false;
@@ -488,7 +490,7 @@ public class SignedCwt {
 		// Compares a single expected value against a single claim value. A multi-valued ("aud" as a
 		// CBOR array) claim is not supported and will not match.
 		@SuppressWarnings("BooleanMethodIsAlwaysInverted")
-		private boolean match(Object expected, Object claim) {
+		private boolean match(Object expected, @Nullable Object claim) {
 			if (expected instanceof byte[] be && claim instanceof byte[] bc)
 				return Arrays.equals(be, bc);
 
@@ -507,7 +509,7 @@ public class SignedCwt {
 		 * <p>
 		 * <b>Security:</b> the signature is verified against the public key in the token's own
 		 * {@code "iss"} claim (self-asserted issuer). Unless {@link #requireIssuer(Id)} was
-		 * configured, a successful parse does not authenticate the issuer — validate {@code "iss"}
+		 * configured, a successful parse does not authenticate the issuer - validate {@code "iss"}
 		 * against a trust anchor yourself. See the {@link SignedCwt class documentation}.
 		 *
 		 * @param coseBytes the raw CBOR bytes of the CWT.

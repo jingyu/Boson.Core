@@ -42,5 +42,12 @@
  * serialization options (for example selecting the W3C-DID string form for IDs).
  *
  * <p>The concrete (de)serializers live in the non-published {@code internal} subpackage.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.json;
+
+import org.jspecify.annotations.NullMarked;

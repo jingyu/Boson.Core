@@ -24,6 +24,8 @@ package io.bosonnetwork.web;
 
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -38,12 +40,12 @@ public class CwtAuthOptions {
 	private static final int DEFAULT_LEEWAY = 5 * 60;           // 5 minutes in seconds
 	private static final int DEFAULT_TTL = 14 * 24 * 60 * 60;   // 14 days in seconds
 
-	private Identity identity;
-	private ClientProvider clientProvider;
-	private Id expectedAudience;
+	private @Nullable Identity identity;
+	private @Nullable ClientProvider clientProvider;
+	private @Nullable Id expectedAudience;
 	private int leeway; // seconds
 	private int defaultTtl; // seconds
-	private String defaultScope;
+	private @Nullable String defaultScope;
 
 	/**
 	 * Creates a new instance of {@code CwtAuthOptions} with default settings.
@@ -63,7 +65,7 @@ public class CwtAuthOptions {
 	 *
 	 * @return the signing and verification identity, or null if not configured
 	 */
-	public Identity getIdentity() {
+	public @Nullable Identity getIdentity() {
 		return identity;
 	}
 
@@ -84,7 +86,7 @@ public class CwtAuthOptions {
 	 *
 	 * @return the client provider, or null if not configured
 	 */
-	public ClientProvider getClientProvider() {
+	public @Nullable ClientProvider getClientProvider() {
 		return clientProvider;
 	}
 
@@ -105,7 +107,7 @@ public class CwtAuthOptions {
 	 *
 	 * @return the expected audience ID, or null if audience check is disabled
 	 */
-	public Id getExpectedAudience() {
+	public @Nullable Id getExpectedAudience() {
 		return expectedAudience;
 	}
 
@@ -121,7 +123,7 @@ public class CwtAuthOptions {
 	 * @param expectedAudience the expected audience ID; if null, audience validation is disabled
 	 * @return this CwtAuthOptions instance for method chaining
 	 */
-	public CwtAuthOptions setExpectedAudience(Id expectedAudience) {
+	public CwtAuthOptions setExpectedAudience(@Nullable Id expectedAudience) {
 		this.expectedAudience = expectedAudience;
 		return this;
 	}
@@ -178,7 +180,7 @@ public class CwtAuthOptions {
 	 *
 	 * @return the default access scope, or null if no default scope is configured
 	 */
-	public String getDefaultScope() {
+	public @Nullable String getDefaultScope() {
 		return defaultScope;
 	}
 
@@ -188,7 +190,7 @@ public class CwtAuthOptions {
 	 * @param defaultScope the default access scope to set; may be null to disable default scope
 	 * @return this CwtAuthOptions instance for method chaining
 	 */
-	public CwtAuthOptions setDefaultScope(String defaultScope) {
+	public CwtAuthOptions setDefaultScope(@Nullable String defaultScope) {
 		this.defaultScope = defaultScope;
 		return this;
 	}

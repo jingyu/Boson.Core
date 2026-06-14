@@ -34,6 +34,8 @@ import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.vertx.VertxCaffeine;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -69,7 +71,7 @@ public class CachedResolver implements Resolver {
 	 * This cache is used to retrieve and store resolved {@link Card} objects to provide longer-lived caching
 	 * across application restarts or multiple instances.
 	 */
-	private final ResolutionCache persistentCache;
+	private final @Nullable ResolutionCache persistentCache;
 
 	private final static Logger log = LoggerFactory.getLogger(CachedResolver.class);
 
@@ -85,7 +87,7 @@ public class CachedResolver implements Resolver {
 	 * @param persistentCache an optional persistent cache for resolution results;
 	 *                        may be null if no persistent storage is needed
 	 */
-	public CachedResolver(Resolver resolver, Vertx vertx, ResolutionCache persistentCache) {
+	public CachedResolver(Resolver resolver, @Nullable Vertx vertx, @Nullable ResolutionCache persistentCache) {
 		this.resolver = Objects.requireNonNull(resolver, "resolver");
 
 		this.persistentCache = persistentCache;
@@ -115,7 +117,7 @@ public class CachedResolver implements Resolver {
 	 * @param resolver the underlying resolver used for resolving identifiers, must not be null
 	 * @param vertx the Vert.x instance used for asynchronous support, may be null if not needed
 	 */
-	public CachedResolver(Resolver resolver, Vertx vertx) {
+	public CachedResolver(Resolver resolver, @Nullable Vertx vertx) {
 		this(resolver, vertx, null);
 	}
 

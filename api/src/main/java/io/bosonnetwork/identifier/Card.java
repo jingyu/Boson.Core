@@ -40,6 +40,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -88,14 +90,14 @@ public class Card {
 	 */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date signedAt;
+	private final @Nullable Date signedAt;
 
 	/**
 	 * Digital signature over the contents of this Card.
 	 * Compact JSON property name "sig".
 	 */
 	@JsonProperty("sig")
-	private final byte[] signature;
+	private final byte @Nullable [] signature;
 
 	/**
 	 * Internal constructor used by JSON deserializer.
@@ -108,8 +110,8 @@ public class Card {
 	 */
 	@JsonCreator
 	protected Card(@JsonProperty(value = "id", required = true) Id id,
-				   @JsonProperty(value = "c") List<Credential> credentials,
-				   @JsonProperty(value = "s") List<Service> services,
+				   @JsonProperty(value = "c") @Nullable List<Credential> credentials,
+				   @JsonProperty(value = "s") @Nullable List<Service> services,
 				   @JsonProperty(value = "sat") Date signedAt,
 				   @JsonProperty(value = "sig", required = true) byte[] signature) {
 		Objects.requireNonNull(id, "id");
@@ -135,7 +137,7 @@ public class Card {
 	 * @param services    list of services (maybe null or empty)
 	 * @param signedAt    the signing timestamp to embed
 	 */
-	protected Card(Id id, List<Credential> credentials, List<Service> services, Date signedAt) {
+	protected Card(Id id, @Nullable List<Credential> credentials, @Nullable List<Service> services, Date signedAt) {
 		Objects.requireNonNull(id, "id");
 
 		this.id = id;
@@ -197,7 +199,7 @@ public class Card {
 	 * @return the credential with the matching id, or null if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public Credential getCredential(String id) {
+	public @Nullable Credential getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 
 		return credentials.stream()
@@ -214,7 +216,7 @@ public class Card {
 	 * @return the credential matching the specified id and type, or null if no such credential exists
 	 * @throws NullPointerException if the id or type is null
 	 */
-	public Credential getCredential(String id, String type) {
+	public @Nullable Credential getCredential(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 
@@ -253,7 +255,7 @@ public class Card {
 	 * @return the service with the matching id, or null if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public Service getService(String id) {
+	public @Nullable Service getService(String id) {
 		Objects.requireNonNull(id, "id");
 
 		return services.stream()
@@ -269,7 +271,7 @@ public class Card {
 	 * @param type the type of the service to find
 	 * @return the service matching the specified id and type, or null if no such service exists
 	 */
-	public Service getService(String id, String type) {
+	public @Nullable Service getService(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		return services.stream()
@@ -286,7 +288,7 @@ public class Card {
 	 *
 	 * @return the signature timestamp, or null if unsigned
 	 */
-	public Date getSignedAt() {
+	public @Nullable Date getSignedAt() {
 		return signedAt;
 	}
 
@@ -295,7 +297,7 @@ public class Card {
 	 *
 	 * @return the signature bytes, or null if unsigned
 	 */
-	public byte[] getSignature() {
+	public byte @Nullable [] getSignature() {
 		return signature == null ? null : signature.clone();
 	}
 

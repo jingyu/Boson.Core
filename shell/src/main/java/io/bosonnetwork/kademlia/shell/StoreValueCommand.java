@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.kademlia.shell;
 
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
@@ -93,12 +94,13 @@ public class StoreValueCommand implements Callable<Integer> {
 				return -1;
 			}
 
-			value = node.getValue(id).get();
-			if (value == null) {
+			Optional<Value> v = node.getValue(id).get();
+			if (v.isEmpty()) {
 				System.out.println("Value not exists: " + target);
 				return -1;
 			}
 
+			value = v.get();
 			if (!value.isMutable()) {
 				System.out.println("Value is immutable: " + target);
 				return -1;

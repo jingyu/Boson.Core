@@ -106,7 +106,7 @@ Value fields as they appear on the wire:
 
 #### Sequence number semantics (mutable values and peers)
 
-- **Monotonic only.** A stored record's content is replaced **only** by an update whose `seq` is strictly greater than the stored `seq`. The sequence number can never be lowered or reset — this is what prevents a replayed older (still validly signed) value from reverting current content. Owners update by incrementing `seq`; immutable values use `seq = 0` and are never content-updated (their ID is the content hash).
+- **Monotonic only.** A stored record's content is replaced **only** by an update whose `seq` is strictly greater than the stored `seq`. The sequence number can never be lowered or reset - this is what prevents a replayed older (still validly signed) value from reverting current content. Owners update by incrementing `seq`; immutable values use `seq = 0` and are never content-updated (their ID is the content hash).
 - **Equal `seq` is first-write-wins.** A store at the *same* `seq` with different content is accepted by the token/signature checks but does **not** replace the stored content (re-signing at an unchanged `seq` is a no-op for content). An honest owner never signs two payloads at one `seq`.
 - **Republish keeps records alive regardless of `seq`.** Any valid store/announce for an existing record refreshes its announced timestamp (resetting its expiration), even when `seq` is unchanged or lower. This is the Kademlia keep-alive path; it can only extend the life of valid data, never alter it.
 - The `seq` space (a non-negative integer) is large enough that resetting is unnecessary in practice.
@@ -129,8 +129,8 @@ Tokens can be acquired from:
 ### PING (1)
 Verifies node liveness.
 
-- **Request (`q`)**: *(empty — no fields)*
-- **Response (`r`)**: *(empty — no fields)*
+- **Request (`q`)**: *(empty - no fields)*
+- **Response (`r`)**: *(empty - no fields)*
 
 ---
 
@@ -201,7 +201,7 @@ Publishes a value to a node. Requires a write token from a prior `FIND_VALUE` or
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Yes | The value payload. |
 
-**Response (`r`):** *(empty — no fields)*
+**Response (`r`):** *(empty - no fields)*
 
 ---
 
@@ -230,7 +230,7 @@ Discovers service endpoints registered under a service ID. Returns matching peer
 ### ANNOUNCE_PEER (3)
 Registers a service endpoint with a node. Requires a write token from a prior `FIND_PEER` or `FIND_NODE`.
 
-**Request (`q`)** — field order on wire: `tok`, `cas`, `k`, `n`, `seq`, `o`, `os`, `sig`, `f`, `e`, `ex`:
+**Request (`q`)** - field order on wire: `tok`, `cas`, `k`, `n`, `seq`, `o`, `os`, `sig`, `f`, `e`, `ex`:
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -246,7 +246,7 @@ Registers a service endpoint with a node. Requires a write token from a prior `F
 | `e` | Endpoint | `String` | Yes | Service URI (e.g., `https://example.com:8080`). |
 | `ex` | Extra Data | `Binary` | No | Opaque extension bytes. |
 
-**Response (`r`):** *(empty — no fields)*
+**Response (`r`):** *(empty - no fields)*
 
 ---
 

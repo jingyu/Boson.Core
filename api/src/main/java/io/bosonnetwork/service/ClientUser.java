@@ -30,7 +30,7 @@ import io.bosonnetwork.Id;
  * This interface provides access to user profile information such as identification,
  * display name, contact details, and account status.
  */
-public interface ClientUser {
+public non-sealed interface ClientUser extends Principal {
 	/**
 	 * Gets the unique identifier of the user.
 	 *

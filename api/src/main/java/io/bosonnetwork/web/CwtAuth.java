@@ -38,6 +38,7 @@ import io.vertx.ext.auth.authentication.Credentials;
 import io.vertx.ext.auth.authentication.TokenCredentials;
 import io.vertx.ext.auth.authorization.Authorization;
 import io.vertx.ext.auth.authorization.RoleBasedAuthorization;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +49,7 @@ import io.bosonnetwork.cwt.Claim;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Role;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.service.SuperNodeInfo;
@@ -65,7 +67,7 @@ public class CwtAuth implements AuthenticationProvider {
 	private final Identity identity;
 	private final ClientProvider clientProvider;
 	private final int defaultTtl;
-	private final String defaultScope;
+	private final @Nullable String defaultScope;
 	private final SignedCwt.Parser cwtParser;
 
 	private CwtAuth(CwtAuthOptions options) {
@@ -130,8 +132,11 @@ public class CwtAuth implements AuthenticationProvider {
 		}
 
 		// The token signature and basic structure have already been verified by the parser.
-		// Extract the issuer; this is expected to be present if the parse succeeded.
+		// Extract the issuer; this is expected to be present if the parse succeeded, but guard
+		// explicitly so a malformed token fails cleanly instead of throwing an NPE below.
 		final Id issuerId = cwt.getClaimAsId(Claim.ISSUER.getValue());
+		if (issuerId == null)
+			return Future.failedFuture("Invalid authorization token: missing issuer");
 
 		final Id userId;
 		try {
@@ -158,33 +163,33 @@ public class CwtAuth implements AuthenticationProvider {
 
 		final String scope = cwt.getClaimAsString(Claim.SCOPE.getValue());
 
-		Future<?> getClient;
+		Future<Principal> getClient;
 		if (clientId == null) {
 			getClient = clientProvider.getUser(userId).transform(ar -> {
 				if (ar.failed())
 					return Future.failedFuture(ar.cause());
 
-				if (ar.result() == null)
+				if (ar.result().isEmpty())
 					return Future.failedFuture("Invalid authorization token: user not exists");
 
-				return Future.succeededFuture(ar.result());
+				return Future.succeededFuture(ar.result().get());
 			});
 		} else {
 			getClient = clientProvider.getClient(userId, clientId).transform(ar -> {
 				if (ar.failed())
 					return Future.failedFuture(ar.cause());
 
-				if (ar.result() == null)
+				if (ar.result().isEmpty())
 					return Future.failedFuture("Invalid authorization token: client not exists");
 
-				return Future.succeededFuture(ar.result());
+				return Future.succeededFuture(ar.result().get());
 			});
 		}
 
 		return getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken()));
 	}
 
-	private User createUser(Object client, String scope, SignedCwt cwt, String accessToken) {
+	private User createUser(Principal client, @Nullable String scope, SignedCwt cwt, String accessToken) {
 		final Id userId;
 		final Id clientId;
 		final Set<Authorization> authorizations = new HashSet<>();
@@ -220,7 +225,7 @@ public class CwtAuth implements AuthenticationProvider {
 		map.put("access_token", accessToken);
 		if (scope != null)
 			map.put("scope", scope);
-		// sid identifies THIS session — needed when a user has multiple linked AuthIdentities sharing the same userId subject.
+		// sid identifies THIS session - needed when a user has multiple linked AuthIdentities sharing the same userId subject.
 		if (cwt.containsClaim(Claim.SESSION_ID.getValue()))
 			map.put("sessionId", cwt.getClaimAsId(Claim.SESSION_ID.getValue()));
 		JsonObject principal = new JsonObject(Map.copyOf(map));
@@ -255,7 +260,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
-	public String generateToken(Id userId, Id sessionId, Id clientId, String scope, long ttl) {
+	public String generateToken(Id userId, @Nullable Id sessionId, @Nullable Id clientId, @Nullable String scope, long ttl) {
 		Objects.requireNonNull(userId, "user cannot be null");
 		if (ttl < 0)
 			throw new IllegalArgumentException("ttl must be positive");
@@ -289,7 +294,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 * @return the generated token string
 	 * @throws IllegalArgumentException if expiration is invalid
 	 */
-	public String generateToken(Id userId, Id clientId, String scope, long ttl) {
+	public String generateToken(Id userId, @Nullable Id clientId, @Nullable String scope, long ttl) {
 		return generateToken(userId, null, clientId, scope, ttl);
 	}
 
@@ -301,7 +306,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 * @param scope the scope associated with the token; can be null or optional
 	 * @return the generated token string
 	 */
-	public String generateToken(Id userId, Id clientId, String scope) {
+	public String generateToken(Id userId, @Nullable Id clientId, @Nullable String scope) {
 		return generateToken(userId, clientId, scope, 0);
 	}
 
@@ -312,7 +317,7 @@ public class CwtAuth implements AuthenticationProvider {
 	 * @param scope the scope associated with the token; can be null or optional
 	 * @return the generated token string
 	 */
-	public String generateToken(Id userId, String scope) {
+	public String generateToken(Id userId, @Nullable String scope) {
 		return generateToken(userId, null, null, scope, 0);
 	}
 }

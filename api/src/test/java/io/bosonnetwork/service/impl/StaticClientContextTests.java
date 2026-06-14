@@ -29,12 +29,12 @@ public class StaticClientContextTests {
 		assertTrue(context.existsUser(userId).get());
 		assertFalse(context.existsUser(Id.random()).get());
 
-		ClientUser user = context.getUser(userId).get();
+		ClientUser user = context.getUser(userId).get().orElseThrow();
 		assertNotNull(user);
 		assertEquals("Alice", user.getName());
 		assertTrue(user.verifyPassphrase("pass"));
 
-		assertNull(context.getUser(Id.random()).get());
+		assertTrue(context.getUser(Id.random()).get().isEmpty());
 	}
 
 	@Test

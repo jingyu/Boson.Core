@@ -297,7 +297,7 @@ public class RoutingTable {
 	 * into the bucket's <em>high</em> branch. This is a deliberate Boson adaptation: unlike the original
 	 * Kademlia paper (§2.4), which splits only the bucket whose range contains the local node's own ID,
 	 * Boson lets density drive splitting and relies on {@link #mergeBuckets()} during maintenance to
-	 * coalesce any sibling pair whose combined effective size fits in a single bucket — so unproductive
+	 * coalesce any sibling pair whose combined effective size fits in a single bucket - so unproductive
 	 * splits are reclaimed rather than accumulating. The high-branch condition keeps the decision
 	 * deterministic and is covered by {@code RoutingTableTests#testNeedsSplitAndSplit}.
 	 *

@@ -1,5 +1,7 @@
 package io.bosonnetwork.web;
 
+import java.util.Optional;
+
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
@@ -19,6 +21,7 @@ import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.Principal;
 
 @ExtendWith(VertxExtension.class)
 public class CwtAuthHandlerTest {
@@ -34,14 +37,14 @@ public class CwtAuthHandlerTest {
 			.setLeeway(0)
 			.setClientProvider(new ClientProvider() {
 				@Override
-				public Future<?> getUser(Id userId) {
+				public Future<Optional<Principal>> getUser(Id userId) {
 					return userId.equals(alice.getId()) ?
-							Future.succeededFuture(alice) : Future.succeededFuture(null);
+							Future.succeededFuture(Optional.of(alice)) : Future.succeededFuture(Optional.empty());
 				}
 
 				@Override
-				public Future<?> getClient(Id userId, Id clientId) {
-					return Future.succeededFuture(null);
+				public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
+					return Future.succeededFuture(Optional.empty());
 				}
 			});
 

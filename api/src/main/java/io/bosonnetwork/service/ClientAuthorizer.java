@@ -31,17 +31,17 @@ import io.bosonnetwork.Id;
  * Interface for authorizing client requests to access specific services.
  * <p>
  * Implementations decide whether a user, acting from a specific device, is permitted to use the
- * requested service, and — on success — return any authorization details the service will need
+ * requested service, and - on success - return any authorization details the service will need
  * downstream (issued tokens, granted features, rate-limit overrides, etc.).
  * <p>
  * <strong>Result contract.</strong>
  * <ul>
- *   <li><strong>Authorized</strong> — the future completes successfully with a
+ *   <li><strong>Authorized</strong> - the future completes successfully with a
  *       {@code Map<String, Object>} carrying authorization details. The exact key set is
  *       implementation-defined for now and may evolve; consumers should treat unknown keys as
  *       opaque and missing keys as "not provided." An empty map means "authorized with no extra
  *       details." {@code null} should not be returned.</li>
- *   <li><strong>Denied or system error</strong> — the future completes <em>exceptionally</em> with
+ *   <li><strong>Denied or system error</strong> - the future completes <em>exceptionally</em> with
  *       a {@link io.bosonnetwork.BosonException} (or a subtype). Implementations are encouraged
  *       to distinguish denial from infrastructure failure through the exception subtype/message,
  *       but both flow through the same exceptional-completion channel from the caller's

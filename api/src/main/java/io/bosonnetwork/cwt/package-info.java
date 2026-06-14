@@ -22,18 +22,18 @@
 
 /**
  * CBOR Web Token (CWT) support, used as the authentication token format across Boson's HTTP
- * services (super node ↔ client ↔ federation).
+ * services (super node - client - federation).
  *
  * <h2>{@link io.bosonnetwork.cwt.SignedCwt}</h2>
  * The entry point: a CWT structured as a COSE_Sign1 single-signer object. It is specialized for
- * Boson — it strictly enforces the EdDSA (Ed25519) signature algorithm and binds the {@code "iss"}
+ * Boson - it strictly enforces the EdDSA (Ed25519) signature algorithm and binds the {@code "iss"}
  * (issuer) claim to a Boson {@link io.bosonnetwork.Id} / {@link io.bosonnetwork.Identity}. Build
  * tokens with {@link io.bosonnetwork.cwt.SignedCwt#builder(io.bosonnetwork.Identity)} and verify
  * them with {@link io.bosonnetwork.cwt.SignedCwt#parser()}.
  * <p>
  * <strong>Security:</strong> a token is verified against the public key carried in its own
  * {@code "iss"} claim (self-asserted issuer), so a successful parse proves only that the holder of
- * that key signed it — callers must pin trust via
+ * that key signed it - callers must pin trust via
  * {@link io.bosonnetwork.cwt.SignedCwt.Parser#requireIssuer(io.bosonnetwork.Id)} or validate the
  * issuer against a trust anchor after parsing.
  *
@@ -49,8 +49,15 @@
  *
  * <h2>References</h2>
  * <ul>
- *   <li><a href="https://datatracker.ietf.org/doc/html/rfc8392">RFC 8392</a> — CBOR Web Token (CWT)</li>
- *   <li><a href="https://datatracker.ietf.org/doc/html/rfc8152">RFC 8152</a> / <a href="https://www.rfc-editor.org/rfc/rfc9052.html">RFC 9052</a> — COSE</li>
+ *   <li><a href="https://datatracker.ietf.org/doc/html/rfc8392">RFC 8392</a> - CBOR Web Token (CWT)</li>
+ *   <li><a href="https://datatracker.ietf.org/doc/html/rfc8152">RFC 8152</a> / <a href="https://www.rfc-editor.org/rfc/rfc9052.html">RFC 9052</a> - COSE</li>
  * </ul>
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.cwt;
+
+import org.jspecify.annotations.NullMarked;

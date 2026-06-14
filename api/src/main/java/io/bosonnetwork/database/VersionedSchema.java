@@ -45,6 +45,7 @@ import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlClient;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.Tuple;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -489,7 +490,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @return the next statement including the trailing semicolon, or {@code null} if EOF
 	 * @throws IOException if reading fails
 	 */
-	private static String nextStatement(BufferedReader reader) throws IOException {
+	private static @Nullable String nextStatement(BufferedReader reader) throws IOException {
 		StringBuilder statement = new StringBuilder();
 		String line;
 		String currentDollarTag = null;

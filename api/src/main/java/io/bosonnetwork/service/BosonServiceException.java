@@ -23,6 +23,8 @@
 
 package io.bosonnetwork.service;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.BosonException;
 
 /**
@@ -50,7 +52,7 @@ public class BosonServiceException extends BosonException {
 	 * @param   message   the detail message. The detail message is saved for
 	 *		  later retrieval by the {@link #getMessage()} method.
 	 */
-	public BosonServiceException(String message) {
+	public BosonServiceException(@Nullable String message) {
 		super(message);
 	}
 
@@ -67,7 +69,7 @@ public class BosonServiceException extends BosonException {
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
 	 */
-	public BosonServiceException(String message, Throwable cause) {
+	public BosonServiceException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -84,7 +86,7 @@ public class BosonServiceException extends BosonException {
 	 *		 permitted, and indicates that the cause is nonexistent or
 	 *		 unknown.)
 	 */
-	public BosonServiceException(Throwable cause) {
+	public BosonServiceException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

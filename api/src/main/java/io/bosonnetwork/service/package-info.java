@@ -24,14 +24,14 @@
 /**
  * Public APIs for building and hosting <em>layer-2 services</em> on top of a Boson super node.
  * <p>
- * A layer-2 service (web gateway, ion store, photon messaging, custom services, …) is published
+ * A layer-2 service (web gateway, ion store, photon messaging, custom services, ...) is published
  * by an operator's super node and consumed by end users (clients) or by other super nodes
  * (federation peers). This package defines the contracts on both sides of that boundary.
  *
  * <h2>Authoring a service: {@link io.bosonnetwork.service.BosonService} +
  * {@link io.bosonnetwork.service.BosonServiceFactory}</h2>
  * A service implements {@link io.bosonnetwork.service.BosonService} (identity, public endpoint,
- * lifecycle: {@code init} → {@code start} → {@code stop}) and ships a
+ * lifecycle: {@code init} -> {@code start} -> {@code stop}) and ships a
  * {@link io.bosonnetwork.service.BosonServiceFactory} discovered via Java
  * {@link java.util.ServiceLoader} (a {@code META-INF/services/} entry, or a {@code provides}
  * declaration on the module path). The hosting super node loads factories by
@@ -48,7 +48,7 @@
  *       an {@link io.bosonnetwork.service.ServiceContext#unwrap(Class) unwrap} hook for
  *       infrastructure components (e.g. Vert.x);</li>
  *   <li>a {@link io.bosonnetwork.service.ClientContext} for looking up end-user identities
- *       (users + their devices) — see below;</li>
+ *       (users + their devices) - see below;</li>
  *   <li>a {@link io.bosonnetwork.service.FederationContext} for talking to other super nodes
  *       and the services they host.</li>
  * </ul>
@@ -56,18 +56,18 @@
  * <h2>Client vs. federation</h2>
  * The two "sides" each carry their own auth surface:
  * <ul>
- *   <li><strong>Client side</strong> ({@link io.bosonnetwork.service.ClientContext}) — read-only
+ *   <li><strong>Client side</strong> ({@link io.bosonnetwork.service.ClientContext}) - read-only
  *       lookups of {@link io.bosonnetwork.service.ClientUser} / {@link io.bosonnetwork.service.ClientDevice},
  *       plus a {@link io.bosonnetwork.service.ClientAuthenticator} for verifying who they are and
  *       a {@link io.bosonnetwork.service.ClientAuthorizer} for deciding what they can do.</li>
- *   <li><strong>Federation side</strong> ({@link io.bosonnetwork.service.FederationContext}) —
+ *   <li><strong>Federation side</strong> ({@link io.bosonnetwork.service.FederationContext}) -
  *       lookup/probe of {@link io.bosonnetwork.service.SuperNodeInfo} /
  *       {@link io.bosonnetwork.service.ServiceInfo}, plus a
  *       {@link io.bosonnetwork.service.FederationAuthenticator} for verifying peer node/service
  *       identity.</li>
  * </ul>
  * Both authenticator interfaces share a "nonce/signature contract" (see their interface Javadoc):
- * non-null nonce+signature ⇒ verify; both null ⇒ pre-authenticated mode; exactly one null ⇒ caller bug.
+ * non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null => caller bug.
  *
  * <h2>Identity and access scopes</h2>
  * Principal entitlements are exposed through {@link io.bosonnetwork.service.Role} (server-derived
@@ -83,5 +83,12 @@
  * {@link io.bosonnetwork.service.FederationContext#disabled() disabled},
  * {@link io.bosonnetwork.service.FederationContext#allowAll(io.bosonnetwork.Identity) allowAll},
  * and {@link io.bosonnetwork.service.FederationContext#staticContext(io.bosonnetwork.Identity) staticContext}.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.service;
+
+import org.jspecify.annotations.NullMarked;

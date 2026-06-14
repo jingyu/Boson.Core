@@ -24,6 +24,8 @@ package io.bosonnetwork.service;
 
 import java.util.concurrent.CompletableFuture;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -35,14 +37,14 @@ import io.bosonnetwork.Id;
  * <strong>Nonce/signature contract.</strong> The {@code (id, nonce, signature)} overloads accept
  * three argument shapes:
  * <ul>
- *   <li>Both {@code nonce} and {@code signature} non-null — the implementation MUST verify the
+ *   <li>Both {@code nonce} and {@code signature} non-null - the implementation MUST verify the
  *       signature against the nonce using the id's signing key, and return the verification result.</li>
- *   <li>Both {@code nonce} and {@code signature} null — "pre-authenticated" mode: the caller has
+ *   <li>Both {@code nonce} and {@code signature} null - "pre-authenticated" mode: the caller has
  *       already verified the identity out of band (typically at the transport layer) and is asking
  *       only whether the id is admissible. The implementation MUST NOT treat the absence of a
  *       signature as a failure; it should apply its admission policy (membership, allow-list, etc.)
  *       and return that. The no-nonce default overloads delegate to this mode.</li>
- *   <li>Exactly one of {@code nonce} / {@code signature} is null — caller bug; the implementation
+ *   <li>Exactly one of {@code nonce} / {@code signature} is null - caller bug; the implementation
  *       MUST return {@code false}.</li>
  * </ul>
  */
@@ -57,10 +59,10 @@ public interface FederationAuthenticator {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the node is admitted,
 	 *         or {@code false} otherwise
 	 */
-	CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature);
+	CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature);
 
 	/**
-	 * Convenience for pre-authenticated mode — equivalent to
+	 * Convenience for pre-authenticated mode - equivalent to
 	 * {@link #authenticateNode(Id, byte[], byte[]) authenticateNode(nodeId, null, null)}.
 	 *
 	 * @param nodeId the unique identifier of the node to be authenticated
@@ -82,10 +84,10 @@ public interface FederationAuthenticator {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the peer is admitted,
 	 *         or {@code false} otherwise
 	 */
-	CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature);
+	CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature);
 
 	/**
-	 * Convenience for pre-authenticated mode — equivalent to
+	 * Convenience for pre-authenticated mode - equivalent to
 	 * {@link #authenticatePeer(Id, Id, byte[], byte[]) authenticatePeer(nodeId, peerId, null, null)}.
 	 *
 	 * @param nodeId the unique identifier of the node managing the peer

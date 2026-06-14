@@ -25,10 +25,13 @@ package io.bosonnetwork.utils;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * This class is a simple holder for a quadruple of values.
  * <p>
  * It follows the same conventions as {@link Pair} and {@link Triple}, but stores four values instead of two/three.
+ * Each element may be {@code null}; {@link #empty()} holds {@code null} for all four.
  *
  * @param <A> type for value a.
  * @param <B> type for value b.
@@ -38,10 +41,10 @@ import java.util.function.Function;
 public class Quadruple<A, B, C, D> {
 	private static final Quadruple<?, ?, ?, ?> EMPTY = new Quadruple<>(null, null, null, null);
 
-	private final A a;
-	private final B b;
-	private final C c;
-	private final D d;
+	private final @Nullable A a;
+	private final @Nullable B b;
+	private final @Nullable C c;
+	private final @Nullable D d;
 
 	/**
 	 * Create a value quadruple object from the given values.
@@ -51,7 +54,7 @@ public class Quadruple<A, B, C, D> {
 	 * @param c value c.
 	 * @param d value d.
 	 */
-	public Quadruple(A a, B b, C c, D d) {
+	public Quadruple(@Nullable A a, @Nullable B b, @Nullable C c, @Nullable D d) {
 		this.a = a;
 		this.b = b;
 		this.c = c;
@@ -71,7 +74,7 @@ public class Quadruple<A, B, C, D> {
 	 * @param d value d.
 	 * @return the new Quadruple object.
 	 */
-	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> of(A1 a, B1 b, C1 c, D1 d) {
+	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> of(@Nullable A1 a, @Nullable B1 b, @Nullable C1 c, @Nullable D1 d) {
 		return new Quadruple<>(a, b, c, d);
 	}
 
@@ -94,7 +97,7 @@ public class Quadruple<A, B, C, D> {
 	 *
 	 * @return the value a.
 	 */
-	public A a() {
+	public @Nullable A a() {
 		return a;
 	}
 
@@ -103,7 +106,7 @@ public class Quadruple<A, B, C, D> {
 	 *
 	 * @return the value b.
 	 */
-	public B b() {
+	public @Nullable B b() {
 		return b;
 	}
 
@@ -112,7 +115,7 @@ public class Quadruple<A, B, C, D> {
 	 *
 	 * @return the value c.
 	 */
-	public C c() {
+	public @Nullable C c() {
 		return c;
 	}
 
@@ -121,7 +124,7 @@ public class Quadruple<A, B, C, D> {
 	 *
 	 * @return the value d.
 	 */
-	public D d() {
+	public @Nullable D d() {
 		return d;
 	}
 

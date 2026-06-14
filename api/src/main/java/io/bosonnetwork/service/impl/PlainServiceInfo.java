@@ -25,6 +25,8 @@ package io.bosonnetwork.service.impl;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.service.ServiceInfo;
 
@@ -45,7 +47,7 @@ public class PlainServiceInfo implements ServiceInfo {
 		this(peerId, fingerprint, nodeId, endpoint, null, null);
 	}
 
-	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, String serviceType, String serviceName) {
+	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, @Nullable String serviceType, @Nullable String serviceName) {
 		this.peerId = Objects.requireNonNull(peerId);
 		this.fingerprint = fingerprint;
 		this.nodeId = Objects.requireNonNull(nodeId);
@@ -80,7 +82,7 @@ public class PlainServiceInfo implements ServiceInfo {
 	}
 
 	@Override
-	public byte[] getExtraData() {
+	public byte @Nullable [] getExtraData() {
 		return null;
 	}
 

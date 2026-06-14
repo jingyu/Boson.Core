@@ -4,7 +4,7 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net/)
 [![Maven](https://img.shields.io/badge/Maven-3.8%2B-red.svg)](https://maven.apache.org/)
 
-Boson Core is the foundational library for the [Boson Network](https://github.com/bosonnetwork) — a decentralized, encrypted peer-to-peer communication framework. It provides the common APIs, a secure Kademlia DHT implementation, and an interactive developer shell.
+Boson Core is the foundational library for the [Boson Network](https://github.com/bosonnetwork) - a decentralized, encrypted peer-to-peer communication framework. It provides the common APIs, a secure Kademlia DHT implementation, and an interactive developer shell.
 
 ---
 
@@ -28,8 +28,8 @@ Boson Core is the foundational library for the [Boson Network](https://github.co
 
 Boson is a decentralized and encrypted peer-to-peer communication framework designed for secure, censorship-resistant networking. It uses a two-layer architecture:
 
-- **Bottom layer** — A unified DHT (Distributed Hash Table) network that handles node discovery, peer routing, and distributed storage.
-- **Top layer** — Application-oriented services (messaging, active proxy, etc.) built on top of the DHT network.
+- **Bottom layer** - A unified DHT (Distributed Hash Table) network that handles node discovery, peer routing, and distributed storage.
+- **Top layer** - Application-oriented services (messaging, active proxy, etc.) built on top of the DHT network.
 
 Every node in the Boson network has a cryptographic identity derived from an Ed25519 key pair. Node IDs, peer announcements, and stored values are all signed and verified, making the network resistant to Sybil attacks and data tampering.
 
@@ -46,7 +46,7 @@ The `api` module defines the contracts and shared utilities used by the DHT impl
 - Core interfaces
 - Crypto primitives
 - Decentralized identifier system
-  Boson implements a self-sovereign identity layer that is fully compatible with the [W3C DID Core](https://www.w3.org/TR/did-core/) and [W3C Verifiable Credentials](https://www.w3.org/TR/vc-data-model/) specifications. Every Boson node or user has an identity anchored to an Ed25519 key pair, and that identity can be discovered, resolved, and verified entirely through the DHT — with no central registry. 
+  Boson implements a self-sovereign identity layer that is fully compatible with the [W3C DID Core](https://www.w3.org/TR/did-core/) and [W3C Verifiable Credentials](https://www.w3.org/TR/vc-data-model/) specifications. Every Boson node or user has an identity anchored to an Ed25519 key pair, and that identity can be discovered, resolved, and verified entirely through the DHT - with no central registry. 
   The dual-format design means every object can be serialized as a full W3C JSON-LD document (for interoperability with standards-compliant verifiers) or as the Boson compact format (for efficiency inside the P2P network).
 - Service framework
   Defines the plugin API for Boson services, and federation support.
@@ -57,11 +57,11 @@ The `api` module defines the contracts and shared utilities used by the DHT impl
 
 The `dht` module implements a hardened Kademlia DHT node. It extends standard Kademlia with several security features:
 
-- **Cryptographic node identity** — every node is identified by its Ed25519 public key; all RPC messages are authenticated.
-- **Signed values** — mutable values stored in the DHT carry an Ed25519 signature that any node can verify.
-- **Security blacklist** — misbehaving nodes are tracked and banned automatically.
-- **Dual-stack networking** — simultaneous IPv4 and IPv6 support on a single port.
-- **Dual serialization** — RPC messages support both JSON (text) and CBOR (binary) formats.
+- **Cryptographic node identity** - every node is identified by its Ed25519 public key; all RPC messages are authenticated.
+- **Signed values** - mutable values stored in the DHT carry an Ed25519 signature that any node can verify.
+- **Security blacklist** - misbehaving nodes are tracked and banned automatically.
+- **Dual-stack networking** - simultaneous IPv4 and IPv6 support on a single port.
+- **Dual serialization** - RPC messages support both JSON (text) and CBOR (binary) formats.
 
 **RPC protocol**
 
@@ -142,7 +142,7 @@ cd shell/target/dist
 ./bin/dht-shell [OPTIONS]
 ```
 
-**Example — start a local shell node and bootstrap into the network:**
+**Example - start a local shell node and bootstrap into the network:**
 
 ```bash
 ./bin/dht-shell \
@@ -178,7 +178,7 @@ bootstraps:
     port: 39001
 ```
 
-> **Important:** `address4` and `address6` must be specific **public unicast** IP addresses. Wildcard addresses (`0.0.0.0`, `::`) and loopback addresses (`127.0.0.1`, `::1`) are not valid — the DHT embeds this address in node announcements so that other peers can reach you. If you omit the field entirely, the node will auto-detect its public IP via the default network route.
+> **Important:** `address4` and `address6` must be specific **public unicast** IP addresses. Wildcard addresses (`0.0.0.0`, `::`) and loopback addresses (`127.0.0.1`, `::1`) are not valid - the DHT embeds this address in node announcements so that other peers can reach you. If you omit the field entirely, the node will auto-detect its public IP via the default network route.
 
 ---
 

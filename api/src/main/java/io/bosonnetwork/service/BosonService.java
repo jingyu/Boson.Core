@@ -58,7 +58,7 @@ public interface BosonService {
 
 	/**
 	 * Returns the <em>local</em> bind host of the service (the address the service listens on
-	 * locally — e.g. {@code 0.0.0.0}, {@code 127.0.0.1}, or a configured interface). This is
+	 * locally - e.g. {@code 0.0.0.0}, {@code 127.0.0.1}, or a configured interface). This is
 	 * deployment configuration and is generally different from the publicly-reachable host
 	 * advertised in {@link #getPeerInfo()}.
 	 *
@@ -84,7 +84,7 @@ public interface BosonService {
 	String getEndpoint();
 
 	/**
-	 * Returns the published peer information for this service — the public-facing identity, the
+	 * Returns the published peer information for this service - the public-facing identity, the
 	 * advertised endpoint, and any associated metadata. This is what federation peers see when
 	 * looking up the service.
 	 *

@@ -148,7 +148,7 @@ public class CertUtilBouncyCastle {
 			if (subjectAltNames.isEmpty())
 				throw new CryptoUtil.KeyConvertException("At least one SAN (hostname or IP) must be provided");
 
-			// Ed25519 signatures don't use a hash — pass "Ed25519" directly
+			// Ed25519 signatures don't use a hash - pass "Ed25519" directly
 			ContentSigner signer = new JcaContentSignerBuilder("Ed25519")
 					.setProvider("BC")
 					.build(privateKey);
@@ -162,7 +162,7 @@ public class CertUtilBouncyCastle {
 							new X509ExtensionUtils(digestCalc).createSubjectKeyIdentifier(spki))
 					// KeyUsage: required for TLS
 					.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature))
-					// SAN — critical for client acceptance
+					// SAN - critical for client acceptance
 					.addExtension(Extension.subjectAlternativeName, false,
 							new GeneralNames(subjectAltNames.toArray(new GeneralName[0])))
 					// BasicConstraints: CA=false, this is a server/end-entity cert

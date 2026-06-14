@@ -27,5 +27,12 @@
  * wants to observe Boson services, and {@link io.bosonnetwork.metrics.Measured} is the marker
  * interface for components that expose such metrics. The interfaces are intentionally minimal so a
  * host application can plug in its own metrics backend.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.metrics;
+
+import org.jspecify.annotations.NullMarked;

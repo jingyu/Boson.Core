@@ -24,11 +24,14 @@ package io.bosonnetwork.identifier;
 
 import java.util.Date;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonValue;
+
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 
@@ -162,11 +165,11 @@ public interface Resolver {
 	 */
 	class ResolutionMetadata {
 		@JsonProperty("created")
-		private final Date created;
+		private final @Nullable Date created;
 		@JsonProperty("updated")
-		private final Date updated;
+		private final @Nullable Date updated;
 		@JsonProperty("resolved")
-		private final Date resolved;
+		private final @Nullable Date resolved;
 		@JsonProperty("deactivated")
 		private final boolean deactivated;
 		@JsonProperty("version")
@@ -179,7 +182,7 @@ public interface Resolver {
 		 * @param deactivated whether the resource is deactivated
 		 * @param version version number of the resource
 		 */
-		public ResolutionMetadata(Date created, Date updated, Date resolved, boolean deactivated, int version) {
+		public ResolutionMetadata(@Nullable Date created, @Nullable Date updated, @Nullable Date resolved, boolean deactivated, int version) {
 			this.created = created;
 			this.updated = updated;
 			this.resolved = resolved;
@@ -190,21 +193,21 @@ public interface Resolver {
 		/**
 		 * @return the creation date of the resource
 		 */
-		public Date getCreated() {
+		public @Nullable Date getCreated() {
 			return created;
 		}
 
 		/**
 		 * @return the last update date of the resource
 		 */
-		public Date getUpdated() {
+		public @Nullable Date getUpdated() {
 			return updated;
 		}
 
 		/**
 		 * @return the date/time when this result was resolved
 		 */
-		public Date getResolved() {
+		public @Nullable Date getResolved() {
 			return resolved;
 		}
 
@@ -237,9 +240,9 @@ public interface Resolver {
 		@JsonProperty("status")
 		private final ResolutionStatus status;
 		@JsonProperty("result")
-		private final T result;
+		private final @Nullable T result;
 		@JsonProperty("resultMetadata")
-		private final ResolutionMetadata metadata;
+		private final @Nullable ResolutionMetadata metadata;
 
 		/**
 		 * Constructs a resolution result with the given status, result, and metadata.
@@ -247,7 +250,7 @@ public interface Resolver {
 		 * @param result the resolved object, or null if not found or invalid
 		 * @param metadata metadata about the resolved object
 		 */
-		public ResolutionResult(ResolutionStatus status, T result, ResolutionMetadata metadata) {
+		public ResolutionResult(ResolutionStatus status, @Nullable T result, @Nullable ResolutionMetadata metadata) {
 			this.status = status;
 			this.result = result;
 			this.metadata = metadata;
@@ -258,7 +261,7 @@ public interface Resolver {
 		 * @param result the resolved object
 		 * @param metadata metadata about the resolved object
 		 */
-		public ResolutionResult(T result, ResolutionMetadata metadata) {
+		public ResolutionResult(T result, @Nullable ResolutionMetadata metadata) {
 			this(ResolutionStatus.SUCCESS, result, metadata);
 		}
 
@@ -272,14 +275,25 @@ public interface Resolver {
 		/**
 		 * @return the resolved object, or null if not found or invalid
 		 */
-		public T getResult() {
+		public @Nullable T getResult() {
 			return result;
+		}
+
+		/**
+		 * Returns the resolved object as an {@link Optional}, empty when the resolution did not
+		 * succeed (i.e. {@code NOT_FOUND} or {@code INVALID}). Prefer this over {@link #getResult()}
+		 * when you want to avoid an explicit {@code null} check.
+		 *
+		 * @return the resolved object, or {@link Optional#empty()} if not found or invalid
+		 */
+		public Optional<T> result() {
+			return Optional.ofNullable(result);
 		}
 
 		/**
 		 * @return metadata about the resolved object
 		 */
-		public ResolutionMetadata getResultMetadata() {
+		public @Nullable ResolutionMetadata getResultMetadata() {
 			return metadata;
 		}
 

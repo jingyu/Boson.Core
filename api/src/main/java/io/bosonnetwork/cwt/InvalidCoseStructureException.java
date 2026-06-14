@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when the CWT does not conform to the expected COSE_Sign1 structure.
  */
@@ -33,7 +35,7 @@ public class InvalidCoseStructureException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidCoseStructureException(String message) {
+	public InvalidCoseStructureException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidCoseStructureException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidCoseStructureException(String message, Throwable cause) {
+	public InvalidCoseStructureException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

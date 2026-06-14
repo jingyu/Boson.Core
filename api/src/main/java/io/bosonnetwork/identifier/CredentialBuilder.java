@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -45,13 +47,13 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	/** List of credential types */
 	private final List<String> types;
 	/** Human-readable name of the credential */
-	private String name;
+	private @Nullable String name;
 	/** Description of the credential */
-	private String description;
+	private @Nullable String description;
 	/** Start date of credential validity */
-	private Date validFrom;
+	private @Nullable Date validFrom;
 	/** End date of credential validity */
-	private Date validUntil;
+	private @Nullable Date validUntil;
 	/** Subject of the credential */
 	private Id subject;
 	/** Claims or attributes asserted by the credential */
@@ -135,7 +137,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @param name the credential name
 	 * @return this builder instance
 	 */
-	public CredentialBuilder name(String name) {
+	public CredentialBuilder name(@Nullable String name) {
 		this.name = name == null || name.isEmpty() ? null : normalize(name);
 		return this;
 	}
@@ -148,7 +150,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @param description the credential description
 	 * @return this builder instance
 	 */
-	public CredentialBuilder description(String description) {
+	public CredentialBuilder description(@Nullable String description) {
 		this.description = description == null || description.isEmpty() ? null : normalize(description);
 		return this;
 	}
@@ -161,7 +163,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @param validFrom the start date
 	 * @return this builder instance
 	 */
-	public CredentialBuilder validFrom(Date validFrom) {
+	public CredentialBuilder validFrom(@Nullable Date validFrom) {
 		// Trim milliseconds from date if not null
 		this.validFrom = validFrom == null ? null : trimMillis(validFrom);
 		return this;
@@ -175,7 +177,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @param validUntil the end date
 	 * @return this builder instance
 	 */
-	public CredentialBuilder validUntil(Date validUntil) {
+	public CredentialBuilder validUntil(@Nullable Date validUntil) {
 		// Trim milliseconds from date if not null
 		this.validUntil = validUntil == null ? null : trimMillis(validUntil);
 		return this;

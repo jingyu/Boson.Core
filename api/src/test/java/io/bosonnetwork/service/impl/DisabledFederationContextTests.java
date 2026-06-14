@@ -16,7 +16,7 @@ public class DisabledFederationContextTests {
 		DisabledFederationContext context = new DisabledFederationContext();
 
 		assertFalse(context.existsNode(Id.random()).get());
-		assertNull(context.getNode(Id.random(), false).get());
+		assertTrue(context.getNode(Id.random(), false).get().isEmpty());
 		assertTrue(context.getServices(Id.random(), Id.random()).get().isEmpty());
 		assertTrue(context.getServices(Id.random()).get().isEmpty());
 		assertFalse(context.getAuthenticator().authenticateNode(Id.random()).get());

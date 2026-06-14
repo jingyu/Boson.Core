@@ -28,6 +28,8 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Represents a paginated result set.
  *
@@ -59,7 +61,7 @@ public class PaginatedResult<T> {
 	                          @JsonProperty(value = "pageSize", required = true) long pageSize,
 	                          @JsonProperty(value = "totalPages", required = true) long totalPages,
 	                          @JsonProperty(value = "totalItems", required = true) long totalItems,
-	                          @JsonProperty(value = "items") List<T> items) {
+	                          @JsonProperty(value = "items") @Nullable List<T> items) {
 		this.page = page;
 		this.pageSize = pageSize;
 		this.totalPages = totalPages;
@@ -67,7 +69,7 @@ public class PaginatedResult<T> {
 		this.items = items == null || items.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(items);
 	}
 
-	private PaginatedResult(long page, long pageSize, long totalItems, List<T> items) {
+	private PaginatedResult(long page, long pageSize, long totalItems, @Nullable List<T> items) {
 		this.page = page;
 		this.pageSize = pageSize;
 		this.totalPages = pageSize > 0 ? (totalItems + pageSize - 1) / pageSize : 0;
@@ -85,7 +87,7 @@ public class PaginatedResult<T> {
 	 * @param items the items in the current page
 	 * @return a new paginated result
 	 */
-	public static <T> PaginatedResult<T> of(long page, long pageSize, long totalItems, List<T> items) {
+	public static <T> PaginatedResult<T> of(long page, long pageSize, long totalItems, @Nullable List<T> items) {
 		return new PaginatedResult<>(page, pageSize, totalItems, items);
 	}
 

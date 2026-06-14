@@ -22,10 +22,12 @@
 
 package io.bosonnetwork.identifier;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown by {@link ResolutionCache} implementations when a cache operation
  * ({@code put}, {@code get}, {@code evictExpired}, {@code clear}, or construction) cannot be
- * completed — typically due to I/O failures or (de)serialization errors.
+ * completed - typically due to I/O failures or (de)serialization errors.
  * <p>
  * Part of the resolver exception hierarchy ({@link io.bosonnetwork.BosonException} →
  * {@link RegistryException} → {@link ResolverException} → {@code ResolutionCacheException}),
@@ -47,7 +49,7 @@ public class ResolutionCacheException extends ResolverException {
 	 *
 	 * @param message the detail message that explains the reason for the exception
 	 */
-	public ResolutionCacheException(String message) {
+	public ResolutionCacheException(@Nullable String message) {
 		super(message);
 	}
 
@@ -58,7 +60,7 @@ public class ResolutionCacheException extends ResolverException {
 	 * @param message the detail message that explains the reason for the exception
 	 * @param cause   the cause of the exception (may be {@code null})
 	 */
-	public ResolutionCacheException(String message, Throwable cause) {
+	public ResolutionCacheException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -67,7 +69,7 @@ public class ResolutionCacheException extends ResolverException {
 	 *
 	 * @param cause the cause of the exception (may be {@code null})
 	 */
-	public ResolutionCacheException(Throwable cause) {
+	public ResolutionCacheException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

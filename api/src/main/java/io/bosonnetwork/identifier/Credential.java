@@ -41,6 +41,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.bosonnetwork.BeforeValidPeriodException;
 import io.bosonnetwork.ExpiredException;
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -81,12 +83,12 @@ public class Credential {
 	/** Human-readable credential name ("n"), optional */
 	@JsonProperty("n")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final String name;
+	private final @Nullable String name;
 
 	/** Human-readable credential description ("d"), optional */
 	@JsonProperty("d")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final String description;
+	private final @Nullable String description;
 
 	/** Issuer identifier ("i"), required */
 	@JsonProperty("i")
@@ -96,12 +98,12 @@ public class Credential {
 	/** Credential valid from date ("v"), optional */
 	@JsonProperty("v")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date validFrom;
+	private final @Nullable Date validFrom;
 
 	/** Credential valid until date ("e"), optional */
 	@JsonProperty("e")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date validUntil;
+	private final @Nullable Date validUntil;
 
 	/** Credential subject ("s"), required */
 	@JsonProperty("s")
@@ -110,11 +112,11 @@ public class Credential {
 	/** Signature timestamp ("sat"), optional */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date signedAt;
+	private final @Nullable Date signedAt;
 
 	/** Cryptographic signature bytes ("sig"), required */
 	@JsonProperty("sig")
-	private final byte[] signature;
+	private final byte @Nullable [] signature;
 
 	/**
 	 * Internal constructor used by JSON deserializer.
@@ -133,15 +135,15 @@ public class Credential {
 	 */
 	@JsonCreator
 	protected Credential(@JsonProperty(value = "id", required = true) String id,
-						 @JsonProperty(value = "t") List<String> types,
-						 @JsonProperty(value = "n") String name,
-						 @JsonProperty(value = "d") String description,
+						 @JsonProperty(value = "t") @Nullable List<String> types,
+						 @JsonProperty(value = "n") @Nullable String name,
+						 @JsonProperty(value = "d") @Nullable String description,
 						 @JsonProperty(value = "i", required = true) Id issuer,
-						 @JsonProperty(value = "v") Date validFrom,
-						 @JsonProperty(value = "e") Date validUntil,
+						 @JsonProperty(value = "v") @Nullable Date validFrom,
+						 @JsonProperty(value = "e") @Nullable Date validUntil,
 						 @JsonProperty(value = "s", required = true) Subject subject,
-						 @JsonProperty(value = "sat") Date signedAt,
-						 @JsonProperty(value = "sig") byte[] signature) {
+						 @JsonProperty(value = "sat") @Nullable Date signedAt,
+						 @JsonProperty(value = "sig") byte @Nullable [] signature) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(issuer, "issuer");
 		Objects.requireNonNull(subject, "subject");
@@ -239,7 +241,7 @@ public class Credential {
 	 *
 	 * @return Credential name or null if not set
 	 */
-	public String getName() {
+	public @Nullable String getName() {
 		return name;
 	}
 
@@ -248,7 +250,7 @@ public class Credential {
 	 *
 	 * @return Credential description or null if not set
 	 */
-	public String getDescription() {
+	public @Nullable String getDescription() {
 		return description;
 	}
 
@@ -267,7 +269,7 @@ public class Credential {
 	 *
 	 * @return Valid from date or null if not set
 	 */
-	public Date getValidFrom() {
+	public @Nullable Date getValidFrom() {
 		return validFrom;
 	}
 
@@ -276,7 +278,7 @@ public class Credential {
 	 *
 	 * @return Valid until date or null if not set
 	 */
-	public Date getValidUntil() {
+	public @Nullable Date getValidUntil() {
 		return validUntil;
 	}
 
@@ -298,7 +300,7 @@ public class Credential {
 	 *
 	 * @return Signed at date
 	 */
-	public Date getSignedAt() {
+	public @Nullable Date getSignedAt() {
 		return signedAt;
 	}
 
@@ -307,7 +309,7 @@ public class Credential {
 	 *
 	 * @return Signature byte array
 	 */
-	public byte[] getSignature() {
+	public byte @Nullable [] getSignature() {
 		return signature == null ? null : signature.clone();
 	}
 
@@ -513,7 +515,7 @@ public class Credential {
 		/** Subject identifier ("id"), may be null if implicit */
 		@JsonProperty("id")
 		@JsonInclude(JsonInclude.Include.NON_NULL)
-		private Id id;
+		private @Nullable Id id;
 
 		/** Additional claims for the subject as key-value pairs */
 		@JsonAnySetter
@@ -563,7 +565,7 @@ public class Credential {
 		 *
 		 * @return Subject Id or null if implicit
 		 */
-		public Id getId() {
+		public @Nullable Id getId() {
 			return id;
 		}
 
@@ -584,7 +586,7 @@ public class Credential {
 		 * @return Claim value or null if not present
 		 */
 		@SuppressWarnings("unchecked")
-		public <T> T getClaim(String name) {
+		public <T> @Nullable T getClaim(String name) {
 			return (T) claims.get(name);
 		}
 

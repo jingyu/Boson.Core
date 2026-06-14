@@ -175,7 +175,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 		// counter.entrySet().removeIf(entry -> entry.getValue() <= delta);
 		// counter.replaceAll((k, v) -> v - delta);
 		// ==>>
-		// remove and update entries in a single pass — safely and efficiently
+		// remove and update entries in a single pass - safely and efficiently
 		Iterator<Map.Entry<InetAddress, Integer>> it = counter.entrySet().iterator();
 		while (it.hasNext()) {
 			Map.Entry<InetAddress, Integer> entry = it.next();

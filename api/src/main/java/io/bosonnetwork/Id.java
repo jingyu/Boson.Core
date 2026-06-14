@@ -26,6 +26,7 @@ package io.bosonnetwork;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Objects;
 
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.Signature;
@@ -98,10 +99,7 @@ public class Id implements Comparable<Id> {
 		 * @throws NullPointerException if the target is null.
 		 */
 		public ThreeWayComparator(Id target) {
-			if (target == null)
-				throw new NullPointerException("Target identifier cannot be null");
-
-			this.target = target;
+			this.target = Objects.requireNonNull(target, "Target identifier cannot be null");
 		}
 
 		/**
@@ -133,9 +131,7 @@ public class Id implements Comparable<Id> {
 	 * @throws IllegalArgumentException if the array length is not exactly {@link #BYTES}.
 	 */
 	protected Id(byte[] buf) {
-		if (buf == null)
-			throw new NullPointerException("Byte array cannot be null");
-
+		Objects.requireNonNull(buf, "Byte array cannot be null");
 		if (buf.length != BYTES)
 			throw new IllegalArgumentException("Byte array should be exactly " + BYTES + " bytes");
 
@@ -150,9 +146,7 @@ public class Id implements Comparable<Id> {
 	 */
 	@SuppressWarnings("CopyConstructorMissesField")
 	protected Id(Id id) {
-		if (id == null)
-			throw new NullPointerException("Input identifier cannot be null");
-
+		Objects.requireNonNull(id, "Identifier cannot be null");
 		this.bytes = Arrays.copyOf(id.bytes, BYTES);
 	}
 
@@ -179,12 +173,9 @@ public class Id implements Comparable<Id> {
 	 *		 {@link #BYTES} bytes available from the offset.
 	 */
 	public static Id of(byte[] buf, int offset) {
-		if (buf == null)
-			throw new NullPointerException("Byte array cannot be null");
-
+		Objects.requireNonNull(buf, "Byte array cannot be null");
 		if (offset < 0)
 			throw new IllegalArgumentException("Offset must be non-negative");
-
 		if (buf.length - offset < BYTES)
 			throw new IllegalArgumentException("Byte array must have at least " + BYTES + " bytes available");
 
@@ -215,8 +206,7 @@ public class Id implements Comparable<Id> {
 	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id of(String id) {
-		if (id == null)
-			throw new NullPointerException("Identifier string cannot be null");
+		Objects.requireNonNull(id, "Identifier string cannot be null");
 
 		try {
 			return ofBase58(id);
@@ -240,8 +230,7 @@ public class Id implements Comparable<Id> {
 	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id ofHex(String hexId) {
-		if (hexId == null)
-			throw new NullPointerException("Hexadecimal string cannot be null");
+		Objects.requireNonNull(hexId, "Hexadecimal string cannot be null");
 
 		final int offset = hexId.startsWith("0x") || hexId.startsWith("0X") ? 2 : 0;
 		if (hexId.length() != BYTES * 2 + offset)
@@ -260,9 +249,7 @@ public class Id implements Comparable<Id> {
 	 * @throws NullPointerException if the input string is null.
 	 */
 	public static Id ofBase58(String base58Id) {
-		if (base58Id == null)
-			throw new NullPointerException("Base58 string cannot be null");
-
+		Objects.requireNonNull(base58Id, "Base58 string cannot be null");
 		return of(Base58.decode(base58Id));
 	}
 

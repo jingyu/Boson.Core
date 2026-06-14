@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.identifier;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exception thrown when an error occurs during the resolution of Boson Cards or DIDDocuments.
  */
@@ -40,7 +42,7 @@ public class ResolverException extends RegistryException {
 	 *
 	 * @param message the detail message
 	 */
-	public ResolverException(String message) {
+	public ResolverException(@Nullable String message) {
 		super(message);
 	}
 
@@ -50,7 +52,7 @@ public class ResolverException extends RegistryException {
 	 * @param message the detail message
 	 * @param cause the cause of the exception
 	 */
-	public ResolverException(String message, Throwable cause) {
+	public ResolverException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -59,7 +61,7 @@ public class ResolverException extends RegistryException {
 	 *
 	 * @param cause the cause of the exception
 	 */
-	public ResolverException(Throwable cause) {
+	public ResolverException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

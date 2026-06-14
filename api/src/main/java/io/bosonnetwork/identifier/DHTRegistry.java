@@ -29,6 +29,8 @@ import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
@@ -58,7 +60,7 @@ class DHTRegistry implements Registry {
 	 * @param persistentCache the cache used to persist resolution results across runs; may be null
 	 * @throws NullPointerException if {@code node} is null
 	 */
-	protected DHTRegistry(Node node, Vertx vertx, ResolutionCache persistentCache) {
+	protected DHTRegistry(Node node, @Nullable Vertx vertx, @Nullable ResolutionCache persistentCache) {
 		Objects.requireNonNull(node);
 
 		this.node = node;

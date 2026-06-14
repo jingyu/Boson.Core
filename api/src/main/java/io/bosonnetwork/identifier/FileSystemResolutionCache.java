@@ -37,6 +37,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.json.Json;
 
@@ -157,7 +159,7 @@ class FileSystemResolutionCache implements ResolutionCache {
 	 * @throws ResolutionCacheException if reading from the cache file fails
 	 */
 	@Override
-	public Resolver.ResolutionResult<Card> get(Id id) throws ResolutionCacheException {
+	public Resolver.@Nullable ResolutionResult<Card> get(Id id) throws ResolutionCacheException {
 		try {
 			Path file = cacheDir.resolve(id.toString());
 			// Check if the cache file exists for this Id

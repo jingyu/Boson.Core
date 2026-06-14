@@ -51,6 +51,8 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import io.vertx.core.json.jackson.DatabindCodec;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
@@ -101,7 +103,7 @@ public final class Json {
 	// The factories, module, mappers and shared type reference are singletons that are expensive to
 	// build and immutable once configured. They are published through the initialization-on-demand
 	// holder idiom: the JVM guarantees that a nested class is initialized lazily, exactly once, and
-	// with a happens-before edge to every thread that subsequently reads its static field — so these
+	// with a happens-before edge to every thread that subsequently reads its static field - so these
 	// accessors are both lazy and thread-safe without explicit locking.
 
 	private static final class ModuleHolder {
@@ -291,7 +293,7 @@ public final class Json {
 	 * @return the JSON string representation of the object
 	 * @throws IllegalArgumentException if the object cannot be serialized
 	 */
-	public static String toString(Object object, JsonContext context) {
+	public static String toString(Object object, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return objectMapper().writeValueAsString(object);
@@ -325,7 +327,7 @@ public final class Json {
 	 * @return the pretty-printed JSON string representation of the object
 	 * @throws IllegalArgumentException if the object cannot be serialized
 	 */
-	public static String toPrettyString(Object object, JsonContext context) {
+	public static String toPrettyString(Object object, @Nullable JsonContext context) {
 		try {
 			ObjectWriter writer = context == null || context.isEmpty() ?
 					objectMapper().writerWithDefaultPrettyPrinter() :
@@ -360,7 +362,7 @@ public final class Json {
 	 * @return the CBOR-encoded byte array representation of the object
 	 * @throws IllegalArgumentException if the object cannot be serialized
 	 */
-	public static byte[] toBytes(Object object, JsonContext context) {
+	public static byte[] toBytes(Object object, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return cborMapper().writeValueAsBytes(object);
@@ -403,7 +405,7 @@ public final class Json {
 	 * @return a map representation of the JSON input
 	 * @throws IllegalArgumentException if the JSON cannot be parsed
 	 */
-	public static Map<String, Object> parse(String json, JsonContext context) {
+	public static Map<String, Object> parse(String json, @Nullable JsonContext context) {
 		return parse(json, mapType(), context);
 	}
 
@@ -428,7 +430,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the JSON cannot be parsed
 	 */
-	public static <T> T parse(String json, Class<T> clazz, JsonContext context) {
+	public static <T> T parse(String json, Class<T> clazz, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return objectMapper().readValue(json, clazz);
@@ -466,7 +468,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the JSON cannot be parsed
 	 */
-	public static <T> T parse(String json, TypeReference<T> type, JsonContext context) {
+	public static <T> T parse(String json, TypeReference<T> type, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return objectMapper().readValue(json, type);
@@ -504,7 +506,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the JSON cannot be parsed
 	 */
-	public static <T> T parse(String json, JavaType type, JsonContext context) {
+	public static <T> T parse(String json, JavaType type, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return objectMapper().readValue(json, type);
@@ -540,7 +542,7 @@ public final class Json {
 	 * @return a map representation of the CBOR input
 	 * @throws IllegalArgumentException if the CBOR cannot be parsed
 	 */
-	public static Map<String, Object> parse(byte[] cbor, JsonContext context) {
+	public static Map<String, Object> parse(byte[] cbor, @Nullable JsonContext context) {
 		return parse(cbor, mapType(), context);
 	}
 
@@ -565,7 +567,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the CBOR cannot be parsed
 	 */
-	public static <T> T parse(byte[] cbor, Class<T> clazz, JsonContext context) {
+	public static <T> T parse(byte[] cbor, Class<T> clazz, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return cborMapper().readValue(cbor, clazz);
@@ -603,7 +605,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the CBOR cannot be parsed
 	 */
-	public static <T> T parse(byte[] cbor, TypeReference<T> type, JsonContext context) {
+	public static <T> T parse(byte[] cbor, TypeReference<T> type, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return cborMapper().readValue(cbor, type);
@@ -641,7 +643,7 @@ public final class Json {
 	 * @return the parsed object
 	 * @throws IllegalArgumentException if the CBOR cannot be parsed
 	 */
-	public static <T> T parse(byte[] cbor, JavaType type, JsonContext context) {
+	public static <T> T parse(byte[] cbor, JavaType type, @Nullable JsonContext context) {
 		try {
 			if (context == null || context.isEmpty())
 				return cborMapper().readValue(cbor, type);
@@ -727,7 +729,7 @@ public final class Json {
 	 * {@link DatabindCodec} mapper.
 	 * <p>
 	 * <b>Process-global side effect:</b> this mutates the singleton {@code DatabindCodec.mapper()}
-	 * shared by all Vert.x JSON handling in the JVM — it registers the Boson type module and enables
+	 * shared by all Vert.x JSON handling in the JVM - it registers the Boson type module and enables
 	 * {@link DeserializationFeature#USE_BIG_DECIMAL_FOR_FLOATS} for every Vert.x JSON operation in
 	 * the process, not just Boson code. Call it once during application startup.
 	 * <p>

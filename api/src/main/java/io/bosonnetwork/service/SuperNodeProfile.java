@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.identifier.Card;
@@ -51,10 +53,10 @@ public class SuperNodeProfile {
 	private static final String ACTIVE_PROXY_SERVICE_TYPE = "io.bosonnetwork.activeproxy";
 
 	private final Id nodeId;
-	private final String name;
-	private final String logo;
-	private final String website;
-	private final String contact;
+	private final @Nullable String name;
+	private final @Nullable String logo;
+	private final @Nullable String website;
+	private final @Nullable String contact;
 
 	private final Card card;
 
@@ -68,7 +70,7 @@ public class SuperNodeProfile {
 	 * @param contact the node's contact information
 	 * @param card the underlying card object
 	 */
-	private SuperNodeProfile(Id nodeId, String name, String logo, String website, String contact, Card card) {
+	private SuperNodeProfile(Id nodeId, @Nullable String name, @Nullable String logo, @Nullable String website, @Nullable String contact, Card card) {
 		this.nodeId = nodeId;
 		this.name = name;
 		this.logo = logo;
@@ -119,7 +121,7 @@ public class SuperNodeProfile {
 	 *
 	 * @return the name, or null if not set
 	 */
-	public String getName() {
+	public @Nullable String getName() {
 		return name;
 	}
 
@@ -128,7 +130,7 @@ public class SuperNodeProfile {
 	 *
 	 * @return the logo string, or null if not set
 	 */
-	public String getLogo() {
+	public @Nullable String getLogo() {
 		return logo;
 	}
 
@@ -137,7 +139,7 @@ public class SuperNodeProfile {
 	 *
 	 * @return the website URL, or null if not set
 	 */
-	public String getWebsite() {
+	public @Nullable String getWebsite() {
 		return website;
 	}
 
@@ -146,7 +148,7 @@ public class SuperNodeProfile {
 	 *
 	 * @return the contact info, or null if not set
 	 */
-	public String getContact() {
+	public @Nullable String getContact() {
 		return contact;
 	}
 
@@ -157,7 +159,7 @@ public class SuperNodeProfile {
 	 * @return the service, or null if not found
 	 * @throws NullPointerException if servicePeerId is null
 	 */
-	public Card.Service getService(Id servicePeerId) {
+	public Card.@Nullable Service getService(Id servicePeerId) {
 		Objects.requireNonNull(servicePeerId);
 		return card.getService(servicePeerId.toBase58String());
 	}
@@ -188,7 +190,7 @@ public class SuperNodeProfile {
 	 *
 	 * @return the API service, or null if not found
 	 */
-	public Card.Service getApiService() {
+	public Card.@Nullable Service getApiService() {
 		// The API service for a super node is identified by the same ID as the node's unique identifier.
 		return card.getService(nodeId.toBase58String());
 	}
@@ -270,7 +272,7 @@ public class SuperNodeProfile {
 		 * Validates that the endpoint URI is well-formed (has both a scheme and a host). Service
 		 * types in a {@code SuperNodeProfile} may use different protocols (e.g. {@code http(s)} for
 		 * the API and web gateway, {@code mqtts} for photon messaging), so this only enforces basic
-		 * URI structure — individual callers may impose stricter rules on top.
+		 * URI structure - individual callers may impose stricter rules on top.
 		 *
 		 * @param endpoint the endpoint URI to validate
 		 * @throws IllegalArgumentException if the endpoint URI is missing a scheme or host
@@ -477,7 +479,7 @@ public class SuperNodeProfile {
 		/**
 		 * Builds a {@link SuperNodeProfile} instance.
 		 * <p>
-		 * A display {@link #name(String) name} is mandatory — operators publishing a profile must
+		 * A display {@link #name(String) name} is mandatory - operators publishing a profile must
 		 * declare who they are. The {@code logo}, {@code website}, and {@code contact} fields are
 		 * optional and only emitted into the profile credential when set.
 		 *

@@ -25,10 +25,13 @@ package io.bosonnetwork.utils;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * This class is a simple holder for a triple of values.
  * <p>
  * It follows the same conventions as {@link Pair}, but stores three values instead of two.
+ * Each element may be {@code null}; {@link #empty()} holds {@code null} for all three.
  *
  * @param <A> type for value a.
  * @param <B> type for value b.
@@ -37,9 +40,9 @@ import java.util.function.Function;
 public class Triple<A, B, C> {
 	private static final Triple<?, ?, ?> EMPTY = new Triple<>(null, null, null);
 
-	private final A a;
-	private final B b;
-	private final C c;
+	private final @Nullable A a;
+	private final @Nullable B b;
+	private final @Nullable C c;
 
 	/**
 	 * Create a value triple object from the given values.
@@ -48,7 +51,7 @@ public class Triple<A, B, C> {
 	 * @param b value b.
 	 * @param c value c.
 	 */
-	public Triple(A a, B b, C c) {
+	public Triple(@Nullable A a, @Nullable B b, @Nullable C c) {
 		this.a = a;
 		this.b = b;
 		this.c = c;
@@ -65,7 +68,7 @@ public class Triple<A, B, C> {
 	 * @param c value c.
 	 * @return the new Triple object.
 	 */
-	public static <A1, B1, C1> Triple<A1, B1, C1> of(A1 a, B1 b, C1 c) {
+	public static <A1, B1, C1> Triple<A1, B1, C1> of(@Nullable A1 a, @Nullable B1 b, @Nullable C1 c) {
 		return new Triple<>(a, b, c);
 	}
 
@@ -87,7 +90,7 @@ public class Triple<A, B, C> {
 	 *
 	 * @return the value a.
 	 */
-	public A a() {
+	public @Nullable A a() {
 		return a;
 	}
 
@@ -96,7 +99,7 @@ public class Triple<A, B, C> {
 	 *
 	 * @return the value b.
 	 */
-	public B b() {
+	public @Nullable B b() {
 		return b;
 	}
 
@@ -105,7 +108,7 @@ public class Triple<A, B, C> {
 	 *
 	 * @return the value c.
 	 */
-	public C c() {
+	public @Nullable C c() {
 		return c;
 	}
 

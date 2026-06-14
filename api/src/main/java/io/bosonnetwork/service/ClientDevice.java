@@ -30,7 +30,7 @@ import io.bosonnetwork.Id;
  * A client device is associated with a user and can have specific attributes like a name, application information,
  * and usage statistics such as creation time, update time, and last seen details.
  */
-public interface ClientDevice {
+public non-sealed interface ClientDevice extends Principal {
 	/**
 	 * Gets the unique identifier of the device.
 	 *

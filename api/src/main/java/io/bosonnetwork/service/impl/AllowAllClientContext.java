@@ -23,9 +23,11 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Future;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -34,6 +36,7 @@ import io.bosonnetwork.service.ClientAuthorizer;
 import io.bosonnetwork.service.ClientContext;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuth;
@@ -70,8 +73,8 @@ public class AllowAllClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompletableFuture<ClientUser> getUser(Id userId) {
-		return ContextualFuture.succeededFuture(new PlainUser(userId));
+	public CompletableFuture<Optional<ClientUser>> getUser(Id userId) {
+		return ContextualFuture.succeededFuture(Optional.of(new PlainUser(userId)));
 	}
 
 	@Override
@@ -80,8 +83,8 @@ public class AllowAllClientContext implements ClientContext {
 	}
 
 	@Override
-	public CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId) {
-		return ContextualFuture.succeededFuture(new PlainDevice(deviceId, userId));
+	public CompletableFuture<Optional<ClientDevice>> getDevice(Id userId, Id deviceId) {
+		return ContextualFuture.succeededFuture(Optional.of(new PlainDevice(deviceId, userId)));
 	}
 
 	@Override
@@ -93,14 +96,14 @@ public class AllowAllClientContext implements ClientContext {
 	public ClientAuthenticator getAuthenticator() {
 		return new ClientAuthenticator() {
 			@Override
-			public CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticateUser(Id userId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				boolean isValid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && userId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
 			}
 
 			@Override
-			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address) {
+			public CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte @Nullable [] nonce, byte @Nullable [] signature, String address) {
 				boolean isValid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && deviceId.toSignatureKey().verify(nonce, signature));
 				return CompletableFuture.completedFuture(isValid);
@@ -122,13 +125,13 @@ public class AllowAllClientContext implements ClientContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<ClientUser> getUser(Id userId) {
-						return Future.succeededFuture(new PlainUser(userId));
+					public Future<Optional<Principal>> getUser(Id userId) {
+						return Future.succeededFuture(Optional.of(new PlainUser(userId)));
 					}
 
 					@Override
-					public Future<?> getClient(Id userId, Id clientId) {
-						return Future.succeededFuture(new PlainDevice(clientId, userId));
+					public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(Optional.of(new PlainDevice(clientId, userId)));
 					}
 				});
 

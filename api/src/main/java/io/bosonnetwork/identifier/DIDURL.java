@@ -29,6 +29,8 @@ import java.net.URI;
 import java.text.Normalizer;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -57,17 +59,17 @@ public class DIDURL {
 	/**
 	 * The path component of the DID URL, normalized to NFC.
 	 */
-	private String path;
+	private @Nullable String path;
 
 	/**
 	 * The query component of the DID URL, normalized to NFC.
 	 */
-	private String query;
+	private @Nullable String query;
 
 	/**
 	 * The fragment component of the DID URL, normalized to NFC.
 	 */
-	private String fragment;
+	private @Nullable String fragment;
 
 	// TODO: do the URL encoding for the URL
 
@@ -312,7 +314,7 @@ public class DIDURL {
 	 *
 	 * @return the path component or {@code null}
 	 */
-	public String getPath() {
+	public @Nullable String getPath() {
 		return path;
 	}
 
@@ -321,7 +323,7 @@ public class DIDURL {
 	 *
 	 * @return the query component or {@code null}
 	 */
-	public String getQuery() {
+	public @Nullable String getQuery() {
 		return query;
 	}
 
@@ -330,7 +332,7 @@ public class DIDURL {
 	 *
 	 * @return the fragment component or {@code null}
 	 */
-	public String getFragment() {
+	public @Nullable String getFragment() {
 		return fragment;
 	}
 

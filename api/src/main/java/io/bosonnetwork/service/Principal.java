@@ -20,18 +20,17 @@
  * SOFTWARE.
  */
 
-/**
- * Logging support classes for Boson.
- * <p>
- * {@link io.bosonnetwork.utils.logging.HighlightingCompositeConverter} is a Logback converter that
- * colors console output by log level (ERROR / WARN / INFO / TRACE) using ANSI codes; reference it
- * from a Logback pattern layout to get colored logs in supported terminals.
- *
- * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
- * field is non-null by default; anything that may be {@code null} is explicitly
- * {@link org.jspecify.annotations.Nullable}.
- */
-@NullMarked
-package io.bosonnetwork.utils.logging;
+package io.bosonnetwork.service;
 
-import org.jspecify.annotations.NullMarked;
+/**
+ * A resolved principal returned by a {@link io.bosonnetwork.web.ClientProvider} lookup.
+ * <p>
+ * A principal is one of the four authenticatable entities Boson super-node services deal with: an
+ * end user ({@link ClientUser}) or one of its devices ({@link ClientDevice}) on the client side, and
+ * a federated super node ({@link SuperNodeInfo}) or one of the services it hosts ({@link ServiceInfo})
+ * on the federation side. This sealed type lets callers dispatch on the concrete kind exhaustively
+ * (for example with a {@code switch} over the permitted subtypes) instead of testing an untyped
+ * {@code Object}.
+ */
+public sealed interface Principal permits ClientUser, ClientDevice, SuperNodeInfo, ServiceInfo {
+}

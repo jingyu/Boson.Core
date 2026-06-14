@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when the CWT CBOR structure does not start with the expected COSE Sign1 tag.
  */
@@ -33,7 +35,7 @@ public class InvalidCborTagException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidCborTagException(String message) {
+	public InvalidCborTagException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidCborTagException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidCborTagException(String message, Throwable cause) {
+	public InvalidCborTagException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

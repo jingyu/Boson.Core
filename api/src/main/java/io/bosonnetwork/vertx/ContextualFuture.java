@@ -345,8 +345,8 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	/**
-	 * Completes with the outcome of whichever of {@code this}/{@code other} settles first — normally
-	 * <em>or</em> exceptionally — matching {@link CompletableFuture}'s "either" semantics. (Note this
+	 * Completes with the outcome of whichever of {@code this}/{@code other} settles first - normally
+	 * <em>or</em> exceptionally - matching {@link CompletableFuture}'s "either" semantics. (Note this
 	 * differs from {@link Future#any} which waits for the first <em>success</em>.)
 	 */
 	private Future<T> either(Future<? extends T> other) {

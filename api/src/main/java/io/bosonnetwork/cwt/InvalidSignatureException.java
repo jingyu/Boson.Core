@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when the cryptographic signature of the CWT fails verification.
  */
@@ -33,7 +35,7 @@ public class InvalidSignatureException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidSignatureException(String message) {
+	public InvalidSignatureException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidSignatureException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidSignatureException(String message, Throwable cause) {
+	public InvalidSignatureException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

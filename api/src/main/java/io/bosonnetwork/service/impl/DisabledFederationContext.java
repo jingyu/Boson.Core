@@ -23,19 +23,22 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Future;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.ServiceInfo;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.vertx.ContextualFuture;
-import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.ClientProvider;
+import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
@@ -53,8 +56,8 @@ import io.bosonnetwork.web.CwtAuthOptions;
  */
 public class DisabledFederationContext implements FederationContext {
 	@Override
-	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(null);
+	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+		return ContextualFuture.succeededFuture(Optional.empty());
 	}
 
 	@Override
@@ -81,12 +84,12 @@ public class DisabledFederationContext implements FederationContext {
 	public FederationAuthenticator getAuthenticator() {
 		return new FederationAuthenticator() {
 			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				return ContextualFuture.succeededFuture(false);
 			}
 
 			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				return ContextualFuture.succeededFuture(false);
 			}
 		};
@@ -98,13 +101,13 @@ public class DisabledFederationContext implements FederationContext {
 				.setIdentity(new CryptoIdentity())
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<?> getUser(Id nodeId) {
-						return Future.succeededFuture();
+					public Future<Optional<Principal>> getUser(Id nodeId) {
+						return Future.succeededFuture(Optional.empty());
 					}
 
 					@Override
-					public Future<?> getClient(Id nodeId, Id peerId) {
-						return Future.succeededFuture();
+					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
+						return Future.succeededFuture(Optional.empty());
 					}
 				});
 

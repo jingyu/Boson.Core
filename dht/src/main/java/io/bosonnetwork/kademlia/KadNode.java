@@ -16,6 +16,8 @@ import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +53,7 @@ import io.bosonnetwork.vertx.BosonVerticle;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.vertx.VertxCaffeine;
 
+@NullMarked
 public class KadNode extends BosonVerticle implements Node {
 	public static final String NAME = "Orca";
 	public static final String SHORT_NAME = "OR";
@@ -66,12 +69,12 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private final CachedCryptoIdentity identity;
 
-	private DHT dht4;
-	private DHT dht6;
+	private @Nullable DHT dht4;
+	private @Nullable DHT dht6;
 
 	private LookupOption defaultLookupOption;
 
-	private Blacklist blacklist;
+	private  @Nullable Blacklist blacklist;
 
 	private TokenManager tokenManager;
 	private DataStorage storage;

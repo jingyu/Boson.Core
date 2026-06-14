@@ -28,6 +28,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.CryptoContext;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -41,15 +43,16 @@ import io.bosonnetwork.Identity;
  * The cache is implemented using Caffeine with configurable settings to control resource usage and cache expiration.
  */
 public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
-	private volatile LoadingCache<Id, CryptoContext> cryptoContexts;
+	private volatile @Nullable LoadingCache<Id, CryptoContext> cryptoContexts;
 
 	/**
 	 * Constructs a new {@code CachedCryptoIdentity} with a randomly generated signature key pair
 	 * and the provided Caffeine cache configuration.
 	 *
-	 * @param caffeine the Caffeine cache builder used to configure the cache; must not be {@code null}
+	 * @param caffeine the Caffeine cache builder used to configure the cache; if {@code null}, no
+	 *                 {@link CryptoContext} cache is used and contexts are computed on demand
 	 */
-	public CachedCryptoIdentity(Caffeine<Object, Object> caffeine) {
+	public CachedCryptoIdentity(@Nullable Caffeine<Object, Object> caffeine) {
 		this(Signature.KeyPair.random(), caffeine);
 	}
 
@@ -58,9 +61,10 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	 * and the provided Caffeine cache configuration.
 	 *
 	 * @param privateKey the private key bytes used to create the signature key pair; must not be {@code null}
-	 * @param caffeine the Caffeine cache builder used to configure the cache; must not be {@code null}
+	 * @param caffeine the Caffeine cache builder used to configure the cache; if {@code null}, no
+	 *                 {@link CryptoContext} cache is used and contexts are computed on demand
 	 */
-	public CachedCryptoIdentity(byte[] privateKey, Caffeine<Object, Object> caffeine) {
+	public CachedCryptoIdentity(byte[] privateKey, @Nullable Caffeine<Object, Object> caffeine) {
 		this(Signature.KeyPair.fromPrivateKey(privateKey), caffeine);
 	}
 
@@ -69,9 +73,10 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	 * and the provided Caffeine cache configuration.
 	 *
 	 * @param keyPair the signature key pair to use for this identity; must not be {@code null}
-	 * @param caffeine the Caffeine cache builder used to configure the cache; must not be {@code null}
+	 * @param caffeine the Caffeine cache builder used to configure the cache; if {@code null}, no
+	 *                 {@link CryptoContext} cache is used and contexts are computed on demand
 	 */
-	public CachedCryptoIdentity(Signature.KeyPair keyPair, Caffeine<Object, Object> caffeine) {
+	public CachedCryptoIdentity(Signature.KeyPair keyPair, @Nullable Caffeine<Object, Object> caffeine) {
 		super(keyPair);
 		if (caffeine != null)
 			initCache(caffeine);

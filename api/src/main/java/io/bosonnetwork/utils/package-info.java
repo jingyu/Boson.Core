@@ -41,5 +41,12 @@
  *       {@link io.bosonnetwork.utils.ByteBufferOutputStream} adapters, and string helpers in
  *       {@link io.bosonnetwork.utils.StringUtils}.</li>
  * </ul>
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.utils;
+
+import org.jspecify.annotations.NullMarked;

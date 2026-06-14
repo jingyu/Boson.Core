@@ -24,6 +24,8 @@ package io.bosonnetwork.service;
 
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -32,7 +34,7 @@ import io.bosonnetwork.Id;
  * This interface encapsulates details about where a service is running (host, port),
  * its identity (peer ID, node ID), and identifiers for the service itself.
  */
-public interface ServiceInfo {
+public non-sealed interface ServiceInfo extends Principal {
 	/**
 	 * Gets the unique peer identifier associated with the service.
 	 *
@@ -71,12 +73,12 @@ public interface ServiceInfo {
 	/**
 	 * Gets the extra data as a raw byte array.
 	 * <p>
-	 * Implementations MUST return a defensive copy — mutating the returned array MUST NOT affect
+	 * Implementations MUST return a defensive copy - mutating the returned array MUST NOT affect
 	 * the internal state of this {@code ServiceInfo}.
 	 *
 	 * @return a defensive copy of the extra data, or {@code null} if no extra data is present
 	 */
-	byte[] getExtraData();
+	byte @Nullable [] getExtraData();
 
 	/**
 	 * Gets the extra data parsed as a map.

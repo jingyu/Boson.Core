@@ -52,6 +52,8 @@ import java.util.TimeZone;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.PfxOptions;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.BosonException;
 import io.bosonnetwork.utils.Base58;
 
@@ -72,14 +74,16 @@ public class CryptoUtil {
 	 * Generates a self-signed X.509 certificate and private key from a signature private key without Bouncy Castle.
 	 *
 	 * @param signaturePrivateKey the signature private key
-	 * @param ipAddress           the IP address to include in the Subject Alternative Name (SAN)
-	 * @param hostName            the host name to include in the Subject Alternative Name (SAN)
+	 * @param ipAddress           the IP address to include in the Subject Alternative Name (SAN), or
+	 *                            {@code null} to omit an IP SAN entry
+	 * @param hostName            the host name to include in the Subject Alternative Name (SAN), or
+	 *                            {@code null} to omit a DNS SAN entry
 	 * @param enableWildcard      whether to include a wildcard host name in the SAN
 	 * @return a {@link PemCertificateAndKey} containing the PEM-encoded certificate and private key
 	 * @throws KeyConvertException if an error occurs during key conversion or certificate generation
 	 */
 	public static PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey signaturePrivateKey,
-	                                                               String ipAddress, String hostName, boolean enableWildcard)
+	                                                               @Nullable String ipAddress, @Nullable String hostName, boolean enableWildcard)
 			throws KeyConvertException {
 		try {
 			// Extract the 32-byte seed and public key from libsodium 64-byte SK
@@ -159,7 +163,7 @@ public class CryptoUtil {
 	}
 
 	private static byte[] encodeTBS(BigInteger serial, String cn, Date notBefore, Date notAfter, byte[] pubKey,
-	                                String ip, String host, boolean wildcard) throws IOException {
+	                                @Nullable String ip, @Nullable String host, boolean wildcard) throws IOException {
 		DerBuilder tbs = new DerBuilder();
 		tbs.addTag((byte) 0xA0, new DerBuilder().addInt(2).build()); // Version v3
 		tbs.addInt(serial);

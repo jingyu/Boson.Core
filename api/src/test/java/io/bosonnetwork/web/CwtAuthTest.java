@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.Optional;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -35,6 +36,7 @@ import io.bosonnetwork.cwt.TokenExpiredException;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Role;
 
 @ExtendWith(VertxExtension.class)
@@ -56,15 +58,15 @@ public class CwtAuthTest {
 			.setLeeway(0)
 			.setClientProvider(new ClientProvider() {
 				@Override
-				public Future<?> getUser(Id userId) {
+				public Future<Optional<Principal>> getUser(Id userId) {
 					return userId.equals(alice.getId()) ?
-							Future.succeededFuture(alice) : Future.succeededFuture(null);
+							Future.succeededFuture(Optional.of(alice)) : Future.succeededFuture(Optional.empty());
 				}
 
 				@Override
-				public Future<?> getClient(Id userId, Id clientId) {
+				public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
 					return userId.equals(alice.getId()) && clientId.equals(iPad.getId()) ?
-							Future.succeededFuture(iPad) : Future.succeededFuture(null);
+							Future.succeededFuture(Optional.of(iPad)) : Future.succeededFuture(Optional.empty());
 				}
 			});
 
@@ -415,12 +417,12 @@ public class CwtAuthTest {
 				.setExpectedAudience(superNodeIdentity.getId())
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<?> getUser(Id userId) {
+					public Future<Optional<Principal>> getUser(Id userId) {
 						return Future.failedFuture("Database connection failed");
 					}
 
 					@Override
-					public Future<?> getClient(Id userId, Id clientId) {
+					public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
 						return Future.failedFuture("Database connection failed");
 					}
 				});
@@ -475,14 +477,14 @@ public class CwtAuthTest {
 				.setLeeway(0)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<?> getUser(Id userId) {
+					public Future<Optional<Principal>> getUser(Id userId) {
 						return userId.equals(admin.getId()) ?
-								Future.succeededFuture(admin) : Future.succeededFuture(null);
+								Future.succeededFuture(Optional.of(admin)) : Future.succeededFuture(Optional.empty());
 					}
 
 					@Override
-					public Future<?> getClient(Id userId, Id clientId) {
-						return Future.succeededFuture(null);
+					public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
+						return Future.succeededFuture(Optional.empty());
 					}
 				});
 		CwtAuth adminAuth = CwtAuth.create(adminOptions);

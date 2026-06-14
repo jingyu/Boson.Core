@@ -23,19 +23,22 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.Future;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.ServiceInfo;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.vertx.ContextualFuture;
-import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.ClientProvider;
+import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
@@ -66,12 +69,12 @@ public class AllowAllFederationContext implements FederationContext {
 	}
 
 	private ServiceInfo _getService(Id peerId, Id nodeId) {
-		return new PlainServiceInfo(peerId, 0, nodeId, "boson://localhost:65532");
+		return  new PlainServiceInfo(peerId, 0, nodeId, "boson://localhost:65532");
 	}
 
 	@Override
-	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(_getNode(nodeId));
+	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+		return ContextualFuture.succeededFuture(Optional.of(_getNode(nodeId)));
 	}
 
 	@Override
@@ -98,14 +101,14 @@ public class AllowAllFederationContext implements FederationContext {
 	public FederationAuthenticator getAuthenticator() {
 		return new FederationAuthenticator() {
 			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
 				return ContextualFuture.succeededFuture(valid);
 			}
 
 			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				boolean valid = (nonce == null && signature == null) ||
 						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
 				return ContextualFuture.succeededFuture(valid);
@@ -122,13 +125,13 @@ public class AllowAllFederationContext implements FederationContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<SuperNodeInfo> getUser(Id nodeId) {
-						return Future.succeededFuture(_getNode(nodeId));
+					public Future<Optional<Principal>> getUser(Id nodeId) {
+						return Future.succeededFuture(Optional.of(_getNode(nodeId)));
 					}
 
 					@Override
-					public Future<ServiceInfo> getClient(Id nodeId, Id peerId) {
-						return Future.succeededFuture(_getService(peerId, nodeId));
+					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
+						return Future.succeededFuture(Optional.of(_getService(peerId, nodeId)));
 					}
 				});
 

@@ -27,6 +27,8 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.cfg.ContextAttributes;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A context object for customizing JSON serialization and deserialization.
  * <p>
@@ -169,7 +171,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return the attribute value, or {@code null} if not present
 	 */
 	@Override
-	public Object getAttribute(Object key) {
+	public @Nullable Object getAttribute(Object key) {
 		if (key == JsonContext.class || key == ContextAttributes.class)
 			return this;
 
@@ -211,7 +213,7 @@ public class JsonContext extends ContextAttributes.Impl {
 	 * @return a new context with the specified shared attributes
 	 */
 	@Override
-	public JsonContext withSharedAttributes(Map<?, ?> attributes) {
+	public JsonContext withSharedAttributes(@Nullable Map<?, ?> attributes) {
 		return new JsonContext(attributes == null || attributes.isEmpty() ? Map.of() : attributes);
 	}
 

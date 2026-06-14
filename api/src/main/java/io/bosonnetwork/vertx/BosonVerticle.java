@@ -45,7 +45,7 @@ import io.vertx.core.json.JsonObject;
  * <p>
  * Extend this class and implement {@link #deploy()} and {@link #undeploy()} to define
  * startup and shutdown logic respectively. Do <b>not</b> override {@code start(Promise)}
- * or {@code stop(Promise)} — those are managed internally and delegate to your methods.
+ * or {@code stop(Promise)} - those are managed internally and delegate to your methods.
  * </p>
  *
  * <h2>Method naming</h2>

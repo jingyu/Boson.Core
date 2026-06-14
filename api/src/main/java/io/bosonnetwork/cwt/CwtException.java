@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The base exception class for all CBOR Web Token (CWT) related errors.
  */
@@ -33,7 +35,7 @@ public class CwtException extends Exception {
 	 *
 	 * @param message the detail message.
 	 */
-	public CwtException(String message) {
+	public CwtException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class CwtException extends Exception {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public CwtException(String message, Throwable cause) {
+	public CwtException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.service;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -30,7 +32,7 @@ import io.bosonnetwork.Id;
  * This interface provides access to the properties of a federated node, including its identity,
  * connection details, software information, and metadata such as trust status and reputation.
  */
-public interface SuperNodeInfo {
+public non-sealed interface SuperNodeInfo extends Principal {
 	/**
 	 * Gets the unique identifier of the federated node.
 	 *
@@ -57,56 +59,56 @@ public interface SuperNodeInfo {
 	 *
 	 * @return the API endpoint string, or {@code null} if not set
 	 */
-	String getApiEndpoint();
+	@Nullable String getApiEndpoint();
 
 	/**
 	 * Gets the name of the software running on the node.
 	 *
 	 * @return the software name, or {@code null} if not advertised
 	 */
-	String getSoftware();
+	@Nullable String getSoftware();
 
 	/**
 	 * Gets the version of the software running on the node.
 	 *
 	 * @return the software version, or {@code null} if not advertised
 	 */
-	String getVersion();
+	@Nullable String getVersion();
 
 	/**
 	 * Gets the display name of the node.
 	 *
 	 * @return the node name, or {@code null} if not set
 	 */
-	String getName();
+	@Nullable String getName();
 
 	/**
 	 * Gets the URL or identifier for the node's logo.
 	 *
 	 * @return the logo string, or {@code null} if not set
 	 */
-	String getLogo();
+	@Nullable String getLogo();
 
 	/**
 	 * Gets the website URL associated with the node.
 	 *
 	 * @return the website URL, or {@code null} if not set
 	 */
-	String getWebsite();
+	@Nullable String getWebsite();
 
 	/**
 	 * Gets the contact information for the node administrator.
 	 *
 	 * @return the contact string, or {@code null} if not set
 	 */
-	String getContact();
+	@Nullable String getContact();
 
 	/**
 	 * Gets the description of the node.
 	 *
 	 * @return the node description, or {@code null} if not set
 	 */
-	String getDescription();
+	@Nullable String getDescription();
 
 	/**
 	 * Checks if the node is considered federated.
@@ -117,7 +119,7 @@ public interface SuperNodeInfo {
 
 	/**
 	 * Gets the reputation score of the node. Higher is better; the floor is zero, with no fixed
-	 * upper bound — implementations choose the scale (typical scoring functions accumulate
+	 * upper bound - implementations choose the scale (typical scoring functions accumulate
 	 * positive events and clamp negatives at zero).
 	 *
 	 * @return the reputation score, always {@code >= 0}

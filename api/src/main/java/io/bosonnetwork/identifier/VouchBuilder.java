@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -43,7 +45,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	/**
 	 * Optional identifier for the Vouch.
 	 */
-	private String id;
+	private @Nullable String id;
 
 	/**
 	 * List of types associated with the Vouch.
@@ -76,7 +78,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	 * @param id the identifier string
 	 * @return this builder instance for chaining
 	 */
-	public VouchBuilder id(String id) {
+	public VouchBuilder id(@Nullable String id) {
 		// Normalize the id or set to null if empty
 		this.id = id == null || id.isEmpty() ? null : normalize(id);
 		return this;

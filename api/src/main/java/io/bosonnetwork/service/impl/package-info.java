@@ -21,17 +21,9 @@
  */
 
 /**
- * Logging support classes for Boson.
- * <p>
- * {@link io.bosonnetwork.utils.logging.HighlightingCompositeConverter} is a Logback converter that
- * colors console output by log level (ERROR / WARN / INFO / TRACE) using ANSI codes; reference it
- * from a Logback pattern layout to get colored logs in supported terminals.
- *
- * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
- * field is non-null by default; anything that may be {@code null} is explicitly
- * {@link org.jspecify.annotations.Nullable}.
+ * Internal implementation classes for the Boson service API.
  */
 @NullMarked
-package io.bosonnetwork.utils.logging;
+package io.bosonnetwork.service.impl;
 
 import org.jspecify.annotations.NullMarked;

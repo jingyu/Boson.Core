@@ -79,7 +79,7 @@ public class FilterTests {
 		assertEquals(100, params.get("ts_gte"));
 		assertEquals(200, params.get("ts_lte"));
 
-		// Same column AND same operator still collides — surfaced with a clear message.
+		// Same column AND same operator still collides - surfaced with a clear message.
 		Filter colliding = Filter.and(Filter.eq("x", 1), Filter.eq("x", 2));
 		assertThrows(IllegalStateException.class, colliding::getParams);
 	}

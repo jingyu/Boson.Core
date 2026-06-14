@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when the algorithm specified in the CWT is unsupported or invalid.
  */
@@ -33,7 +35,7 @@ public class InvalidAlgorithmException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidAlgorithmException(String message) {
+	public InvalidAlgorithmException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidAlgorithmException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidAlgorithmException(String message, Throwable cause) {
+	public InvalidAlgorithmException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

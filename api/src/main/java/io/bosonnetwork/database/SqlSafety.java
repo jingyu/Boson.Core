@@ -24,6 +24,8 @@ package io.bosonnetwork.database;
 
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Validation helpers for SQL identifiers (column names, bind-parameter names, schema names).
  * <p>
@@ -79,7 +81,7 @@ public final class SqlSafety {
 	 * @return the validated schema name, or {@code null} if the input was null or empty
 	 * @throws IllegalArgumentException if a non-empty schema name is not a safe identifier
 	 */
-	public static String validateSchema(String schema) {
+	public static @Nullable String validateSchema(@Nullable String schema) {
 		if (schema == null || schema.isEmpty())
 			return null;
 

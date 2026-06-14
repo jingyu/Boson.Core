@@ -24,6 +24,8 @@ package io.bosonnetwork.service;
 
 import java.util.concurrent.CompletableFuture;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -35,14 +37,14 @@ import io.bosonnetwork.Id;
  * <strong>Nonce/signature contract.</strong> The overloads that accept {@code (nonce, signature)}
  * support three call shapes:
  * <ul>
- *   <li>Both {@code nonce} and {@code signature} non-null — the implementation MUST verify the
+ *   <li>Both {@code nonce} and {@code signature} non-null - the implementation MUST verify the
  *       signature against the nonce using the id's signing key, and return the verification result.</li>
- *   <li>Both {@code nonce} and {@code signature} null — "pre-authenticated" mode: the caller has
+ *   <li>Both {@code nonce} and {@code signature} null - "pre-authenticated" mode: the caller has
  *       already verified the identity out of band (typically at the transport layer) and is asking
  *       only whether the id is admissible. The implementation MUST NOT treat the absence of a
  *       signature as a failure; it should apply its admission policy and return that. The no-nonce
  *       default overloads delegate to this mode.</li>
- *   <li>Exactly one of {@code nonce} / {@code signature} is null — caller bug; the implementation
+ *   <li>Exactly one of {@code nonce} / {@code signature} is null - caller bug; the implementation
  *       MUST return {@code false}.</li>
  * </ul>
  */
@@ -58,10 +60,10 @@ public interface ClientAuthenticator {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the user is admitted,
 	 *         or {@code false} otherwise
 	 */
-	CompletableFuture<Boolean> authenticateUser(Id userId, byte[] nonce, byte[] signature);
+	CompletableFuture<Boolean> authenticateUser(Id userId, byte @Nullable [] nonce, byte @Nullable [] signature);
 
 	/**
-	 * Convenience for pre-authenticated mode — equivalent to
+	 * Convenience for pre-authenticated mode - equivalent to
 	 * {@link #authenticateUser(Id, byte[], byte[]) authenticateUser(userId, null, null)}.
 	 *
 	 * @param userId the unique identifier of the user to authenticate
@@ -84,10 +86,10 @@ public interface ClientAuthenticator {
 	 * @return a {@link CompletableFuture} that completes with {@code true} if the device is admitted,
 	 *         or {@code false} otherwise
 	 */
-	CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte[] nonce, byte[] signature, String address);
+	CompletableFuture<Boolean> authenticateDevice(Id userId, Id deviceId, byte @Nullable [] nonce, byte @Nullable [] signature, String address);
 
 	/**
-	 * Convenience for pre-authenticated mode — equivalent to
+	 * Convenience for pre-authenticated mode - equivalent to
 	 * {@link #authenticateDevice(Id, Id, byte[], byte[], String) authenticateDevice(userId, deviceId, null, null, address)}.
 	 *
 	 * @param userId   the unique identifier of the user who owns the device

@@ -19,7 +19,7 @@ public class AllowAllClientContextTests {
 		assertTrue(context.existsDevice(Id.random(), Id.random()).get());
 
         Id userId = Id.random();
-		ClientUser user = context.getUser(userId).get();
+		ClientUser user = context.getUser(userId).get().orElseThrow();
 		assertNotNull(user);
 		assertEquals(userId, user.getId());
 		assertTrue(user.verifyPassphrase("any"));

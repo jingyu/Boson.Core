@@ -24,6 +24,9 @@
 package io.bosonnetwork;
 
 import java.util.Arrays;
+import java.util.Objects;
+
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoBox.Nonce;
@@ -49,7 +52,7 @@ public class CryptoContext {
 	private final CryptoBox box;
 
 	private Nonce nextNonce;
-	private volatile Nonce lastPeerNonce;
+	private volatile @Nullable Nonce lastPeerNonce;
 
     /**
      * Constructs a CryptoContext with the given Id and CryptoBox.
@@ -158,7 +161,7 @@ public class CryptoContext {
 		// TODO: how to avoid the memory copy?!
 		byte[] n = Arrays.copyOfRange(data, 0, Nonce.BYTES);
 		Nonce nonce = Nonce.fromBytes(n);
-		if (nonce.equals(lastPeerNonce))
+		if (Objects.equals(nonce, lastPeerNonce))
 			throw new CryptoException("Duplicated nonce");
 
 		lastPeerNonce = nonce;

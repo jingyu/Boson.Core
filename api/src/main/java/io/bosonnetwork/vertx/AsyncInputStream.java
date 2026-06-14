@@ -32,12 +32,14 @@ import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.streams.ReadStream;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A Vert.x {@link ReadStream} that adapts a blocking {@link InputStream}.
  * <p>
  * Each chunk is read in a short {@link Context#executeBlocking(java.util.concurrent.Callable, boolean)
- * executeBlocking} task and the next read is scheduled only when there is outstanding demand, so —
- * unlike a naive adapter that loops on a worker thread for the stream's lifetime — no worker thread is
+ * executeBlocking} task and the next read is scheduled only when there is outstanding demand, so -
+ * unlike a naive adapter that loops on a worker thread for the stream's lifetime - no worker thread is
  * held while the stream is idle or paused. Back-pressure is honored per chunk: {@link #pause()},
  * {@link #resume()} and {@link #fetch(long)} control how many further chunks are read and delivered.
  *
@@ -48,7 +50,7 @@ import io.vertx.core.streams.ReadStream;
  *
  * <h2>Resource ownership</h2>
  * The wrapped {@link InputStream} is closed when the stream ends, fails, or {@link #close()} is
- * called — but only if {@code closeInput} was set ({@code true} for the two-argument constructor).
+ * called - but only if {@code closeInput} was set ({@code true} for the two-argument constructor).
  */
 public class AsyncInputStream implements ReadStream<Buffer> {
 	private static final int DEFAULT_CHUNK_SIZE = 8192;
@@ -59,11 +61,11 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	private final boolean closeInput;
 
 	// All mutable state below is confined to {@link #context} once bound.
-	private Context context;
+	private @Nullable Context context;
 
-	private Handler<Buffer> dataHandler;
-	private Handler<Void> endHandler;
-	private Handler<Throwable> exceptionHandler;
+	private @Nullable Handler<Buffer> dataHandler;
+	private @Nullable Handler<Void> endHandler;
+	private @Nullable Handler<Throwable> exceptionHandler;
 
 	// Outstanding number of chunks to deliver; Long.MAX_VALUE means "flowing" (unbounded).
 	private long demand = Long.MAX_VALUE;
@@ -101,13 +103,13 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	}
 
 	@Override
-	public AsyncInputStream exceptionHandler(Handler<Throwable> handler) {
+	public AsyncInputStream exceptionHandler(@Nullable Handler<Throwable> handler) {
 		this.exceptionHandler = handler;
 		return this;
 	}
 
 	@Override
-	public AsyncInputStream handler(Handler<Buffer> handler) {
+	public AsyncInputStream handler(@Nullable Handler<Buffer> handler) {
 		this.dataHandler = handler;
 		if (handler != null && !closed) {
 			if (context == null)
@@ -149,7 +151,7 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	}
 
 	@Override
-	public AsyncInputStream endHandler(Handler<Void> handler) {
+	public AsyncInputStream endHandler(@Nullable Handler<Void> handler) {
 		this.endHandler = handler;
 		return this;
 	}

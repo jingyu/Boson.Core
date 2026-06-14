@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -57,12 +59,12 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	/**
 	 * Human-readable name of the credential.
 	 */
-	private String name;
+	private @Nullable String name;
 
 	/**
 	 * Description of the credential.
 	 */
-	private String description;
+	private @Nullable String description;
 
 	/**
 	 * The date from which the credential is valid.
@@ -168,7 +170,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 * @param name the name of the credential, null or empty clears the name
 	 * @return this builder instance for chaining
 	 */
-	public VerifiableCredentialBuilder name(String name) {
+	public VerifiableCredentialBuilder name(@Nullable String name) {
 		this.name = name == null || name.isEmpty() ? null : normalize(name);
 		return this;
 	}
@@ -179,7 +181,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 * @param description the description, null or empty clears the description
 	 * @return this builder instance for chaining
 	 */
-	public VerifiableCredentialBuilder description(String description) {
+	public VerifiableCredentialBuilder description(@Nullable String description) {
 		this.description = description == null || description.isEmpty() ? null : normalize(description);
 		return this;
 	}

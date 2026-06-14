@@ -34,6 +34,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -70,7 +72,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	/** Cryptographic proof of the presentation */
 	@JsonProperty("proof")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Proof proof;
+	private final @Nullable Proof proof;
 
 	/** Transient compact Boson Vouch representation */
 	private transient volatile VouchView vouchView;
@@ -205,7 +207,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return matching VerifiableCredential or null if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public VerifiableCredential getCredential(String id) {
+	public @Nullable VerifiableCredential getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		// Construct DIDURL from id string, relative to holder if no DID scheme prefix
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -221,7 +223,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return matching VerifiableCredential or null if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public VerifiableCredential getCredential(DIDURL id) {
+	public @Nullable VerifiableCredential getCredential(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -236,7 +238,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 *
 	 * @return proof object, may be null if not present
 	 */
-	public Proof getProof() {
+	public @Nullable Proof getProof() {
 		return proof;
 	}
 

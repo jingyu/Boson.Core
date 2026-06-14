@@ -24,6 +24,8 @@ package io.bosonnetwork.identifier;
 
 import java.nio.file.Path;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -61,7 +63,7 @@ public interface ResolutionCache {
 	 * @return the cached resolution result, or {@code null} if no valid entry exists
 	 * @throws ResolutionCacheException if retrieval fails (I/O error, deserialization error, etc.)
 	 */
-	Resolver.ResolutionResult<Card> get(Id id) throws ResolutionCacheException;
+	Resolver.@Nullable ResolutionResult<Card> get(Id id) throws ResolutionCacheException;
 
 	/**
 	 * Evicts entries whose expiration has passed. Implementations that already purge lazily on

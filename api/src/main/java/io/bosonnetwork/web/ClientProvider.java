@@ -22,9 +22,12 @@
 
 package io.bosonnetwork.web;
 
+import java.util.Optional;
+
 import io.vertx.core.Future;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.service.Principal;
 
 /**
  * Interface for retrieving user and client entities.
@@ -34,16 +37,22 @@ public interface ClientProvider {
 	 * Retrieves the user or federated node by ID.
 	 *
 	 * @param userId the user ID or node ID
-	 * @return a Future containing the user object (ClientUser, SuperNodeInfo, etc.) or null if not found
+	 * @return a {@link Future} that completes with the resolved {@link Principal}
+	 *         (a {@link io.bosonnetwork.service.ClientUser ClientUser} or
+	 *         {@link io.bosonnetwork.service.SuperNodeInfo SuperNodeInfo}), or
+	 *         {@link Optional#empty()} if no such principal exists
 	 */
-	Future<?> getUser(Id userId);
+	Future<Optional<Principal>> getUser(Id userId);
 
 	/**
 	 * Retrieves the client (device or service) by ID.
 	 *
 	 * @param userId   the ID of the user or node that owns the client
 	 * @param clientId the client ID (device ID or service peer ID)
-	 * @return a Future containing the client object (ClientDevice, ServiceInfo, etc.) or null if not found
+	 * @return a {@link Future} that completes with the resolved {@link Principal}
+	 *         (a {@link io.bosonnetwork.service.ClientDevice ClientDevice} or
+	 *         {@link io.bosonnetwork.service.ServiceInfo ServiceInfo}), or
+	 *         {@link Optional#empty()} if no such principal exists
 	 */
-	Future<?> getClient(Id userId, Id clientId);
+	Future<Optional<Principal>> getClient(Id userId, Id clientId);
 }

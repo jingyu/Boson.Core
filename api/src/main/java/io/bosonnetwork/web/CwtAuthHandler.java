@@ -42,6 +42,8 @@ import io.vertx.ext.web.handler.HttpException;
 import io.vertx.ext.web.handler.impl.HTTPAuthorizationHandler;
 import io.vertx.ext.web.impl.RoutingContextInternal;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * An auth handler that provides CBOR Web Token (CWT) authentication support.
  * <p>
@@ -53,7 +55,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 	private final List<String> scopes;
 	private String delimiter;
 
-	private CwtAuthHandler(CwtAuth authProvider, String realm) {
+	private CwtAuthHandler(CwtAuth authProvider, @Nullable String realm) {
 		super(authProvider, Type.BEARER, realm);
 		this.scopes = Collections.emptyList();
 		this.delimiter  = " ";
@@ -72,7 +74,7 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 	 * @param realm the authentication realm to be associated with this handler.
 	 * @return a new instance of CwtAuthHandler initialized with the provided authentication provider and realm.
 	 */
-	public static CwtAuthHandler create(CwtAuth authProvider, String realm) {
+	public static CwtAuthHandler create(CwtAuth authProvider, @Nullable String realm) {
 		return new CwtAuthHandler(authProvider, realm);
 	}
 

@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -93,7 +95,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	 * @return this builder instance
 	 * @throws NullPointerException if credentials list is null
 	 */
-	public CardBuilder addCredential(List<Credential> credentials) {
+	public CardBuilder addCredential(List<@Nullable Credential> credentials) {
 		Objects.requireNonNull(credentials, "credentials");
 		for (Credential cred : credentials) {
 			if (cred != null)
@@ -244,7 +246,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	 * @throws NullPointerException if id, type, or endpoint is null
 	 * @throws IllegalArgumentException if properties contain reserved keys
 	 */
-	public CardBuilder addService(String id, String type, String endpoint, Map<String, Object> properties) {
+	public CardBuilder addService(String id, String type, String endpoint, @Nullable Map<String, Object> properties) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");

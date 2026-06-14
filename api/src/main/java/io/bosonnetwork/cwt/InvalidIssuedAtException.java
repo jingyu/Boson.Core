@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when a CWT contains an "Issued At" (iat) claim that is in the future.
  */
@@ -33,7 +35,7 @@ public class InvalidIssuedAtException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidIssuedAtException(String message) {
+	public InvalidIssuedAtException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidIssuedAtException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidIssuedAtException(String message, Throwable cause) {
+	public InvalidIssuedAtException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

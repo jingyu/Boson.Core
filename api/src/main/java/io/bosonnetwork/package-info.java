@@ -22,7 +22,7 @@
  */
 
 /**
- * The core public API of the Boson network — the root types every other package and third-party
+ * The core public API of the Boson network - the root types every other package and third-party
  * SDK builds on.
  *
  * <h2>Node and identity</h2>
@@ -49,7 +49,7 @@
  * {@link io.bosonnetwork.database database helpers}, {@link io.bosonnetwork.web web auth},
  * {@link io.bosonnetwork.vertx Vert.x helpers} and {@link io.bosonnetwork.utils utilities}.
  *
- * <p>This package is {@link org.jspecify.annotations.NullMarked} — every type, parameter, return and
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
  * field is non-null by default; anything that may be {@code null} is explicitly
  * {@link org.jspecify.annotations.Nullable}.
  */

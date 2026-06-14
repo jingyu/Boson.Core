@@ -218,7 +218,7 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 
 		Message response = call.getResponse();
 		// This task runs on a single-protocol DHT instance, so it only requested and only consumes nodes
-		// for its own network (n4 for IPv4, n6 for IPv6) — the lookup is correct per stack.
+		// for its own network (n4 for IPv4, n6 for IPv6) - the lookup is correct per stack.
 		// Known limitation (not a correctness issue): nodes of the sibling protocol that a dual-stack peer
 		// may also return are not cross-forwarded to the sibling DHT instance. Cross-pollinating v4/v6
 		// discovery between sibling instances is a future efficiency optimization.

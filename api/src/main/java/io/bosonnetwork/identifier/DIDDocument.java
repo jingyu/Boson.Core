@@ -38,6 +38,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -83,7 +85,7 @@ public class DIDDocument extends W3CDIDFormat {
 	/** The cryptographic proof (signature) for this DID Document. */
 	@JsonProperty("proof")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Proof proof;
+	private final @Nullable Proof proof;
 
 	/**
 	 * The internal CardView adapter for this document, used for signature/serialization.
@@ -268,7 +270,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The id of the verification method (DID URL or fragment)
 	 * @return The verification method, or null
 	 */
-	public VerificationMethod getVerificationMethod(String id) {
+	public @Nullable VerificationMethod getVerificationMethod(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -281,7 +283,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The DIDURL of the verification method
 	 * @return The verification method, or null
 	 */
-	public VerificationMethod getVerificationMethod(DIDURL id) {
+	public @Nullable VerificationMethod getVerificationMethod(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -304,7 +306,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The id of the authentication method (DID URL or fragment)
 	 * @return The authentication method, or null
 	 */
-	public VerificationMethod getAuthentication(String id) {
+	public @Nullable VerificationMethod getAuthentication(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -317,7 +319,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The DIDURL of the authentication method
 	 * @return The authentication method, or null
 	 */
-	public VerificationMethod getAuthentication(DIDURL id) {
+	public @Nullable VerificationMethod getAuthentication(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -340,7 +342,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The id of the assertion method (DID URL or fragment)
 	 * @return The assertion method, or null
 	 */
-	public VerificationMethod getAssertion(String id) {
+	public @Nullable VerificationMethod getAssertion(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -353,7 +355,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The DIDURL of the assertion method
 	 * @return The assertion method, or null
 	 */
-	public VerificationMethod getAssertion(DIDURL id) {
+	public @Nullable VerificationMethod getAssertion(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -388,7 +390,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The id of the credential (DID URL or fragment)
 	 * @return The verifiable credential, or null
 	 */
-	public VerifiableCredential getCredential(String id) {
+	public @Nullable VerifiableCredential getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -401,7 +403,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The DIDURL of the credential
 	 * @return The verifiable credential, or null
 	 */
-	public VerifiableCredential getCredential(DIDURL id) {
+	public @Nullable VerifiableCredential getCredential(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -419,7 +421,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return the verifiable credential matching the specified identifier and type
 	 * @throws NullPointerException if either the id or type is null
 	 */
-	public VerifiableCredential getCredential(String id, String type) {
+	public @Nullable VerifiableCredential getCredential(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -436,7 +438,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return A {@code VerifiableCredential} instance that matches the given ID and type,
 	 *         or {@code null} if no matching credential is found.
 	 */
-	public VerifiableCredential getCredential(DIDURL id, String type) {
+	public @Nullable VerifiableCredential getCredential(DIDURL id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 
@@ -472,7 +474,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The id of the service (DID URL or fragment)
 	 * @return The service, or null
 	 */
-	public Service getService(String id) {
+	public @Nullable Service getService(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -485,7 +487,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param id The DIDURL of the service
 	 * @return The service, or null
 	 */
-	public Service getService(DIDURL id) {
+	public @Nullable Service getService(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
@@ -503,7 +505,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return the service object associated with the given identifier and type
 	 * @throws NullPointerException if either the id or type is null
 	 */
-	public Service getService(String id, String type) {
+	public @Nullable Service getService(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -519,7 +521,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param type the type of the service; must not be null
 	 * @return the matching Service object if found, otherwise null
 	 */
-	public Service getService(DIDURL id, String type) {
+	public @Nullable Service getService(DIDURL id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 
@@ -534,7 +536,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * Returns the cryptographic proof (signature) for this DID Document.
 	 * @return The proof, or null if unsigned
 	 */
-	public Proof getProof() {
+	public @Nullable Proof getProof() {
 		return proof;
 	}
 
@@ -852,7 +854,7 @@ public class DIDDocument extends W3CDIDFormat {
 		 * @param <T> The property type
 		 */
 		@SuppressWarnings("unchecked")
-		public <T> T getProperty(String name) {
+		public <T> @Nullable T getProperty(String name) {
 			return (T) properties.get(name);
 		}
 

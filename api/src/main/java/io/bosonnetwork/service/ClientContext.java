@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.service;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import io.bosonnetwork.Id;
@@ -42,10 +43,10 @@ public interface ClientContext {
 	 * Retrieves the user information for a given user ID.
 	 *
 	 * @param userId the unique identifier of the user to retrieve
-	 * @return a {@link CompletableFuture} that completes with the {@link ClientUser} object if found,
-	 *         or completes with {@code null} if the user does not exist
+	 * @return a {@link CompletableFuture} that completes with an {@link Optional} containing the
+	 *         {@link ClientUser} if found, or an empty {@code Optional} if the user does not exist
 	 */
-	CompletableFuture<ClientUser> getUser(Id userId);
+	CompletableFuture<Optional<ClientUser>> getUser(Id userId);
 
 	/**
 	 * Checks if a user with the specified ID exists.
@@ -61,10 +62,11 @@ public interface ClientContext {
 	 *
 	 * @param userId   the unique identifier of the user
 	 * @param deviceId the unique identifier of the device
-	 * @return a {@link CompletableFuture} that completes with the {@link ClientDevice} if it exists
-	 *         and belongs to the user, or completes with {@code null} otherwise
+	 * @return a {@link CompletableFuture} that completes with an {@link Optional} containing the
+	 *         {@link ClientDevice} if it exists and belongs to the user, or an empty {@code Optional}
+	 *         otherwise
 	 */
-	CompletableFuture<ClientDevice> getDevice(Id userId, Id deviceId);
+	CompletableFuture<Optional<ClientDevice>> getDevice(Id userId, Id deviceId);
 
 	/**
 	 * Checks if a specific device exists and is associated with the specified user.
@@ -100,7 +102,7 @@ public interface ClientContext {
 	CwtAuth getWebAuthenticator();
 
 	/**
-	 * Returns an "allow-all" client context — intended for development, smoke tests, and bring-up
+	 * Returns an "allow-all" client context - intended for development, smoke tests, and bring-up
 	 * of a service that does not yet wire a real client store. Concretely:
 	 * <ul>
 	 *   <li>{@link #getUser(Id)} returns a fresh anonymous {@code PlainUser} for any id, and

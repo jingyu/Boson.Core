@@ -13,7 +13,7 @@ public interface SqlDialect {
 					-- Content is replaced only when the incoming value is newer (higher sequence number);
 					-- otherwise it is preserved. The `updated` timestamp is always refreshed so that
 					-- re-announcing an existing value (same sequence, or immutable values with seq 0)
-					-- keeps it alive against purge() — see Kademlia republish (paper 2.5).
+					-- keeps it alive against purge() - see Kademlia republish (paper 2.5).
 					public_key = CASE WHEN valores.sequence_number < excluded.sequence_number THEN excluded.public_key ELSE valores.public_key END,
 					private_key = CASE
 						WHEN excluded.private_key IS NOT NULL

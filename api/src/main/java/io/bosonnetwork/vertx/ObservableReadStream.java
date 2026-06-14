@@ -25,6 +25,8 @@ package io.bosonnetwork.vertx;
 import io.vertx.core.Handler;
 import io.vertx.core.streams.ReadStream;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A ReadStream wrapper that observes each element before forwarding it.
  * <p>
@@ -39,9 +41,9 @@ import io.vertx.core.streams.ReadStream;
  */
 public class ObservableReadStream<T> implements ReadStream<T> {
 	private final ReadStream<T> delegate;
-	private final Handler<T> observeHandler;
+	private final @Nullable Handler<T> observeHandler;
 	private volatile boolean terminated;
-	private Handler<Throwable> exceptionHandler;
+	private @Nullable Handler<Throwable> exceptionHandler;
 
 	/**
 	 * Constructs an ObservableReadStream that wraps a given ReadStream and observes each element
@@ -53,20 +55,20 @@ public class ObservableReadStream<T> implements ReadStream<T> {
 	 *                        is paused, no further elements are forwarded, and the exception
 	 *                        handler (if set) is invoked
 	 */
-	public ObservableReadStream(ReadStream<T> delegate, Handler<T> observeHandler) {
+	public ObservableReadStream(ReadStream<T> delegate, @Nullable Handler<T> observeHandler) {
 		this.delegate = delegate;
 		this.observeHandler = observeHandler;
 	}
 
 	@Override
-	public ObservableReadStream<T> exceptionHandler(Handler<Throwable> handler) {
+	public ObservableReadStream<T> exceptionHandler(@Nullable Handler<Throwable> handler) {
 		exceptionHandler = handler;
 		delegate.exceptionHandler(handler);
 		return this;
 	}
 
 	@Override
-	public ObservableReadStream<T> handler(Handler<T> handler) {
+	public ObservableReadStream<T> handler(@Nullable Handler<T> handler) {
 		if (terminated)
 			return this;
 
@@ -116,7 +118,7 @@ public class ObservableReadStream<T> implements ReadStream<T> {
 	}
 
 	@Override
-	public ObservableReadStream<T> endHandler(Handler<Void> endHandler) {
+	public ObservableReadStream<T> endHandler(@Nullable Handler<Void> endHandler) {
 		delegate.endHandler(endHandler);
 		return this;
 	}

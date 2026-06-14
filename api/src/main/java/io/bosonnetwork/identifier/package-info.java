@@ -26,14 +26,14 @@
  *
  * <h2>Identity documents and claims</h2>
  * <ul>
- *   <li>{@link io.bosonnetwork.identifier.DIDDocument} — the DID document for an identity, with
+ *   <li>{@link io.bosonnetwork.identifier.DIDDocument} - the DID document for an identity, with
  *       {@link io.bosonnetwork.identifier.VerificationMethod}s and embedded credentials;</li>
- *   <li>{@link io.bosonnetwork.identifier.Card} — a Boson profile/business-card object;</li>
+ *   <li>{@link io.bosonnetwork.identifier.Card} - a Boson profile/business-card object;</li>
  *   <li>{@link io.bosonnetwork.identifier.Credential} and
- *       {@link io.bosonnetwork.identifier.VerifiableCredential} — issued claims about a subject;</li>
+ *       {@link io.bosonnetwork.identifier.VerifiableCredential} - issued claims about a subject;</li>
  *   <li>{@link io.bosonnetwork.identifier.VerifiablePresentation} and
- *       {@link io.bosonnetwork.identifier.Vouch} — holder-presented bundles of credentials;</li>
- *   <li>{@link io.bosonnetwork.identifier.Proof} — the Ed25519 signature/proof attached to the
+ *       {@link io.bosonnetwork.identifier.Vouch} - holder-presented bundles of credentials;</li>
+ *   <li>{@link io.bosonnetwork.identifier.Proof} - the Ed25519 signature/proof attached to the
  *       above objects.</li>
  * </ul>
  * Each object has a fluent {@code *Builder} (for example
@@ -56,5 +56,12 @@
  *   <li><a href="https://www.w3.org/TR/did-core/">W3C DID Core</a></li>
  *   <li><a href="https://www.w3.org/TR/vc-data-model/">W3C Verifiable Credentials Data Model</a></li>
  * </ul>
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.identifier;
+
+import org.jspecify.annotations.NullMarked;

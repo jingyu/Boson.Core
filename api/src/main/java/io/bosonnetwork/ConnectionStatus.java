@@ -28,7 +28,7 @@ package io.bosonnetwork;
  */
 public enum ConnectionStatus {
 	/**
-	 * Disconnected to the Boson network. can not handle any DHT request.
+	 * Disconnected to the Boson network. Cannot handle any DHT request.
 	 */
 	Disconnected,
 	/**

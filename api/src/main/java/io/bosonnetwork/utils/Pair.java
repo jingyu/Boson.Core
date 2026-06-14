@@ -26,8 +26,13 @@ package io.bosonnetwork.utils;
 import java.util.Objects;
 import java.util.function.Function;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * This class is a simple holder for a pair of values.
+ *
+ * <p>Either element may be {@code null}; the elements are nullable and the {@link #empty()}
+ * instance holds {@code null} for both.
  *
  * @param <A> type for value a.
  * @param <B> type for value b.
@@ -35,8 +40,8 @@ import java.util.function.Function;
 public class Pair<A, B> {
 	private static final Pair<?, ?> EMPTY = new Pair<>(null, null);
 
-	private final A a;
-	private final B b;
+	private final @Nullable A a;
+	private final @Nullable B b;
 
 	/**
 	 * Create a value pair object from the given values.
@@ -44,7 +49,7 @@ public class Pair<A, B> {
 	 * @param a value a.
 	 * @param b value b.
 	 */
-	public Pair(A a, B b) {
+	public Pair(@Nullable A a, @Nullable B b) {
 		this.a = a;
 		this.b = b;
 	}
@@ -58,7 +63,7 @@ public class Pair<A, B> {
 	 * @param b value b.
 	 * @return the new Pair object.
 	 */
-	public static <A1, B1> Pair<A1, B1> of(A1 a, B1 b) {
+	public static <A1, B1> Pair<A1, B1> of(@Nullable A1 a, @Nullable B1 b) {
 		return new Pair<>(a, b);
 	}
 
@@ -79,7 +84,7 @@ public class Pair<A, B> {
 	 *
 	 * @return the value a.
 	 */
-	public A a() {
+	public @Nullable A a() {
 		return a;
 	}
 
@@ -88,7 +93,7 @@ public class Pair<A, B> {
 	 *
 	 * @return the value b.
 	 */
-	public B b() {
+	public @Nullable B b() {
 		return b;
 	}
 

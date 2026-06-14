@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import org.jspecify.annotations.Nullable;
+
 import io.vertx.core.net.SocketAddress;
 
 /**
@@ -53,7 +55,7 @@ public final class AddressUtils {
 	}
 
 	// IPv4 Bogon ranges. Some entries overlap with InetAddress.isSiteLocalAddress() /
-	// isLoopbackAddress() / isLinkLocalAddress() / isMulticastAddress() — kept here explicitly
+	// isLoopbackAddress() / isLinkLocalAddress() / isMulticastAddress() - kept here explicitly
 	// so the table reads as a self-contained list of RFC-classified non-routable ranges.
 	// Reference: RFC 1918, RFC 6890
 	private static final String[] IPV4_BOGON_RANGES = {
@@ -77,7 +79,7 @@ public final class AddressUtils {
 
 	// IPv6 Bogon ranges. Some entries overlap with InetAddress.isLinkLocalAddress() /
 	// isSiteLocalAddress() / isMulticastAddress(), and some are subsets of broader entries in this
-	// table (e.g. ::ffff:0:0/96 ⊂ ::/8; Teredo / Benchmarking / ORCHID ⊂ 2001::/23) — kept here
+	// table (e.g. ::ffff:0:0/96 ⊂ ::/8; Teredo / Benchmarking / ORCHID ⊂ 2001::/23) - kept here
 	// explicitly so the table reads as a self-contained list of RFC-classified non-routable ranges.
 	// Reference: RFC 4291, RFC 6890
 	private static final String[] IPV6_BOGON_RANGES = {
@@ -287,7 +289,7 @@ public final class AddressUtils {
 		if (isSpecialUseAddress(addr))
 			return true;
 
-		// Handle IPv4-mapped addresses (::ffff:0:0/96) — check the embedded IPv4 surface too
+		// Handle IPv4-mapped addresses (::ffff:0:0/96) - check the embedded IPv4 surface too
 		InetAddress unmapped = unmapIPv4MappedIPv6(addr);
 		if (unmapped != null) {
 			if (isSpecialUseAddress(unmapped))
@@ -325,7 +327,7 @@ public final class AddressUtils {
 	 * embedded IPv4 address; otherwise returns {@code null}. Lets classification routines
 	 * apply IPv4 rules to the mapped form.
 	 */
-	private static InetAddress unmapIPv4MappedIPv6(InetAddress addr) {
+	private static @Nullable InetAddress unmapIPv4MappedIPv6(InetAddress addr) {
 		if (!(addr instanceof Inet6Address))
 			return null;
 		byte[] bytes = addr.getAddress();
@@ -447,7 +449,7 @@ public final class AddressUtils {
 	 * <ul>
 	 *   <li>IPv4 site-local (RFC 1918: {@code 10/8}, {@code 172.16/12}, {@code 192.168/16}) via
 	 *       {@link InetAddress#isSiteLocalAddress()};</li>
-	 *   <li>IPv4 shared address space (RFC 6598 / CGN, {@code 100.64.0.0/10}) — not covered by
+	 *   <li>IPv4 shared address space (RFC 6598 / CGN, {@code 100.64.0.0/10}) - not covered by
 	 *       {@code isSiteLocalAddress()};</li>
 	 *   <li>IPv6 site-local ({@code fec0::/10}, deprecated) via {@code isSiteLocalAddress()};</li>
 	 *   <li>IPv6 Unique Local Addresses (RFC 4193, {@code fc00::/7}).</li>
@@ -463,10 +465,10 @@ public final class AddressUtils {
 			return true;
 		byte[] b = addr.getAddress();
 		if (addr instanceof Inet4Address)
-			// RFC 6598: 100.64.0.0/10 — first byte 0x64 (100), top 2 bits of second byte = 01
+			// RFC 6598: 100.64.0.0/10 - first byte 0x64 (100), top 2 bits of second byte = 01
 			return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 0x40;
 		if (addr instanceof Inet6Address)
-			// RFC 4193: fc00::/7 — top 7 bits = 1111110 (0xfc or 0xfd in the leading byte)
+			// RFC 4193: fc00::/7 - top 7 bits = 1111110 (0xfc or 0xfd in the leading byte)
 			return (b[0] & 0xfe) == 0xfc;
 		return false;
 	}
@@ -566,7 +568,7 @@ public final class AddressUtils {
 	 * <p>
 	 * Uses the well-known UDP-{@code connect} trick: opening an unbound {@link DatagramSocket}
 	 * and {@code connect}ing it to a public address forces the kernel to pick the local address
-	 * the OS would use to reach that destination — without actually sending any packets. The
+	 * the OS would use to reach that destination - without actually sending any packets. The
 	 * targets are Google DNS ({@code 8.8.8.8} for IPv4, {@code 2001:4860:4860::8888} for IPv6),
 	 * which the kernel only needs to be able to route to, not to talk to.
 	 *
@@ -576,7 +578,7 @@ public final class AddressUtils {
 	 * wildcard
 	 * @throws IllegalArgumentException if the type is not supported
 	 */
-	public static InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
+	public static @Nullable InetAddress getDefaultRouteAddress(Class<? extends InetAddress> type) {
 		if (type != Inet4Address.class && type != Inet6Address.class)
 			throw new IllegalArgumentException("Unsupported type: " + type);
 
@@ -595,7 +597,7 @@ public final class AddressUtils {
 
 			return null;
 		} catch (SocketException | UnknownHostException e) {
-			// "No route", "address family not supported", offline, etc. — not a programming error.
+			// "No route", "address family not supported", offline, etc. - not a programming error.
 			return null;
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to get default route address", e);
@@ -613,7 +615,7 @@ public final class AddressUtils {
 	 * or {@code null} if no default interface is found.
 	 * @throws RuntimeException if there is an error retrieving the network interface.
 	 */
-	public static NetworkInterface getDefaultNetworkInterface(Class<? extends InetAddress> type) {
+	public static @Nullable NetworkInterface getDefaultNetworkInterface(Class<? extends InetAddress> type) {
 		InetAddress defaultAddress = getDefaultRouteAddress(type);
 		if (defaultAddress == null)
 			return null;

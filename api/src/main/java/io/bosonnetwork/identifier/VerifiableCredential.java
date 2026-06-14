@@ -40,6 +40,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.bosonnetwork.BeforeValidPeriodException;
 import io.bosonnetwork.ExpiredException;
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -79,14 +81,14 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 */
 	@JsonProperty("name")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final String name;
+	private final @Nullable String name;
 
 	/**
 	 * The description of this verifiable credential.
 	 */
 	@JsonProperty("description")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final String description;
+	private final @Nullable String description;
 
 	/**
 	 * The issuer identity of this verifiable credential.
@@ -99,14 +101,14 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 */
 	@JsonProperty("validFrom")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date validFrom;
+	private final @Nullable Date validFrom;
 
 	/**
 	 * The end date until which this verifiable credential is valid.
 	 */
 	@JsonProperty("validUntil")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date validUntil;
+	private final @Nullable Date validUntil;
 
 	/**
 	 * The subject of this verifiable credential.
@@ -248,7 +250,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 *
 	 * @return the name or null if not set
 	 */
-	public String getName() {
+	public @Nullable String getName() {
 		return name;
 	}
 
@@ -257,7 +259,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 *
 	 * @return the description or null if not set
 	 */
-	public String getDescription() {
+	public @Nullable String getDescription() {
 		return description;
 	}
 
@@ -275,7 +277,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 *
 	 * @return the validity start date or null if not set
 	 */
-	public Date getValidFrom() {
+	public @Nullable Date getValidFrom() {
 		return validFrom;
 	}
 
@@ -284,7 +286,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 *
 	 * @return the validity end date or null if not set
 	 */
-	public Date getValidUntil() {
+	public @Nullable Date getValidUntil() {
 		return validUntil;
 	}
 
@@ -523,7 +525,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 */
 		@JsonProperty("id")
 		@JsonInclude(JsonInclude.Include.NON_NULL)
-		private final Id id;
+		private final @Nullable Id id;
 
 		/**
 		 * The claims associated with the subject.
@@ -562,7 +564,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 *
 		 * @return the subject Id
 		 */
-		public Id getId() {
+		public @Nullable Id getId() {
 			return id;
 		}
 
@@ -583,7 +585,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 * @return the claim value or null if not present
 		 */
 		@SuppressWarnings("unchecked")
-		public <T> T getClaim(String name) {
+		public <T> @Nullable T getClaim(String name) {
 			return (T) claims.get(name);
 		}
 

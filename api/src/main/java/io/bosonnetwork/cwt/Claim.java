@@ -82,7 +82,7 @@ public enum Claim {
 	 */
 	CLIENT_ID(12),
 	/**
-	 * Session identifier — identifies THIS OAuth session within a user who may have multiple linked identities.
+	 * Session identifier - identifies THIS OAuth session within a user who may have multiple linked identities.
 	 */
 	SESSION_ID(13);
 

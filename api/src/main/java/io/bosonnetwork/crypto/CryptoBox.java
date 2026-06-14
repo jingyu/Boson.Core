@@ -30,6 +30,7 @@ import javax.security.auth.Destroyable;
 import org.apache.tuweni.crypto.sodium.Box;
 import org.apache.tuweni.crypto.sodium.Box.Seed;
 import org.apache.tuweni.crypto.sodium.Sodium;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Public-key(Curve 25519) authenticated encryption.
@@ -53,7 +54,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		public static final int BYTES = Box.PublicKey.length();
 
 		private final Box.PublicKey key;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private PublicKey(Box.PublicKey key) {
 			this.key = key;
@@ -153,7 +154,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		public static final int BYTES = Box.SecretKey.length();
 
 		private final Box.SecretKey key;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private PrivateKey(Box.SecretKey key) {
 			this.key = key;
@@ -398,7 +399,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		public static final int BYTES = Box.Nonce.length();
 
 		private final Box.Nonce nonce;
-		private byte[] bytes;
+		private byte @Nullable [] bytes;
 
 		private Nonce(Box.Nonce nonce) {
 			this.nonce = nonce;
@@ -460,7 +461,7 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 			if (bytes == null)
 				bytes = nonce.bytesArray();
 
-			return bytes;
+			return bytes.clone();
 		}
 
 		@Override

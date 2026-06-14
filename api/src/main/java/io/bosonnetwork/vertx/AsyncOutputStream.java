@@ -36,12 +36,14 @@ import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.streams.WriteStream;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A Vert.x {@link WriteStream} that adapts a blocking {@link OutputStream}.
  * <p>
  * Buffers are written one at a time, each in a short
- * {@link Context#executeBlocking(java.util.concurrent.Callable, boolean) executeBlocking} task, so —
- * unlike a naive adapter — no worker thread is held while the stream is idle. Write ordering is
+ * {@link Context#executeBlocking(java.util.concurrent.Callable, boolean) executeBlocking} task, so -
+ * unlike a naive adapter - no worker thread is held while the stream is idle. Write ordering is
  * preserved (only one write is in flight at a time) and back-pressure is reported through
  * {@link #writeQueueFull()} / {@link #drainHandler(Handler)}: the queue is measured in buffered bytes
  * and bounded by {@link #setWriteQueueMaxSize(int)}.
@@ -62,9 +64,9 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	private final boolean closeOutput;
 
 	// All mutable state below is confined to {@link #context} once bound.
-	private Context context;
-	private Handler<Throwable> exceptionHandler;
-	private Handler<Void> drainHandler;
+	private @Nullable Context context;
+	private @Nullable Handler<Throwable> exceptionHandler;
+	private @Nullable Handler<Void> drainHandler;
 
 	private final Deque<PendingWrite> pending = new ArrayDeque<>();
 	private long pendingBytes;
@@ -73,7 +75,7 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	private boolean writeInProgress;
 	private boolean ending;
 	private boolean closed;
-	private Promise<Void> endPromise;
+	private @Nullable Promise<Void> endPromise;
 
 	private record PendingWrite(Buffer buffer, Promise<Void> promise) {}
 
@@ -102,7 +104,7 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	}
 
 	@Override
-	public AsyncOutputStream exceptionHandler(Handler<Throwable> handler) {
+	public AsyncOutputStream exceptionHandler(@Nullable Handler<Throwable> handler) {
 		this.exceptionHandler = handler;
 		return this;
 	}
@@ -160,7 +162,7 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	}
 
 	@Override
-	public AsyncOutputStream drainHandler(Handler<Void> handler) {
+	public AsyncOutputStream drainHandler(@Nullable Handler<Void> handler) {
 		this.drainHandler = handler;
 		return this;
 	}

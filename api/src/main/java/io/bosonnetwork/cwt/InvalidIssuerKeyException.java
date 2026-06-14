@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.cwt;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Thrown when the issuer claim in the CWT is missing or cannot be parsed into a valid public key.
  */
@@ -33,7 +35,7 @@ public class InvalidIssuerKeyException extends CwtException {
 	 *
 	 * @param message the detail message.
 	 */
-	public InvalidIssuerKeyException(String message) {
+	public InvalidIssuerKeyException(@Nullable String message) {
 		super(message);
 	}
 
@@ -43,7 +45,7 @@ public class InvalidIssuerKeyException extends CwtException {
 	 * @param message the detail message.
 	 * @param cause   the cause of the exception.
 	 */
-	public InvalidIssuerKeyException(String message, Throwable cause) {
+	public InvalidIssuerKeyException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 }

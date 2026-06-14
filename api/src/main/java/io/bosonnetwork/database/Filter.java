@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * SQL WHERE clause builder with safe parameter binding.
  * Supports AND / OR composition and multiple operators.
@@ -333,7 +335,7 @@ public class Filter {
 	 * Derives a safe default bind-parameter name from a column name and the operator. A qualified
 	 * column such as {@code table.col} is mapped to {@code table_col} so it is a valid parameter
 	 * token, and the operator is appended (e.g. {@code col_gte}) so that distinct operators on the
-	 * same column do not collide when combined — for example
+	 * same column do not collide when combined - for example
 	 * {@code and(gte("ts", lo), lte("ts", hi))} yields the distinct names {@code ts_gte} and
 	 * {@code ts_lte}. Combining two filters that use the <em>same</em> column and operator still
 	 * collides; use the explicit {@code paramName} overload to disambiguate those.
@@ -342,7 +344,7 @@ public class Filter {
 	 * @param op     the operator suffix (e.g. {@code "eq"}, {@code "gte"})
 	 * @return a valid parameter name, or {@code null} if {@code column} is {@code null}
 	 */
-	private static String defaultParamName(String column, String op) {
+	private static @Nullable String defaultParamName(String column, String op) {
 		return column == null ? null : column.replace('.', '_') + '_' + op;
 	}
 

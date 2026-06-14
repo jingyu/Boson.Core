@@ -23,18 +23,18 @@
 /**
  * Lightweight SQL helper layer for Boson modules built on the Vert.x reactive SQL client. It
  * provides safe query construction, connection/transaction helpers, and file-based schema
- * migration — without pulling in a heavyweight ORM.
+ * migration - without pulling in a heavyweight ORM.
  *
  * <h2>Safe query building</h2>
  * Only bound <em>values</em> are parameterized; SQL identifiers (column / parameter / schema names)
  * are interpolated, so they are validated through {@link io.bosonnetwork.database.SqlSafety} to
  * prevent injection. The builders compose Vert.x {@code SqlTemplate} fragments:
  * <ul>
- *   <li>{@link io.bosonnetwork.database.Filter} — {@code WHERE} clauses (eq/ne/lt/gt/like/in, plus
+ *   <li>{@link io.bosonnetwork.database.Filter} - {@code WHERE} clauses (eq/ne/lt/gt/like/in, plus
  *       {@code AND}/{@code OR} composition) with named bind parameters;</li>
- *   <li>{@link io.bosonnetwork.database.Ordering} — {@code ORDER BY} clauses;</li>
- *   <li>{@link io.bosonnetwork.database.Pagination} — {@code LIMIT}/{@code OFFSET} clauses;</li>
- *   <li>{@link io.bosonnetwork.database.CollectionParameter} — expands a collection into the
+ *   <li>{@link io.bosonnetwork.database.Ordering} - {@code ORDER BY} clauses;</li>
+ *   <li>{@link io.bosonnetwork.database.Pagination} - {@code LIMIT}/{@code OFFSET} clauses;</li>
+ *   <li>{@link io.bosonnetwork.database.CollectionParameter} - expands a collection into the
  *       placeholder tuple needed for an {@code IN (...)} predicate.</li>
  * </ul>
  *
@@ -49,5 +49,12 @@
  * {@code <version>_<description>.sql} migration files transactionally, records them in a
  * {@code schema_versions} table, and verifies SHA-256 checksums to detect tampering. It targets
  * PostgreSQL and SQLite via the Vert.x SQL clients.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.database;
+
+import org.jspecify.annotations.NullMarked;

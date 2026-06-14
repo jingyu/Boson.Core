@@ -23,23 +23,30 @@
 /**
  * Integration helpers that make Vert.x easier and safer to use within Boson modules.
  * <ul>
- *   <li>{@link io.bosonnetwork.vertx.BosonVerticle} — an abstract verticle base that hides the
+ *   <li>{@link io.bosonnetwork.vertx.BosonVerticle} - an abstract verticle base that hides the
  *       Vert.x 4.x/5.x {@code Verticle}/{@code Deployable} API differences behind
  *       {@code deploy()}/{@code undeploy()};</li>
- *   <li>{@link io.bosonnetwork.vertx.ContextualFuture} — a {@link java.util.concurrent.CompletableFuture}
+ *   <li>{@link io.bosonnetwork.vertx.ContextualFuture} - a {@link java.util.concurrent.CompletableFuture}
  *       compatible wrapper around a Vert.x {@code Future}, bridging the reactive and
  *       {@code CompletionStage} programming models;</li>
  *   <li>{@link io.bosonnetwork.vertx.BufferInputStream} / {@link io.bosonnetwork.vertx.BufferOutputStream}
- *       — zero-copy {@code InputStream}/{@code OutputStream} views over a Vert.x {@code Buffer}
+ *       â zero-copy {@code InputStream}/{@code OutputStream} views over a Vert.x {@code Buffer}
  *       (e.g. for Jackson);</li>
- *   <li>{@link io.bosonnetwork.vertx.ObservableReadStream} — a {@code ReadStream} wrapper that
+ *   <li>{@link io.bosonnetwork.vertx.ObservableReadStream} - a {@code ReadStream} wrapper that
  *       observes each element (and treats an observer error as the authoritative failure signal);</li>
- *   <li>{@link io.bosonnetwork.vertx.VertxCaffeine} — an {@link java.util.concurrent.Executor} and
+ *   <li>{@link io.bosonnetwork.vertx.VertxCaffeine} - an {@link java.util.concurrent.Executor} and
  *       scheduler that let a Caffeine cache run cooperatively on the Vert.x event loop.</li>
  * </ul>
  *
  * <p><strong>Threading:</strong> blocking accessors (such as
  * {@link io.bosonnetwork.vertx.ContextualFuture#get()}) must never be called on a Vert.x event-loop
  * or worker thread.
+ *
+ * <p>This package is {@link org.jspecify.annotations.NullMarked} - every type, parameter, return and
+ * field is non-null by default; anything that may be {@code null} is explicitly
+ * {@link org.jspecify.annotations.Nullable}.
  */
+@NullMarked
 package io.bosonnetwork.vertx;
+
+import org.jspecify.annotations.NullMarked;

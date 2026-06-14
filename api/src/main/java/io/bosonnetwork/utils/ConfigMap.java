@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -85,11 +87,11 @@ public class ConfigMap implements Map<String, Object> {
 	 * Retrieves a string value for the specified key or returns a default value if the key is not present.
 	 *
 	 * @param key the configuration key, key must not be null
-	 * @param def the default value to return if the key is not present
-	 * @return the string value or the default value
+	 * @param def the default value to return if the key is not present; may be {@code null}
+	 * @return the string value, or {@code def} (which may be {@code null}) if the key is not present
 	 * @throws NullPointerException if the key is null
 	 */
-	public String getString(String key, String def) {
+	public @Nullable String getString(String key, @Nullable String def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getString(key) : def;
 	}
@@ -134,11 +136,11 @@ public class ConfigMap implements Map<String, Object> {
 	 * Retrieves a numeric value for the specified key or returns a default value if the key is not present.
 	 *
 	 * @param key the configuration key, key must not be null
-	 * @param def the default value to return if the key is not present
-	 * @return the numeric value or the default value
+	 * @param def the default value to return if the key is not present; may be {@code null}
+	 * @return the numeric value, or {@code def} (which may be {@code null}) if the key is not present
 	 * @throws NullPointerException if the key is null
 	 */
-	public Number getNumber(String key, Number def) {
+	public @Nullable Number getNumber(String key, @Nullable Number def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getNumber(key) : def;
 	}
@@ -315,10 +317,11 @@ public class ConfigMap implements Map<String, Object> {
 	 * the provided default path is returned.
 	 *
 	 * @param key the key whose associated path is to be returned; must not be null
-	 * @param def the default path to return if the key is not present in the map
-	 * @return the path associated with the specified key, or the default path if the key is not found
+	 * @param def the default path to return if the key is not present in the map; may be {@code null}
+	 * @return the path associated with the specified key, or the (normalized) default path - which may
+	 *         be {@code null} - if the key is not found
 	 */
-	public Path getPath(String key, Path def) {
+	public @Nullable Path getPath(String key, @Nullable Path def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getPath(key) : FileUtils.normalizePath(def);
 	}
@@ -464,11 +467,11 @@ public class ConfigMap implements Map<String, Object> {
 	 * Retrieves a duration value for the specified key or returns a default value if the key is not present.
 	 *
 	 * @param key the configuration key, key must not be null
-	 * @param def the default value to return if the key is not present
-	 * @return the duration value or the default value
+	 * @param def the default value to return if the key is not present; may be {@code null}
+	 * @return the duration value, or {@code def} (which may be {@code null}) if the key is not present
 	 * @throws NullPointerException if the key is null
 	 */
-	public Duration getDuration(String key, Duration def) {
+	public @Nullable Duration getDuration(String key, @Nullable Duration def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getDuration(key) : def;
 	}
@@ -558,13 +561,14 @@ public class ConfigMap implements Map<String, Object> {
 	 * in the map, the provided default identifier is returned.
 	 *
 	 * @param key the key whose associated Id is to be retrieved
-	 * @param def the default identifier to return if the key is not present in the map
-	 * @return the identifier associated with the given key, or the default identifier if the key is not found
+	 * @param def the default identifier to return if the key is not present in the map; may be {@code null}
+	 * @return the identifier associated with the given key, or {@code def} (which may be {@code null})
+	 *         if the key is not found
 	 * @throws NullPointerException     if the key is null
 	 * @throws IllegalArgumentException if the value associated with the key is not a valid String
 	 *                                  representation of an Id
 	 */
-	public Id getId(String key, Id def) {
+	public @Nullable Id getId(String key, @Nullable Id def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getId(key) : def;
 	}
@@ -585,7 +589,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a Map
 	 */
-	public ConfigMap getObject(String key) {
+	public @Nullable ConfigMap getObject(String key) {
 		Objects.requireNonNull(key);
 		Object val = map.get(key);
 		if (val == null) {
@@ -606,7 +610,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * </p>
 	 * <p>
 	 * <strong>Note:</strong> like {@link #getObject(String)}, this returns {@code null} (rather
-	 * than throwing) when the key is absent — list configuration sections are commonly optional.
+	 * than throwing) when the key is absent - list configuration sections are commonly optional.
 	 *
 	 * @param <T> the type of elements in the list
 	 * @param key the configuration key, key must not be null
@@ -614,7 +618,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * @throws NullPointerException if the key is null
 	 * @throws IllegalArgumentException if the value is not a List
 	 */
-	public <T> List<T> getList(String key) {
+	public <T> @Nullable List<T> getList(String key) {
 		Objects.requireNonNull(key);
 		Object val = map.get(key);
 		if (val == null) {
@@ -664,7 +668,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Object get(Object key) {
+	public @Nullable Object get(Object key) {
 		return map.get(key);
 	}
 
@@ -672,7 +676,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Object put(String key, Object value) {
+	public @Nullable Object put(String key, Object value) {
 		return map.put(key, value);
 	}
 
@@ -680,7 +684,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * {@inheritDoc}
 	 */
 	@Override
-	public Object remove(Object key) {
+	public @Nullable Object remove(Object key) {
 		return map.remove(key);
 	}
 

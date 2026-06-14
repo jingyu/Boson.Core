@@ -26,22 +26,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.vertx.core.Future;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.utils.Pair;
+import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.ContextualFuture;
-import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.ClientProvider;
+import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
@@ -60,7 +62,9 @@ import io.bosonnetwork.web.CwtAuthOptions;
  */
 public class StaticFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
-	private final Map<Id, Pair<SuperNodeInfo, List<ServiceInfo>>> nodeServicesRegistry;
+	private final Map<Id, SuperNodeAndServices> nodeServicesRegistry;
+
+	private record SuperNodeAndServices(SuperNodeInfo superNodeInfo, List<ServiceInfo> services) {}
 
 	/**
 	 * Constructs a new instance of the StaticFederationContext class with the specified node identity.
@@ -85,7 +89,7 @@ public class StaticFederationContext implements FederationContext {
 	 * @throws NullPointerException if nodeId or host is null
 	 * @throws IllegalArgumentException if the port number is invalid (not between 1 and 65535, inclusive)
 	 */
-	public boolean addNode(Id nodeId, String host, int port, String apiEndpoint) {
+	public boolean addNode(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(host);
 		if (port <= 0 || port > 65535)
@@ -95,7 +99,7 @@ public class StaticFederationContext implements FederationContext {
 			return false;
 
 		nodeServicesRegistry.computeIfAbsent(nodeId, k ->
-				Pair.of(new PlainSuperNodeInfo(nodeId, host, port, apiEndpoint), List.of()));
+				new SuperNodeAndServices(new PlainSuperNodeInfo(nodeId, host, port, apiEndpoint), List.of()));
 		return true;
 	}
 
@@ -116,15 +120,17 @@ public class StaticFederationContext implements FederationContext {
 
 	/**
 	 * Retrieves a federated node from the registry synchronously based on the specified node identifier.
-	 * If the node is not found in the registry, this method returns null.
+	 * If the node is not found in the registry, this method returns an empty {@link Optional}.
 	 *
 	 * @param nodeId the unique identifier of the node to retrieve; cannot be null
-	 * @return the {@link SuperNodeInfo} associated with the specified node ID, or null if no such node exists
+	 * @return an {@link Optional} containing the {@link SuperNodeInfo} associated with the specified
+	 *         node ID, or an empty {@code Optional} if no such node exists
 	 * @throws NullPointerException if nodeId is null
 	 */
-	public SuperNodeInfo getNodeSync(Id nodeId) {
+	public Optional<SuperNodeInfo> getNodeSync(Id nodeId) {
 		Objects.requireNonNull(nodeId);
-		return nodeServicesRegistry.getOrDefault(nodeId, Pair.empty()).a();
+		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
+		return sns == null ? Optional.empty() : Optional.of(sns.superNodeInfo);
 	}
 
 	/**
@@ -165,7 +171,7 @@ public class StaticFederationContext implements FederationContext {
 	 * @throws NullPointerException if nodeId or peerId is null
 	 * @throws IllegalStateException if the node registry is in an invalid state
 	 */
-	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, String serviceType, String serviceName) {
+	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, @Nullable String serviceType, @Nullable String serviceName) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 		if (!existsNodeSync(nodeId))
@@ -179,12 +185,12 @@ public class StaticFederationContext implements FederationContext {
 				throw new IllegalStateException("Node does not exist");
 
 			ServiceInfo newService = new PlainServiceInfo(peerId, fingerprint, nodeId, endpoint, serviceType, serviceName);
-			if (v.b().isEmpty()) {
-				return Pair.of(v.a(), List.of(newService));
+			if (v.services.isEmpty()) {
+				return new SuperNodeAndServices(v.superNodeInfo, List.of(newService));
 			} else {
-				List<ServiceInfo> services = new ArrayList<>(v.b());
+				List<ServiceInfo> services = new ArrayList<>(v.services);
 				services.add(newService);
-				return Pair.of(v.a(), List.copyOf(services));
+				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
 			}
 		});
 
@@ -215,19 +221,18 @@ public class StaticFederationContext implements FederationContext {
 	 * @param peerId the unique identifier of the peer providing the service; cannot be null
 	 * @param fingerprint the fingerprint of the service to ensure uniqueness
 	 * @param nodeId the unique identifier of the node where the service is registered; cannot be null
-	 * @return the {@link ServiceInfo} object matching the given peer, fingerprint, and node,
-	 *         or null if no such service exists
+	 * @return an {@link Optional} containing the {@link ServiceInfo} matching the given peer,
+	 *         fingerprint, and node, or an empty {@code Optional} if no such service exists
 	 * @throws NullPointerException if peerId or nodeId is null
 	 */
-	public ServiceInfo getServiceSync(Id peerId, long fingerprint, Id nodeId) {
+	public Optional<ServiceInfo> getServiceSync(Id peerId, long fingerprint, Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 
-		Pair<SuperNodeInfo, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
-		return pair == null ? null : pair.b().stream()
+		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
+		return sns == null ? Optional.empty() : sns.services.stream()
 				.filter(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint)
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -241,7 +246,7 @@ public class StaticFederationContext implements FederationContext {
 	public boolean existsServiceSync(Id peerId, long fingerprint, Id nodeId) {
 		Objects.requireNonNull(peerId);
 		Objects.requireNonNull(nodeId);
-		return getServiceSync(peerId, fingerprint, nodeId) != null;
+		return getServiceSync(peerId, fingerprint, nodeId).isPresent();
 	}
 
 	/**
@@ -256,8 +261,8 @@ public class StaticFederationContext implements FederationContext {
 	public List<ServiceInfo> getServicesSync(Id peerId, Id nodeId) {
 		Objects.requireNonNull(peerId);
 		Objects.requireNonNull(nodeId);
-		Pair<SuperNodeInfo, List<ServiceInfo>> pair = nodeServicesRegistry.get(nodeId);
-		return pair == null ? List.of() : pair.b().stream()
+		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
+		return sns == null ? List.of() : sns.services.stream()
 				.filter(s -> s.getPeerId().equals(peerId))
 				.toList();
 	}
@@ -284,7 +289,7 @@ public class StaticFederationContext implements FederationContext {
 	public List<ServiceInfo> getServicesSync(Id peerId) {
 		Objects.requireNonNull(peerId);
 		return nodeServicesRegistry.values().stream()
-				.flatMap(p -> p.b().stream())
+				.flatMap(sns -> sns.services.stream())
 				.filter(s -> s.getPeerId().equals(peerId))
 				.toList();
 	}
@@ -301,14 +306,14 @@ public class StaticFederationContext implements FederationContext {
 	public boolean removeService(Id peerId, long fingerprint, Id nodeId) {
 		Variable<Boolean> removed = Variable.of(false);
 		nodeServicesRegistry.computeIfPresent(nodeId, (k, v) -> {
-			if (v.b().isEmpty())
+			if (v.services.isEmpty())
 				return v;
 
-			List<ServiceInfo> services = new ArrayList<>(v.b());
+			List<ServiceInfo> services = new ArrayList<>(v.services);
 			boolean rm = services.removeIf(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint);
 			if (rm) {
 				removed.set(true);
-				return Pair.of(v.a(), List.copyOf(services));
+				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
 			} else {
 				// no change
 				return v;
@@ -329,14 +334,14 @@ public class StaticFederationContext implements FederationContext {
 	public boolean removeServices(Id peerId, Id nodeId) {
 		Variable<Boolean> removed = Variable.of(false);
 		nodeServicesRegistry.computeIfPresent(nodeId, (k, v) -> {
-			if (v.b().isEmpty())
+			if (v.services.isEmpty())
 				return v;
 
-			List<ServiceInfo> services = new ArrayList<>(v.b());
+			List<ServiceInfo> services = new ArrayList<>(v.services);
 			boolean rm = services.removeIf(s -> s.getPeerId().equals(peerId));
 			if (rm) {
 				removed.set(true);
-				return Pair.of(v.a(), List.copyOf(services));
+				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
 			} else {
 				// no change
 				return v;
@@ -347,7 +352,7 @@ public class StaticFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists) {
+	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return ContextualFuture.succeededFuture(getNodeSync(nodeId));
 	}
 
@@ -375,7 +380,7 @@ public class StaticFederationContext implements FederationContext {
 	public FederationAuthenticator getAuthenticator() {
 		return new FederationAuthenticator() {
 			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				if (!existsNodeSync(nodeId))
 					return ContextualFuture.succeededFuture(false);
 
@@ -385,7 +390,7 @@ public class StaticFederationContext implements FederationContext {
 			}
 
 			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte[] nonce, byte[] signature) {
+			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature) {
 				if (!existsServiceSync(peerId, nodeId))
 					return ContextualFuture.succeededFuture(false);
 
@@ -405,13 +410,18 @@ public class StaticFederationContext implements FederationContext {
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
 					@Override
-					public Future<SuperNodeInfo> getUser(Id nodeId) {
-						return Future.succeededFuture(getNodeSync(nodeId));
+					public Future<Optional<Principal>> getUser(Id nodeId) {
+						Optional<Principal> principal = getNodeSync(nodeId).map(Principal.class::cast);
+						return Future.succeededFuture(principal);
 					}
 
 					@Override
-					public Future<ServiceInfo> getClient(Id nodeId, Id peerId) {
-						return Future.succeededFuture(getServicesSync(peerId, nodeId).stream().findFirst().orElse(null));
+					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
+						Optional<Principal> principal = getServicesSync(peerId, nodeId)
+								.stream()
+								.findFirst()
+								.map(Principal.class::cast);
+						return Future.succeededFuture(principal);
 					}
 				});
 

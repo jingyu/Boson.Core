@@ -101,7 +101,7 @@ public final class Functional {
 	 * Invokes {@code f} and returns its result; if {@code f} throws a checked exception, that
 	 * exception is rethrown without being declared.
 	 * <p>
-	 * <strong>This uses the "sneaky-throw" idiom</strong> — the original exception is rethrown
+	 * <strong>This uses the "sneaky-throw" idiom</strong> - the original exception is rethrown
 	 * as-is using a generic-erasure trick, not wrapped in a {@code RuntimeException}. A caller's
 	 * {@code catch (IOException e)} clause will still match an {@code IOException} thrown from
 	 * {@code f}, even though this method's signature does not declare it. Use this only where
@@ -134,7 +134,7 @@ public final class Functional {
 	/**
 	 * Rethrows the {@code e} without being declared.
 	 * <p>
-	 * <strong>This uses the "sneaky-throw" idiom</strong> — the original exception is rethrown
+	 * <strong>This uses the "sneaky-throw" idiom</strong> - the original exception is rethrown
 	 * as-is using a generic-erasure trick, not wrapped in a {@code RuntimeException}. A caller's
 	 * {@code catch (IOException e)} clause will still match an {@code IOException} thrown from
 	 * this method, even though this method's signature does not declare it. Use this only where

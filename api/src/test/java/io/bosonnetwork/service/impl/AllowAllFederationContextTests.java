@@ -20,7 +20,7 @@ public class AllowAllFederationContextTests {
 		assertTrue(context.existsNode(Id.random()).get());
 		
 		Id nodeId = Id.random();
-		SuperNodeInfo node = context.getNode(nodeId, true).get();
+		SuperNodeInfo node = context.getNode(nodeId, true).get().orElseThrow();
 		assertNotNull(node);
 		assertEquals(nodeId, node.getId());
 

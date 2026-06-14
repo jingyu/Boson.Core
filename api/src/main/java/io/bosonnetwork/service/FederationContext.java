@@ -23,7 +23,10 @@
 package io.bosonnetwork.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -61,10 +64,11 @@ public interface FederationContext {
 	 *
 	 * @param nodeId                 the unique identifier of the node to retrieve
 	 * @param tryFederateIfNotExists if {@code true}, attempts to add the node to the federation if it is not already known
-	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} object if found,
-	 *         or completes exceptionally/with null if the node cannot be found or federated
+	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} if found, or
+	 *         {@link Optional#empty()} if the node cannot be found or federated; it completes
+	 *         exceptionally only on an unexpected error
 	 */
-	CompletableFuture<SuperNodeInfo> getNode(Id nodeId, boolean tryFederateIfNotExists);
+	CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists);
 
 	/**
 	 * Retrieves a federated node by its ID.
@@ -72,10 +76,11 @@ public interface FederationContext {
 	 * This is a convenience method that calls {@link #getNode(Id, boolean)} with {@code federateIfNotExists} set to {@code false}.
 	 *
 	 * @param nodeId the unique identifier of the node to retrieve
-	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} object if found,
-	 *         or completes exceptionally/with null if the node is not part of the federation
+	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} if found, or
+	 *         {@link Optional#empty()} if the node is not part of the federation; it completes
+	 *         exceptionally only on an unexpected error
 	 */
-	default CompletableFuture<SuperNodeInfo> getNode(Id nodeId) {
+	default CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId) {
 		return getNode(nodeId, false);
 	}
 
@@ -148,14 +153,15 @@ public interface FederationContext {
 	 * Retrieves the instance of {@link CwtAuth} used for handling
 	 * web token authentication within the federation.
 	 *
-	 * @return the {@link CwtAuth} instance responsible for managing
-	 *         web token authentication.
+	 * @return the {@link CwtAuth} instance responsible for managing web token authentication, or
+	 *         {@code null} if this context does not support web authentication (e.g.; the
+	 *         {@link #disabled() disabled} context)
 	 */
-	CwtAuth getWebAuthenticator();
+	@Nullable CwtAuth getWebAuthenticator();
 
 	/**
-	 * Returns a federation context that reports the federation feature as turned off — for use
-	 * by services that do not federate. Lookup methods complete with empty/{@code null} results
+	 * Returns a federation context that reports the federation feature as turned off - for use
+	 * by services that do not federate. Look up methods complete with empty/{@code null} results
 	 * (no node or service is ever found); {@link #getAuthenticator()} rejects every challenge; and
 	 * {@link #getWebAuthenticator()} returns {@code null}.
 	 *
@@ -166,7 +172,7 @@ public interface FederationContext {
 	}
 
 	/**
-	 * Returns an "allow-all" federation context — intended for development, smoke tests, and
+	 * Returns an "allow-all" federation context - intended for development, smoke tests, and
 	 * bring-up where peer/service discovery is faked. Concretely:
 	 * <ul>
 	 *   <li>{@link #getNode(Id, boolean)} synthesizes a {@code SuperNodeInfo} for any requested id,

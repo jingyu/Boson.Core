@@ -35,6 +35,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -44,8 +46,8 @@ import io.bosonnetwork.json.Json;
 /**
  * Boson's compact form of a {@link VerifiablePresentation}.
  * <p>
- * A <em>vouch</em> is the holder's signed affirmation — "I, the holder, vouch for these credentials"
- * — packaged in a short, CBOR/JSON-friendly layout. It mirrors {@code VerifiablePresentation}
+ * A <em>vouch</em> is the holder's signed affirmation - "I, the holder, vouch for these credentials"
+ * - packaged in a short, CBOR/JSON-friendly layout. It mirrors {@code VerifiablePresentation}
  * (the W3C form) the same way {@link Card} mirrors {@link DIDDocument}: same content, shorter keys
  * and no JSON-LD vocabulary, so it's cheap to ship over the wire or pin in storage.
  * <p>
@@ -71,7 +73,7 @@ public class Vouch {
 	 */
 	@JsonProperty("id")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	private final String id;
+	private final @Nullable String id;
 	/**
 	 * The types associated with this presentation.
 	 * <p>
@@ -102,7 +104,7 @@ public class Vouch {
 	 */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final Date signedAt;
+	private final @Nullable Date signedAt;
 	/**
 	 * The signature over the presentation data.
 	 * <p>
@@ -110,7 +112,7 @@ public class Vouch {
 	 */
 	@JsonProperty("sig")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final byte[] signature;
+	private final byte @Nullable [] signature;
 
 	/**
 	 * Internal constructor used by JSON deserializer.
@@ -189,7 +191,7 @@ public class Vouch {
 	 *
 	 * @return the unique identifier, or {@code null} if not set
 	 */
-	public String getId() {
+	public @Nullable String getId() {
 		return id;
 	}
 
@@ -245,7 +247,7 @@ public class Vouch {
 	 * @param id the credential identifier to search for (must not be null)
 	 * @return the credential with the given id, or {@code null} if not present
 	 */
-	public Credential getCredential(String id) {
+	public @Nullable Credential getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		return credentials.stream()
 				.filter(c -> c.getId().equals(id))
@@ -261,7 +263,7 @@ public class Vouch {
 	 *
 	 * @return the signing timestamp, or {@code null} if unsigned
 	 */
-	public Date getSignedAt() {
+	public @Nullable Date getSignedAt() {
 		return signedAt;
 	}
 
@@ -272,7 +274,7 @@ public class Vouch {
 	 *
 	 * @return the signature byte array, or {@code null} if unsigned
 	 */
-	public byte[] getSignature() {
+	public byte @Nullable [] getSignature() {
 		return signature == null ? null : signature.clone();
 	}
 

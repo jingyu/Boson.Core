@@ -48,7 +48,7 @@ public class SuspiciousNodeDetectorTests {
 		// Lazy expiry: the ban no longer takes effect even though purge() has not run and the entry remains.
 		assertFalse(d.isBanned(addr.host()), "ban must expire on read, independent of purge");
 		assertFalse(d.isSuspicious(addr));
-		assertEquals(1, d.getBannedSize(), "entry remains in the map until purge() — expiry is lazy on read");
+		assertEquals(1, d.getBannedSize(), "entry remains in the map until purge() - expiry is lazy on read");
 
 		d.purge();
 		assertEquals(0, d.getBannedSize());
