@@ -1004,7 +1004,7 @@ public class DHT extends BosonVerticle {
 			}
 		}
 
-		return new Result<>(nodes4, nodes6);
+		return Result.of(nodes4, nodes6);
 	}
 
 	public Future<NodeInfo> findNode(Id id, LookupOption option) {

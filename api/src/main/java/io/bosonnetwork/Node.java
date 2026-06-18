@@ -466,7 +466,7 @@ public interface Node extends Identity {
 	 * @return the component instance, or null if not available or not supported
 	 * @param <T> the type parameter
 	 */
-	<T> T unwrap(Class<T> clazz);
+	<T> @Nullable T unwrap(Class<T> clazz);
 
 	/**
 	 * Creates and initializes a new {@link Node} instance using the provided configuration.

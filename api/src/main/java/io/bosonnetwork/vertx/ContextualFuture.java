@@ -25,6 +25,7 @@ package io.bosonnetwork.vertx;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -44,6 +45,8 @@ import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullUnmarked;
 
 /**
  * ContextualFuture is a {@link CompletableFuture}-compatible wrapper around Vert.x's {@link io.vertx.core.Future}.
@@ -61,9 +64,13 @@ import io.vertx.core.Vertx;
  *
  * @param <T> the result type
  */
-public class ContextualFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, java.util.concurrent.CompletionStage<T> {
-	/** The underlying Vert.x Future being wrapped. */
-	final Future<T> future;
+
+@NullUnmarked
+public class ContextualFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, CompletionStage<T> {
+	/**
+	 * The underlying Vert.x Future being wrapped.
+	 */
+	final @NonNull Future<T> future;
 
 	/**
 	 * Wraps an existing Vert.x {@link Future} into a ContextualFuture.
@@ -71,7 +78,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 *
 	 * @param future the Vert.x Future to wrap
 	 */
-	protected ContextualFuture(Future<T> future) {
+	protected ContextualFuture(@NonNull Future<T> future) {
 		// Keep the original future (so a Promise-backed one stays completable via complete());
 		// register the state-sync handler for the inherited CompletableFuture machinery.
 		this.future = future;
@@ -88,10 +95,10 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * Creates a ContextualFuture wrapper around an existing Vert.x Future.
 	 *
 	 * @param future the Vert.x Future
+	 * @param <T>    the type of the ContextualFuture result
 	 * @return a new ContextualFuture wrapping the given future
-	 * @param <T> the type of the ContextualFuture result
 	 */
-	public static <T> ContextualFuture<T> of(Future<T> future) {
+	public static <T> @NonNull ContextualFuture<T> of(@NonNull Future<T> future) {
 		return new ContextualFuture<>(future);
 	}
 
@@ -101,12 +108,12 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * it is directly returned after being cast to the appropriate type.
 	 * Otherwise, a new {@link ContextualFuture} is created.
 	 *
-	 * @param <T> the type of the result in the future
+	 * @param <T>    the type of the result in the future
 	 * @param future the {@link CompletableFuture} to be converted
 	 * @return a {@link ContextualFuture} representing the same computation or result as the provided {@link CompletableFuture}
 	 */
 	@SuppressWarnings("unchecked")
-	public static <T> ContextualFuture<T> of(CompletableFuture<T> future) {
+	public static <T> @NonNull ContextualFuture<T> of(@NonNull CompletableFuture<T> future) {
 		if (future instanceof ContextualFuture<?> vf)
 			return (ContextualFuture<T>) vf;
 
@@ -117,10 +124,10 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * Creates a failed ContextualFuture from a Throwable.
 	 *
 	 * @param cause the cause of the failure
+	 * @param <U>   the type of the ContextualFuture Future result
 	 * @return a new ContextualFuture with a failure cause
-	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> ContextualFuture<U> failedFuture(Throwable cause) {
+	public static <U> @NonNull ContextualFuture<U> failedFuture(@NonNull Throwable cause) {
 		return new ContextualFuture<>(Future.failedFuture(cause));
 	}
 
@@ -128,20 +135,20 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * Creates a failed ContextualFuture from an error message.
 	 *
 	 * @param cause the error message of the failure
+	 * @param <U>   the type of the ContextualFuture Future result
 	 * @return a new ContextualFuture with a failure cause as a String.
-	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> ContextualFuture<U> failedFuture(String cause) {
+	public static <U> @NonNull ContextualFuture<U> failedFuture(@NonNull String cause) {
 		return new ContextualFuture<>(Future.failedFuture(cause));
 	}
 
 	/**
 	 * Creates a successfully completed ContextualFuture with a {@code null} result.
 	 *
-	 * @return a new ContextualFuture with a {@code null} result.
 	 * @param <U> the type of the ContextualFuture Future result
+	 * @return a new ContextualFuture with a {@code null} result.
 	 */
-	public static <U> ContextualFuture<U> succeededFuture() {
+	public static <U> @NonNull ContextualFuture<U> succeededFuture() {
 		return new ContextualFuture<>(Future.succeededFuture());
 	}
 
@@ -149,15 +156,83 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * Creates a successfully completed ContextualFuture with the given result.
 	 *
 	 * @param result the result of the future
+	 * @param <U>    the type of the ContextualFuture Future result
 	 * @return a new ContextualFuture with the given result
-	 * @param <U> the type of the ContextualFuture Future result
 	 */
-	public static <U> ContextualFuture<U> succeededFuture(U result) {
+	public static <U> @NonNull ContextualFuture<U> succeededFuture(U result) {
 		return new ContextualFuture<>(Future.succeededFuture(result));
 	}
 
+	/**
+	 * Like {@link #either(Future)} but value-agnostic: settles on the first of the two to complete.
+	 */
+	private static @NonNull Future<Void> eitherSettled(@NonNull Future<?> a, @NonNull Future<?> b) {
+		Promise<Void> settled = Promise.promise();
+		a.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete();
+			else
+				settled.tryFail(ar.cause());
+		});
+		b.onComplete(ar -> {
+			if (ar.succeeded())
+				settled.tryComplete();
+			else
+				settled.tryFail(ar.cause());
+		});
+		return settled.future();
+	}
+
+	/**
+	 * Returns a new ContextualFuture that is completed when all the given futures complete.
+	 *
+	 * @param futures the futures to wait for
+	 * @return a new ContextualFuture that is completed when all the given futures complete
+	 */
+	public static @NonNull ContextualFuture<Void> allOf(@NonNull ContextualFuture<?>... futures) {
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		Future<Void> cf = Future.all(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new ContextualFuture that is completed when all the given futures complete.
+	 *
+	 * @param futures the collection of futures to wait for
+	 * @return a new ContextualFuture that is completed when all the given futures complete
+	 */
+	public static @NonNull ContextualFuture<Void> allOf(@NonNull Collection<ContextualFuture<?>> futures) {
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		Future<Void> cf = Future.all(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
+	 *
+	 * @param futures the futures to wait for
+	 * @return a new ContextualFuture that is completed when any of the given futures succeed
+	 */
+	public static @NonNull ContextualFuture<Void> anyOf(@NonNull ContextualFuture<?>... futures) {
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		Future<Void> cf = Future.any(vfs).mapEmpty();
+		return of(cf);
+	}
+
+	/**
+	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
+	 *
+	 * @param futures the collection of futures to wait for
+	 * @return a new ContextualFuture that is completed when any of the given futures succeed
+	 */
+	public static @NonNull ContextualFuture<Void> anyOf(@NonNull Collection<ContextualFuture<?>> futures) {
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		Future<Void> cf = Future.any(vfs).mapEmpty();
+		return of(cf);
+	}
+
 	@Override
-	public Executor defaultExecutor() {
+	public @NonNull Executor defaultExecutor() {
 		Context context = Vertx.currentContext();
 		if (context != null) {
 			return (r) -> context.executeBlocking(() -> {
@@ -170,19 +245,19 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenApply(Function<? super T, ? extends U> fn) {
+	public <U> @NonNull ContextualFuture<U> thenApply(@NonNull Function<? super T, ? extends U> fn) {
 		Future<U> mapper = future.map(fn::apply);
 		return of(mapper);
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn) {
+	public <U> @NonNull ContextualFuture<U> thenApplyAsync(@NonNull Function<? super T, ? extends U> fn) {
 		return thenApplyAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenApplyAsync(Function<? super T, ? extends U> fn, Executor executor) {
-		Future <U> composer = future.compose(t -> {
+	public <U> @NonNull ContextualFuture<U> thenApplyAsync(@NonNull Function<? super T, ? extends U> fn, @NonNull Executor executor) {
+		Future<U> composer = future.compose(t -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
@@ -199,7 +274,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> thenAccept(Consumer<? super T> action) {
+	public @NonNull ContextualFuture<Void> thenAccept(@NonNull Consumer<? super T> action) {
 		return thenApply(t -> {
 			action.accept(t);
 			return null;
@@ -207,12 +282,12 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> thenAcceptAsync(Consumer<? super T> action) {
+	public @NonNull ContextualFuture<Void> thenAcceptAsync(@NonNull Consumer<? super T> action) {
 		return thenAcceptAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<Void> thenAcceptAsync(Consumer<? super T> action, Executor executor) {
+	public @NonNull ContextualFuture<Void> thenAcceptAsync(@NonNull Consumer<? super T> action, @NonNull Executor executor) {
 		return thenApplyAsync(t -> {
 			action.accept(t);
 			return null;
@@ -220,7 +295,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> thenRun(Runnable action) {
+	public @NonNull ContextualFuture<Void> thenRun(@NonNull Runnable action) {
 		return thenApply(t -> {
 			action.run();
 			return null;
@@ -228,12 +303,12 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> thenRunAsync(Runnable action) {
+	public @NonNull ContextualFuture<Void> thenRunAsync(@NonNull Runnable action) {
 		return thenRunAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<Void> thenRunAsync(Runnable action, Executor executor) {
+	public @NonNull ContextualFuture<Void> thenRunAsync(@NonNull Runnable action, @NonNull Executor executor) {
 		return thenApplyAsync(t -> {
 			action.run();
 			return null;
@@ -241,8 +316,8 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U, V> ContextualFuture<V> thenCombine(CompletionStage<? extends U> other,
-	                                              BiFunction<? super T, ? super U, ? extends V> fn) {
+	public <U, V> @NonNull ContextualFuture<V> thenCombine(@NonNull CompletionStage<? extends U> other,
+	                                                       @NonNull BiFunction<? super T, ? super U, ? extends V> fn) {
 		Future<? extends U> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<V> mapper = Future.all(future, otherFuture).map(cf -> {
@@ -255,14 +330,15 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U, V> ContextualFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
-	                                                   BiFunction<? super T, ? super U, ? extends V> fn) {
+	public <U, V> @NonNull ContextualFuture<V> thenCombineAsync(@NonNull CompletionStage<? extends U> other,
+	                                                            @NonNull BiFunction<? super T, ? super U, ? extends V> fn) {
 		return thenCombineAsync(other, fn, defaultExecutor());
 	}
 
 	@Override
-	public <U, V> ContextualFuture<V> thenCombineAsync(CompletionStage<? extends U> other,
-	                                                   BiFunction<? super T, ? super U, ? extends V> fn, Executor executor) {
+	public <U, V> @NonNull ContextualFuture<V> thenCombineAsync(@NonNull CompletionStage<? extends U> other,
+	                                                            @NonNull BiFunction<? super T, ? super U, ? extends V> fn,
+	                                                            @NonNull Executor executor) {
 		Future<? extends U> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<V> composer = Future.all(future, otherFuture).compose(cf -> {
@@ -284,8 +360,8 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<Void> thenAcceptBoth(CompletionStage<? extends U> other,
-	                                                 BiConsumer<? super T, ? super U> action) {
+	public <U> @NonNull ContextualFuture<Void> thenAcceptBoth(@NonNull CompletionStage<? extends U> other,
+	                                                          @NonNull BiConsumer<? super T, ? super U> action) {
 		return thenCombine(other, (t, u) -> {
 			action.accept(t, u);
 			return null;
@@ -293,14 +369,15 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
-	                                                      BiConsumer<? super T, ? super U> action) {
+	public <U> @NonNull ContextualFuture<Void> thenAcceptBothAsync(@NonNull CompletionStage<? extends U> other,
+	                                                               @NonNull BiConsumer<? super T, ? super U> action) {
 		return thenAcceptBothAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public <U> ContextualFuture<Void> thenAcceptBothAsync(CompletionStage<? extends U> other,
-	                                                      BiConsumer<? super T, ? super U> action, Executor executor) {
+	public <U> @NonNull ContextualFuture<Void> thenAcceptBothAsync(@NonNull CompletionStage<? extends U> other,
+	                                                               @NonNull BiConsumer<? super T, ? super U> action,
+	                                                               @NonNull Executor executor) {
 		return thenCombineAsync(other, (t, u) -> {
 			action.accept(t, u);
 			return null;
@@ -308,7 +385,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterBoth(CompletionStage<?> other, Runnable action) {
+	public @NonNull ContextualFuture<Void> runAfterBoth(@NonNull CompletionStage<?> other, @NonNull Runnable action) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<Void> mapper = Future.all(future, otherFuture).map(cf -> {
@@ -320,12 +397,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action) {
+	public @NonNull ContextualFuture<Void> runAfterBothAsync(@NonNull CompletionStage<?> other, @NonNull Runnable action) {
 		return runAfterBothAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterBothAsync(CompletionStage<?> other, Runnable action, Executor executor) {
+	public @NonNull ContextualFuture<Void> runAfterBothAsync(@NonNull CompletionStage<?> other, @NonNull Runnable action,
+	                                                         @NonNull Executor executor) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		// The behavior of Future.all is similar to CompletableFuture.thenCombine...
 		Future<Void> composer = Future.all(future, otherFuture).compose(cf -> {
@@ -349,7 +427,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * <em>or</em> exceptionally - matching {@link CompletableFuture}'s "either" semantics. (Note this
 	 * differs from {@link Future#any} which waits for the first <em>success</em>.)
 	 */
-	private Future<T> either(Future<? extends T> other) {
+	private @NonNull Future<T> either(@NonNull Future<? extends T> other) {
 		Promise<T> settled = Promise.promise();
 		future.onComplete(ar -> {
 			if (ar.succeeded())
@@ -366,39 +444,21 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		return settled.future();
 	}
 
-	/** Like {@link #either(Future)} but value-agnostic: settles on the first of the two to complete. */
-	private static Future<Void> eitherSettled(Future<?> a, Future<?> b) {
-		Promise<Void> settled = Promise.promise();
-		a.onComplete(ar -> {
-			if (ar.succeeded())
-				settled.tryComplete();
-			else
-				settled.tryFail(ar.cause());
-		});
-		b.onComplete(ar -> {
-			if (ar.succeeded())
-				settled.tryComplete();
-			else
-				settled.tryFail(ar.cause());
-		});
-		return settled.future();
-	}
-
 	@Override
-	public <U> ContextualFuture<U> applyToEither(CompletionStage<? extends T> other, Function<? super T, U> fn) {
+	public <U> @NonNull ContextualFuture<U> applyToEither(@NonNull CompletionStage<? extends T> other, @NonNull Function<? super T, U> fn) {
 		Future<? extends T> otherFuture = Future.fromCompletionStage(other);
-		Future<U> mapper = either(otherFuture).map(fn::apply);
+		Future<U> mapper = either(otherFuture).map(fn);
 		return of(mapper);
 	}
 
 	@Override
-	public <U> ContextualFuture<U> applyToEitherAsync(CompletionStage<? extends T> other, Function<? super T, U> fn) {
+	public <U> @NonNull ContextualFuture<U> applyToEitherAsync(@NonNull CompletionStage<? extends T> other, @NonNull Function<? super T, U> fn) {
 		return applyToEitherAsync(other, fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> ContextualFuture<U> applyToEitherAsync(CompletionStage<? extends T> other,
-	                                                  Function<? super T, U> fn, Executor executor) {
+	public <U> @NonNull ContextualFuture<U> applyToEitherAsync(@NonNull CompletionStage<? extends T> other,
+	                                                           @NonNull Function<? super T, U> fn, @NonNull Executor executor) {
 		Future<? extends T> otherFuture = Future.fromCompletionStage(other);
 		Future<U> composer = either(otherFuture).compose(t -> {
 			Promise<U> promise = Promise.promise();
@@ -416,7 +476,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> acceptEither(CompletionStage<? extends T> other, Consumer<? super T> action) {
+	public @NonNull ContextualFuture<Void> acceptEither(@NonNull CompletionStage<? extends T> other, @NonNull Consumer<? super T> action) {
 		return applyToEither(other, (t) -> {
 			action.accept(t);
 			return null;
@@ -424,13 +484,14 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action) {
+	public @NonNull ContextualFuture<Void> acceptEitherAsync(@NonNull CompletionStage<? extends T> other, @NonNull Consumer<? super T> action) {
 		return acceptEitherAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<Void> acceptEitherAsync(CompletionStage<? extends T> other, Consumer<? super T> action,
-	                                                Executor executor) {
+	public @NonNull ContextualFuture<Void> acceptEitherAsync(@NonNull CompletionStage<? extends T> other,
+	                                                         @NonNull Consumer<? super T> action,
+	                                                         @NonNull Executor executor) {
 		return applyToEitherAsync(other, (t) -> {
 			action.accept(t);
 			return null;
@@ -438,7 +499,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterEither(CompletionStage<?> other, Runnable action) {
+	public @NonNull ContextualFuture<Void> runAfterEither(@NonNull CompletionStage<?> other, @NonNull Runnable action) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		Future<Void> mapper = eitherSettled(future, otherFuture).map(v -> {
 			action.run();
@@ -449,12 +510,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action) {
+	public @NonNull ContextualFuture<Void> runAfterEitherAsync(@NonNull CompletionStage<?> other, @NonNull Runnable action) {
 		return runAfterEitherAsync(other, action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<Void> runAfterEitherAsync(CompletionStage<?> other, Runnable action, Executor executor) {
+	public @NonNull ContextualFuture<Void> runAfterEitherAsync(@NonNull CompletionStage<?> other, @NonNull Runnable action,
+	                                                           @NonNull Executor executor) {
 		Future<?> otherFuture = Future.fromCompletionStage(other);
 		Future<Void> composer = eitherSettled(future, otherFuture).compose(v -> {
 			Promise<Void> promise = Promise.promise();
@@ -473,20 +535,20 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenCompose(Function<? super T, ? extends CompletionStage<U>> fn) {
+	public <U> @NonNull ContextualFuture<U> thenCompose(@NonNull Function<? super T, ? extends CompletionStage<U>> fn) {
 		Future<U> composer = future.compose(t -> Future.fromCompletionStage(fn.apply(t)));
 		return of(composer);
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn) {
+	public <U> @NonNull ContextualFuture<U> thenComposeAsync(@NonNull Function<? super T, ? extends CompletionStage<U>> fn) {
 		return thenComposeAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> ContextualFuture<U> thenComposeAsync(Function<? super T, ? extends CompletionStage<U>> fn,
-	                                                Executor executor) {
-		Future <U> composer = future.compose(t -> {
+	public <U> @NonNull ContextualFuture<U> thenComposeAsync(@NonNull Function<? super T, ? extends CompletionStage<U>> fn,
+	                                                         @NonNull Executor executor) {
+		Future<U> composer = future.compose(t -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
@@ -508,7 +570,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<U> handle(BiFunction<? super T, Throwable, ? extends U> fn) {
+	public <U> @NonNull ContextualFuture<U> handle(@NonNull BiFunction<? super T, Throwable, ? extends U> fn) {
 		Future<U> handle = future.transform(ar -> {
 			U u = fn.apply(ar.result(), ar.cause());
 			return Future.succeededFuture(u);
@@ -518,12 +580,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn) {
+	public <U> @NonNull ContextualFuture<U> handleAsync(@NonNull BiFunction<? super T, Throwable, ? extends U> fn) {
 		return handleAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public <U> ContextualFuture<U> handleAsync(BiFunction<? super T, Throwable, ? extends U> fn, Executor executor) {
+	public <U> @NonNull ContextualFuture<U> handleAsync(@NonNull BiFunction<? super T, Throwable, ? extends U> fn,
+	                                                    @NonNull Executor executor) {
 		Future<U> handle = future.transform(ar -> {
 			Promise<U> promise = Promise.promise();
 			executor.execute(() -> {
@@ -541,7 +604,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action) {
+	public @NonNull ContextualFuture<T> whenComplete(@NonNull BiConsumer<? super T, ? super Throwable> action) {
 		// Reference: API doc of CompletableFuture.whenComplete
 		//
 		// Unlike method handle, this method is not designed to translate completion
@@ -569,12 +632,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action) {
+	public @NonNull ContextualFuture<T> whenCompleteAsync(@NonNull BiConsumer<? super T, ? super Throwable> action) {
 		return whenCompleteAsync(action, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<T> whenCompleteAsync(BiConsumer<? super T, ? super Throwable> action, Executor executor) {
+	public @NonNull ContextualFuture<T> whenCompleteAsync(@NonNull BiConsumer<? super T, ? super Throwable> action,
+	                                                      @NonNull Executor executor) {
 		// Reference: API doc of CompletableFuture.whenCompleteAsync
 		//
 		// Unlike method handle, this method is not designed to translate completion
@@ -605,20 +669,20 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionally(Function<Throwable, ? extends T> fn) {
+	public @NonNull ContextualFuture<T> exceptionally(@NonNull Function<Throwable, ? extends T> fn) {
 		Future<T> otherwise = future.otherwise(fn::apply);
 
 		return of(otherwise);
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn) {
+	public @NonNull ContextualFuture<T> exceptionallyAsync(@NonNull Function<Throwable, ? extends T> fn) {
 		return exceptionallyAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn, Executor executor) {
-		Future <T> mapper = future.recover(e -> {
+	public @NonNull ContextualFuture<T> exceptionallyAsync(@NonNull Function<Throwable, ? extends T> fn, @NonNull Executor executor) {
+		Future<T> mapper = future.recover(e -> {
 			Promise<T> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
@@ -635,21 +699,21 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionallyCompose(Function<Throwable, ? extends CompletionStage<T>> fn) {
-		Future <T> mapper = future.recover(e -> Future.fromCompletionStage(fn.apply(e)));
+	public @NonNull ContextualFuture<T> exceptionallyCompose(@NonNull Function<Throwable, ? extends CompletionStage<T>> fn) {
+		Future<T> mapper = future.recover(e -> Future.fromCompletionStage(fn.apply(e)));
 
 		return of(mapper);
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn) {
+	public @NonNull ContextualFuture<T> exceptionallyComposeAsync(@NonNull Function<Throwable, ? extends CompletionStage<T>> fn) {
 		return exceptionallyComposeAsync(fn, defaultExecutor());
 	}
 
 	@Override
-	public ContextualFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn,
-	                                                     Executor executor) {
-		Future <T> mapper = future.recover(e -> {
+	public @NonNull ContextualFuture<T> exceptionallyComposeAsync(@NonNull Function<Throwable, ? extends CompletionStage<T>> fn,
+	                                                              @NonNull Executor executor) {
+		Future<T> mapper = future.recover(e -> {
 			Promise<T> promise = Promise.promise();
 			executor.execute(() -> {
 				try {
@@ -671,13 +735,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public <U> ContextualFuture<U> newIncompleteFuture() {
+	public <U> @NonNull ContextualFuture<U> newIncompleteFuture() {
 		Promise<U> promise = Promise.promise();
 		return of(promise.future());
 	}
 
 	@Override
-	public CompletableFuture<T> toCompletableFuture() {
+	public @NonNull CompletableFuture<T> toCompletableFuture() {
 		return this;
 	}
 
@@ -686,7 +750,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 *
 	 * @return the underlying Vert.x Future.
 	 */
-	public Future<T> toVertxFuture() {
+	public @NonNull Future<T> toVertxFuture() {
 		return future;
 	}
 
@@ -717,10 +781,9 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * or worker thread, as it will block the reactive runtime.
 	 *
 	 * @return the result of the future or {@code null}
-	 *
 	 * @throws IllegalStateException if called on a Vert.x thread
-	 * @throws ExecutionException if the future completed exceptionally
-	 * @throws InterruptedException if the thread was interrupted
+	 * @throws ExecutionException    if the future completed exceptionally
+	 * @throws InterruptedException  if the thread was interrupted
 	 */
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
@@ -753,15 +816,14 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * or worker thread, as it will block the reactive runtime.
 	 *
 	 * @param timeout the maximum time to wait
-	 * @param unit the time unit of the timeout argument
+	 * @param unit    the time unit of the timeout argument
 	 * @return the result of the future or {@code null} if the specified waiting time elapses before
-	 *
 	 * @throws IllegalStateException if called on a Vert.x thread
-	 * @throws ExecutionException if the future completed exceptionally
-	 * @throws InterruptedException if the thread was interrupted
+	 * @throws ExecutionException    if the future completed exceptionally
+	 * @throws InterruptedException  if the thread was interrupted
 	 */
 	@Override
-	public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+	public T get(long timeout, @NonNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
 		if (!future.isComplete()) {
 			if (Context.isOnVertxThread() || Context.isOnEventLoopThread())
 				throw new IllegalStateException("Cannot be called on a vertx thread or event loop thread");
@@ -777,12 +839,12 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 
 	@Override
 	public T join() {
-		 try {
-			 return get();
-		 } catch (InterruptedException | ExecutionException e) {
-			 throw new CompletionException(e);
-		 }
-	 }
+		try {
+			return get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new CompletionException(e);
+		}
+	}
 
 	@Override
 	public T getNow(T valueIfAbsent) {
@@ -793,7 +855,8 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 				Throwable cause = future.cause();
 				if (cause instanceof CompletionException ce) {
 					throw ce;
-				} if (cause instanceof CancellationException ce) {
+				}
+				if (cause instanceof CancellationException ce) {
 					throw ce;
 				} else {
 					throw new CompletionException(cause);
@@ -820,23 +883,21 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
-		if (supplier == null || executor == null)
-			throw new NullPointerException();
+	public @NonNull ContextualFuture<T> completeAsync(@NonNull Supplier<? extends T> supplier, @NonNull Executor executor) {
+		Objects.requireNonNull(supplier);
+		Objects.requireNonNull(executor);
 		executor.execute(() -> complete(supplier.get()));
 		return this;
 	}
 
 	@Override
-	public ContextualFuture<T> completeAsync(Supplier<? extends T> supplier) {
+	public @NonNull ContextualFuture<T> completeAsync(@NonNull Supplier<? extends T> supplier) {
 		return completeAsync(supplier, defaultExecutor());
 	}
 
 	@Override
 	public boolean completeExceptionally(Throwable ex) {
-		if (ex == null)
-			throw new NullPointerException();
-
+		Objects.requireNonNull(ex);
 		if (future instanceof Promise<?> promise)
 			return promise.tryFail(ex);
 		else
@@ -844,17 +905,15 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> orTimeout(long timeout, TimeUnit unit) {
-		if (unit == null)
-			throw new NullPointerException();
+	public @NonNull ContextualFuture<T> orTimeout(long timeout, @NonNull TimeUnit unit) {
+		Objects.requireNonNull(unit);
 		Future<T> f = future.timeout(timeout, unit);
 		return f == future ? this : of(f);
 	}
 
 	@Override
-	public ContextualFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
-		if (unit == null)
-			throw new NullPointerException();
+	public @NonNull ContextualFuture<T> completeOnTimeout(T value, long timeout, @NonNull TimeUnit unit) {
+		Objects.requireNonNull(unit);
 
 		Future<T> f = future.timeout(timeout, unit).recover(e -> {
 			if (e instanceof TimeoutException)
@@ -877,63 +936,15 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	@Override
-	public ContextualFuture<T> copy() {
+	public @NonNull ContextualFuture<T> copy() {
 		Promise<T> promise = Promise.promise();
 		future.andThen(promise);
 		return of(promise.future());
 	}
 
 	@Override
-	public CompletionStage<T> minimalCompletionStage() {
+	public @NonNull CompletionStage<T> minimalCompletionStage() {
 		return new MinimalStage<>(future);
-	}
-
-	/**
-	 * Returns a new ContextualFuture that is completed when all the given futures complete.
-	 *
-	 * @param futures the futures to wait for
-	 * @return a new ContextualFuture that is completed when all the given futures complete
-	 */
-	public static ContextualFuture<Void> allOf(ContextualFuture<?>... futures) {
-		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
-		Future<Void> cf = Future.all(vfs).mapEmpty();
-		return of(cf);
-	}
-
-	/**
-	 * Returns a new ContextualFuture that is completed when all the given futures complete.
-	 *
-	 * @param futures the collection of futures to wait for
-	 * @return a new ContextualFuture that is completed when all the given futures complete
-	 */
-	public static ContextualFuture<Void> allOf(Collection<ContextualFuture<?>> futures) {
-		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
-		Future<Void> cf = Future.all(vfs).mapEmpty();
-		return of(cf);
-	}
-
-	/**
-	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
-	 *
-	 * @param futures the futures to wait for
-	 * @return a new ContextualFuture that is completed when any of the given futures succeed
-	 */
-	public static ContextualFuture<Void> anyOf(ContextualFuture<?>... futures) {
-		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
-		Future<Void> cf = Future.any(vfs).mapEmpty();
-		return of(cf);
-	}
-
-	/**
-	 * Returns a new ContextualFuture that is completed when any of the given futures succeed.
-	 *
-	 * @param futures the collection of futures to wait for
-	 * @return a new ContextualFuture that is completed when any of the given futures succeed
-	 */
-	public static ContextualFuture<Void> anyOf(Collection<ContextualFuture<?>> futures) {
-		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
-		Future<Void> cf = Future.any(vfs).mapEmpty();
-		return of(cf);
 	}
 
 	/**
@@ -944,7 +955,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * {@link CompletableFuture#minimalCompletionStage()} contract.
 	 */
 	static final class MinimalStage<T> extends ContextualFuture<T> {
-		MinimalStage(Future<T> future) {
+		MinimalStage(@NonNull Future<T> future) {
 			super(future);
 		}
 
@@ -954,7 +965,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		}
 
 		@Override
-		public T get(long timeout, TimeUnit unit) {
+		public T get(long timeout, @NonNull TimeUnit unit) {
 			throw new UnsupportedOperationException();
 		}
 
@@ -983,6 +994,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 			throw new UnsupportedOperationException();
 		}
 
+		/*/
 		@Override
 		public void obtrudeValue(T value) {
 			throw new UnsupportedOperationException();
@@ -992,6 +1004,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		public void obtrudeException(Throwable ex) {
 			throw new UnsupportedOperationException();
 		}
+		*/
 
 		@Override
 		public boolean isDone() {
@@ -1014,27 +1027,27 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		}
 
 		@Override
-		public MinimalStage<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
+		public @NonNull MinimalStage<T> completeAsync(@NonNull Supplier<? extends T> supplier, @NonNull Executor executor) {
 			throw new UnsupportedOperationException();
 		}
 
 		@Override
-		public MinimalStage<T> completeAsync(Supplier<? extends T> supplier) {
+		public @NonNull MinimalStage<T> completeAsync(@NonNull Supplier<? extends T> supplier) {
 			throw new UnsupportedOperationException();
 		}
 
 		@Override
-		public MinimalStage<T> orTimeout(long timeout, TimeUnit unit) {
+		public @NonNull MinimalStage<T> orTimeout(long timeout, @NonNull TimeUnit unit) {
 			throw new UnsupportedOperationException();
 		}
 
 		@Override
-		public MinimalStage<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
+		public @NonNull MinimalStage<T> completeOnTimeout(@NonNull T value, long timeout, @NonNull TimeUnit unit) {
 			throw new UnsupportedOperationException();
 		}
 
 		@Override
-		public CompletableFuture<T> toCompletableFuture() {
+		public @NonNull CompletableFuture<T> toCompletableFuture() {
 			Promise<T> promise = Promise.promise();
 			future.andThen(promise);
 			return of(promise.future());

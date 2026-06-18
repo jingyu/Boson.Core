@@ -35,6 +35,7 @@ import io.vertx.sqlclient.SqlClient;
 import io.vertx.sqlclient.SqlConnection;
 import io.vertx.sqlclient.SqlResult;
 import io.vertx.sqlclient.TransactionRollbackException;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Abstraction over a Vert.x {@link SqlClient} providing convenience helpers for
@@ -50,7 +51,7 @@ public interface VertxDatabase {
 	 *
 	 * @return the backing SQL client
 	 */
-	SqlClient getClient();
+	@Nullable SqlClient getClient();
 
 	/**
 	 * Attempts to retrieve the database product name from the current connection.
@@ -97,11 +98,11 @@ public interface VertxDatabase {
 		return Future.succeededFuture();
 	}
 
-	private <R>BiFunction<SqlConnection, String, Future<R>> wrapped(Function<String, R> function) {
+	private <R extends @Nullable Object> BiFunction<SqlConnection, String, Future<R>> wrapped(Function<String, R> function) {
 		return (c, t) -> prepareConnection(c).map(v -> function.apply(t));
 	}
 
-	private <R>Function<SqlConnection, Future<R>> wrappedAsync(Function<SqlConnection, Future<R>> function) {
+	private <R extends @Nullable Object> Function<SqlConnection, Future<R>> wrappedAsync(Function<SqlConnection, Future<R>> function) {
 		return c -> prepareConnection(c).compose(v -> function.apply(c));
 	}
 
@@ -117,7 +118,7 @@ public interface VertxDatabase {
 	 * @param <T>      result type
 	 * @return a future completing with the function result after commit, or failing after rollback
 	 */
-	default <T> Future<T> withTransaction(Function<SqlConnection, Future<T>> function) {
+	default <T extends @Nullable Object> Future<T> withTransaction(Function<SqlConnection, Future<T>> function) {
 		final SqlClient client = getClient();
 		if (client instanceof Pool p) {
 			return p.withTransaction(c -> wrappedAsync(function).apply(c));
@@ -128,7 +129,7 @@ public interface VertxDatabase {
 		}
 	}
 
-	private <T> Future<T> withTransaction(SqlConnection connection, Function<SqlConnection, Future<T>> function) {
+	private <T extends @Nullable Object> Future<T> withTransaction(SqlConnection connection, Function<SqlConnection, Future<T>> function) {
 		return connection.begin().compose(tx ->
 				function.apply(connection).compose(
 						res -> tx.commit().compose(v -> Future.succeededFuture(res)),
@@ -154,7 +155,7 @@ public interface VertxDatabase {
 	 * @param <T>      result type
 	 * @return a future completing with the function result
 	 */
-	default <T> Future<T> withConnection(Function<SqlConnection, Future<T>> function) {
+	default <T extends @Nullable Object> Future<T> withConnection(Function<SqlConnection, Future<T>> function) {
 		final SqlClient client = getClient();
 		if (client instanceof SqlConnection c) {
 			return wrappedAsync(function).apply(c);
@@ -181,7 +182,7 @@ public interface VertxDatabase {
 	 * @return the found boolean or the default
 	 */
 	default boolean findBoolean(RowSet<Row> rowSet, boolean defaultValue) {
-		if (rowSet == null || rowSet.size() == 0)
+		if (rowSet.size() == 0)
 			return defaultValue;
 		return getBoolean(rowSet.iterator().next(), 0);
 	}
@@ -204,7 +205,7 @@ public interface VertxDatabase {
 	 * @return the found integer or the default
 	 */
 	default int findInteger(RowSet<Row> rowSet, int defaultValue) {
-		if (rowSet == null || rowSet.size() == 0)
+		if (rowSet.size() == 0)
 			return defaultValue;
 		Object val = rowSet.iterator().next().getValue(0);
 		if (val instanceof Number n)
@@ -230,7 +231,7 @@ public interface VertxDatabase {
 	 * @return the found long or the default
 	 */
 	default long findLong(RowSet<Row> rowSet, long defaultValue) {
-		if (rowSet == null || rowSet.size() == 0)
+		if (rowSet.size() == 0)
 			return defaultValue;
 		Object val = rowSet.iterator().next().getValue(0);
 		if (val instanceof Number n)
@@ -257,8 +258,8 @@ public interface VertxDatabase {
 	 * @param <T>          mapped type
 	 * @return mapped value or the default
 	 */
-	default <T> T findUniqueOrDefault(RowSet<Row> rowSet, Function<Row, T> mapper, T defaultValue) {
-		if (rowSet == null || rowSet.size() == 0)
+	default <T> @Nullable T findUniqueOrDefault(RowSet<Row> rowSet, Function<Row, T> mapper, @Nullable T defaultValue) {
+		if (rowSet.size() == 0)
 			return defaultValue;
 		return mapper.apply(rowSet.iterator().next());
 	}
@@ -271,7 +272,7 @@ public interface VertxDatabase {
 	 * @param <T>    mapped type
 	 * @return mapped value or {@code null}
 	 */
-	default <T> T findUnique(RowSet<Row> rowSet, Function<Row, T> mapper) {
+	default <T> @Nullable T findUnique(RowSet<Row> rowSet, Function<Row, T> mapper) {
 		return findUniqueOrDefault(rowSet, mapper, null);
 	}
 
@@ -284,7 +285,7 @@ public interface VertxDatabase {
 	 * @return list of mapped values (possibly empty)
 	 */
 	default <T> List<T> findMany(RowSet<Row> rowSet, Function<Row, T> mapper) {
-		if (rowSet == null)
+		if (rowSet.size() == 0)
 			return List.of();
 		return rowSet.stream().map(mapper).collect(Collectors.toList());
 	}

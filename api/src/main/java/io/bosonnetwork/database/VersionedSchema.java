@@ -80,9 +80,9 @@ public class VersionedSchema implements VertxDatabase {
 	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "",  null,"", 0, 0, true);
 	private final Vertx vertx;
 	private final SqlClient client;
-	private final String schema;
+	private final @Nullable String schema;
 	private final Path migrationPath;
-	private String databaseProductName;
+	private @Nullable String databaseProductName;
 	private SchemaVersion currentVersion;
 
 	private static final Logger log = LoggerFactory.getLogger(VersionedSchema.class);
@@ -140,7 +140,7 @@ public class VersionedSchema implements VertxDatabase {
 		}
 	}
 
-	private VersionedSchema(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
+	private VersionedSchema(Vertx vertx, SqlClient client, @Nullable String schema, Path migrationPath) {
 		this.vertx = vertx;
 		this.client = client;
 		this.schema = schema;
@@ -172,7 +172,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @param migrationPath the path to the directory containing migration SQL files
 	 * @return a new {@link VersionedSchema} instance configured for the provided parameters
 	 */
-	public static VersionedSchema init(Vertx vertx, SqlClient client, String schema, Path migrationPath) {
+	public static VersionedSchema init(Vertx vertx, SqlClient client, @Nullable String schema, Path migrationPath) {
 		return new VersionedSchema(vertx, client, validateSchema(schema), migrationPath);
 	}
 

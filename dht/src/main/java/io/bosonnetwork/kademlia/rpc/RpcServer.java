@@ -452,7 +452,7 @@ public class RpcServer implements Measured {
 		}
 
 		// Validate packet size
-		if (buffer.length() < Id.BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
+		if (buffer.length() < Id.BYTES + CryptoBox.MAC_BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
 			log.warn("Ignored invalid packet(too short) from {}", remoteAddress);
 			suspiciousNodeDetector.malformedMessage(remoteAddress);
 			if (metrics != null) {
