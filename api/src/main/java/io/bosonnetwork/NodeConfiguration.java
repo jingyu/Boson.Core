@@ -647,6 +647,15 @@ public class NodeConfiguration {
 		}
 
 		/**
+		 * Checks if a private key is present.
+		 *
+		 * @return true if a private key exists, false otherwise.
+		 */
+		public boolean hasPrivateKey() {
+			return privateKey != null;
+		}
+
+		/**
 		 * Set the storage path for DHT persistent data using a string path.
 		 * @param dir the string path (maybe null to disable persistence)
 		 * @return this Builder for chaining
@@ -853,6 +862,15 @@ public class NodeConfiguration {
 			return this;
 		}
 
+		/**
+		 * Populates the builder with values from the specified map. The map is expected to contain
+		 * configurations relating to network, database, and other settings.
+		 *
+		 * @param map A nullable map containing configuration data. If the map is null or empty, the
+		 *            method returns the current builder instance without making changes.
+		 * @return The builder instance with the configurations applied from the map, enabling method chaining.
+		 * @throws IllegalArgumentException If any bootstrap node configuration is invalid or missing required fields.
+		 */
 		public Builder fromMap(@Nullable Map<String, Object> map) {
 			if (map == null || map.isEmpty())
 				return this;

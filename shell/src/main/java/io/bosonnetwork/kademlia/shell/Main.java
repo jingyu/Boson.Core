@@ -51,7 +51,6 @@ import picocli.shell.jline3.PicocliCommands;
 import picocli.shell.jline3.PicocliCommands.PicocliCommandsFactory;
 
 import io.bosonnetwork.ConnectionStatusListener;
-import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
@@ -202,12 +201,12 @@ public class Main implements Callable<Integer> {
 		if (dataDir != null && configFile == null)
 			configFile = dataDir + File.separator + "config.yaml";
 
-		DefaultNodeConfiguration.Builder builder = NodeConfiguration.builder();
+		NodeConfiguration.Builder builder = NodeConfiguration.builder();
 
 		if (configFile != null && (!saveConfig || Files.exists(Path.of(configFile)))) {
 			try {
 				Map<String, Object> map = Json.yamlMapper().readValue(new File(configFile), Json.mapType());
-				builder.template(map);
+				builder.fromMap(map);
 			} catch (Exception e) {
 				System.out.println("Can not load the config file: " + configFile + ", error: " + e.getMessage());
 				e.printStackTrace(System.err);
@@ -227,7 +226,7 @@ public class Main implements Callable<Integer> {
 		builder.dataDir(dataDir != null ? dataDir : DEFAULT_DATA_DIR);
 
 		if (storageURL != null)
-			builder.database(storageURL);
+			builder.databaseUri(storageURL);
 
 		if (!builder.hasPrivateKey())
 			builder.generatePrivateKey();
@@ -243,7 +242,7 @@ public class Main implements Callable<Integer> {
 		}
 
 		if (developerMode)
-			builder.enableDeveloperMode();
+			builder.setDeveloperMode(true);
 
 		config = builder.build();
 
@@ -255,7 +254,7 @@ public class Main implements Callable<Integer> {
 
 			try {
 				Path targetFile = configFile != null ? Path.of(configFile) : Path.of(dataDir).resolve("config.yaml");
-				Map<String, Object> map = ((DefaultNodeConfiguration) config).toMap();
+				Map<String, Object> map = config.toMap();
 				Json.yamlMapper().writeValue(targetFile.toFile(), map);
 			} catch (Exception e) {
 				System.out.println("Can not save the config file: " + configFile + ", error: " + e.getMessage());
