@@ -25,7 +25,6 @@ package io.bosonnetwork.identifier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -91,10 +90,6 @@ public class VerificationMethodTests {
 				controller.toBase58String());
 
 		var vmr = (VerificationMethod.Reference) VerificationMethod.of(id);
-		assertNull(vmr.getType());
-		assertNull(vmr.getController());
-		assertNull(vmr.getPublicKeyMultibase());
-
 		assertEquals(vm.getReference(), vmr);
 
 		vmr.updateReference(vm);

@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -44,7 +46,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	/** JSON-LD context URIs for the presentation */
 	private final List<String> contexts;
 	/** Unique identifier of the presentation (DID URL with fragment) */
-	private String id;
+	private @Nullable String id;
 	/** List of presentation types */
 	private final List<String> types;
 	/** Map of credential ID to VerifiableCredential included in the presentation */
@@ -77,20 +79,20 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 *
 	 * @param id the identifier string (DID URL or fragment)
 	 * @return this builder instance
-	 * @throws NullPointerException if id is null
-	 * @throws IllegalArgumentException if id is empty, does not start with holder DID, or lacks fragment
+	 * @throws IllegalArgumentException if id does not start with holder DID, or lacks fragment
 	 */
-	public VerifiablePresentationBuilder id(String id) {
-		Objects.requireNonNull(id, "id");
-		if (id.isEmpty())
-			throw new IllegalArgumentException("Verifiable presentation id must not be empty");
+	public VerifiablePresentationBuilder id(@Nullable String id) {
+		if (id == null || id.isEmpty()) {
+			this.id = null;
+			return this;
+		}
 
 		DIDURL idUrl;
 		// Check if id is a full DID URL starting with DID scheme
 		if (id.startsWith(DIDConstants.DID_SCHEME + ":")) {
 			idUrl = DIDURL.create(id);
 			// Validate that the DID URL's id matches the holder's DID
-			if (!idUrl.getId().equals(identity.getId()))
+			if (!Objects.equals(idUrl.getId(), identity.getId()))
 				throw new IllegalArgumentException("Verifiable presentation id DID URL must use holder DID "
 						+ identity.getId().toDIDString() + ": " + id);
 			// Validate that the DID URL contains a fragment part
@@ -139,6 +141,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 
 		// Normalize and add contexts, avoiding duplicates and null/empty
 		for (String context : contexts) {
+			// noinspection ConstantConditions
 			if (context == null || context.isEmpty())
 				continue;
 
@@ -181,6 +184,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 */
 	public VerifiablePresentationBuilder addCredential(List<VerifiableCredential> vcs) {
 		for (VerifiableCredential vc : vcs) {
+			// noinspection ConstantConditions
 			if (vc != null)
 				addCredential(vc);
 		}
@@ -198,7 +202,7 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 * @return this builder instance
 	 * @throws NullPointerException if id or claims is null
 	 */
-	public VerifiablePresentationBuilder addCredential(String id, String type, List<String> contexts, Map<String, Object> claims) {
+	public VerifiablePresentationBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts, Map<String, Object> claims) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claims, "claims");
 
@@ -222,7 +226,8 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 * @return this builder instance
 	 * @throws NullPointerException if id or claim1 is null
 	 */
-	public VerifiablePresentationBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1) {
+	public VerifiablePresentationBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts,
+													   String claim1, Object value1) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 
@@ -248,8 +253,8 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 * @return this builder instance
 	 * @throws NullPointerException if id, claim1, or claim2 is null
 	 */
-	public VerifiablePresentationBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
-										 String claim2, Object value2) {
+	public VerifiablePresentationBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts,
+													   String claim1, Object value1, String claim2, Object value2) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 		Objects.requireNonNull(claim2, "claim2");
@@ -279,8 +284,9 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	 * @return this builder instance
 	 * @throws NullPointerException if id, claim1, claim2, or claim3 is null
 	 */
-	public VerifiablePresentationBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
-										 String claim2, Object value2, String claim3, Object value3) {
+	public VerifiablePresentationBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts,
+													   String claim1, Object value1, String claim2, Object value2,
+													   String claim3, Object value3) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 		Objects.requireNonNull(claim2, "claim2");
@@ -308,12 +314,12 @@ public class VerifiablePresentationBuilder extends BosonIdentityObjectBuilder<Ve
 	public VerifiableCredentialBuilder addCredential() {
 		return new VerifiableCredentialBuilder(identity) {
 			@Override
-			public VerifiableCredentialBuilder subject(Id subject) {
+			public VerifiableCredentialBuilder subject(@Nullable Id subject) {
 				// Enforce that credential subject matches the holder identity
 				if (subject != null && !subject.equals(identity.getId()))
 					throw new IllegalArgumentException("Credential subject does not match the holder");
 
-				return super.subject(subject);
+				return super.subject(identity.getId());
 			}
 
 			@Override

@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
@@ -90,7 +91,7 @@ public class DIDDocument extends W3CDIDFormat {
 	/**
 	 * The internal CardView adapter for this document, used for signature/serialization.
 	 */
-	private transient volatile CardView cardView;
+	private transient volatile @Nullable CardView cardView;
 
 	/**
 	 * Constructs a DIDDocument by deserializing all fields.
@@ -107,13 +108,13 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @throws IllegalArgumentException if references are invalid or required fields are missing
 	 */
 	@JsonCreator
-	public DIDDocument(@JsonProperty(value = "@context") List<String> contexts,
+	public DIDDocument(@JsonProperty(value = "@context") @Nullable List<String> contexts,
 					   @JsonProperty(value = "id", required = true) Id id,
 					   @JsonProperty(value = "verificationMethod", required = true) List<VerificationMethod> verificationMethods,
-					   @JsonProperty(value = "authentication") List<VerificationMethod> authentications,
-					   @JsonProperty(value = "assertion") List<VerificationMethod> assertions,
-					   @JsonProperty(value = "verifiableCredential") List<VerifiableCredential> credentials,
-					   @JsonProperty(value = "service") List<Service> services,
+					   @JsonProperty(value = "authentication") @Nullable List<VerificationMethod> authentications,
+					   @JsonProperty(value = "assertion") @Nullable List<VerificationMethod> assertions,
+					   @JsonProperty(value = "verifiableCredential") @Nullable List<VerifiableCredential> credentials,
+					   @JsonProperty(value = "service") @Nullable List<Service> services,
 					   @JsonProperty(value = "proof", required = true) Proof proof) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(verificationMethods, "verificationMethods");
@@ -199,8 +200,8 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param services Service endpoints
 	 */
 	protected DIDDocument(List<String> contexts, Id id, List<VerificationMethod> verificationMethods,
-						  List<VerificationMethod> authentications, List<VerificationMethod> assertions,
-						  List<VerifiableCredential> credentials, List<Service> services) {
+						  @Nullable List<VerificationMethod> authentications, @Nullable List<VerificationMethod> assertions,
+						  @Nullable List<VerifiableCredential> credentials, @Nullable List<Service> services) {
 		this.contexts = contexts;
 		this.id = id;
 		this.verificationMethods = verificationMethods.isEmpty() ? List.of() : List.copyOf(verificationMethods);
@@ -266,11 +267,11 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the verification method with the specified id, or null if not found.
+	 * Returns the verification method with the specified id, or empty if not found.
 	 * @param id The id of the verification method (DID URL or fragment)
-	 * @return The verification method, or null
+	 * @return an {@link Optional} with the verification method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getVerificationMethod(String id) {
+	public Optional<VerificationMethod> getVerificationMethod(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -279,18 +280,17 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the verification method with the specified DIDURL, or null if not found.
+	 * Returns the verification method with the specified DIDURL, or empty if not found.
 	 * @param id The DIDURL of the verification method
-	 * @return The verification method, or null
+	 * @return an {@link Optional} with the verification method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getVerificationMethod(DIDURL id) {
+	public Optional<VerificationMethod> getVerificationMethod(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return verificationMethods.stream()
 			.filter(vm -> vm.getId().equals(sid))
-			.findFirst()
-			.orElse(null);
+			.findFirst();
 	}
 
 	/**
@@ -302,11 +302,11 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the authentication method with the specified id, or null if not found.
+	 * Returns the authentication method with the specified id, or empty if not found.
 	 * @param id The id of the authentication method (DID URL or fragment)
-	 * @return The authentication method, or null
+	 * @return an {@link Optional} with the authentication method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getAuthentication(String id) {
+	public Optional<VerificationMethod> getAuthentication(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -315,18 +315,17 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the authentication method with the specified DIDURL, or null if not found.
+	 * Returns the authentication method with the specified DIDURL, or empty if not found.
 	 * @param id The DIDURL of the authentication method
-	 * @return The authentication method, or null
+	 * @return an {@link Optional} with the authentication method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getAuthentication(DIDURL id) {
+	public Optional<VerificationMethod> getAuthentication(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return authentications.stream()
 			.filter(vm -> vm.getId().equals(sid))
-			.findFirst()
-			.orElse(null);
+			.findFirst();
 	}
 
 	/**
@@ -338,11 +337,11 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the assertion method with the specified id, or null if not found.
+	 * Returns the assertion method with the specified id, or empty if not found.
 	 * @param id The id of the assertion method (DID URL or fragment)
-	 * @return The assertion method, or null
+	 * @return an {@link Optional} with the assertion method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getAssertion(String id) {
+	public Optional<VerificationMethod> getAssertion(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -351,18 +350,17 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the assertion method with the specified DIDURL, or null if not found.
+	 * Returns the assertion method with the specified DIDURL, or empty if not found.
 	 * @param id The DIDURL of the assertion method
-	 * @return The assertion method, or null
+	 * @return an {@link Optional} with the assertion method, or empty if not found
 	 */
-	public @Nullable VerificationMethod getAssertion(DIDURL id) {
+	public Optional<VerificationMethod> getAssertion(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return assertions.stream()
 			.filter(vm -> vm.getId().equals(sid))
-			.findFirst()
-			.orElse(null);
+			.findFirst();
 	}
 
 	/**
@@ -386,11 +384,11 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the verifiable credential with the specified id, or null if not found.
+	 * Returns the verifiable credential with the specified id, or empty if not found.
 	 * @param id The id of the credential (DID URL or fragment)
-	 * @return The verifiable credential, or null
+	 * @return an {@link Optional} with the verifiable credential, or empty if not found
 	 */
-	public @Nullable VerifiableCredential getCredential(String id) {
+	public Optional<VerifiableCredential> getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -399,18 +397,17 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the verifiable credential with the specified DIDURL, or null if not found.
+	 * Returns the verifiable credential with the specified DIDURL, or empty if not found.
 	 * @param id The DIDURL of the credential
-	 * @return The verifiable credential, or null
+	 * @return an {@link Optional} with the verifiable credential, or empty if not found
 	 */
-	public @Nullable VerifiableCredential getCredential(DIDURL id) {
+	public Optional<VerifiableCredential> getCredential(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return credentials.stream()
 			.filter(vc -> vc.getId().equals(sid))
-			.findFirst()
-			.orElse(null);
+			.findFirst();
 	}
 
 	/**
@@ -421,7 +418,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return the verifiable credential matching the specified identifier and type
 	 * @throws NullPointerException if either the id or type is null
 	 */
-	public @Nullable VerifiableCredential getCredential(String id, String type) {
+	public Optional<VerifiableCredential> getCredential(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -438,15 +435,14 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return A {@code VerifiableCredential} instance that matches the given ID and type,
 	 *         or {@code null} if no matching credential is found.
 	 */
-	public @Nullable VerifiableCredential getCredential(DIDURL id, String type) {
+	public Optional<VerifiableCredential> getCredential(DIDURL id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 
 		String sid = id.toString();
 		return credentials.stream()
 				.filter(vc -> vc.getId().equals(sid) && vc.getTypes().contains(type))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -470,11 +466,11 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the service with the specified id, or null if not found.
+	 * Returns the service with the specified id, or empty if not found.
 	 * @param id The id of the service (DID URL or fragment)
-	 * @return The service, or null
+	 * @return an {@link Optional} with the service, or empty if not found
 	 */
-	public @Nullable Service getService(String id) {
+	public Optional<Service> getService(String id) {
 		Objects.requireNonNull(id, "id");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
 				DIDURL.create(id) : new DIDURL(getId(), null, null, id);
@@ -483,18 +479,17 @@ public class DIDDocument extends W3CDIDFormat {
 	}
 
 	/**
-	 * Returns the service with the specified DIDURL, or null if not found.
+	 * Returns the service with the specified DIDURL, or empty if not found.
 	 * @param id The DIDURL of the service
-	 * @return The service, or null
+	 * @return an {@link Optional} with the service, or empty if not found
 	 */
-	public @Nullable Service getService(DIDURL id) {
+	public Optional<Service> getService(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return services.stream()
 			.filter(service -> service.getId().equals(sid))
-			.findFirst()
-			.orElse(null);
+			.findFirst();
 	}
 
 	/**
@@ -505,7 +500,7 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return the service object associated with the given identifier and type
 	 * @throws NullPointerException if either the id or type is null
 	 */
-	public @Nullable Service getService(String id, String type) {
+	public Optional<Service> getService(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -521,23 +516,22 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param type the type of the service; must not be null
 	 * @return the matching Service object if found, otherwise null
 	 */
-	public @Nullable Service getService(DIDURL id, String type) {
+	public Optional<Service> getService(DIDURL id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 
 		String sid = id.toString();
 		return services.stream()
 				.filter(service -> service.getId().equals(sid) && service.getType().equals(type))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
 	 * Returns the cryptographic proof (signature) for this DID Document.
-	 * @return The proof, or null if unsigned
+	 * @return The proof
 	 */
-	public @Nullable Proof getProof() {
-		return proof;
+	public Proof getProof() {
+		return Objects.requireNonNull(proof);
 	}
 
 	/**
@@ -565,10 +559,13 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @return The Card representation of this DID Document
 	 */
 	public Card toCard() {
-		if (cardView == null)
-			cardView = new CardView(this);
+		CardView view = cardView;
+		if (view == null) {
+			view = new CardView(this);
+			this.cardView = view;
+		}
 
-		return cardView;
+		return view;
 	}
 
 	/**
@@ -580,8 +577,8 @@ public class DIDDocument extends W3CDIDFormat {
 	 * @param vcTypeContexts Map of credential type to context URIs
 	 * @return The corresponding DIDDocument
 	 */
-	public static DIDDocument fromCard(Card card, List<String> documentContexts,
-									   Map<String, List<String>> vcTypeContexts) {
+	public static DIDDocument fromCard(Card card, @Nullable List<String> documentContexts,
+									   @Nullable Map<String, List<String>> vcTypeContexts) {
 		if (card instanceof CardView bc)
 			return bc.getDocument();
 
@@ -640,7 +637,7 @@ public class DIDDocument extends W3CDIDFormat {
 		// At verification time the proof is non-null and provides the signed-at timestamp,
 		// so the CardView view rebuilds the exact bytes the underlying Card signature covers
 		// (id, credentials, services, sat).
-		CardView view = cardView != null ? cardView : new CardView(this);
+		Card view = toCard();
 		return view.getSignData();
 	}
 
@@ -712,7 +709,7 @@ public class DIDDocument extends W3CDIDFormat {
 					doc.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
 					doc.services.stream().map(s -> new Card.Service(s.getId(), s.getType(), s.getEndpoint(), s.getProperties()))
 							.collect(Collectors.toList()),
-					doc.proof.getCreated(), doc.proof.getProofValue());
+					Objects.requireNonNull(doc.proof).getCreated(), doc.proof.getProofValue());
 
 			this.doc = doc;
 		}
@@ -808,7 +805,7 @@ public class DIDDocument extends W3CDIDFormat {
 		 * @param endpoint The service endpoint URI
 		 * @param properties Additional service properties
 		 */
-		protected Service(String id, String type, String endpoint, Map<String, Object> properties) {
+		protected Service(String id, String type, String endpoint, @Nullable Map<String, Object> properties) {
 			this.id = id;
 			this.type = type;
 			this.endpoint = endpoint;
@@ -841,7 +838,7 @@ public class DIDDocument extends W3CDIDFormat {
 
 		/**
 		 * Returns an unmodifiable map of all additional service properties.
-		 * @return The properties map
+		 * @return The property map
 		 */
 		public Map<String, Object> getProperties() {
 			return Collections.unmodifiableMap(properties);

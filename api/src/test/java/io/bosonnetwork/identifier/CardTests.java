@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Date;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -59,7 +60,9 @@ public class CardTests {
 		assertEquals(1, card.getCredentials("BosonProfile").size());
 		assertEquals(1, card.getServices("BosonHomeNode").size());
 
-		Credential cred = card.getCredential("profile");
+		Optional<Credential> oc = card.getCredential("profile");
+		assertTrue(oc.isPresent());
+		Credential cred = oc.get();
 		assertTrue(cred.isGenuine());
 		assertTrue(cred.isValid());
 		assertTrue(cred.selfIssued());
@@ -134,8 +137,9 @@ public class CardTests {
 		assertEquals("messaging", services.get(1).getId());
 		assertEquals("bcr", services.get(2).getId());
 
-		Credential cred = card.getCredential("profile", "BosonProfile");
-		assertNotNull(cred);
+		var oc = card.getCredential("profile", "BosonProfile");
+		assertTrue(oc.isPresent());
+		Credential cred = oc.get();
 		assertTrue(cred.isGenuine());
 		assertTrue(cred.isValid());
 		assertTrue(cred.selfIssued());

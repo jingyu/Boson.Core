@@ -149,29 +149,26 @@ public abstract class VerificationMethod {
 	/**
 	 * Returns the type of this verification method.
 	 *
-	 * @return The verification method {@link Type}, or null if this is a reference without loaded entity.
+	 * @return the verification method {@link Type}
+	 * @throws IllegalStateException if this is an unresolved reference (its entity is not loaded)
 	 */
-	public @Nullable Type getType() {
-		return null;
-	}
+	public abstract Type getType();
 
 	/**
 	 * Returns the controller DID of this verification method.
 	 *
-	 * @return The controller {@link Id}, or null if this is a reference without loaded entity.
+	 * @return the controller {@link Id}
+	 * @throws IllegalStateException if this is an unresolved reference (its entity is not loaded)
 	 */
-	public @Nullable Id getController() {
-		return null;
-	}
+	public abstract Id getController();
 
 	/**
 	 * Returns the public key material encoded in multibase format.
 	 *
-	 * @return The public key multibase string, or null if this is a reference without loaded entity.
+	 * @return the public key multibase string
+	 * @throws IllegalStateException if this is an unresolved reference (its entity is not loaded)
 	 */
-	public @Nullable String getPublicKeyMultibase() {
-		return null;
-	}
+	public abstract String getPublicKeyMultibase();
 
 	/**
 	 * Indicates whether this verification method is a reference (i.e., only contains an ID)
@@ -244,9 +241,9 @@ public abstract class VerificationMethod {
 		 */
 		@JsonCreator
 		protected Entity(@JsonProperty(value = "id", required = true) String id,
-						 @JsonProperty(value = "type") Type type,
-						 @JsonProperty(value = "controller") Id controller,
-						 @JsonProperty(value = "publicKeyMultibase") String publicKeyMultibase) {
+						 @JsonProperty(value = "type", required = true) Type type,
+						 @JsonProperty(value = "controller", required = true) Id controller,
+						 @JsonProperty(value = "publicKeyMultibase", required = true) String publicKeyMultibase) {
 			// Require all fields to be non-null for a full entity
 			Objects.requireNonNull(id, "id");
 			Objects.requireNonNull(type, "type");
@@ -368,22 +365,32 @@ public abstract class VerificationMethod {
 			return id;
 		}
 
-		@Override
-		public @Nullable Type getType() {
-			// Return type from cached entity if present, otherwise null
-			return entity == null ? null : entity.getType();
+		/**
+		 * Returns the referenced verification method, or throws if this reference has not been resolved.
+		 *
+		 * @return the resolved {@link VerificationMethod}
+		 * @throws IllegalStateException if this reference is dangling (its entity is not loaded)
+		 */
+		private VerificationMethod resolvedEntity() {
+			if (entity == null)
+				throw new IllegalStateException("Verification method reference is dangling: its entity is not resolved");
+
+			return entity;
 		}
 
 		@Override
-		public @Nullable Id getController() {
-			// Return controller from cached entity if present, otherwise null
-			return entity == null ? null : entity.getController();
+		public Type getType() {
+			return resolvedEntity().getType();
 		}
 
 		@Override
-		public @Nullable String getPublicKeyMultibase() {
-			// Return public key from cached entity if present, otherwise null
-			return entity == null ? null : entity.getPublicKeyMultibase();
+		public Id getController() {
+			return resolvedEntity().getController();
+		}
+
+		@Override
+		public String getPublicKeyMultibase() {
+			return resolvedEntity().getPublicKeyMultibase();
 		}
 
 		@Override

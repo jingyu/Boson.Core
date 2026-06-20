@@ -30,7 +30,6 @@ import java.util.Map;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 
-import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.json.Json;
@@ -45,8 +44,8 @@ import io.bosonnetwork.vertx.ContextualFuture;
 public class Launcher {
 	private static KadNode node;
 
-	private static DefaultNodeConfiguration buildConfigFromArgs(String[] args) throws IllegalArgumentException {
-		DefaultNodeConfiguration.Builder builder = NodeConfiguration.builder();
+	private static NodeConfiguration buildConfigFromArgs(String[] args) throws IllegalArgumentException {
+		NodeConfiguration.Builder builder = NodeConfiguration.builder();
 
 		int i = 0;
 		while (i < args.length) {
@@ -58,7 +57,7 @@ public class Launcher {
 					String configFile = args[++i];
 					try {
 						Map<String, Object> map = Json.yamlMapper().readValue(new File(configFile), Json.mapType());
-						builder.template(map);
+						builder.fromMap(map);
 					} catch (Exception e) {
 						throw new IllegalArgumentException("Failed to load configuration file: " + configFile, e);
 					}
@@ -128,7 +127,7 @@ public class Launcher {
 						throw new IllegalArgumentException("Failed to parse bootstrap node " + bootstrapValue, e);
 					}
 				}
-				case "--developerMode" -> builder.enableDeveloperMode();
+				case "--developerMode" -> builder.setDeveloperMode(true);
 				case "--help", "-h" -> {
 					printUsage();
 					System.exit(0);
@@ -139,7 +138,13 @@ public class Launcher {
 			i++;
 		}
 
-		return (DefaultNodeConfiguration) builder.build();
+		Vertx vertx = Vertx.vertx(new VertxOptions()
+				.setEventLoopPoolSize(4)
+				.setWorkerPoolSize(4)
+				.setPreferNativeTransport(true));
+		builder.vertx(vertx);
+
+		return builder.build();
 	}
 
 	private static void printUsage() {
@@ -158,7 +163,7 @@ public class Launcher {
 	}
 
 	public static void main(String[] args) {
-		DefaultNodeConfiguration config;
+		NodeConfiguration config;
 		try {
 			config = buildConfigFromArgs(args);
 		} catch (IllegalArgumentException e) {
@@ -169,12 +174,7 @@ public class Launcher {
 			return;
 		}
 
-		Vertx vertx = Vertx.vertx(new VertxOptions()
-				.setEventLoopPoolSize(4)
-				.setWorkerPoolSize(4)
-				.setPreferNativeTransport(true));
-		config.setVertx(vertx);
-
+		Vertx vertx = config.vertx();
 		Object shutdown = new Object();
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			synchronized (shutdown) {
@@ -196,7 +196,9 @@ public class Launcher {
 		System.out.println("Native transport: " + vertx.isNativeTransportEnabled() + "\n");
 
 		int rc = 0;
-		Path dataDir = config.dataDir() != null ? config.dataDir() : Path.of(".");
+		Path dataDir = config.dataDir();
+		if (dataDir == null)
+			dataDir = Path.of(".");
 		Path lockFile = dataDir.resolve("lock");
 		// noinspection unused
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {

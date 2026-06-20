@@ -111,17 +111,11 @@ public class Proof {
 					@JsonProperty(value = "verificationMethod", required = true) VerificationMethod verificationMethod,
 					@JsonProperty(value = "proofPurpose", required = true) Purpose proofPurpose,
 					@JsonProperty(value = "proofValue", required = true) byte[] proofValue) {
-		Objects.requireNonNull(type, "type");
-		Objects.requireNonNull(created, "created");
-		Objects.requireNonNull(verificationMethod, "verificationMethod");
-		Objects.requireNonNull(proofPurpose, "proofPurpose");
-		Objects.requireNonNull(proofValue, "proofValue");
-
-		this.type = type;
-		this.created = created;
-		this.proofPurpose = proofPurpose;
-		this.proofValue = proofValue.clone();
-		this.verificationMethod = verificationMethod;
+		this.type = Objects.requireNonNull(type, "type");
+		this.created = Objects.requireNonNull(created, "created");
+		this.verificationMethod = Objects.requireNonNull(verificationMethod, "verificationMethod");
+		this.proofPurpose = Objects.requireNonNull(proofPurpose, "proofPurpose");
+		this.proofValue = Objects.requireNonNull(proofValue, "proofValue").clone();
 	}
 
 	/**
@@ -191,7 +185,7 @@ public class Proof {
 		try {
 			// Parse the verification method's DID URL and ensure it belongs to the subject
 			DIDURL url = new DIDURL(verificationMethod.getId());
-			if (!url.getId().equals(subject))
+			if (!Objects.equals(url.getId(), subject))
 				return false;
 
 			// Verify the signature over the data using the subject's signature key

@@ -37,11 +37,10 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.BeforeValidPeriodException;
 import io.bosonnetwork.ExpiredException;
-import org.jspecify.annotations.Nullable;
-
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -120,12 +119,13 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * The cryptographic proof of this verifiable credential.
 	 */
 	@JsonProperty("proof")
-	private final Proof proof;
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private final @Nullable Proof proof;
 
 	/**
 	 * A transient CredentialView representation of this verifiable credential.
 	 */
-	private transient volatile CredentialView credentialView;
+	private transient volatile @Nullable CredentialView credentialView;
 
 	/**
 	 * Internal constructor used by JSON deserializer.
@@ -142,14 +142,14 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @param proof      the cryptographic proof
 	 */
 	@JsonCreator
-	protected VerifiableCredential(@JsonProperty(value = "@context") List<String> contexts,
-								   @JsonProperty(value = "id", required = true) String id,
+	protected VerifiableCredential(@JsonProperty(value = "@context") @Nullable List<String> contexts,
+								   @JsonProperty(value = "id", required = true)String id,
 								   @JsonProperty(value = "type", required = true) List<String> types,
-								   @JsonProperty(value = "name") String name,
-								   @JsonProperty(value = "description") String description,
+								   @JsonProperty(value = "name") @Nullable String name,
+								   @JsonProperty(value = "description") @Nullable String description,
 								   @JsonProperty(value = "issuer", required = true) Id issuer,
-								   @JsonProperty(value = "validFrom") Date validFrom,
-								   @JsonProperty(value = "validUntil") Date validUntil,
+								   @JsonProperty(value = "validFrom") @Nullable Date validFrom,
+								   @JsonProperty(value = "validUntil") @Nullable Date validUntil,
 								   @JsonProperty(value = "credentialSubject", required = true) CredentialSubject subject,
 								   @JsonProperty(value = "proof", required = true) Proof proof) {
 		Objects.requireNonNull(id, "id");
@@ -185,11 +185,12 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @param subject    the subject identity
 	 * @param claims     the claims of the subject
 	 */
-	protected VerifiableCredential(List<String> contexts, String id, List<String> types, String name, String description,
-								   Id issuer, Date validFrom, Date validUntil, Id subject, Map<String, Object> claims) {
+	protected VerifiableCredential(@Nullable List<String> contexts, String id, @Nullable List<String> types,
+								   @Nullable String name, @Nullable String description, Id issuer,
+								   @Nullable Date validFrom, @Nullable Date validUntil, Id subject, Map<String, Object> claims) {
 		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
-		this.id = id;
-		this.types = types.isEmpty() ? List.of() : List.copyOf(types);
+		this.id = Objects.requireNonNull(id);
+		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
 		this.issuer = issuer;
@@ -248,7 +249,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	/**
 	 * Returns the name of this verifiable credential.
 	 *
-	 * @return the name or null if not set
+	 * @return the credential name, or {@code null} if not set
 	 */
 	public @Nullable String getName() {
 		return name;
@@ -257,7 +258,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	/**
 	 * Returns the description of this verifiable credential.
 	 *
-	 * @return the description or null if not set
+	 * @return the credential description, or {@code null} if not set
 	 */
 	public @Nullable String getDescription() {
 		return description;
@@ -275,7 +276,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	/**
 	 * Returns the start date from which this credential is valid.
 	 *
-	 * @return the validity start date or null if not set
+	 * @return the validity start date, or {@code null} if not set
 	 */
 	public @Nullable Date getValidFrom() {
 		return validFrom;
@@ -284,7 +285,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	/**
 	 * Returns the end date until which this credential is valid.
 	 *
-	 * @return the validity end date or null if not set
+	 * @return the validity end date, or {@code null} if not set
 	 */
 	public @Nullable Date getValidUntil() {
 		return validUntil;
@@ -305,7 +306,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @return the proof object
 	 */
 	public Proof getProof() {
-		return proof;
+		return Objects.requireNonNull(proof);
 	}
 
 	/**
@@ -381,10 +382,13 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @return the Credential object
 	 */
 	public Credential toCredential() {
-		if (credentialView == null)
-			credentialView = new CredentialView(this);
+		CredentialView view = credentialView;
+		if (view == null) {
+			view = new CredentialView(this);
+			this.credentialView = view;
+		}
 
-		return credentialView;
+		return view;
 	}
 
 	/**
@@ -394,7 +398,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @param typeContexts optional mapping of types to additional contexts
 	 * @return the constructed VerifiableCredential
 	 */
-	public static VerifiableCredential fromCredential(Credential credential, Map<String, List<String>> typeContexts) {
+	public static VerifiableCredential fromCredential(Credential credential, @Nullable Map<String, List<String>> typeContexts) {
 		Objects.requireNonNull(credential, "credential");
 		if (credential instanceof CredentialView vcCard)
 			return vcCard.vc;
@@ -424,14 +428,15 @@ public class VerifiableCredential extends W3CDIDFormat {
 			}
 		}
 
-		VerifiableCredential vc = new VerifiableCredential(contexts,
-				new DIDURL(credential.getSubject().getId(), null, null, credential.getId()).toString(),
-				types, credential.getName(), credential.getDescription(), credential.getIssuer(),
-				credential.getValidFrom(), credential.getValidUntil(),
-				new CredentialSubject(credential.getSubject().getId(), credential.getSubject().getClaims()),
-				new Proof(Proof.Type.Ed25519Signature2020, credential.getSignedAt(),
-						VerificationMethod.defaultReferenceOf(credential.getIssuer()), Proof.Purpose.assertionMethod,
-						credential.getSignature()));
+		String idUrl = new DIDURL(credential.getSubject().getId(), null, null, credential.getId()).toString();
+		CredentialSubject subject = new CredentialSubject(credential.getSubject().getId(), credential.getSubject().getClaims());
+		Proof proof = new Proof(Proof.Type.Ed25519Signature2020, credential.getSignedAt(),
+				VerificationMethod.defaultReferenceOf(credential.getIssuer()), Proof.Purpose.assertionMethod,
+				credential.getSignature());
+
+		VerifiableCredential vc = new VerifiableCredential(contexts, idUrl,
+				types, credential.getName().orElse(null), credential.getDescription().orElse(null), credential.getIssuer(),
+				credential.getValidFrom().orElse(null), credential.getValidUntil().orElse(null), subject, proof);
 
 		vc.credentialView = new CredentialView(credential, vc);
 		return vc;
@@ -453,8 +458,8 @@ public class VerifiableCredential extends W3CDIDFormat {
 	 * @return the byte array of sign data
 	 */
 	protected byte[] getSignData() {
-		CredentialView unsigned = credentialView != null ? credentialView : new CredentialView(this);
-		return unsigned.getSignData();
+		Credential view = toCredential();
+		return view.getSignData();
 	}
 
 	@Override
@@ -542,7 +547,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 * @param id     the subject identifier
 		 * @param claims the claims map
 		 */
-		protected CredentialSubject(Id id, Map<String, Object> claims) {
+		protected CredentialSubject(@Nullable Id id, @Nullable Map<String, Object> claims) {
 			this.id = id;
 			this.claims = claims == null || claims.isEmpty() ? Map.of() : new LinkedHashMap<>(claims);
 		}
@@ -620,12 +625,11 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 * @param vc the source verifiable credential
 		 */
 		protected CredentialView(VerifiableCredential vc) {
-			super(DIDURL.create(vc.id).getFragment(),
+			super(Objects.requireNonNull(DIDURL.create(vc.id).getFragment()),
 					vc.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VC_TYPE)).collect(Collectors.toList()),
 					vc.name, vc.description, vc.issuer, vc.validFrom, vc.validUntil,
 					vc.subject.id, vc.subject.claims,
-					vc.proof == null ? null : vc.proof.getCreated(),
-					vc.proof == null ? null : vc.proof.getProofValue());
+					Objects.requireNonNull(vc.proof).getCreated(),  vc.proof.getProofValue());
 
 			this.vc = vc;
 		}
@@ -652,7 +656,7 @@ public class VerifiableCredential extends W3CDIDFormat {
 		 * @param signedAt the signing timestamp to embed in the signed bytes
 		 */
 		protected CredentialView(VerifiableCredential vc, Date signedAt) {
-			super(DIDURL.create(vc.id).getFragment(),
+			super(Objects.requireNonNull(DIDURL.create(vc.id).getFragment()),
 					vc.types.stream().filter(t -> !t.equals(DIDConstants.DEFAULT_VC_TYPE)).collect(Collectors.toList()),
 					vc.name, vc.description, vc.issuer, vc.validFrom, vc.validUntil,
 					vc.subject.id, vc.subject.claims,

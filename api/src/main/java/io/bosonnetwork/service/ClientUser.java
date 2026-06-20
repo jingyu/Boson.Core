@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.service;
 
+import java.util.Optional;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -49,30 +51,30 @@ public non-sealed interface ClientUser extends Principal {
 	/**
 	 * Gets the display name of the user.
 	 *
-	 * @return the user's name
+	 * @return an {@link Optional} with the user's name, or empty if not set
 	 */
-	String getName();
+	Optional<String> getName();
 
 	/**
 	 * Gets the avatar identifier or URL of the user.
 	 *
-	 * @return the avatar string
+	 * @return an {@link Optional} with the avatar string, or empty if not set
 	 */
-	String getAvatar();
+	Optional<String> getAvatar();
 
 	/**
 	 * Gets the email address associated with the user.
 	 *
-	 * @return the user's email address
+	 * @return an {@link Optional} with the user's email address, or empty if not set
 	 */
-	String getEmail();
+	Optional<String> getEmail();
 
 	/**
 	 * Gets the biography or description of the user.
 	 *
-	 * @return the user's bio
+	 * @return an {@link Optional} with the user's bio, or empty if not set
 	 */
-	String getBio();
+	Optional<String> getBio();
 
 	/**
 	 * Gets the timestamp when the user account was created.

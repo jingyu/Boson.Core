@@ -27,11 +27,11 @@ public class UserProfileTests {
 
 		assertNotNull(profile);
 		assertEquals(identity.getId(), profile.getId());
-		assertEquals("John Doe", profile.getName());
-		assertEquals("https://example.com/avatar.png", profile.getAvatar());
-		assertEquals("A boson user", profile.getBio());
-		assertEquals(homeNode, profile.getHomeNode());
-		assertEquals(messagingPeer, profile.getMessagingHomePeer());
+		assertEquals("John Doe", profile.getName().orElseThrow());
+		assertEquals("https://example.com/avatar.png", profile.getAvatar().orElseThrow());
+		assertEquals("A boson user", profile.getBio().orElseThrow());
+		assertEquals(homeNode, profile.getHomeNode().orElseThrow());
+		assertEquals(messagingPeer, profile.getMessagingHomePeer().orElseThrow());
 
 		Card card = profile.getCard();
 		assertNotNull(card);

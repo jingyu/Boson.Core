@@ -77,15 +77,15 @@ public class PeerInfo {
 	/** The peer ID. */
 	private final Id publicKey;
 	/** The private key to sign the peer info. Optional. */
-	private final byte[] privateKey;
+	private final byte @Nullable [] privateKey;
 	/** The nonce. */
 	private final byte[] nonce;
 	/** The sequence number. */
 	private final int sequenceNumber;
 	/** Optional: The node that provides the peer. */
-	private final Id nodeId;
+	private final @Nullable Id nodeId;
 	/** Optional: Signature of the node, mandatory if nodeId is present. */
-	private final byte[] nodeSig;
+	private final byte @Nullable [] nodeSig;
 	/** The signature. */
 	private final byte[] signature;
 	/**
@@ -97,19 +97,22 @@ public class PeerInfo {
 	/** The service endpoint URI of the peer. */
 	private final String endpoint;
 	/** The extra data in binary format. */
-	private final byte[] extraData;
+	private final byte @Nullable [] extraData;
 
-	private transient Map<String, Object> extra;
+	private transient @Nullable Map<String, Object> extra;
 
-	private PeerInfo(Id peerId, byte[] privateKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
-					 byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
-		this.publicKey = peerId;
+	private PeerInfo(Id peerId, byte @Nullable [] privateKey, byte[] nonce, int sequenceNumber,
+					 @Nullable Id nodeId, byte @Nullable [] nodeSig,
+					 byte[] signature, long fingerprint, String endpoint, byte @Nullable [] extraData) {
+		this.publicKey = Objects.requireNonNull(peerId);
 		this.privateKey = privateKey == null ? null : privateKey.clone();
-		this.nonce = nonce == null ? null : nonce.clone();
+		this.nonce = Objects.requireNonNull(nonce).clone();
 		this.sequenceNumber = sequenceNumber;
 		this.nodeId = nodeId;
+		if (nodeId != null)
+			Objects.requireNonNull(nodeSig);
 		this.nodeSig = nodeSig == null ? null : nodeSig.clone();
-		this.signature = signature == null ? null : signature.clone();
+		this.signature = Objects.requireNonNull(signature).clone();
 		this.fingerprint = fingerprint;
 		this.endpoint = endpoint;
 		this.extraData = extraData == null ? null : extraData.clone();
@@ -149,8 +152,8 @@ public class PeerInfo {
 	 * @param extraData      The extra data.
 	 * @return The new PeerInfo instance.
 	 */
-	public static PeerInfo of(Id peerId, byte[] privateKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
-							  byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
+	public static PeerInfo of(Id peerId, byte @Nullable [] privateKey, byte[] nonce, int sequenceNumber, @Nullable Id nodeId,
+							  byte @Nullable [] nodeSig, byte[] signature, long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		Objects.requireNonNull(peerId, "peerId");
 		Objects.requireNonNull(nonce, "nonce");
 		Objects.requireNonNull(signature, "signature");
@@ -206,8 +209,8 @@ public class PeerInfo {
 	 * @param extraData Additional arbitrary data associated with the {@code PeerInfo}.
 	 * @return A newly created {@code PeerInfo} instance containing the provided details and cryptographic signatures.
 	 */
-	private static PeerInfo create(Identity peer, byte[] privateKey, Identity node, int sequenceNumber,
-								   long fingerprint, String endpoint, byte[] extraData) {
+	private static PeerInfo create(Identity peer, byte @Nullable [] privateKey, @Nullable Identity node,
+	                               int sequenceNumber, long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
 
@@ -263,7 +266,7 @@ public class PeerInfo {
 	 * @return the nonce
 	 */
 	public byte[] getNonce() {
-		return nonce == null ? null : nonce.clone();
+		return nonce.clone();
 	}
 
 	/**
@@ -315,7 +318,7 @@ public class PeerInfo {
 	 * @return The signature.
 	 */
 	public byte[] getSignature() {
-		return signature == null ? null : signature.clone();
+		return signature.clone();
 	}
 
 	/**
@@ -359,9 +362,11 @@ public class PeerInfo {
 	 *
 	 * @return the extra data map
 	 */
-	public @Nullable Map<String, Object> getExtra() {
+	public Map<String, Object> getExtra() {
+		Map<String, Object> extra = this.extra;
+
 		if (extra == null) {
-			if (hasExtra()) {
+			if (extraData != null && extraData.length > 0) {
 				try {
 					extra = Collections.unmodifiableMap(Json.parse(extraData));
 				} catch (Exception e) {
@@ -370,6 +375,8 @@ public class PeerInfo {
 			} else {
 				extra = Collections.emptyMap();
 			}
+
+			this.extra = extra;
 		}
 
 		return extra;
@@ -380,8 +387,8 @@ public class PeerInfo {
 	 *
 	 * @return the digest
 	 */
-	private static byte[] computeDigest(Id publicKey, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
-										long fingerprint, String endpoint, byte[] extraData) {
+	private static byte[] computeDigest(Id publicKey, byte[] nonce, int sequenceNumber, @Nullable Id nodeId, byte @Nullable [] nodeSig,
+										long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		MessageDigest sha = Hash.sha256();
 		sha.update(publicKey.bytesUnsafe());
 		sha.update(nonce);
@@ -414,10 +421,10 @@ public class PeerInfo {
 	 * @return {@code true} if the value is valid, {@code false} otherwise.
 	 */
 	public boolean isValid() {
-		if (signature == null || signature.length != Signature.BYTES)
+		if (signature.length != Signature.BYTES)
 			return false;
 
-		if (nonce == null || nonce.length != NONCE_BYTES)
+		if (nonce.length != NONCE_BYTES)
 			return false;
 
 		if (sequenceNumber < 0)
@@ -512,7 +519,7 @@ public class PeerInfo {
 		StringBuilder repr = new StringBuilder();
 		repr.append("id:").append(publicKey)
 				.append(",endpoint:").append(endpoint);
-		if (hasExtra()) {
+		if (extraData != null && extraData.length > 0) {
 			if (extra != null)
 				repr.append(",extra:").append(extra);
 			else
@@ -525,7 +532,7 @@ public class PeerInfo {
 		if (sequenceNumber > 0)
 			repr.append(",seq:").append(sequenceNumber);
 
-		if (nodeId != null) {
+		if (nodeId != null && nodeSig != null) {
 			repr.append(",nodeId:").append(nodeId);
 			repr.append(",nodeSig:").append(Hex.encode(nodeSig));
 		}
@@ -537,15 +544,15 @@ public class PeerInfo {
 	 * PeerInfo builder.
 	 */
 	public static class Builder {
-		private final PeerInfo forUpdate;
+		private final @Nullable PeerInfo forUpdate;
 
-		private Identity identity = null;
+		private @Nullable Identity identity = null;
 		private boolean keepPrivateKey;
 		private int sequenceNumber = 0;
-		private Identity node = null;
+		private @Nullable Identity node = null;
 		private long fingerprint = 0;
-		private String endpoint = null;
-		private byte[] extraData = null;
+		private @Nullable String endpoint = null;
+		private byte @Nullable [] extraData = null;
 
 		private Builder() {
 			this.forUpdate = null;
@@ -553,7 +560,7 @@ public class PeerInfo {
 
 		private Builder(PeerInfo peerInfo) {
 			this.forUpdate = peerInfo;
-			this.identity = peerInfo.hasPrivateKey() ? new CryptoIdentity(peerInfo.privateKey) : null;
+			this.identity = peerInfo.privateKey != null ? new CryptoIdentity(peerInfo.privateKey) : null;
 			this.keepPrivateKey = peerInfo.hasPrivateKey();
 			this.sequenceNumber = peerInfo.sequenceNumber + 1;
 			this.fingerprint = peerInfo.fingerprint;
@@ -573,7 +580,8 @@ public class PeerInfo {
 		 * @throws IllegalArgumentException if the endpoint is null or empty
 		 */
 		public Builder endpoint(String endpoint) {
-			if (endpoint == null || endpoint.isEmpty())
+			Objects.requireNonNull(endpoint, "Endpoint must not be null");
+			if (endpoint.isEmpty())
 				throw new IllegalArgumentException("Endpoint must not be null or empty");
 			this.endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
 			return this;
@@ -585,7 +593,7 @@ public class PeerInfo {
 		 * @param extra the extra data map
 		 * @return the builder instance
 		 */
-		public Builder extra(Map<String, Object> extra) {
+		public Builder extra(@Nullable Map<String, Object> extra) {
 			this.extraData = extra != null && !extra.isEmpty() ? Json.toBytes(extra) : null;
 			return this;
 		}
@@ -596,7 +604,7 @@ public class PeerInfo {
 		 * @param extra the extra data
 		 * @return the builder instance
 		 */
-		public Builder extra(byte[] extra) {
+		public Builder extra(byte @Nullable [] extra) {
 			this.extraData = extra;
 			return this;
 		}
@@ -624,7 +632,7 @@ public class PeerInfo {
 		public Builder node(Identity node) {
 			Objects.requireNonNull(node);
 
-			if (isUpdate()) {
+			if (forUpdate != null) {
 				if (forUpdate.nodeId != null && !forUpdate.nodeId.equals(node.getId()))
 					throw new IllegalArgumentException("Cannot change node identity of an authenticated peer info");
 			}
@@ -700,7 +708,7 @@ public class PeerInfo {
 		 */
 		public Builder identity(Identity identity) {
 			Objects.requireNonNull(identity);
-			if (isUpdate() && !identity.getId().equals(forUpdate.getId()))
+			if (forUpdate != null && !identity.getId().equals(forUpdate.getId()))
 				throw new IllegalArgumentException("Identity does not match the existing peer id");
 
 			this.identity = identity;
@@ -728,7 +736,7 @@ public class PeerInfo {
 				throw new IllegalStateException("Missing required field: endpoint");
 
 			// Enforce monotonic authentication: cannot remove node authentication once present
-			if (isUpdate()) {
+			if (forUpdate != null) {
 				if (forUpdate.isAuthenticated()) {
 					if (node == null)
 						throw new IllegalStateException("Cannot remove node authentication from an authenticated peer info");

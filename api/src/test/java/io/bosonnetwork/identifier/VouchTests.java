@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,7 +24,7 @@ public class VouchTests {
 				.addCredential("profile", "BosonProfile", "name", "John Doe", "email", "cV9dX@example.com")
 				.build();
 
-		assertNull(vouch.getId());
+		assertTrue(vouch.getId().isEmpty());
 		assertEquals(identity.getId(), vouch.getHolder());
 		assertEquals(1, vouch.getCredentials().size());
 		assertEquals(1, vouch.getCredentials("BosonProfile").size());
@@ -84,7 +83,7 @@ public class VouchTests {
 		vb.addCredential("driverLicense", "DriverLicense", "name", "John Doe", "number", "123456789", "expiration", System.currentTimeMillis() + DAY * 30);
 		var vouch = vb.build();
 
-		assertEquals("testVouch", vouch.getId());
+		assertEquals("testVouch", vouch.getId().orElseThrow());
 		assertEquals(2, vouch.getTypes().size());
 		assertEquals("VouchView", vouch.getTypes().get(0));
 		assertEquals("TestVouch", vouch.getTypes().get(1));

@@ -53,9 +53,9 @@ import io.bosonnetwork.crypto.CryptoException;
  */
 public interface Node extends Identity {
 	/** The maximum age for a peer (2 hours). */
-	static final int MAX_PEER_AGE = 120 * 60 * 1000;             // 2 hours in milliseconds
+	int MAX_PEER_AGE = 120 * 60 * 1000;             // 2 hours in milliseconds
 	/** The maximum age for a value (2 hours). */
-	static final int MAX_VALUE_AGE = 120 * 60 * 1000;            // 2 hours in milliseconds
+	int MAX_VALUE_AGE = 120 * 60 * 1000;            // 2 hours in milliseconds
 
 	/**
 	 * Gets the ID of the node.
@@ -463,10 +463,10 @@ public interface Node extends Identity {
 	 * Unwraps the Node to provide the underlying infrastructure instance.
 	 *
 	 * @param clazz the type of the infrastructure component (e.g. io.vertx.core.Vertx)
-	 * @return the component instance, or null if not available or not supported
+	 * @return an {@link Optional} with the component instance, or empty if not available or not supported
 	 * @param <T> the type parameter
 	 */
-	<T> @Nullable T unwrap(Class<T> clazz);
+	<T> Optional<T> unwrap(Class<T> clazz);
 
 	/**
 	 * Creates and initializes a new {@link Node} instance using the provided configuration.
@@ -477,7 +477,7 @@ public interface Node extends Identity {
 	 *
 	 * @param config the node configuration
 	 * @return an initialized {@link Node} instance
-	 * @throws BosonException if no node implementation is available or it cannot be initialized
+	 * @throws BosonException if no node implementation is available, or it cannot be initialized
 	 */
 	static Node kadNode(NodeConfiguration config) throws BosonException {
 		NodeFactory factory = ServiceLoader.load(NodeFactory.class).findFirst()

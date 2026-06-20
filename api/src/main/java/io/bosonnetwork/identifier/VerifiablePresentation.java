@@ -27,6 +27,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -57,7 +58,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	/** Unique identifier of the presentation */
 	@JsonProperty("id")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	private final String id;
+	private final @Nullable String id;
 	/** List of presentation types, including custom extensions */
 	@JsonProperty("type")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -75,7 +76,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	private final @Nullable Proof proof;
 
 	/** Transient compact Boson Vouch representation */
-	private transient volatile VouchView vouchView;
+	private transient volatile @Nullable VouchView vouchView;
 
 	/**
 	 * Internal constructor used by JSON deserializer to create a VerifiablePresentation instance.
@@ -88,9 +89,9 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @param proof cryptographic proof (required)
 	 */
 	@JsonCreator
-	protected VerifiablePresentation(@JsonProperty(value = "@context") List<String> contexts,
-					@JsonProperty(value = "id") String id,
-					@JsonProperty(value = "type") List<String> types,
+	protected VerifiablePresentation(@JsonProperty(value = "@context") @Nullable List<String> contexts,
+					@JsonProperty(value = "id") @Nullable String id,
+					@JsonProperty(value = "type") @Nullable List<String> types,
 					@JsonProperty(value = "holder", required = true) Id holder,
 					@JsonProperty(value = "verifiableCredential", required = true) List<VerifiableCredential> credentials,
 					@JsonProperty(value = "proof", required = true) Proof proof) {
@@ -116,7 +117,10 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @param holder holder identity
 	 * @param credentials list of verifiable credentials
 	 */
-	protected VerifiablePresentation(List<String> contexts, String id, List<String> types, Id holder, List<VerifiableCredential> credentials) {
+	protected VerifiablePresentation(@Nullable List<String> contexts, @Nullable String id, @Nullable List<String> types,
+									 Id holder, List<VerifiableCredential> credentials) {
+		Objects.requireNonNull(holder, "holder");
+		Objects.requireNonNull(credentials, "credentials");
 		this.contexts = contexts == null || contexts.isEmpty() ? List.of() : List.copyOf(contexts);
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
@@ -152,10 +156,10 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	/**
 	 * Returns the unique identifier of the presentation.
 	 *
-	 * @return presentation ID
+	 * @return an {@link Optional} with the presentation ID, or empty if not set
 	 */
-	public String getId() {
-		return id;
+	public Optional<String> getId() {
+		return Optional.ofNullable(id);
 	}
 
 	/**
@@ -204,10 +208,10 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * If the id does not start with the DID scheme prefix, it is interpreted as a fragment relative to the holder.
 	 *
 	 * @param id the credential identifier string (non-null)
-	 * @return matching VerifiableCredential or null if not found
+	 * @return an {@link Optional} with the matching VerifiableCredential, or empty if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public @Nullable VerifiableCredential getCredential(String id) {
+	public Optional<VerifiableCredential> getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		// Construct DIDURL from id string, relative to holder if no DID scheme prefix
 		DIDURL idUrl = id.startsWith(DIDConstants.DID_SCHEME + ":") ?
@@ -220,26 +224,25 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * Returns the Verifiable Credential matching the specified DIDURL.
 	 *
 	 * @param id the DIDURL of the credential (non-null)
-	 * @return matching VerifiableCredential or null if not found
+	 * @return an {@link Optional} with the matching VerifiableCredential, or empty if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public @Nullable VerifiableCredential getCredential(DIDURL id) {
+	public Optional<VerifiableCredential> getCredential(DIDURL id) {
 		Objects.requireNonNull(id, "id");
 
 		String sid = id.toString();
 		return credentials.stream()
 				.filter(vc -> vc.getId().equals(sid))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
 	 * Returns the cryptographic proof of the presentation.
 	 *
-	 * @return proof object, may be null if not present
+	 * @return the proof object
 	 */
-	public @Nullable Proof getProof() {
-		return proof;
+	public Proof getProof() {
+		return Objects.requireNonNull(proof);
 	}
 
 	/**
@@ -290,10 +293,13 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return Vouch representation of this presentation
 	 */
 	public Vouch toVouch() {
-		if (vouchView == null)
-			vouchView = new VouchView(this);
+		VouchView view = this.vouchView;
+		if (view == null) {
+			view = new VouchView(this);
+			this.vouchView = view;
+		}
 
-		return vouchView;
+		return view;
 	}
 
 	/**
@@ -304,7 +310,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 	 * @return constructed VerifiablePresentation instance
 	 * @throws NullPointerException if vouch is null
 	 */
-	public static VerifiablePresentation fromVouch(Vouch vouch, Map<String, List<String>> typeContexts) {
+	public static VerifiablePresentation fromVouch(Vouch vouch, @Nullable Map<String, List<String>> typeContexts) {
 		Objects.requireNonNull(vouch, "vouch");
 		if (vouch instanceof VouchView bv)
 			return bv.getVerifiablePresentation();
@@ -335,10 +341,8 @@ public class VerifiablePresentation extends W3CDIDFormat {
 		}
 
 		// Construct VerifiablePresentation with mapped credentials and proof
-		VerifiablePresentation vp = new VerifiablePresentation(contexts,
-				vouch.getId() == null ? null :
-						// Construct DIDURL string using holder and fragment id
-						new DIDURL(vouch.getHolder(), null, null, vouch.getId()).toString(),
+		DIDURL idUrl = vouch.getId().map(vid -> new DIDURL(vouch.getHolder(), null, null, vid)).orElse(null);
+		VerifiablePresentation vp = new VerifiablePresentation(contexts, idUrl == null ? null : idUrl.toString(),
 				types, vouch.getHolder(),
 				// Map credentials from Vouch to VerifiableCredential instances
 				vouch.getCredentials().stream().map(c -> VerifiableCredential.fromCredential(c, _typeContexts))
@@ -349,7 +353,6 @@ public class VerifiablePresentation extends W3CDIDFormat {
 
 		vp.vouchView = new VouchView(vouch, vp);
 		return vp;
-
 	}
 
 	/**
@@ -361,7 +364,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 		// At verification time the proof is non-null and provides the signed-at timestamp,
 		// so the VouchView view rebuilds the exact bytes the underlying Vouch signature covers
 		// (id, types, holder, credentials, sat).
-		VouchView view = vouchView != null ? vouchView : new VouchView(this);
+		Vouch view = toVouch();
 		return view.getSignData();
 	}
 
@@ -439,7 +442,7 @@ public class VerifiablePresentation extends W3CDIDFormat {
 					vp.holder,
 					// Map VerifiableCredentials to Credentials
 					vp.credentials.stream().map(VerifiableCredential::toCredential).collect(Collectors.toList()),
-					vp.proof.getCreated(), vp.proof.getProofValue());
+					Objects.requireNonNull(vp.proof).getCreated(), vp.proof.getProofValue());
 
 			this.vp = vp;
 		}

@@ -35,6 +35,8 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A hybrid {@link X509TrustManager} that supports both self-signed certificates and
  * certificates signed by a trusted CA.
@@ -46,7 +48,7 @@ import javax.net.ssl.X509TrustManager;
 public class HybridTrustManager implements X509TrustManager {
 	private final X509TrustManager defaultTrustManager;
 	private final String expectedCn;
-	private final byte[] expectedPublicKey;
+	private final byte @Nullable [] expectedPublicKey;
 
 	/**
 	 * Creates a new {@code HybridTrustManager} with the specified expected CN and public key.
@@ -54,7 +56,7 @@ public class HybridTrustManager implements X509TrustManager {
 	 * @param expectedCn the expected Common Name (CN) in the certificate
 	 * @param expectedPublicKey the expected public key bytes (last 32 bytes of SPKI)
 	 */
-	public HybridTrustManager(String expectedCn, byte[] expectedPublicKey) {
+	public HybridTrustManager(String expectedCn, byte @Nullable [] expectedPublicKey) {
 		this.defaultTrustManager = getDefaultTrustManager();
 		this.expectedCn = expectedCn;
 		this.expectedPublicKey = expectedPublicKey == null ? null : expectedPublicKey.clone();

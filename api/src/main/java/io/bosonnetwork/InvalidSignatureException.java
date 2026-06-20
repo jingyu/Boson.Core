@@ -22,6 +22,8 @@
 
 package io.bosonnetwork;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exception indicating a failure due to an invalid cryptographic signature.
  * This exception extends {@link BosonException}.
@@ -42,7 +44,7 @@ public class InvalidSignatureException extends BosonException {
 	 *
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
 	 */
-	public InvalidSignatureException(String message) {
+	public InvalidSignatureException(@Nullable String message) {
 		super(message);
 	}
 
@@ -53,7 +55,7 @@ public class InvalidSignatureException extends BosonException {
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
-	public InvalidSignatureException(String message, Throwable cause) {
+	public InvalidSignatureException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -63,7 +65,7 @@ public class InvalidSignatureException extends BosonException {
 	 *
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
-	public InvalidSignatureException(Throwable cause) {
+	public InvalidSignatureException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

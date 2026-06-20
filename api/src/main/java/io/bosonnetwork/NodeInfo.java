@@ -28,6 +28,8 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * This class represents the node information in the Boson network; it contains
  * basic node network information.
@@ -103,7 +105,7 @@ public class NodeInfo {
 		try {
 			this.addr = new InetSocketAddress(InetAddress.getByAddress(addr), port);
 		} catch (UnknownHostException e) {
-			throw new IllegalArgumentException("Invalid binary inet address", e);
+			throw new IllegalArgumentException("Invalid binary network address", e);
 		}
 
 		this.id = id;
@@ -194,7 +196,7 @@ public class NodeInfo {
 	 * @param other another node info object to check
 	 * @return true if this and {@code other} share the same id or the same address, false otherwise.
 	 */
-	public boolean matches(NodeInfo other) {
+	public boolean matches(@Nullable NodeInfo other) {
 		if (other != null)
 			return this.id.equals(other.id) || this.addr.equals(other.addr);
 		else
@@ -207,7 +209,7 @@ public class NodeInfo {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equals(@Nullable Object o) {
 		if (o == this)
 			return true;
 
@@ -220,6 +222,6 @@ public class NodeInfo {
 
 	@Override
 	public String toString() {
-		return id.toString() + "@" + getHost() + ":" + getPort();
+		return id + "@" + getHost() + ":" + getPort();
 	}
 }

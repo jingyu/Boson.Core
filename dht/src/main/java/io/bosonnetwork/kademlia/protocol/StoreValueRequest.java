@@ -50,7 +50,7 @@ public class StoreValueRequest implements Request {
 			@JsonProperty(value = "v", required = true) byte[] data) {
 		this.token = token;
 		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
-		this.value = Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data);
+		this.value = Value.of(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
 
 	protected StoreValueRequest(Value value, int token, int expectedSequenceNumber) {

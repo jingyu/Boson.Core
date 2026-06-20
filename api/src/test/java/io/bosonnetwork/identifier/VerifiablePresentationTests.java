@@ -47,7 +47,9 @@ public class VerifiablePresentationTests {
 		assertNotNull(vp.getCredential(vp.getHolder().toDIDString() + "#profile"));
 		assertEquals(1, vp.getCredentials("BosonProfile").size());
 
-		var credProfile = vp.getCredential("profile");
+		var oc = vp.getCredential("profile");
+		assertTrue(oc.isPresent());
+		var credProfile = oc.get();
 		assertTrue(credProfile.isGenuine());
 		assertTrue(credProfile.isValid());
 		assertTrue(credProfile.selfIssued());
@@ -140,7 +142,8 @@ public class VerifiablePresentationTests {
 		assertEquals(DIDConstants.W3C_ED25519_CONTEXT, vp.getContexts().get(2));
 		assertEquals("https://example.com/presentations/test/v1", vp.getContexts().get(3));
 
-		assertEquals(new DIDURL(identity.getId(), null, null, "testVP").toString(), vp.getId());
+		assertTrue(vp.getId().isPresent());
+		assertEquals(new DIDURL(identity.getId(), null, null, "testVP").toString(), vp.getId().get());
 		assertEquals(2, vp.getTypes().size());
 		assertEquals(DIDConstants.DEFAULT_VP_TYPE, vp.getTypes().get(0));
 		assertEquals("TestPresentation", vp.getTypes().get(1));

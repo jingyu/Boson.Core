@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.service;
 
+import java.util.Optional;
+
 import io.bosonnetwork.Id;
 
 /**
@@ -83,7 +85,7 @@ public non-sealed interface ClientDevice extends Principal {
 	/**
 	 * Gets the last known network address (e.g., IP address) of the device.
 	 *
-	 * @return the last known address as a String
+	 * @return an {@link Optional} with the last known address, or empty if unknown
 	 */
-	String getLastAddress();
+	Optional<String> getLastAddress();
 }

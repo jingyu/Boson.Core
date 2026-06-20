@@ -185,7 +185,8 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 
 		readInProgress = true;
 		byte[] buf = new byte[chunkSize];
-		context.executeBlocking(() -> input.read(buf), false).onComplete(ar -> {
+		Context ctx = Objects.requireNonNull(context, "context");
+		ctx.executeBlocking(() -> input.read(buf), false).onComplete(ar -> {
 			readInProgress = false;
 
 			if (closed) {
@@ -217,7 +218,7 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 			}
 
 			if (!closed && demand > 0L)
-				context.runOnContext(v -> doRead());
+				ctx.runOnContext(v -> doRead());
 		});
 	}
 
@@ -229,6 +230,7 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 		closeInputQuietly();
 		Handler<Void> handler = endHandler;
 		if (handler != null)
+			//noinspection ConstantConditions
 			handler.handle(null);
 	}
 

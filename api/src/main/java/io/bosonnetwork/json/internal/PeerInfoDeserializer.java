@@ -23,6 +23,7 @@
 package io.bosonnetwork.json.internal;
 
 import java.io.IOException;
+import java.util.Objects;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
@@ -140,6 +141,10 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 				throw MismatchedInputException.from(p, Id.class, "Invalid PeerInfo: peer id can not be null");
 		}
 
-		return PeerInfo.of(publicKey, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		Objects.requireNonNull(publicKey, "missing peer id");
+		Objects.requireNonNull(nonce, "missing nonce");
+		Objects.requireNonNull(signature, "missing signature");
+		Objects.requireNonNull(endpoint, "missing endpoint");
+		return PeerInfo.of(publicKey, null, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 }

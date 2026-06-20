@@ -1,8 +1,8 @@
 package io.bosonnetwork.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.net.URI;
 
@@ -44,14 +44,14 @@ public class SuperNodeProfileTests {
 
 		assertNotNull(profile);
 		assertEquals(identity.getId(), profile.getNodeId());
-		assertEquals("SuperNode 1", profile.getName());
-		assertEquals("https://bosonnetwork.io/logo.png", profile.getLogo());
-		assertEquals("https://bosonnetwork.io", profile.getWebsite());
-		assertEquals("contact@bosonnetwork.io", profile.getContact());
+		assertEquals("SuperNode 1", profile.getName().orElseThrow());
+		assertEquals("https://bosonnetwork.io/logo.png", profile.getLogo().orElseThrow());
+		assertEquals("https://bosonnetwork.io", profile.getWebsite().orElseThrow());
+		assertEquals("contact@bosonnetwork.io", profile.getContact().orElseThrow());
 
 		// Verify services
 		assertNotNull(profile.getApiService());
-		assertEquals(apiEndpoint.toString(), profile.getApiService().getEndpoint());
+		assertEquals(apiEndpoint.toString(), profile.getApiService().orElseThrow().getEndpoint());
 
 		assertEquals(1, profile.getWebGatewayServices().size());
 		assertEquals(webGatewayEndpoint.toString(), profile.getWebGatewayServices().get(0).getEndpoint());
@@ -86,6 +86,6 @@ public class SuperNodeProfileTests {
 		assertEquals(profile.getPhotonMessagingServices(), profile2.getPhotonMessagingServices());
 		assertEquals(profile.getActiveProxyServices(), profile2.getActiveProxyServices());
 
-		assertNull(profile2.getService(Id.random()));
+		assertFalse(profile2.getService(Id.random()).isPresent());
 	}
 }

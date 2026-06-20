@@ -110,8 +110,8 @@ public class CredentialTests {
 		assertEquals(2, cred.getTypes().size());
 		assertEquals("Profile", cred.getTypes().get(0));
 		assertEquals("Test", cred.getTypes().get(1));
-		assertEquals("John's Profile", cred.getName());
-		assertEquals("This is a test profile", cred.getDescription());
+		assertEquals("John's Profile", cred.getName().orElseThrow());
+		assertEquals("This is a test profile", cred.getDescription().orElseThrow());
 		assertEquals(issuer.getId(), cred.getIssuer());
 		assertEquals(subject, cred.getSubject().getId());
 		assertEquals(8, cred.getSubject().getClaims().size());
@@ -251,10 +251,10 @@ public class CredentialTests {
 
 		var missingId = assertThrows(IllegalStateException.class,
 				() -> new CredentialBuilder(identity).claim("name", "Bob").build());
-		assertEquals("Credential id must be set and non-empty", missingId.getMessage());
+		assertEquals("Credential builder is invalid: Credential id must be set and non-empty", missingId.getMessage());
 
 		var missingClaim = assertThrows(IllegalStateException.class,
 				() -> new CredentialBuilder(identity).id("profile").build());
-		assertEquals("Credential must contain at least one claim", missingClaim.getMessage());
+		assertEquals("Credential builder is invalid: Credential claims must be set and non-empty", missingClaim.getMessage());
 	}
 }

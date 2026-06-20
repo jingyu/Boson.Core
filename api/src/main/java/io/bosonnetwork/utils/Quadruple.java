@@ -23,7 +23,6 @@
 package io.bosonnetwork.utils;
 
 import java.util.Objects;
-import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
@@ -38,7 +37,8 @@ import org.jspecify.annotations.Nullable;
  * @param <C> type for value c.
  * @param <D> type for value d.
  */
-public class Quadruple<A, B, C, D> {
+public class Quadruple<A extends @Nullable Object, B extends @Nullable Object,
+		C extends @Nullable Object, D extends @Nullable Object> {
 	private static final Quadruple<?, ?, ?, ?> EMPTY = new Quadruple<>(null, null, null, null);
 
 	private final @Nullable A a;
@@ -74,7 +74,9 @@ public class Quadruple<A, B, C, D> {
 	 * @param d value d.
 	 * @return the new Quadruple object.
 	 */
-	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> of(@Nullable A1 a, @Nullable B1 b, @Nullable C1 c, @Nullable D1 d) {
+	public static <A1 extends @Nullable Object, B1 extends @Nullable Object,
+			C1 extends @Nullable Object, D1 extends @Nullable Object>
+			Quadruple<A1, B1, C1, D1> of(@Nullable A1 a, @Nullable B1 b, @Nullable C1 c, @Nullable D1 d) {
 		return new Quadruple<>(a, b, c, d);
 	}
 
@@ -88,7 +90,9 @@ public class Quadruple<A, B, C, D> {
 	 * @return an empty Quadruple instance with null values.
 	 */
 	@SuppressWarnings("unchecked")
-	public static <A1, B1, C1, D1> Quadruple<A1, B1, C1, D1> empty() {
+	public static <A1 extends @Nullable Object, B1 extends @Nullable Object,
+			C1 extends @Nullable Object, D1 extends @Nullable Object>
+			Quadruple<A1, B1, C1, D1> empty() {
 		return (Quadruple<A1, B1, C1, D1>) EMPTY;
 	}
 
@@ -134,7 +138,7 @@ public class Quadruple<A, B, C, D> {
 	}
 
 	@Override
-	public boolean equals(Object obj) {
+	public boolean equals(@Nullable Object obj) {
 		if (this == obj)
 			return true;
 
@@ -147,23 +151,17 @@ public class Quadruple<A, B, C, D> {
 		return false;
 	}
 
+	private static String valueOf(@Nullable Object o) {
+		return (o instanceof String) ? "\"" + o + "\"" : String.valueOf(o);
+	}
+
 	@Override
 	public String toString() {
-		StringBuilder repr = new StringBuilder();
-
-		Function<Object, String> valueOf = (v) ->
-				(v instanceof String) ? "\"" + v + "\"" : String.valueOf(v);
-
-		repr.append("<")
-				.append(valueOf.apply(a))
-				.append(", ")
-				.append(valueOf.apply(b))
-				.append(", ")
-				.append(valueOf.apply(c))
-				.append(", ")
-				.append(valueOf.apply(d))
-				.append(">");
-
-		return repr.toString();
+		return "<" +
+				valueOf(a) + ", " +
+				valueOf(b) + ", " +
+				valueOf(c) + ", " +
+				valueOf(d) +
+				">";
 	}
 }

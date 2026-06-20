@@ -23,8 +23,7 @@
 package io.bosonnetwork.service;
 
 import java.util.Map;
-
-import org.jspecify.annotations.Nullable;
+import java.util.Optional;
 
 import io.bosonnetwork.Id;
 
@@ -76,9 +75,9 @@ public non-sealed interface ServiceInfo extends Principal {
 	 * Implementations MUST return a defensive copy - mutating the returned array MUST NOT affect
 	 * the internal state of this {@code ServiceInfo}.
 	 *
-	 * @return a defensive copy of the extra data, or {@code null} if no extra data is present
+	 * @return an {@link Optional} with a defensive copy of the extra data, or empty if no extra data is present
 	 */
-	byte @Nullable [] getExtraData();
+	Optional<byte[]> getExtraData();
 
 	/**
 	 * Gets the extra data parsed as a map.

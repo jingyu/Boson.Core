@@ -1,7 +1,11 @@
 package io.bosonnetwork.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 import io.bosonnetwork.Id;
 
@@ -15,13 +19,13 @@ public class PlainSuperNodeInfoTests {
 		assertEquals("127.0.0.1", node.getHost());
 		assertEquals(8080, node.getPort());
 		assertEquals("http://127.0.0.1:8080", node.getApiEndpoint());
-		assertNull(node.getSoftware());
-		assertNull(node.getVersion());
-		assertNull(node.getName());
-		assertNull(node.getLogo());
-		assertNull(node.getWebsite());
-		assertNull(node.getContact());
-		assertNull(node.getDescription());
+		assertFalse(node.getSoftware().isPresent());
+		assertFalse(node.getVersion().isPresent());
+		assertFalse(node.getName().isPresent());
+		assertFalse(node.getLogo().isPresent());
+		assertFalse(node.getWebsite().isPresent());
+		assertFalse(node.getContact().isPresent());
+		assertFalse(node.getDescription().isPresent());
 		assertTrue(node.isFederated());
 		assertEquals(1000, node.getReputation());
 		assertTrue(node.getCreatedAt() > 0);

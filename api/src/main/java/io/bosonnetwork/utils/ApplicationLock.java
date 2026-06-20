@@ -33,14 +33,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * File based application instance exclusive lock, guarantee the application can only run
  * in single instance mode.
  */
 public class ApplicationLock implements AutoCloseable {
 	private final Path lockFile;
-	private FileChannel fc;
-	private FileLock lock;
+	private @Nullable FileChannel fc;
+	private @Nullable FileLock lock;
 
 	/**
 	 * Creates a {@code ApplicationLock} on the specified path, and try to acquire the
@@ -94,6 +96,7 @@ public class ApplicationLock implements AutoCloseable {
 			try {
 				String marker = ProcessHandle.current().pid() + " " + Instant.now() + System.lineSeparator();
 				fc.truncate(0);
+				// noinspection ResultOfMethodCallIgnored
 				fc.write(ByteBuffer.wrap(marker.getBytes(StandardCharsets.UTF_8)));
 				fc.force(true);
 			} catch (IOException ignore) {

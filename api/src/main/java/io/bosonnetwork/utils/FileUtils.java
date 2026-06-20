@@ -35,8 +35,7 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Map;
-
-import org.jspecify.annotations.Nullable;
+import java.util.Objects;
 
 /**
  * Utility class for common file and directory operations.
@@ -107,18 +106,15 @@ public final class FileUtils {
 	 * home directory as determined by the "user.home" system property. The resulting path
 	 * is then normalized to remove redundant elements.
 	 *
-	 * @param path the {@link Path} to be normalized; can be null.
-	 * @return the normalized {@link Path}, or null if the input path is null.
+	 * @param path the {@link Path} to be normalized.
+	 * @return the normalized {@link Path}.
 	 */
-	public static @Nullable Path normalizePath(@Nullable Path path) {
-		if (path != null) {
-			if (path.startsWith("~"))
-				path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
+	public static Path normalizePath(Path path) {
+		Objects.requireNonNull(path, "Path must not be null");
+		if (path.startsWith("~"))
+			path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
 
-			return path.normalize();
-		}
-
-		return null;
+		return path.normalize();
 	}
 
 	/**

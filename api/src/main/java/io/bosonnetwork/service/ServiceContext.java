@@ -25,6 +25,7 @@ package io.bosonnetwork.service;
 
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
@@ -40,10 +41,10 @@ public interface ServiceContext {
 	 * Unwraps the context to provide the underlying infrastructure instance.
 	 *
 	 * @param clazz the type of the infrastructure component (e.g. io.vertx.core.Vertx)
-	 * @return the component instance, or null if not available or not supported
+	 * @return an {@link Optional} with the component instance, or empty if not available or not supported
 	 * @param <T> the type parameter
 	 */
-	<T> @Nullable T unwrap(Class<T> clazz);
+	<T> Optional<T> unwrap(Class<T> clazz);
 
 	/**
 	 * Gets the host Boson node object.

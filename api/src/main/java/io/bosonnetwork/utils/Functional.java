@@ -116,21 +116,15 @@ public final class Functional {
 		try {
 			return f.get();
 		} catch (Throwable e) {
-			throwAsUnchecked(e);
-			return null;
+			throw rethrow(e);
 		}
 	}
 
-	private static void throwAsUnchecked(Throwable t) {
-		asUnchecked(t);
-	}
-
 	@SuppressWarnings("unchecked")
-	private static <T extends Throwable> void asUnchecked(Throwable t) throws T {
-		throw (T) t;
+	private static <E extends Throwable> RuntimeException rethrow(Throwable e) throws E {
+		throw (E) e;
 	}
 
-	
 	/**
 	 * Rethrows the {@code e} without being declared.
 	 * <p>

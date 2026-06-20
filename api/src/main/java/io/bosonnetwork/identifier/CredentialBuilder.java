@@ -43,7 +43,7 @@ import io.bosonnetwork.Identity;
  */
 public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	/** Credential identifier */
-	private String id;
+	private @Nullable String id;
 	/** List of credential types */
 	private final List<String> types;
 	/** Human-readable name of the credential */
@@ -55,7 +55,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	/** End date of credential validity */
 	private @Nullable Date validUntil;
 	/** Subject of the credential */
-	private Id subject;
+	private @Nullable Id subject;
 	/** Claims or attributes asserted by the credential */
 	private final Map<String, Object> claims;
 
@@ -104,6 +104,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 		Objects.requireNonNull(types, "types");
 
 		for (String type : types) {
+			// noinspection ConstantConditions
 			if (type == null || type.isEmpty())
 				continue;
 
@@ -190,6 +191,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @return this builder instance
 	 */
 	public CredentialBuilder subject(Id subject) {
+		Objects.requireNonNull(subject, "subject");
 		this.subject = subject;
 		return this;
 	}
@@ -230,7 +232,7 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 * @return this builder instance
 	 * @throws IllegalArgumentException if claims contain "id" key
 	 */
-	public CredentialBuilder claims(Map<String, Object> claims) {
+	public CredentialBuilder claims(@Nullable Map<String, Object> claims) {
 		if (claims == null || claims.isEmpty())
 			return this;
 
@@ -254,16 +256,16 @@ public class CredentialBuilder extends BosonIdentityObjectBuilder<Credential> {
 	 */
 	@Override
 	public Credential build() {
-		if (id == null || id.isEmpty())
-			throw new IllegalStateException("Credential id must be set and non-empty");
+		Credential unsigned;
+		try {
+			// Stamp signedAt before signing so it is covered by the signature.
+			Date signedAt = now();
+			unsigned = new Credential(id, types, name, description, identity.getId(), validFrom, validUntil,
+					subject, claims, signedAt, null);
+		} catch (IllegalArgumentException | NullPointerException e) {
+			throw new IllegalStateException("Credential builder is invalid: " + e.getMessage(), e);
+		}
 
-		if (claims.isEmpty())
-			throw new IllegalStateException("Credential must contain at least one claim");
-
-		// Stamp signedAt before signing so it is covered by the signature.
-		Date signedAt = now();
-		Credential unsigned = new Credential(id, types, name, description, identity.getId(), validFrom, validUntil,
-				subject, claims, signedAt, null);
 		byte[] signature = identity.sign(unsigned.getSignData());
 		return new Credential(unsigned, signature);
 	}

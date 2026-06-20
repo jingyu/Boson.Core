@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.vertx;
 
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
 import io.vertx.core.Context;
@@ -30,6 +31,7 @@ import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
+import org.jspecify.annotations.Nullable;
 
 /**
  * An abstract base class for Verticles in the Boson project that unifies the Vert.x 4.x
@@ -59,19 +61,19 @@ public abstract class BosonVerticle implements Deployable {
 	/**
 	 * Reference to the Vert.x instance that deployed this verticle
 	 */
-	protected Vertx vertx;
+	protected @Nullable Vertx vertx;
 
 	/**
 	 * Reference to the context of the verticle
 	 */
-	protected Context vertxContext;
+	protected @Nullable Context vertxContext;
 
 	/**
 	 * Returns the Vert.x instance that deployed this Verticle.
 	 *
 	 * @return the Vert.x instance
 	 */
-	public final Vertx getVertx() {
+	public final @Nullable Vertx getVertx() {
 		return vertx;
 	}
 
@@ -80,7 +82,7 @@ public abstract class BosonVerticle implements Deployable {
 	 *
 	 * @return the Vert.x context
 	 */
-	protected final Context vertxContext() {
+	protected final @Nullable Context vertxContext() {
 		return vertxContext;
 	}
 
@@ -90,6 +92,7 @@ public abstract class BosonVerticle implements Deployable {
 	 * @return the deployment ID
 	 */
 	public final String deploymentID() {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.deploymentID();
 	}
 
@@ -102,6 +105,7 @@ public abstract class BosonVerticle implements Deployable {
 	 * @return the configuration as a {@link JsonObject}
 	 */
 	protected final JsonObject vertxConfig() {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.config();
 	}
 
@@ -183,6 +187,7 @@ public abstract class BosonVerticle implements Deployable {
 	 * @param action the handler to run
 	 */
 	protected void runOnContext(Handler<Void> action) {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		vertxContext.runOnContext(action);
 	}
 
@@ -195,6 +200,7 @@ public abstract class BosonVerticle implements Deployable {
 	 * @return a future representing the blocking operation result
 	 */
 	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler) {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.executeBlocking(blockingCodeHandler);
 	}
 
@@ -208,6 +214,7 @@ public abstract class BosonVerticle implements Deployable {
 	 * @return a future representing the blocking operation result
 	 */
 	protected <T> Future<T> executeBlocking(Callable<T> blockingCodeHandler, boolean ordered) {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.executeBlocking(blockingCodeHandler, ordered);
 	}
 }

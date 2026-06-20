@@ -1,9 +1,13 @@
 package io.bosonnetwork.service.impl;
 
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.Test;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
@@ -22,7 +26,7 @@ public class AllowAllClientContextTests {
 		ClientUser user = context.getUser(userId).get().orElseThrow();
 		assertNotNull(user);
 		assertEquals(userId, user.getId());
-		assertTrue(user.verifyPassphrase("any"));
+		assertTrue(user.verifyPassphrase("secret"));
 
 		assertTrue(context.getAuthenticator().authenticateUser(Id.random()).get());
         assertTrue(context.getAuthenticator().authenticateDevice(Id.random(), Id.random(), "127.0.0.1").get());

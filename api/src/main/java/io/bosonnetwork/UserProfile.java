@@ -25,6 +25,7 @@ package io.bosonnetwork;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
@@ -49,11 +50,11 @@ public class UserProfile {
 	private static final String MESSAGING_HOME_PEER = "messagingHomePeer";
 
 	private final Id id;
-	private final String name;
-	private final String avatar;
-	private final String bio;
-	private final Id homeNode;
-	private final Id messagingHomePeer;
+	private final @Nullable String name;
+	private final @Nullable String avatar;
+	private final @Nullable String bio;
+	private final @Nullable Id homeNode;
+	private final @Nullable Id messagingHomePeer;
 
 	private final Card card;
 
@@ -68,7 +69,8 @@ public class UserProfile {
 	 * @param messagingHomePeer the user's messaging home peer identifier
 	 * @param card the underlying card object
 	 */
-	private UserProfile(Id id, String name, String avatar, String bio, Id homeNode, Id messagingHomePeer, Card card) {
+	private UserProfile(Id id, @Nullable String name, @Nullable String avatar, @Nullable String bio,
+	                    @Nullable Id homeNode, @Nullable Id messagingHomePeer, Card card) {
 		this.id = id;
 		this.name = name;
 		this.avatar = avatar;
@@ -95,7 +97,7 @@ public class UserProfile {
 		String bio = null;
 		Id homeNode = null;
 		Id messagingHomePeer = null;
-		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
+		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID).orElse(null);
 		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
 			name = (String) claims.get(NAME);
@@ -133,46 +135,46 @@ public class UserProfile {
 	/**
 	 * Returns the name of the user.
 	 *
-	 * @return the user name, or null if not set
+	 * @return an {@link Optional} with the user name, or empty if not set
 	 */
-	public String getName() {
-		return name;
+	public Optional<String> getName() {
+		return Optional.ofNullable(name);
 	}
 
 	/**
 	 * Returns the avatar of the user.
 	 *
-	 * @return the avatar string, or null if not set
+	 * @return an {@link Optional} with the avatar string, or empty if not set
 	 */
-	public @Nullable String getAvatar() {
-		return avatar;
+	public Optional<String> getAvatar() {
+		return Optional.ofNullable(avatar);
 	}
 
 	/**
 	 * Returns the biography of the user.
 	 *
-	 * @return the bio, or null if not set
+	 * @return an {@link Optional} with the bio, or empty if not set
 	 */
-	public @Nullable String getBio() {
-		return bio;
+	public Optional<String> getBio() {
+		return Optional.ofNullable(bio);
 	}
 
 	/**
 	 * Returns the identifier of the user's home node.
 	 *
-	 * @return the home node id, or null if not set
+	 * @return an {@link Optional} with the home node id, or empty if not set
 	 */
-	public @Nullable Id getHomeNode() {
-		return homeNode;
+	public Optional<Id> getHomeNode() {
+		return Optional.ofNullable(homeNode);
 	}
 
 	/**
 	 * Returns the identifier of the user's messaging home peer.
 	 *
-	 * @return the messaging home peer id, or null if not set
+	 * @return an {@link Optional} with the messaging home peer id, or empty if not set
 	 */
-	public @Nullable Id getMessagingHomePeer() {
-		return messagingHomePeer;
+	public Optional<Id> getMessagingHomePeer() {
+		return Optional.ofNullable(messagingHomePeer);
 	}
 
 	/**
@@ -200,14 +202,14 @@ public class UserProfile {
 	 */
 	public static class Builder {
 		private final Identity identity;
-		private String name;
-		private String avatar;
-		private String bio;
-		private Id homeNode;
-		private Id messagingHomePeer;
-		private Card card;
+		private @Nullable String name;
+		private @Nullable String avatar;
+		private @Nullable String bio;
+		private @Nullable Id homeNode;
+		private @Nullable Id messagingHomePeer;
+		private @Nullable Card card;
 
-		private Builder (Identity identity) {
+		private Builder(Identity identity) {
 			this.identity = identity;
 		}
 
@@ -217,7 +219,7 @@ public class UserProfile {
 		 * @param name the name
 		 * @return the builder instance
 		 */
-		public Builder name(String name) {
+		public Builder name(@Nullable String name) {
 			this.name = name;
 			return this;
 		}
@@ -228,7 +230,7 @@ public class UserProfile {
 		 * @param avatar the avatar string
 		 * @return the builder instance
 		 */
-		public Builder avatar(String avatar) {
+		public Builder avatar(@Nullable String avatar) {
 			this.avatar = avatar;
 			return this;
 		}
@@ -239,7 +241,7 @@ public class UserProfile {
 		 * @param bio the bio
 		 * @return the builder instance
 		 */
-		public Builder bio(String bio) {
+		public Builder bio(@Nullable String bio) {
 			this.bio = bio;
 			return this;
 		}
@@ -250,7 +252,7 @@ public class UserProfile {
 		 * @param homeNode the home node id
 		 * @return the builder instance
 		 */
-		public Builder homeNode(Id homeNode) {
+		public Builder homeNode(@Nullable Id homeNode) {
 			this.homeNode = homeNode;
 			return this;
 		}
@@ -261,7 +263,7 @@ public class UserProfile {
 		 * @param messagingHomePeer the messaging home peer id
 		 * @return the builder instance
 		 */
-		public Builder messagingHomePeer(Id messagingHomePeer) {
+		public Builder messagingHomePeer(@Nullable Id messagingHomePeer) {
 			this.messagingHomePeer = messagingHomePeer;
 			return this;
 		}

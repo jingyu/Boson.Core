@@ -1,7 +1,9 @@
 package io.bosonnetwork.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
 
 import io.bosonnetwork.Id;
 
@@ -19,7 +21,7 @@ public class PlainDeviceTests {
 		assertTrue(device.getCreatedAt() > 0);
 		assertEquals(device.getCreatedAt(), device.getUpdatedAt());
 		assertEquals(device.getCreatedAt(), device.getLastSeen());
-		assertEquals("n/a", device.getLastAddress());
+		assertTrue(device.getLastAddress().isEmpty());
 	}
 
 	@Test

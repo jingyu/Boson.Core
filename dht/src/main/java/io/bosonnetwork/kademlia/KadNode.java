@@ -41,7 +41,6 @@ import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 import io.bosonnetwork.kademlia.impl.DHT;
-import io.bosonnetwork.kademlia.impl.SimpleNodeConfiguration;
 import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.security.Blacklist;
@@ -65,7 +64,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private static final int DEFAULT_EXPECTED_PEER_COUNT = 8;
 
-	private final SimpleNodeConfiguration config;
+	private final NodeConfiguration config;
 
 	private final CachedCryptoIdentity identity;
 
@@ -104,7 +103,7 @@ public class KadNode extends BosonVerticle implements Node {
 			throw new IllegalArgumentException("Invalid configuration: private key is invalid", e);
 		}
 
-		this.config = new SimpleNodeConfiguration(config);
+		this.config = config;
 
 		this.defaultLookupOption = LookupOption.CONSERVATIVE;
 		this.running = false;
@@ -113,16 +112,15 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	private void checkConfig(NodeConfiguration config) {
-		if (config.privateKey() == null)
-			throw new IllegalArgumentException("Private key can not be null");
-
+		Objects.requireNonNull(config.vertx(), "Vertx can not be null");
+		Objects.requireNonNull(config.privateKey(), "Private key can not be null");
 		if (config.host4() == null && config.host6() == null)
 			throw new IllegalArgumentException("At least one host/address must be specified");
 
 		if (config.port() < 0 || config.port() > 65535)
 			throw new IllegalArgumentException("Invalid port number: " + config.port());
 
-		if (config.bootstrapNodes() == null || config.bootstrapNodes().isEmpty())
+		if (config.bootstrapNodes().isEmpty())
 			log.warn("No bootstrap nodes are configured");
 
 		Path dir = config.dataDir();
@@ -142,12 +140,9 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 		}
 
-		if (config.databaseUri() != null) {
-			if (!DataStorage.supports(config.databaseUri()))
-				throw new IllegalArgumentException("unsupported storage URL: " + config.databaseUri());
-		} else {
-			throw new IllegalArgumentException("No database is configured");
-		}
+		Objects.requireNonNull(config.databaseUri(), "Database URI can not be null");
+		if (!DataStorage.supports(config.databaseUri()))
+			throw new IllegalArgumentException("unsupported storage URL: " + config.databaseUri());
 	}
 
 	@Override
@@ -857,11 +852,11 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public <T> T unwrap(Class<T> clazz) {
+	public <T> Optional<T> unwrap(Class<T> clazz) {
 		if (clazz.isInstance(vertx))
-			return clazz.cast(vertx);
+			return Optional.of(clazz.cast(vertx));
 
-		return null;
+		return Optional.empty();
 	}
 
 	@Override

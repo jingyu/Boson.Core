@@ -26,6 +26,7 @@ package io.bosonnetwork.utils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * Utility to present ByteBuffer data as an InputStream.
@@ -34,7 +35,8 @@ public class ByteBufferInputStream extends InputStream {
 	/**
 	 * The ByteBuffer object from which data is read.
 	 */
-	private ByteBuffer buffer;
+	private final ByteBuffer buffer;
+	private boolean closed;
 
 	/**
 	 * Construct a ByteBufferInputStream on a ByteBuffer object.
@@ -69,15 +71,10 @@ public class ByteBufferInputStream extends InputStream {
 	 * @exception IOException if an I/O error occurs
 	 */
 	public int read() throws IOException {
-		ByteBuffer buf = getByteBuffer();
-		try {
-			return buf.hasRemaining() ? ((buf.get()) & 0xFF) : -1;
-		} catch (NullPointerException e) {
-			if (getByteBuffer() == null)
-				throw new IOException("Stream closed");
-			else
-				throw e;
-		}
+		if (closed)
+			throw new IOException("Stream closed");
+
+		return buffer.hasRemaining() ? ((buffer.get()) & 0xFF) : -1;
 	}
 
 	/**
@@ -96,13 +93,10 @@ public class ByteBufferInputStream extends InputStream {
 	 * @throws IOException if an I/O error occurs.
 	 */
 	public int read(byte[] dest, int offset, int len) throws IOException {
-		if (dest == null || offset < 0 || len < 0 || offset + len > dest.length) {
-			if (dest == null) {
-				throw new IllegalArgumentException("null byte array");
-			} else {
-				throw new IllegalArgumentException("length=" + dest.length + ", offset=" + offset + ", len=" + len);
-			}
-		}
+		Objects.requireNonNull(dest);
+		Objects.checkFromIndexSize(offset, len, dest.length);
+		if (closed)
+			throw new IOException("Stream closed");
 
 		int max = available(); // note: also checks if stream is closed
 		if (len > max) {
@@ -113,7 +107,7 @@ public class ByteBufferInputStream extends InputStream {
 			len = max;
 		}
 
-		getByteBuffer().get(dest, offset, len);
+		buffer.get(dest, offset, len);
 		return len;
 	}
 
@@ -132,6 +126,9 @@ public class ByteBufferInputStream extends InputStream {
 	 * @throws IOException if an I/O error occurs.
 	 */
 	public long skip(long n) throws IOException {
+		if (closed)
+			throw new IOException("Stream closed");
+
 		int cb;
 		if (n > Integer.MAX_VALUE)
 			cb = Integer.MAX_VALUE;
@@ -142,7 +139,6 @@ public class ByteBufferInputStream extends InputStream {
 
 		cb = Math.min(cb, available()); // note: also checks if stream is closed
 
-		ByteBuffer buffer = getByteBuffer();
 		int of = buffer.position();
 		buffer.position(of + cb);
 
@@ -159,14 +155,10 @@ public class ByteBufferInputStream extends InputStream {
 	 * @throws IOException if an I/O error occurs.
 	 */
 	public int available() throws IOException {
-		try {
-			return getByteBuffer().remaining();
-		} catch (NullPointerException e) {
-			if (getByteBuffer() == null)
-				throw new IOException("Stream closed");
-			else
-				throw e;
-		}
+		if (closed)
+			throw new IOException("Stream closed");
+
+		return buffer.remaining();
 	}
 
 	/**
@@ -178,10 +170,7 @@ public class ByteBufferInputStream extends InputStream {
 	 *                  position becomes invalid
 	 */
 	public void mark(int readlimit) {
-		try {
-			getByteBuffer().mark();
-		} catch (NullPointerException ignore) {
-		}
+		buffer.mark();
 	}
 
 	/**
@@ -191,14 +180,10 @@ public class ByteBufferInputStream extends InputStream {
 	 * @exception IOException if an I/O error occurs.
 	 */
 	public void reset() throws IOException {
-		try {
-			getByteBuffer().reset();
-		} catch (NullPointerException e) {
-			if (getByteBuffer() == null)
-				throw new IOException("Stream closed");
-			else
-				throw e;
-		}
+		if (closed)
+			throw new IOException("Stream closed");
+
+		buffer.reset();
 	}
 
 	/**
@@ -220,6 +205,6 @@ public class ByteBufferInputStream extends InputStream {
 	 * @exception IOException if an I/O error occurs.
 	 */
 	public void close() throws IOException {
-		buffer = null;
+		closed = true;
 	}
 }

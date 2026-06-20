@@ -44,17 +44,17 @@ public class DIDURL {
 	/**
 	 * The scheme of the DID URL, typically "did".
 	 */
-	private String scheme;
+	private @Nullable String scheme;
 
 	/**
 	 * The DID method, e.g., "boson".
 	 */
-	private String method;
+	private @Nullable String method;
 
 	/**
 	 * The method-specific identifier represented as an {@link Id}.
 	 */
-	private Id id;
+	private @Nullable Id id;
 
 	/**
 	 * The path component of the DID URL, normalized to NFC.
@@ -89,13 +89,13 @@ public class DIDURL {
 	 * Constructs a DIDURL with the given method-specific ID and optional path, query, and fragment.
 	 *
 	 * @param id       the method-specific identifier
-	 * @param path     the path component (may be null or empty)
-	 * @param query    the query component (may be null or empty)
-	 * @param fragment the fragment component (may be null or empty)
+	 * @param path     the path component (maybe null or empty)
+	 * @param query    the query component (maybe null or empty)
+	 * @param fragment the fragment component (maybe null or empty)
 	 */
-	public DIDURL(Id id, String path, String query, String fragment) {
-		this.scheme = "did";
-		this.method = "boson";
+	public DIDURL(Id id, @Nullable String path, @Nullable String query, @Nullable String fragment) {
+		this.scheme = DIDConstants.DID_SCHEME;
+		this.method = DIDConstants.DID_METHOD;
 		this.id = id;
 
 		this.path = path != null && !path.isEmpty() ? Normalizer.normalize(path, NFC) : null;
@@ -124,11 +124,11 @@ public class DIDURL {
 	 * If the parsed URL does not specify an ID, the provided ID will be used.
 	 *
 	 * @param id   the method-specific identifier to associate
-	 * @param spec the DID URL string to parse (may be null)
+	 * @param spec the DID URL string to parse (maybe null)
 	 * @throws NullPointerException     if {@code id} is null
 	 * @throws MalformedURLException    if the given string is not a valid DID URL
 	 */
-	public DIDURL(Id id, String spec) throws MalformedURLException {
+	public DIDURL(Id id, @Nullable String spec) throws MalformedURLException {
 		Objects.requireNonNull(id, "id");
 
 		if (spec != null)
@@ -136,8 +136,8 @@ public class DIDURL {
 
 		if (this.id == null) {
 			this.id = id;
-			this.scheme = "did";
-			this.method = "boson";
+			this.scheme = DIDConstants.DID_SCHEME;
+			this.method = DIDConstants.DID_METHOD;
 		}
 	}
 
@@ -222,10 +222,10 @@ public class DIDURL {
 			int pos = scan(spec, start, limit, ':', '/', '?', '#');
 			if (pos > start) {
 				String s = spec.substring(start, pos).toLowerCase();
-				if (!s.equals("did"))
+				if (!s.equals(DIDConstants.DID_SCHEME))
 					throw new MalformedURLException("Invalid scheme: " + s);
 
-				scheme = "did";
+				scheme = DIDConstants.DID_SCHEME;
 				start = (spec.charAt(pos) == ':' ? pos + 1 : pos);
 			} else {
 				throw new MalformedURLException("Missing DIDURL scheme");
@@ -235,17 +235,17 @@ public class DIDURL {
 			pos = scan(spec, start, limit, ':', '/', '?', '#');
 			if (pos > start) {
 				String s = spec.substring(start, pos).toLowerCase();
-				if (!s.equals("boson"))
+				if (!s.equals(DIDConstants.DID_METHOD))
 					throw new MalformedURLException("Unsupported method: " + s);
 
-				method = "boson";
+				method = DIDConstants.DID_METHOD;
 				start = (spec.charAt(pos) == ':' ? pos + 1 : pos);
 			} else {
 				throw new MalformedURLException("Missing DIDURL method");
 			}
 
 			// scan method specific id
-			pos =scan(spec, start, limit, '/', '?', '#');
+			pos = scan(spec, start, limit, '/', '?', '#');
 			if (pos > start) {
 				String s = spec.substring(start, pos);
 				try {
@@ -285,27 +285,27 @@ public class DIDURL {
 	/**
 	 * Returns the scheme component of this DID URL.
 	 *
-	 * @return the scheme, typically "did"
+	 * @return the scheme, typically "did", or {@code null} if this is a relative reference
 	 */
-	public String getScheme() {
+	public @Nullable String getScheme() {
 		return scheme;
 	}
 
 	/**
 	 * Returns the method component of this DID URL.
 	 *
-	 * @return the method, e.g., "boson"
+	 * @return the method, e.g., "boson", or {@code null} if this is a relative reference
 	 */
-	public String getMethod() {
+	public @Nullable String getMethod() {
 		return method;
 	}
 
 	/**
 	 * Returns the method-specific identifier component of this DID URL.
 	 *
-	 * @return the method-specific identifier as an {@link Id}
+	 * @return the method-specific identifier as an {@link Id}, or {@code null} if this is a relative reference
 	 */
-	public Id getId() {
+	public @Nullable Id getId() {
 		return id;
 	}
 

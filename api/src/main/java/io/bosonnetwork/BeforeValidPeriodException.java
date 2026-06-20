@@ -22,6 +22,8 @@
 
 package io.bosonnetwork;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Exception thrown when an operation is attempted before its valid period.
  * <p>
@@ -49,7 +51,7 @@ public class BeforeValidPeriodException extends BosonException {
 	 * @param message the detail message saved for later retrieval by
 	 *                {@link #getMessage()}
 	 */
-	public BeforeValidPeriodException(String message) {
+	public BeforeValidPeriodException(@Nullable String message) {
 		super(message);
 	}
 
@@ -63,7 +65,7 @@ public class BeforeValidPeriodException extends BosonException {
 	 * @param cause   the cause saved for later retrieval by {@link #getCause()};
 	 *                may be {@code null} if the cause is nonexistent or unknown
 	 */
-	public BeforeValidPeriodException(String message, Throwable cause) {
+	public BeforeValidPeriodException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -77,7 +79,7 @@ public class BeforeValidPeriodException extends BosonException {
 	 * @param cause the cause saved for later retrieval by {@link #getCause()};
 	 *              may be {@code null} if the cause is nonexistent or unknown
 	 */
-	public BeforeValidPeriodException(Throwable cause) {
+	public BeforeValidPeriodException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

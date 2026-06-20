@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
@@ -38,11 +39,10 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.BeforeValidPeriodException;
 import io.bosonnetwork.ExpiredException;
-import org.jspecify.annotations.Nullable;
-
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.InvalidSignatureException;
@@ -112,10 +112,11 @@ public class Credential {
 	/** Signature timestamp ("sat"), optional */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final @Nullable Date signedAt;
+	private final Date signedAt;
 
 	/** Cryptographic signature bytes ("sig"), required */
 	@JsonProperty("sig")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private final byte @Nullable [] signature;
 
 	/**
@@ -142,8 +143,8 @@ public class Credential {
 						 @JsonProperty(value = "v") @Nullable Date validFrom,
 						 @JsonProperty(value = "e") @Nullable Date validUntil,
 						 @JsonProperty(value = "s", required = true) Subject subject,
-						 @JsonProperty(value = "sat") @Nullable Date signedAt,
-						 @JsonProperty(value = "sig") byte @Nullable [] signature) {
+						 @JsonProperty(value = "sat", required = true) Date signedAt,
+						 @JsonProperty(value = "sig", required = true) byte[] signature) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(issuer, "issuer");
 		Objects.requireNonNull(subject, "subject");
@@ -181,20 +182,30 @@ public class Credential {
 	 * @param signedAt Signature timestamp (should be trimmed of milliseconds)
 	 * @param signature Cryptographic signature bytes
 	 */
-	protected Credential(String id, List<String> types, String name, String description, Id issuer, Date validFrom,
-						 Date validUntil, Id subject, Map<String, Object> claims, Date signedAt, byte[] signature) {
+	protected Credential(@Nullable String id, @Nullable List<String> types, @Nullable String name, @Nullable String description,
+						 Id issuer, @Nullable Date validFrom, @Nullable Date validUntil,
+						 @Nullable Id subject, Map<String, Object> claims, Date signedAt, byte @Nullable [] signature) {
+		Objects.requireNonNull(id, "Credential id must be set and non-empty");
+		if (id.isEmpty())
+			throw new IllegalArgumentException("Credential id must be set and non-empty");
+
+		Objects.requireNonNull(claims, "Credential claims must be set and non-empty");
+		if (claims.isEmpty())
+			throw new IllegalArgumentException("Credential claims must be set and non-empty");
+
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.name = name;
 		this.description = description;
-		this.issuer = issuer;
+		this.issuer = Objects.requireNonNull(issuer, "Credential issuer cannot be null");
 		this.validFrom = validFrom;
 		this.validUntil = validUntil;
 		this.subject = new Subject(subject, claims);
 		// Ensure consistency between subject id and issuer for implicit subjects
 		this.subject.implicitCheck(issuer);
 
-		this.signedAt = signedAt; // signedAt should be trimmed the milliseconds
+		// signedAt should be trimmed the milliseconds
+		this.signedAt = Objects.requireNonNull(signedAt, "Credential signedAt cannot be null");
 		this.signature = signature;
 	}
 
@@ -204,7 +215,7 @@ public class Credential {
 	 * @param cred Original credential
 	 * @param signature Cryptographic signature bytes
 	 */
-	protected Credential(Credential cred, byte[] signature) {
+	protected Credential(Credential cred, byte @Nullable [] signature) {
 		this.id = cred.id;
 		this.types = cred.types;
 		this.name = cred.name;
@@ -230,7 +241,7 @@ public class Credential {
 	/**
 	 * Gets the list of credential types.
 	 *
-	 * @return List of types (may be empty)
+	 * @return List of types (maybe empty)
 	 */
 	public List<String> getTypes() {
 		return types;
@@ -239,47 +250,46 @@ public class Credential {
 	/**
 	 * Gets the human-readable name of the credential.
 	 *
-	 * @return Credential name or null if not set
+	 * @return an {@link Optional} with the credential name, or empty if not set
 	 */
-	public @Nullable String getName() {
-		return name;
+	public Optional<String> getName() {
+		return Optional.ofNullable(name);
 	}
 
 	/**
 	 * Gets the human-readable description of the credential.
 	 *
-	 * @return Credential description or null if not set
+	 * @return an {@link Optional} with the credential description, or empty if not set
 	 */
-	public @Nullable String getDescription() {
-		return description;
+	public Optional<String> getDescription() {
+		return Optional.ofNullable(description);
 	}
 
 	/**
 	 * Gets the issuer identifier of the credential.
-	 * If issuer is null, returns the subject's id.
 	 *
 	 * @return Issuer Id
 	 */
 	public Id getIssuer() {
-		return issuer != null ? issuer : subject.getId();
+		return issuer;
 	}
 
 	/**
 	 * Gets the date from which the credential is valid.
 	 *
-	 * @return Valid from date or null if not set
+	 * @return an {@link Optional} with the valid-from date, or empty if not set
 	 */
-	public @Nullable Date getValidFrom() {
-		return validFrom;
+	public Optional<Date> getValidFrom() {
+		return Optional.ofNullable(validFrom);
 	}
 
 	/**
 	 * Gets the date until which the credential is valid.
 	 *
-	 * @return Valid until date or null if not set
+	 * @return an {@link Optional} with the valid-until date, or empty if not set
 	 */
-	public @Nullable Date getValidUntil() {
-		return validUntil;
+	public Optional<Date> getValidUntil() {
+		return Optional.ofNullable(validUntil);
 	}
 
 	/**
@@ -300,17 +310,18 @@ public class Credential {
 	 *
 	 * @return Signed at date
 	 */
-	public @Nullable Date getSignedAt() {
+	public Date getSignedAt() {
 		return signedAt;
 	}
 
 	/**
-	 * Gets the cryptographic signature bytes.
+	 * Gets a defensive copy of the cryptographic signature bytes.
 	 *
 	 * @return Signature byte array
 	 */
-	public byte @Nullable [] getSignature() {
-		return signature == null ? null : signature.clone();
+	public byte[] getSignature() {
+		Objects.requireNonNull(signature, "signature");
+		return signature.clone();
 	}
 
 	/**
@@ -344,7 +355,7 @@ public class Credential {
 	/**
 	 * Verifies the cryptographic signature of the credential.
 	 *
-	 * @return True if signature is valid, false otherwise
+	 * @return True if the signature is valid, false otherwise
 	 */
 	public boolean isGenuine() {
 		// Signature must be present and of correct length
@@ -358,8 +369,8 @@ public class Credential {
 	/**
 	 * Validates the credential by checking its validity period and signature.
 	 *
-	 * @throws BeforeValidPeriodException if current time is before validFrom
-	 * @throws ExpiredException if current time is after validUntil
+	 * @throws BeforeValidPeriodException if the current time is before validFrom
+	 * @throws ExpiredException if the current time is after validUntil
 	 * @throws InvalidSignatureException if signature verification fails
 	 */
 	public void validate() throws BeforeValidPeriodException, ExpiredException, InvalidSignatureException {
@@ -376,7 +387,7 @@ public class Credential {
 
 	/**
 	 * Gets the byte array of the credential data that is signed.
-	 * If signature is present, returns the unsigned credential bytes for verification.
+	 * If the signature is present, returns the unsigned credential bytes for verification.
 	 * Otherwise, returns the bytes of the current credential.
 	 *
 	 * @return Byte array of the data to be signed or verified
@@ -494,7 +505,7 @@ public class Credential {
 	 *
 	 * @param issuer Issuer identity
 	 * @return CredentialBuilder instance
-	 * @throws NullPointerException if issuer is null
+	 * @throws NullPointerException if the issuer is null
 	 */
 	public static CredentialBuilder builder(Identity issuer) {
 		Objects.requireNonNull(issuer, "issuer");
@@ -533,7 +544,7 @@ public class Credential {
 		 * @param id Subject identifier
 		 * @param claims Subject claims map
 		 */
-		protected Subject(Id id, Map<String, Object> claims) {
+		protected Subject(@Nullable Id id, @Nullable Map<String, Object> claims) {
 			this.id = id;
 			this.claims = claims == null || claims.isEmpty() ? Map.of() : new LinkedHashMap<>(claims);
 		}
@@ -556,17 +567,17 @@ public class Credential {
 		 */
 		@JsonProperty("id")
 		@JsonInclude(JsonInclude.Include.NON_NULL)
-		private Id _getId() {
+		private @Nullable Id _getId() {
 			return implicit ? null : id;
 		}
 
 		/**
 		 * Gets the subject identifier.
 		 *
-		 * @return Subject Id or null if implicit
+		 * @return the subject id (the issuer id when the subject is implicit)
 		 */
-		public @Nullable Id getId() {
-			return id;
+		public Id getId() {
+			return Objects.requireNonNull(id, "id not initialized");
 		}
 
 		/**

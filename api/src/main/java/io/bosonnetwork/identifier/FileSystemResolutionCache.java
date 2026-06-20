@@ -32,12 +32,11 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.json.Json;
@@ -155,17 +154,17 @@ class FileSystemResolutionCache implements ResolutionCache {
 	 * If the entry is expired, it is deleted and {@code null} is returned. If not found, returns {@code null}.
 	 *
 	 * @param id the identifier for the cache entry
-	 * @return the cached resolution result, or {@code null} if not found or expired
+	 * @return an {@link Optional} with the cached resolution result, or empty if not found or expired
 	 * @throws ResolutionCacheException if reading from the cache file fails
 	 */
 	@Override
-	public Resolver.@Nullable ResolutionResult<Card> get(Id id) throws ResolutionCacheException {
+	public Optional<Resolver.ResolutionResult<Card>> get(Id id) throws ResolutionCacheException {
 		try {
 			Path file = cacheDir.resolve(id.toString());
 			// Check if the cache file exists for this Id
 			if (!Files.exists(file)) {
 				log.debug("Resolver persistent cache miss: {}", id);
-				return null;
+				return Optional.empty();
 			}
 
 			// Read file attributes to check for expiration
@@ -175,7 +174,7 @@ class FileSystemResolutionCache implements ResolutionCache {
 				Files.delete(file);
 				// noinspection LoggingSimilarMessage
 				log.debug("Resolver persistent cache entry expired and evicted: {}", id);
-				return null;
+				return Optional.empty();
 			}
 
 			// Cache hit: read the cached result
@@ -184,14 +183,14 @@ class FileSystemResolutionCache implements ResolutionCache {
 
 			// Re-verify on read: the cache file is a trust boundary (a local actor with write access
 			// to the cache directory could tamper with it), so a successful entry must still verify.
-			if (result != null && result.succeeded() && result.getResult() != null && !result.getResult().isGenuine()) {
+			if (result.succeeded() && result.getResult() != null && !result.getResult().isGenuine()) {
 				Files.delete(file);
 				log.warn("Resolver persistent cache entry failed integrity check and was evicted: {}", id);
-				return null;
+				return Optional.empty();
 			}
 
 			log.debug("Resolver persistent cache hit: {}", id);
-			return result;
+			return Optional.of(result);
 		} catch (IOException e) {
 			log.error("Resolver persistent cache entry read failed: {}", id, e);
 			throw new ResolutionCacheException("Resolver persistent cache entry read failed", e);

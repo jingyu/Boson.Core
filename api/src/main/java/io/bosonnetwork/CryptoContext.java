@@ -64,6 +64,8 @@ public class CryptoContext {
      * @param box  The CryptoBox instance used for encryption and decryption.
      */
 	public CryptoContext(Id id, CryptoBox box) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(box, "box");
 		this.id = id;
 		this.box = box;
 		this.nextNonce = Nonce.random();
@@ -155,6 +157,7 @@ public class CryptoContext {
      * @throws NullPointerException if {@code data} is {@code null}.
      */
 	public byte[] decrypt(byte[] data) throws CryptoException {
+		Objects.requireNonNull(data, "data");
 		if (data.length <= Nonce.BYTES + CryptoBox.MAC_BYTES)
 			throw new CryptoException("Invalid cipher size");
 

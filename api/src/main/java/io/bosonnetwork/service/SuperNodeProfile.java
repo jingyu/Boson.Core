@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
@@ -70,7 +71,8 @@ public class SuperNodeProfile {
 	 * @param contact the node's contact information
 	 * @param card the underlying card object
 	 */
-	private SuperNodeProfile(Id nodeId, @Nullable String name, @Nullable String logo, @Nullable String website, @Nullable String contact, Card card) {
+	private SuperNodeProfile(Id nodeId, @Nullable String name, @Nullable String logo, @Nullable String website,
+							 @Nullable String contact, Card card) {
 		this.nodeId = nodeId;
 		this.name = name;
 		this.logo = logo;
@@ -95,7 +97,7 @@ public class SuperNodeProfile {
 		String logo = null;
 		String website = null;
 		String contact = null;
-		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID);
+		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID).orElse(null);
 		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
 			name = (String) claims.get("name");
@@ -119,47 +121,47 @@ public class SuperNodeProfile {
 	/**
 	 * Returns the name of the super node.
 	 *
-	 * @return the name, or null if not set
+	 * @return an {@link Optional} with the name, or empty if not set
 	 */
-	public @Nullable String getName() {
-		return name;
+	public Optional<String> getName() {
+		return Optional.ofNullable(name);
 	}
 
 	/**
 	 * Returns the logo of the super node.
 	 *
-	 * @return the logo string, or null if not set
+	 * @return an {@link Optional} with the logo string, or empty if not set
 	 */
-	public @Nullable String getLogo() {
-		return logo;
+	public Optional<String> getLogo() {
+		return Optional.ofNullable(logo);
 	}
 
 	/**
 	 * Returns the website of the super node.
 	 *
-	 * @return the website URL, or null if not set
+	 * @return an {@link Optional} with the website URL, or empty if not set
 	 */
-	public @Nullable String getWebsite() {
-		return website;
+	public Optional<String> getWebsite() {
+		return Optional.ofNullable(website);
 	}
 
 	/**
 	 * Returns the contact information of the super node.
 	 *
-	 * @return the contact info, or null if not set
+	 * @return an {@link Optional} with the contact info, or empty if not set
 	 */
-	public @Nullable String getContact() {
-		return contact;
+	public Optional<String> getContact() {
+		return Optional.ofNullable(contact);
 	}
 
 	/**
 	 * Returns the service associated with the specified peer identifier.
 	 *
 	 * @param servicePeerId the peer id of the service
-	 * @return the service, or null if not found
+	 * @return an {@link Optional} with the service, or empty if not found
 	 * @throws NullPointerException if servicePeerId is null
 	 */
-	public Card.@Nullable Service getService(Id servicePeerId) {
+	public Optional<Card.Service> getService(Id servicePeerId) {
 		Objects.requireNonNull(servicePeerId);
 		return card.getService(servicePeerId.toBase58String());
 	}
@@ -188,9 +190,9 @@ public class SuperNodeProfile {
 	/**
 	 * Returns the API service for this super node.
 	 *
-	 * @return the API service, or null if not found
+	 * @return an {@link Optional} with the API service, or empty if not found
 	 */
-	public Card.@Nullable Service getApiService() {
+	public Optional<Card.Service> getApiService() {
 		// The API service for a super node is identified by the same ID as the node's unique identifier.
 		return card.getService(nodeId.toBase58String());
 	}
@@ -256,10 +258,10 @@ public class SuperNodeProfile {
 	 */
 	public static class Builder {
 		private final Identity identity;
-		private String name;
-		private String logo;
-		private String website;
-		private String contact;
+		private @Nullable String name;
+		private @Nullable String logo;
+		private @Nullable String website;
+		private @Nullable String contact;
 
 		private final CardBuilder cardBuilder;
 

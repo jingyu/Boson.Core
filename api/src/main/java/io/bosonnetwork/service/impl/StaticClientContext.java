@@ -86,16 +86,15 @@ public class StaticClientContext implements ClientContext {
 	 *
 	 * @param userId    The unique identifier of the user to be added. Must not be null.
 	 * @param name      The name of the user to be added.
-	 * @param passphrase The password or passphrase associated with the user.
 	 * @return true if the user was successfully added to the registry, false if the user already exists.
 	 * @throws NullPointerException if the provided userId is null.
 	 */
-	public boolean addUser(Id userId, String name, String passphrase) {
+	public boolean addUser(Id userId, String name) {
 		Objects.requireNonNull(userId);
 		if (existsUserSync(userId))
 			return false;
 
-		userDevicesRegistry.computeIfAbsent(userId, k -> new UserAndDevices(new PlainUser(userId, name, passphrase), List.of()));
+		userDevicesRegistry.computeIfAbsent(userId, k -> new UserAndDevices(new PlainUser(userId, name, null, null, null), List.of()));
 		return true;
 	}
 
@@ -143,7 +142,7 @@ public class StaticClientContext implements ClientContext {
 	 * Adds a new device to the user registry for a specified user. If the device already exists
 	 * globally, the addition will fail and return false. The user must already exist in the registry.
 	 * <p>
-	 * <strong>Concurrency note:</strong> as with {@link #addUser(Id, String, String) addUser},
+	 * <strong>Concurrency note:</strong> as with {@link #addUser(Id, String) addUser},
 	 * the up-front {@code existsDeviceSync} check and the subsequent {@code compute} insert are
 	 * not a single atomic step; concurrent {@code addDevice} calls for the same {@code deviceId}
 	 * can both return {@code true} even though only one entry is actually inserted. The race is

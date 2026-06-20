@@ -60,9 +60,10 @@ public class NodeSyncTests {
 				.vertx(vertx)
 				.address4(localAddr)
 				.port(TEST_NODES_PORT_START - 1)
+				.generatePrivateKey()
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-bootstrap"))
-				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
-				.enableDeveloperMode()
+				.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-bootstrap" + File.separator + "storage.db"))
+				.setDeveloperMode(true)
 				.build();
 
 		bootstrap = new KadNode(config);
@@ -82,10 +83,11 @@ public class NodeSyncTests {
 					.vertx(vertx)
 					.address4(localAddr)
 					.port(TEST_NODES_PORT_START + i)
+					.generatePrivateKey()
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
-					.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
+					.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
 					.addBootstrap(bootstrap.getNodeInfo().getV4())
-					.enableDeveloperMode()
+					.setDeveloperMode(true)
 					.build();
 
 			var node = new KadNode(config);

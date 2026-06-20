@@ -261,7 +261,7 @@ public class Filter {
 	 * @param params the collection of parameters to bind
 	 * @return a Filter representing the IN condition
 	 */
-	public static Filter in(String column, Map<String, Object> params) {
+	public static Filter in(String column, @Nullable Map<String, Object> params) {
 		Objects.requireNonNull(column);
 		column = validateColumn(column);
 		if (params == null || params.isEmpty()) // empty IN always false
@@ -279,6 +279,7 @@ public class Filter {
 	 * @return a Filter representing the conjunction of the given filters
 	 */
 	public static Filter and(Filter... filters) {
+		//noinspection ConstantConditions
 		if (filters == null || filters.length == 0)
 			return Filter.NONE;
 
@@ -295,6 +296,7 @@ public class Filter {
 	 * @return a Filter representing the disjunction of the given filters
 	 */
 	public static Filter or(Filter... filters) {
+		//noinspection ConstantConditions
 		if (filters == null || filters.length == 0)
 			return Filter.NONE;
 
@@ -344,17 +346,19 @@ public class Filter {
 	 * @param op     the operator suffix (e.g. {@code "eq"}, {@code "gte"})
 	 * @return a valid parameter name, or {@code null} if {@code column} is {@code null}
 	 */
-	private static @Nullable String defaultParamName(String column, String op) {
-		return column == null ? null : column.replace('.', '_') + '_' + op;
+	private static String defaultParamName(String column, String op) {
+		Objects.requireNonNull(column);
+		Objects.requireNonNull(op);
+		return column.replace('.', '_') + '_' + op;
 	}
 
 	/**
 	 * WARNING: raw() is not parameter-safe. Use at your own risk.
 	 */
 	private static class Raw extends Filter {
-		private final String sql;
+		private final @Nullable String sql;
 
-		private Raw(String sql) {
+		private Raw(@Nullable String sql) {
 			this.sql = sql;
 		}
 

@@ -24,6 +24,7 @@
 package io.bosonnetwork.crypto;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 import javax.security.auth.Destroyable;
 
@@ -254,8 +255,8 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 		public static final int SEED_BYTES = Seed.length();
 
 		private final Box.KeyPair keyPair;
-		private PublicKey pk;
-		private PrivateKey sk;
+		private @Nullable PublicKey pk;
+		private @Nullable PrivateKey sk;
 		private boolean destroyed = false;
 
 		private KeyPair(Box.KeyPair keyPair) {
@@ -498,6 +499,8 @@ public class CryptoBox implements AutoCloseable, Destroyable {
 	 * @return a precomputed crypto box instance.
 	 */
 	public static CryptoBox fromKeys(PublicKey pk, PrivateKey sk) {
+		Objects.requireNonNull(pk);
+		Objects.requireNonNull(sk);
 		return new CryptoBox(Box.forKeys(pk.raw(), sk.raw()));
 	}
 

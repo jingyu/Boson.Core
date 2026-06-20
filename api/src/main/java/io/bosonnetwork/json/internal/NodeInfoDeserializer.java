@@ -25,6 +25,7 @@ package io.bosonnetwork.json.internal;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
@@ -109,6 +110,7 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		// NodeInfo's own (Id, String, port) constructor. NodeInfo deserialization can therefore
 		// perform a blocking name resolution; avoiding that would require a NodeInfo-level change to
 		// retain unresolved addresses, which would also alter equality semantics.
+		Objects.requireNonNull(id, "missing id");
 		InetSocketAddress isa = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
 		return new NodeInfo(id, isa);
 	}

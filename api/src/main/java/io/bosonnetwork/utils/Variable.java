@@ -55,7 +55,7 @@ import org.jspecify.annotations.Nullable;
  *
  * @param <T> the type of value that may be contained
  */
-public class Variable<T> {
+public class Variable<T extends @Nullable Object> {
 	private @Nullable T value;
 
 	/**
@@ -97,7 +97,7 @@ public class Variable<T> {
 	 * @param value the value to be contained, which may be {@code null}
 	 * @return a {@code Variable} containing the specified value
 	 */
-	public static <T> Variable<T> ofNullable(@Nullable T value) {
+	public static <T extends @Nullable Object> Variable<T> ofNullable(@Nullable T value) {
 		return new Variable<>(value);
 	}
 
@@ -209,7 +209,7 @@ public class Variable<T> {
 	 */
 	public Variable<T> filter(Predicate<? super T> predicate) {
 		Objects.requireNonNull(predicate);
-		if (!isPresent()) {
+		if (value == null) {
 			return this;
 		} else {
 			return predicate.test(value) ? this : empty();
@@ -242,7 +242,7 @@ public class Variable<T> {
 	 */
 	public <U> Variable<U> map(Function<? super T, ? extends U> mapper) {
 		Objects.requireNonNull(mapper);
-		if (!isPresent()) {
+		if (value == null) {
 			return empty();
 		} else {
 			return Variable.ofNullable(mapper.apply(value));
@@ -271,7 +271,7 @@ public class Variable<T> {
 	 */
 	public <U> Variable<U> flatMap(Function<? super T, ? extends Variable<? extends U>> mapper) {
 		Objects.requireNonNull(mapper);
-		if (!isPresent()) {
+		if (value == null) {
 			return empty();
 		} else {
 			@SuppressWarnings("unchecked")

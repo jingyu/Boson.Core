@@ -132,8 +132,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public <T> T unwrap(Class<T> clazz) {
-				return null;
+			public <T> Optional<T> unwrap(Class<T> clazz) {
+				return Optional.empty();
 			}
 
 			@Override

@@ -79,8 +79,8 @@ public class SybilTests {
 				.port(39001)
 				.generatePrivateKey()
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-target"))
-				.database("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
-				.enableDeveloperMode()
+				.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
+				.setDeveloperMode(true)
 				.build());
 		target.start().get();
 
@@ -111,7 +111,7 @@ public class SybilTests {
 					.port(39002 + i)
 					.privateKey(sybilKey)
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
-					.enableDeveloperMode()
+					.setDeveloperMode(true)
 					.build();
 
 			sybil = new KadNode(sybilConfig);
@@ -174,7 +174,7 @@ public class SybilTests {
 					.address4(localAddr)
 					.port(39002)
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
-					.enableDeveloperMode()
+					.setDeveloperMode(true)
 					.build();
 
 			sybil = new KadNode(sybilConfig);

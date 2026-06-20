@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -77,11 +78,11 @@ import io.bosonnetwork.utils.Hex;
  * </ul>
  */
 public class VersionedSchema implements VertxDatabase {
-	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "",  null,"", 0, 0, true);
+	private static final SchemaVersion EMPTY_VERSION = new SchemaVersion(0, "", "", "", 0, 0, true);
 	private final Vertx vertx;
 	private final SqlClient client;
 	private final @Nullable String schema;
-	private final Path migrationPath;
+	private final @Nullable Path migrationPath;
 	private @Nullable String databaseProductName;
 	private SchemaVersion currentVersion;
 
@@ -140,7 +141,7 @@ public class VersionedSchema implements VertxDatabase {
 		}
 	}
 
-	private VersionedSchema(Vertx vertx, SqlClient client, @Nullable String schema, Path migrationPath) {
+	private VersionedSchema(Vertx vertx, SqlClient client, @Nullable String schema, @Nullable Path migrationPath) {
 		this.vertx = vertx;
 		this.client = client;
 		this.schema = schema;
@@ -159,7 +160,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @param migrationPath directory containing migration SQL files
 	 * @return a new {@link VersionedSchema} instance
 	 */
-	public static VersionedSchema init(Vertx vertx, SqlClient client, Path migrationPath) {
+	public static VersionedSchema init(Vertx vertx, SqlClient client, @Nullable Path migrationPath) {
 		return new VersionedSchema(vertx, client, null, migrationPath);
 	}
 
@@ -172,7 +173,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @param migrationPath the path to the directory containing migration SQL files
 	 * @return a new {@link VersionedSchema} instance configured for the provided parameters
 	 */
-	public static VersionedSchema init(Vertx vertx, SqlClient client, @Nullable String schema, Path migrationPath) {
+	public static VersionedSchema init(Vertx vertx, SqlClient client, @Nullable String schema, @Nullable Path migrationPath) {
 		return new VersionedSchema(vertx, client, validateSchema(schema), migrationPath);
 	}
 
@@ -293,10 +294,10 @@ public class VersionedSchema implements VertxDatabase {
 			for (int i = versions.size(); i < migrations.size(); i++) {
 				Migration migration = migrations.get(i);
 				chain = chain.compose(na ->
-						applyMigration(migration).map(v -> {
-							this.currentVersion = v;
-							return null;
-						})
+						applyMigration(migration).andThen(ar -> {
+							if (ar.succeeded())
+								this.currentVersion = ar.result();
+						}).mapEmpty()
 				);
 			}
 
@@ -458,7 +459,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @return the description without the comment marker, or {@code null} if not present
 	 * @throws IOException if reading fails
 	 */
-	private static String readDescriptionComment(BufferedReader reader) throws IOException {
+	private static @Nullable String readDescriptionComment(BufferedReader reader) throws IOException {
 		String description = null;
 
 		reader.mark(4096);
@@ -529,6 +530,7 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				// Handle line comments (not inside dollar-quoted blocks)
+				// noinspection ConstantConditions
 				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && currentDollarTag == null
 						&& i + 1 < line.length() && line.charAt(i) == '-' && line.charAt(i + 1) == '-') {
 					// the rest of the line is a comment
@@ -536,11 +538,14 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				// Handle entering/leaving quotes
+				// noinspection ConstantConditions
 				if (!inDoubleQuote && !inBlockComment && c == '\'' && currentDollarTag == null) {
 					inSingleQuote = !inSingleQuote;
 					i++;
 					continue;
 				}
+
+				// noinspection ConstantConditions
 				if (!inSingleQuote && !inBlockComment && c == '"' && currentDollarTag == null) {
 					inDoubleQuote = !inDoubleQuote;
 					i++;
@@ -548,6 +553,7 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				// Handle entering/leaving dollar-quoted blocks($$ or $tag$)
+				// noinspection ConstantConditions
 				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && c == '$') {
 					// Try to detect a tag like $tag$
 					int j = i + 1;
@@ -565,6 +571,7 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				// Detect BEGIN/END keywords outside of quotes/comments
+				// noinspection ConstantConditions
 				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && currentDollarTag == null) {
 					// detect BEGIN
 					if (startsKeyword(line, i, "BEGIN")) {
@@ -577,6 +584,7 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				// Detect statement terminator only when safe
+				// noinspection ConstantConditions
 				if (!inSingleQuote && !inDoubleQuote && !inBlockComment && currentDollarTag == null && c == ';') {
 					if (beginEndDepth == 0) {
 						statement.append(line, 0, i + 1).append('\n');
@@ -611,18 +619,8 @@ public class VersionedSchema implements VertxDatabase {
 		return beforeOk && afterOk;
 	}
 
-	/**
-	 * Applies a single migration inside a database transaction.
-	 *
-	 * <p>The migration SQL file is split into individual statements, which are
-	 * executed sequentially. Upon successful execution, a new entry is recorded
-	 * in the {@code schema_versions} table.</p>
-	 *
-	 * @param migration the migration to apply
-	 * @return a future completing with the applied {@link SchemaVersion}
-	 */
 	/** Parsed migration script: an optional long description plus the ordered SQL statements. */
-	private record ParsedMigration(String description, List<String> statements) {}
+	private record ParsedMigration(@Nullable String description, List<String> statements) {}
 
 	/**
 	 * Reads and splits a migration file into individual SQL statements. This performs blocking
@@ -712,6 +710,7 @@ public class VersionedSchema implements VertxDatabase {
 		return versions;
 	}
 
+	@SuppressWarnings("SameParameterValue")
 	private static boolean getBoolean(Row row, String columnName) {
 		Object value = row.getValue(columnName);
 		return value instanceof Boolean b ? b :
@@ -785,6 +784,7 @@ public class VersionedSchema implements VertxDatabase {
 	 * @return parameterized INSERT SQL suitable for the target database
 	 */
 	protected String insertSchemaVersion() {
+		Objects.requireNonNull(databaseProductName, "DatabaseProductName must be initialized");
 		if (databaseProductName.toLowerCase(Locale.ROOT).contains("postgres"))
 			return insertSchemaVersionWithIndexedParameters;
 		else

@@ -22,7 +22,7 @@
 
 package io.bosonnetwork.service;
 
-import org.jspecify.annotations.Nullable;
+import java.util.Optional;
 
 import io.bosonnetwork.Id;
 
@@ -57,58 +57,58 @@ public non-sealed interface SuperNodeInfo extends Principal {
 	/**
 	 * Gets the API endpoint URL for the node.
 	 *
-	 * @return the API endpoint string, or {@code null} if not set
+	 * @return the API endpoint string
 	 */
-	@Nullable String getApiEndpoint();
+	String getApiEndpoint();
 
 	/**
 	 * Gets the name of the software running on the node.
 	 *
-	 * @return the software name, or {@code null} if not advertised
+	 * @return an {@link Optional} with the software name, or empty if not advertised
 	 */
-	@Nullable String getSoftware();
+	Optional<String> getSoftware();
 
 	/**
 	 * Gets the version of the software running on the node.
 	 *
-	 * @return the software version, or {@code null} if not advertised
+	 * @return an {@link Optional} with the software version, or empty if not advertised
 	 */
-	@Nullable String getVersion();
+	Optional<String> getVersion();
 
 	/**
 	 * Gets the display name of the node.
 	 *
-	 * @return the node name, or {@code null} if not set
+	 * @return an {@link Optional} with the node name, or empty if not set
 	 */
-	@Nullable String getName();
+	Optional<String> getName();
 
 	/**
 	 * Gets the URL or identifier for the node's logo.
 	 *
-	 * @return the logo string, or {@code null} if not set
+	 * @return an {@link Optional} with the logo string, or empty if not set
 	 */
-	@Nullable String getLogo();
+	Optional<String> getLogo();
 
 	/**
 	 * Gets the website URL associated with the node.
 	 *
-	 * @return the website URL, or {@code null} if not set
+	 * @return an {@link Optional} with the website URL, or empty if not set
 	 */
-	@Nullable String getWebsite();
+	Optional<String> getWebsite();
 
 	/**
 	 * Gets the contact information for the node administrator.
 	 *
-	 * @return the contact string, or {@code null} if not set
+	 * @return an {@link Optional} with the contact string, or empty if not set
 	 */
-	@Nullable String getContact();
+	Optional<String> getContact();
 
 	/**
 	 * Gets the description of the node.
 	 *
-	 * @return the node description, or {@code null} if not set
+	 * @return an {@link Optional} with the node description, or empty if not set
 	 */
-	@Nullable String getDescription();
+	Optional<String> getDescription();
 
 	/**
 	 * Checks if the node is considered federated.

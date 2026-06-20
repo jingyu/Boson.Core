@@ -71,7 +71,7 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	public CardBuilder addCredential(Credential credential) {
 		Objects.requireNonNull(credential, "credential");
 		// Ensure credential subject matches the identity subject
-		if (!credential.getSubject().getId().equals(identity.getId()))
+		if (!Objects.equals(credential.getSubject().getId(), identity.getId()))
 			throw new IllegalArgumentException("Credential subject does not match identity");
 
 		credentials.put(credential.getId(), credential);
@@ -95,9 +95,10 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	 * @return this builder instance
 	 * @throws NullPointerException if credentials list is null
 	 */
-	public CardBuilder addCredential(List<@Nullable Credential> credentials) {
+	public CardBuilder addCredential(List<Credential> credentials) {
 		Objects.requireNonNull(credentials, "credentials");
 		for (Credential cred : credentials) {
+			// noinspection ConstantConditions
 			if (cred != null)
 				addCredential(cred);
 		}
@@ -118,9 +119,9 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	public CardBuilder addCredential(String id, String type, Map<String, Object> claims) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
-
-		if (claims == null || claims.isEmpty())
-			throw new IllegalArgumentException("Credential claims must not be null or empty");
+		Objects.requireNonNull(claims, "claims");
+		if (claims.isEmpty())
+			throw new IllegalArgumentException("Credential claims must not be empty");
 
 		return addCredential(new CredentialBuilder(identity)
 				.id(id)
@@ -216,12 +217,12 @@ public class CardBuilder extends BosonIdentityObjectBuilder<Card> {
 	public CredentialBuilder addCredential() {
 		return new CredentialBuilder(identity) {
 			@Override
-			public CredentialBuilder subject(Id subject) {
+			public CredentialBuilder subject(@Nullable Id subject) {
 				// Enforce that the credential subject matches the identity subject
 				if (subject != null && !subject.equals(identity.getId()))
 					throw new IllegalArgumentException("Credential subject does not match identity");
 
-				return super.subject(subject);
+				return super.subject(identity.getId());
 			}
 
 			@Override

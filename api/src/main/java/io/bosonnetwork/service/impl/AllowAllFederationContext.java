@@ -118,6 +118,7 @@ public class AllowAllFederationContext implements FederationContext {
 
 	@Override
 	public CwtAuth getWebAuthenticator() {
+		// noinspection ConstantConditions
 		if (nodeIdentity == null)
 			throw new IllegalStateException("Node identity is not set");
 

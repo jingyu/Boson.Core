@@ -1,9 +1,12 @@
 package io.bosonnetwork.service.impl;
 
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+
 import io.bosonnetwork.Id;
 
 public class PlainServiceInfoTests {
@@ -18,7 +21,7 @@ public class PlainServiceInfoTests {
 		assertEquals(nodeId, info.getNodeId());
 		assertEquals("boson://host:port", info.getEndpoint());
 		assertFalse(info.hasExtra());
-		assertNull(info.getExtraData());
+		assertFalse(info.getExtraData().isPresent());
 		assertEquals(Map.of(), info.getExtra());
 		assertEquals(peerId.toString(), info.getServiceType());
 		assertEquals(peerId.toAbbrBase58String(), info.getServiceName());

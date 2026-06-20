@@ -51,7 +51,7 @@ public class FindValueResponse extends LookupResponse {
 		super(nodes4, nodes6);
 		if (nodes4 == null && nodes6 == null && data == null)
 			throw new IllegalArgumentException("Invalid FindValueResponse: missing nodes or value");
-		this.value = data != null ? Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data) : null;
+		this.value = data != null ? Value.of(publicKey, null, recipient, nonce, sequenceNumber, signature, data) : null;
 	}
 
 	protected FindValueResponse(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6, Value value) {

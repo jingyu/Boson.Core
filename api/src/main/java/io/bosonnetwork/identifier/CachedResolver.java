@@ -145,7 +145,7 @@ public class CachedResolver implements Resolver {
 	 *         the resolved result, or completes exceptionally if the resolution fails
 	 */
 	@Override
-	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, ResolutionOptions options) {
+	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, @Nullable ResolutionOptions options) {
 		Objects.requireNonNull(id, "id");
 		ResolutionOptions opts = options == null ? ResolutionOptions.defaultOptions() : options;
 
@@ -153,7 +153,7 @@ public class CachedResolver implements Resolver {
 		if (!opts.useCache()) {
 			log().debug("Resolver cache is disabled, force to resolve: {}", id);
 
-			return resolver.resolve(id, options).thenApply(result -> {
+			return resolver.resolve(id, opts).thenApply(result -> {
 				// Only persist successful results; negative results (not found / invalid) carry no
 				// metadata and should not be cached as if they were authoritative.
 				if (persistentCache != null && result.succeeded()) {
@@ -165,6 +165,7 @@ public class CachedResolver implements Resolver {
 				}
 
 				// Update the in-memory cache asynchronously
+				// noinspection ResultOfMethodCallIgnored
 				cache.synchronous().get(id, k -> result);
 				return result;
 			});
@@ -179,7 +180,7 @@ public class CachedResolver implements Resolver {
 				// Attempt to retrieve from persistent cache if configured
 				if (persistentCache != null) {
 					try {
-						ResolutionResult<Card> result = persistentCache.get(id);
+						ResolutionResult<Card> result = persistentCache.get(id).orElse(null);
 						// Only honor a cached successful result that is still within the requested TTL.
 						// Negative results carry null metadata, so guard against it explicitly.
 						if (result != null && result.succeeded() && result.getResultMetadata() != null

@@ -27,6 +27,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Node;
@@ -88,7 +90,7 @@ public class DHTResolver implements Resolver {
 	 *         if resolution failed due to verification or parsing errors.
 	 */
 	@Override
-	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, ResolutionOptions options) {
+	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, @Nullable ResolutionOptions options) {
 		// Ensure the id is not null
 		Objects.requireNonNull(id, "id");
 

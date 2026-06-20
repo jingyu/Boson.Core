@@ -154,7 +154,7 @@ public interface FederationContext {
 	 * web token authentication within the federation.
 	 *
 	 * @return the {@link CwtAuth} instance responsible for managing web token authentication, or
-	 *         {@code null} if this context does not support web authentication (e.g.; the
+	 *         {@code null} if this context does not support web authentication (e.g. the
 	 *         {@link #disabled() disabled} context)
 	 */
 	@Nullable CwtAuth getWebAuthenticator();

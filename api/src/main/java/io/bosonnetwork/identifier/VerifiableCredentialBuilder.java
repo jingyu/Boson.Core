@@ -49,7 +49,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	/**
 	 * The unique identifier of the credential. Can be a DID URL or a fragment.
 	 */
-	private String id;
+	private @Nullable String id;
 
 	/**
 	 * List of credential types.
@@ -69,17 +69,17 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	/**
 	 * The date from which the credential is valid.
 	 */
-	private Date validFrom;
+	private @Nullable Date validFrom;
 
 	/**
 	 * The date until which the credential is valid.
 	 */
-	private Date validUntil;
+	private @Nullable Date validUntil;
 
 	/**
 	 * The subject of the credential, typically the entity the credential refers to.
 	 */
-	private Id subject;
+	private @Nullable Id subject;
 
 	/**
 	 * Claims or attributes asserted by the credential about the subject.
@@ -153,6 +153,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 			this.types.add(type);
 
 		for (String context : contexts) {
+			// noinspection ConstantConditions
 			if (context == null || context.isEmpty())
 				continue;
 
@@ -192,7 +193,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 * @param validFrom the start validity date, null clears the value
 	 * @return this builder instance for chaining
 	 */
-	public VerifiableCredentialBuilder validFrom(Date validFrom) {
+	public VerifiableCredentialBuilder validFrom(@Nullable Date validFrom) {
 		this.validFrom = validFrom == null ? null : trimMillis(validFrom);
 		return this;
 	}
@@ -203,7 +204,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 * @param validUntil the end validity date, null clears the value
 	 * @return this builder instance for chaining
 	 */
-	public VerifiableCredentialBuilder validUntil(Date validUntil) {
+	public VerifiableCredentialBuilder validUntil(@Nullable Date validUntil) {
 		this.validUntil = validUntil == null ? null : trimMillis(validUntil);
 		return this;
 	}
@@ -247,7 +248,7 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 * @return this builder instance for chaining
 	 * @throws IllegalArgumentException if claims contain "id" key
 	 */
-	public VerifiableCredentialBuilder claims(Map<String, Object> claims) {
+	public VerifiableCredentialBuilder claims(@Nullable Map<String, Object> claims) {
 		if (claims == null || claims.isEmpty())
 			return this;
 
@@ -272,18 +273,26 @@ public class VerifiableCredentialBuilder extends BosonIdentityObjectBuilder<Veri
 	 */
 	@Override
 	public VerifiableCredential build() {
+		if (id == null || id.isEmpty())
+			throw new IllegalStateException("VerifiableCredential builder is invalid: VerifiableCredential id must be set and non-empty");
+
 		Id issuer = identity.getId();
 
 		if (subject == null)
 			subject = identity.getId();
 
-		DIDURL idUrl = normalizeSubjectId(subject, id);
+		String idUrl = normalizeSubjectId(subject, id).toString();
 
 		if (claims.isEmpty())
-			throw new IllegalStateException("Credential must contain at least one claim");
+			throw new IllegalStateException("VerifiableCredential builder is invalid: Credential must contain at least one claim");
 
-		VerifiableCredential unsigned = new VerifiableCredential(contexts, idUrl.toString(), types,
-				name, description, issuer, validFrom, validUntil, subject, claims);
+		VerifiableCredential unsigned;
+		try {
+			unsigned = new VerifiableCredential(contexts, idUrl, types,
+					name, description, issuer, validFrom, validUntil, subject, claims);
+		} catch (IllegalArgumentException | NullPointerException e) {
+			throw new IllegalStateException("VerifiableCredential builder is invalid: " + e.getMessage(), e);
+		}
 		// Stamp signedAt before signing so it is covered by the signature, and use the same
 		// timestamp as the proof's `created` value so verification reconstructs the same bytes.
 		Date signedAt = now();

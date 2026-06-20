@@ -23,6 +23,7 @@
 package io.bosonnetwork.json.internal;
 
 import java.io.IOException;
+import java.util.Objects;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
@@ -117,6 +118,7 @@ public class ValueDeserializer extends StdDeserializer<Value> {
 			}
 		}
 
-		return Value.of(publicKey, recipient, nonce, sequenceNumber, signature, data);
+		Objects.requireNonNull(data, "Invalid Value: data can not be null");
+		return Value.of(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
 }

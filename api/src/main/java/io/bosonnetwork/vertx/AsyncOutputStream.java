@@ -168,12 +168,15 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	}
 
 	private void execute(Runnable action) {
-		if (context == null)
-			context = vertx.getOrCreateContext();
-		if (Vertx.currentContext() == context)
+		Context ctx = this.context;
+		if (ctx == null) {
+			ctx = vertx.getOrCreateContext();
+			this.context = ctx;
+		}
+		if (Vertx.currentContext() == ctx)
 			action.run();
 		else
-			context.runOnContext(v -> action.run());
+			ctx.runOnContext(v -> action.run());
 	}
 
 	private void pump() {
@@ -184,7 +187,8 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 		pendingBytes -= w.buffer().length();
 		writeInProgress = true;
 		byte[] bytes = w.buffer().getBytes();
-		context.executeBlocking(() -> {
+		Context ctx = Objects.requireNonNull(context, "context");
+		ctx.executeBlocking(() -> {
 			output.write(bytes);
 			return null;
 		}, false).onComplete(ar -> {
@@ -208,18 +212,21 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	private void callDrainIfNeeded() {
 		if (wasFull && drainHandler != null && pendingBytes <= maxQueueBytes / 2) {
 			wasFull = false;
+			//noinspection ConstantConditions
 			drainHandler.handle(null);
 		}
 	}
 
 	private void finish() {
-		context.executeBlocking(() -> {
+		Context ctx = Objects.requireNonNull(context, "context");
+		ctx.executeBlocking(() -> {
 			output.flush();
 			if (closeOutput)
 				output.close();
 			return null;
 		}, false).onComplete(ar -> {
 			closed = true;
+			Objects.requireNonNull(endPromise, "endPromise");
 			if (ar.failed())
 				endPromise.fail(ar.cause());
 			else

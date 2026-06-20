@@ -98,6 +98,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 		Objects.requireNonNull(types, "types");
 
 		for (String type : types) {
+			// noinspection ConstantConditions
 			if (type == null || type.isEmpty())
 				continue;
 
@@ -159,6 +160,7 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	public VouchBuilder addCredential(List<Credential> credentials) {
 		Objects.requireNonNull(credentials, "credentials");
 		for (Credential cred : credentials) {
+			// noinspection ConstantConditions
 			if (cred != null)
 				addCredential(cred);
 		}
@@ -180,8 +182,8 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	public VouchBuilder addCredential(String id, String type, Map<String, Object> claims) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
-
-		if (claims == null || claims.isEmpty())
+		Objects.requireNonNull(claims, "claims");
+		if (claims.isEmpty())
 			throw new IllegalArgumentException("Credential claims must not be null or empty");
 
 		return addCredential(new CredentialBuilder(identity)
@@ -282,12 +284,12 @@ public class VouchBuilder extends BosonIdentityObjectBuilder<Vouch> {
 	public CredentialBuilder addCredential() {
 		return new CredentialBuilder(identity) {
 			@Override
-			public CredentialBuilder subject(Id subject) {
+			public CredentialBuilder subject(@Nullable Id subject) {
 				// Ensure the credential subject matches the holder's identity
 				if (subject != null && !subject.equals(identity.getId()))
 					throw new IllegalArgumentException("Credential subject does not match the holder");
 
-				return super.subject(subject);
+				return super.subject(identity.getId());
 			}
 
 			@Override

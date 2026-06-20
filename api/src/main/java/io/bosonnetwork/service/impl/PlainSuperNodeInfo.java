@@ -23,6 +23,7 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
@@ -44,13 +45,29 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 	private final String apiEndpoint;
 	private final long ts;
 
-	PlainSuperNodeInfo(Id nodeId, String host, int port) {
+	/**
+	 * Creates a super node info with an API endpoint derived from the host and port.
+	 *
+	 * @param nodeId the super node id
+	 * @param host   the host name or address
+	 * @param port   the port (must be in 1-65535)
+	 */
+	protected PlainSuperNodeInfo(Id nodeId, String host, int port) {
 		this(nodeId, host, port, null);
 	}
 
-	PlainSuperNodeInfo(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
+	/**
+	 * Creates a super node info with the given attributes.
+	 *
+	 * @param nodeId      the super node id
+	 * @param host        the host name or address
+	 * @param port        the port (must be in 1-65535)
+	 * @param apiEndpoint the API endpoint; a {@code http://host:port} URL is used when null or empty
+	 * @throws IllegalArgumentException if the port is out of range
+	 */
+	protected PlainSuperNodeInfo(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
 		if (port <= 0 || port > 65535)
-			throw new IllegalArgumentException("Invalid port");
+			throw new IllegalArgumentException("Invalid port: " + port);
 
 		this.id = Objects.requireNonNull(nodeId);
 		this.host = Objects.requireNonNull(host);
@@ -81,38 +98,38 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 	}
 
 	@Override
-	public @Nullable String getSoftware() {
-		return null;
+	public Optional<String> getSoftware() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getVersion() {
-		return null;
+	public Optional<String> getVersion() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getName() {
-		return null;
+	public Optional<String> getName() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getLogo() {
-		return null;
+	public Optional<String> getLogo() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getWebsite() {
-		return null;
+	public Optional<String> getWebsite() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getContact() {
-		return null;
+	public Optional<String> getContact() {
+		return Optional.empty();
 	}
 
 	@Override
-	public @Nullable String getDescription() {
-		return null;
+	public Optional<String> getDescription() {
+		return Optional.empty();
 	}
 
 	@Override

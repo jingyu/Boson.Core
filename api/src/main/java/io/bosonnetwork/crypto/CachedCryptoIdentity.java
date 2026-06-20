@@ -96,10 +96,12 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 		if (cryptoContexts != null)
 			throw new IllegalStateException("Cache already initialized");
 
-		this.cryptoContexts = caffeine.removalListener((Id id, CryptoContext ctx, RemovalCause cause) -> {
-			if (ctx != null)
-				ctx.close();
-		}).build(super::createCryptoContext);
+		this.cryptoContexts = caffeine.removalListener(this::removalListener).build(super::createCryptoContext);
+	}
+
+	private void removalListener(@Nullable Id id, @Nullable CryptoContext ctx, RemovalCause cause) {
+		if (ctx != null)
+			ctx.close();
 	}
 
 	/**
@@ -113,6 +115,7 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	 * If the cache is uninitialized or null, this method has no effect.
 	 */
 	public void clearCache() {
+		LoadingCache<Id, CryptoContext> cryptoContexts = this.cryptoContexts;
 		if (cryptoContexts != null)
 			cryptoContexts.invalidateAll();
 	}
@@ -128,6 +131,7 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	}
 
 	private CryptoContext getContext(Id id) throws CryptoException {
+		LoadingCache<Id, CryptoContext> cryptoContexts = this.cryptoContexts;
 		return cryptoContexts != null ? cryptoContexts.get(id) : super.createCryptoContext(id);
 	}
 

@@ -417,10 +417,10 @@ public class VerifiableCredentialTests {
 
 		var missingId = assertThrows(IllegalStateException.class,
 				() -> new VerifiableCredentialBuilder(identity).claim("name", "Bob").build());
-		assertEquals("id must be set and non-empty", missingId.getMessage());
+		assertEquals("VerifiableCredential builder is invalid: VerifiableCredential id must be set and non-empty", missingId.getMessage());
 
 		var missingClaim = assertThrows(IllegalStateException.class,
 				() -> new VerifiableCredentialBuilder(identity).id("profile").build());
-		assertEquals("Credential must contain at least one claim", missingClaim.getMessage());
+		assertEquals("VerifiableCredential builder is invalid: Credential must contain at least one claim", missingClaim.getMessage());
 	}
 }

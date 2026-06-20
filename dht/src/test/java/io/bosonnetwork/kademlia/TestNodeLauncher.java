@@ -10,13 +10,12 @@ import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 
 import io.bosonnetwork.ConnectionStatusListener;
-import io.bosonnetwork.DefaultNodeConfiguration;
 import io.bosonnetwork.Network;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.crypto.Signature;
-import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.utils.AddressUtils;
 
 public class TestNodeLauncher {
 	private static final Path dataPath = Path.of(System.getProperty("java.io.tmpdir"), "boson", "KademliaNode");
@@ -34,7 +33,7 @@ public class TestNodeLauncher {
 			// fix the dataDir
 			map.put("dataDir", dataPath.toAbsolutePath().toString());
 
-			return DefaultNodeConfiguration.fromMap(map);
+			return NodeConfiguration.fromMap(map);
 		} catch (Exception e) {
 			System.err.println("Failed to load configuration file: " + e.getMessage());
 			throw e;

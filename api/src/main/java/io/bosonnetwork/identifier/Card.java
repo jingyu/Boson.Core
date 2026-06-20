@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
@@ -90,13 +91,14 @@ public class Card {
 	 */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final @Nullable Date signedAt;
+	private final Date signedAt;
 
 	/**
 	 * Digital signature over the contents of this Card.
 	 * Compact JSON property name "sig".
 	 */
 	@JsonProperty("sig")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private final byte @Nullable [] signature;
 
 	/**
@@ -112,7 +114,7 @@ public class Card {
 	protected Card(@JsonProperty(value = "id", required = true) Id id,
 				   @JsonProperty(value = "c") @Nullable List<Credential> credentials,
 				   @JsonProperty(value = "s") @Nullable List<Service> services,
-				   @JsonProperty(value = "sat") Date signedAt,
+				   @JsonProperty(value = "sat", required = true) Date signedAt,
 				   @JsonProperty(value = "sig", required = true) byte[] signature) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(signedAt, "signedAt");
@@ -153,7 +155,7 @@ public class Card {
 	 * @param profile   the unsigned Card instance
 	 * @param signature digital signature bytes
 	 */
-	protected Card(Card profile, byte[] signature) {
+	protected Card(Card profile, byte @Nullable[] signature) {
 		this.id = profile.id;
 		this.credentials = profile.credentials;
 		this.services = profile.services;
@@ -196,16 +198,14 @@ public class Card {
 	 * Returns the credential with the specified id.
 	 *
 	 * @param id the credential id to look for
-	 * @return the credential with the matching id, or null if not found
+	 * @return an {@link Optional} with the credential, or empty if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public @Nullable Credential getCredential(String id) {
+	public Optional<Credential> getCredential(String id) {
 		Objects.requireNonNull(id, "id");
-
 		return credentials.stream()
 				.filter(c -> c.getId().equals(id))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -213,17 +213,15 @@ public class Card {
 	 *
 	 * @param id   the unique identifier of the credential to find, it must not be null
 	 * @param type the type of the credential to filter by
-	 * @return the credential matching the specified id and type, or null if no such credential exists
+	 * @return an {@link Optional} with the matching credential, or empty if none exists
 	 * @throws NullPointerException if the id or type is null
 	 */
-	public @Nullable Credential getCredential(String id, String type) {
+	public Optional<Credential> getCredential(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
-
 		return credentials.stream()
 				.filter(c -> c.getId().equals(id) && c.getTypes().contains(type))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -252,16 +250,14 @@ public class Card {
 	 * Returns the service with the specified id.
 	 *
 	 * @param id the service id to look for
-	 * @return the service with the matching id, or null if not found
+	 * @return an {@link Optional} with the service, or empty if not found
 	 * @throws NullPointerException if id is null
 	 */
-	public @Nullable Service getService(String id) {
+	public Optional<Service> getService(String id) {
 		Objects.requireNonNull(id, "id");
-
 		return services.stream()
 				.filter(s -> s.getId().equals(id))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -269,15 +265,14 @@ public class Card {
 	 *
 	 * @param id   the unique identifier of the service to find
 	 * @param type the type of the service to find
-	 * @return the service matching the specified id and type, or null if no such service exists
+	 * @return an {@link Optional} with the matching service, or empty if none exists
 	 */
-	public @Nullable Service getService(String id, String type) {
+	public Optional<Service> getService(String id, String type) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		return services.stream()
 				.filter(s -> s.getId().equals(id) && s.getType().equals(type))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -286,19 +281,20 @@ public class Card {
 	 * Note: {@code signedAt} is metadata and is <em>not</em> covered by the signature, so it is not
 	 * cryptographically authenticated; do not rely on it for security decisions.
 	 *
-	 * @return the signature timestamp, or null if unsigned
+	 * @return the signature timestamp
 	 */
-	public @Nullable Date getSignedAt() {
+	public Date getSignedAt() {
 		return signedAt;
 	}
 
 	/**
-	 * Returns the digital signature bytes over this Card's contents.
+	 * Returns a defensive copy of the digital signature bytes over this Card's contents.
 	 *
-	 * @return the signature bytes, or null if unsigned
+	 * @return the signature bytes
 	 */
-	public byte @Nullable [] getSignature() {
-		return signature == null ? null : signature.clone();
+	public byte[] getSignature() {
+		Objects.requireNonNull(signature, "signature");
+		return signature.clone();
 	}
 
 	/**
@@ -521,7 +517,7 @@ public class Card {
 		 * @param endpoint   the service endpoint
 		 * @param properties additional properties map, maybe null
 		 */
-		protected Service(String id, String type, String endpoint, Map<String, Object> properties) {
+		protected Service(String id, String type, String endpoint, @Nullable Map<String, Object> properties) {
 			this.id = id;
 			this.type = type;
 			this.endpoint = endpoint;
@@ -572,7 +568,7 @@ public class Card {
 		 * @return the property value, or null if not present
 		 */
 		@SuppressWarnings("unchecked")
-		public <T> T getProperty(String name) {
+		public <T> @Nullable T getProperty(String name) {
 			return (T) properties.get(name);
 		}
 

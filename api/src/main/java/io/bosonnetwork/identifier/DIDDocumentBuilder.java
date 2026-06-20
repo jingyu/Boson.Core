@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 
@@ -106,6 +108,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 		for (String context : contexts) {
 			context = normalize(context);
 
+			// noinspection ConstantConditions
 			if (context != null && !this.contexts.contains(context))
 				this.contexts.add(context);
 		}
@@ -199,7 +202,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	public DIDDocumentBuilder addCredential(VerifiableCredential vc) {
 		Objects.requireNonNull(vc, "vc");
 		// Validate subject consistency
-		if (!vc.getSubject().getId().equals(identity.getId()))
+		if (!Objects.equals(vc.getSubject().getId(), identity.getId()))
 			throw new IllegalArgumentException("VerifiableCredential subject does not match identity");
 
 		credentials.put(vc.getId(), vc);
@@ -224,6 +227,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 */
 	public DIDDocumentBuilder addCredential(List<VerifiableCredential> vcs) {
 		for (VerifiableCredential vc : vcs) {
+			// noinspection ConstantConditions
 			if (vc != null)
 				addCredential(vc);
 		}
@@ -240,7 +244,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 * @param claims   the claims map
 	 * @return this builder instance
 	 */
-	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, Map<String, Object> claims) {
+	public DIDDocumentBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts, Map<String, Object> claims) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claims, "claims");
 
@@ -263,7 +267,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 * @param value1   the claim value
 	 * @return this builder instance
 	 */
-	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1) {
+	public DIDDocumentBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts, String claim1, Object value1) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
 
@@ -288,7 +292,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 * @param value2   the second claim value
 	 * @return this builder instance
 	 */
-	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
+	public DIDDocumentBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts, String claim1, Object value1,
 											String claim2, Object value2) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
@@ -318,7 +322,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 * @param value3   the third claim value
 	 * @return this builder instance
 	 */
-	public DIDDocumentBuilder addCredential(String id, String type, List<String> contexts, String claim1, Object value1,
+	public DIDDocumentBuilder addCredential(String id, @Nullable String type, @Nullable List<String> contexts, String claim1, Object value1,
 											String claim2, Object value2, String claim3, Object value3) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(claim1, "claim1");
@@ -347,12 +351,12 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	public VerifiableCredentialBuilder addCredential() {
 		return new VerifiableCredentialBuilder(identity) {
 			@Override
-			public VerifiableCredentialBuilder subject(Id subject) {
+			public VerifiableCredentialBuilder subject(@Nullable Id subject) {
 				// Ensure credential subject matches the identity
 				if (subject != null && !subject.equals(identity.getId()))
 					throw new IllegalArgumentException("Credential subject does not match identity");
 
-				return super.subject(subject);
+				return super.subject(identity.getId());
 			}
 
 			@Override
@@ -378,7 +382,7 @@ public class DIDDocumentBuilder extends BosonIdentityObjectBuilder<DIDDocument> 
 	 * @throws IllegalStateException    if the service ID does not match the identity or lacks a fragment
 	 * @throws IllegalArgumentException if reserved properties are included
 	 */
-	public DIDDocumentBuilder addService(String id, String type, String endpoint, Map<String, Object> properties) {
+	public DIDDocumentBuilder addService(String id, String type, String endpoint, @Nullable Map<String, Object> properties) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(type, "type");
 		Objects.requireNonNull(endpoint, "endpoint");

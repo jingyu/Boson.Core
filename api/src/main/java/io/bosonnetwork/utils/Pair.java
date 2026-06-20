@@ -24,7 +24,6 @@
 package io.bosonnetwork.utils;
 
 import java.util.Objects;
-import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
@@ -37,7 +36,7 @@ import org.jspecify.annotations.Nullable;
  * @param <A> type for value a.
  * @param <B> type for value b.
  */
-public class Pair<A, B> {
+public class Pair<A extends @Nullable Object, B extends @Nullable Object> {
 	private static final Pair<?, ?> EMPTY = new Pair<>(null, null);
 
 	private final @Nullable A a;
@@ -63,7 +62,7 @@ public class Pair<A, B> {
 	 * @param b value b.
 	 * @return the new Pair object.
 	 */
-	public static <A1, B1> Pair<A1, B1> of(@Nullable A1 a, @Nullable B1 b) {
+	public static <A1 extends @Nullable Object, B1 extends @Nullable Object> Pair<A1, B1> of(@Nullable A1 a, @Nullable B1 b) {
 		return new Pair<>(a, b);
 	}
 
@@ -75,7 +74,7 @@ public class Pair<A, B> {
 	 * @return an empty Pair instance with null values.
 	 */
 	@SuppressWarnings("unchecked")
-	public static <A1, B1> Pair<A1, B1> empty() {
+	public static <A1 extends @Nullable Object, B1 extends @Nullable Object> Pair<A1, B1> empty() {
 		return (Pair<A1, B1>) EMPTY;
 	}
 
@@ -103,7 +102,7 @@ public class Pair<A, B> {
 	}
 
 	@Override
-	public boolean equals(Object obj) {
+	public boolean equals(@Nullable Object obj) {
 		if (this == obj)
 			return true;
 
@@ -113,19 +112,12 @@ public class Pair<A, B> {
 		return false;
 	}
 
+	private static String valueOf(@Nullable Object o) {
+		return (o instanceof String) ? "\"" + o + "\"" : String.valueOf(o);
+	}
+
 	@Override
 	public String toString() {
-		StringBuilder repr = new StringBuilder();
-
-		Function<Object, String> valueOf = (v) ->
-			(v instanceof String) ? "\"" + v + "\"" : String.valueOf(v);
-
-		repr.append("<")
-			.append(valueOf.apply(a))
-			.append(", ")
-			.append(valueOf.apply(b))
-			.append(">");
-
-		return repr.toString();
+		return "<" + valueOf(a) + ", " + valueOf(b) + ">";
 	}
 }

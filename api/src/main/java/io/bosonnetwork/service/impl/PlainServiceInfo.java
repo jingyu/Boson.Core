@@ -24,6 +24,7 @@ package io.bosonnetwork.service.impl;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
@@ -43,11 +44,29 @@ public class PlainServiceInfo implements ServiceInfo {
 	private final String serviceType;
 	private final String serviceName;
 
-	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint) {
+	/**
+	 * Creates a service info with a default service type and name derived from the peer id.
+	 *
+	 * @param peerId      the service peer id
+	 * @param fingerprint the service fingerprint
+	 * @param nodeId      the id of the node hosting the service
+	 * @param endpoint    the service endpoint
+	 */
+	protected PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint) {
 		this(peerId, fingerprint, nodeId, endpoint, null, null);
 	}
 
-	PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, @Nullable String serviceType, @Nullable String serviceName) {
+	/**
+	 * Creates a service info with the given attributes.
+	 *
+	 * @param peerId      the service peer id
+	 * @param fingerprint the service fingerprint
+	 * @param nodeId      the id of the node hosting the service
+	 * @param endpoint    the service endpoint
+	 * @param serviceType the service type; the peer id is used when null or empty
+	 * @param serviceName the service name; an abbreviated peer id is used when null or empty
+	 */
+	protected PlainServiceInfo(Id peerId, long fingerprint, Id nodeId, String endpoint, @Nullable String serviceType, @Nullable String serviceName) {
 		this.peerId = Objects.requireNonNull(peerId);
 		this.fingerprint = fingerprint;
 		this.nodeId = Objects.requireNonNull(nodeId);
@@ -82,8 +101,8 @@ public class PlainServiceInfo implements ServiceInfo {
 	}
 
 	@Override
-	public byte @Nullable [] getExtraData() {
-		return null;
+	public Optional<byte[]> getExtraData() {
+		return Optional.empty();
 	}
 
 	@Override

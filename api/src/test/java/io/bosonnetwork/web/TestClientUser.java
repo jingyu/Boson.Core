@@ -1,80 +1,14 @@
 package io.bosonnetwork.web;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.impl.PlainUser;
 
-public class TestClientUser implements ClientUser {
-	private final Id id;
-	private final String name;
-	private final String avatar;
-	private final String email;
-	private final String bio;
-	private final long created;
-	private final long updated;
-	private final boolean admin;
-
+public class TestClientUser extends PlainUser {
 	public TestClientUser(Id id, String name, String avatar, String email, String bio, boolean admin) {
-		this.id = id;
-		this.name = name;
-		this.avatar = avatar;
-		this.email = email;
-		this.bio = bio;
-		this.created = System.currentTimeMillis();
-		this.updated = created;
-		this.admin = admin;
+		super(id, name, avatar, email, bio, admin);
 	}
 
 	public TestClientUser(Id id, String name, String avatar, String email, String bio) {
-		this(id, name, avatar, email, bio, false);
-	}
-
-	@Override
-	public Id getId() {
-		return id;
-	}
-
-	@Override
-	public boolean verifyPassphrase(String passphrase) {
-		return true;
-	}
-
-	@Override
-	public String getName() {
-		return name;
-	}
-
-	@Override
-	public String getAvatar() {
-		return avatar;
-	}
-
-	@Override
-	public String getEmail() {
-		return email;
-	}
-
-	@Override
-	public String getBio() {
-		return bio;
-	}
-
-	@Override
-	public long getCreatedAt() {
-		return created;
-	}
-
-	@Override
-	public long getUpdatedAt() {
-		return updated;
-	}
-
-	@Override
-	public String getPlanName() {
-		return "Free";
-	}
-
-	@Override
-	public boolean isAdmin() {
-		return admin;
+		super(id, name, avatar, email, bio);
 	}
 }

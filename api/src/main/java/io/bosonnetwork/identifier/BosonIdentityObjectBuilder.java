@@ -31,6 +31,7 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TimeZone;
 
 import io.bosonnetwork.Id;
@@ -145,14 +146,16 @@ public abstract class BosonIdentityObjectBuilder<T> {
 	 * @throws IllegalStateException if the ID is null, empty, invalid, or fails validation
 	 */
 	protected DIDURL normalizeSubjectId(Id subject, String id) {
-		if (id == null || id.isEmpty())
-			throw new IllegalStateException("id must be set and non-empty");
+		Objects.requireNonNull(subject, "subject must not be null");
+		Objects.requireNonNull(id, "id must not be null");
+		if (id.isEmpty())
+			throw new IllegalStateException("id must not be empty");
 
 		if (!id.startsWith(DIDConstants.DID_SCHEME + ":"))
 			return new DIDURL(subject, null, null, id);
 
 		DIDURL idUrl = DIDURL.create(id);
-		if (!idUrl.getId().equals(subject))
+		if (!Objects.equals(idUrl.getId(), subject))
 			throw new IllegalStateException("id DID URL subject part must be DID "
 					+ subject.toDIDString() + ": " + id);
 

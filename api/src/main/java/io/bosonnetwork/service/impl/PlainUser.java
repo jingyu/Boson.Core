@@ -23,6 +23,9 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.Objects;
+import java.util.Optional;
+
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.PasswordHash;
@@ -35,21 +38,79 @@ import io.bosonnetwork.service.ClientUser;
  * not support updates beyond the initial state.
  */
 public class PlainUser implements ClientUser {
+	private static final String DEFAULT_PASSPHRASE = "secret";
 	private final Id id;
+	private String passphrase;
 	private final String name;
-	private final String passphrase;
+	private final @Nullable String avatar;
+	private final @Nullable String email;
+	private final @Nullable String bio;
+	private final boolean isAdmin;
 	private final long ts;
 
-	PlainUser(Id id) {
-		this(id, null, null);
+	/**
+	 * Creates a non-admin user with no profile attributes.
+	 *
+	 * @param id the user id
+	 */
+	protected PlainUser(Id id) {
+		this(id, null, null, null, null, false);
 	}
 
-	PlainUser(Id id, String name, String passphrase) {
+	/**
+	 * Creates a non-admin user with the given name.
+	 *
+	 * @param id   the user id
+	 * @param name the user name; an abbreviated id is used when null or empty
+	 */
+	protected PlainUser(Id id, @Nullable String name) {
+		this(id, name, null, null, null, false);
+	}
+
+	/**
+	 * Creates a user with no profile attributes and the given admin flag.
+	 *
+	 * @param id      the user id
+	 * @param isAdmin whether the user is an administrator
+	 */
+	protected PlainUser(Id id, boolean isAdmin) {
+		this(id, null, null, null, null, isAdmin);
+	}
+
+	/**
+	 * Creates a non-admin user with the given profile attributes.
+	 *
+	 * @param id     the user id
+	 * @param name   the user name; an abbreviated id is used when null or empty
+	 * @param avatar the avatar identifier or URL, or null if unset
+	 * @param email  the email address, or null if unset
+	 * @param bio    the biography, or null if unset
+	 */
+	protected PlainUser(Id id, @Nullable String name, @Nullable String avatar, @Nullable String email, @Nullable String bio) {
+		this(id, name, avatar, email, bio, false);
+	}
+
+	/**
+	 * Creates a user with the given profile attributes and admin flag.
+	 *
+	 * @param id      the user id
+	 * @param name    the user name; an abbreviated id is used when null or empty
+	 * @param avatar  the avatar identifier or URL, or null if unset
+	 * @param email   the email address, or null if unset
+	 * @param bio     the biography, or null if unset
+	 * @param isAdmin whether the user is an administrator
+	 */
+	protected PlainUser(Id id, @Nullable String name, @Nullable String avatar, @Nullable String email, @Nullable String bio, boolean isAdmin) {
 		this.id = Objects.requireNonNull(id);
+		this.passphrase = passwordHash(DEFAULT_PASSPHRASE);
 		this.name = name == null || name.isEmpty() ? id.toAbbrBase58String() : name;
-		this.passphrase = (passphrase != null && !passphrase.isEmpty()) ? passwordHash(passphrase) : null;
+		this.avatar = avatar;
+		this.email = email;
+		this.bio = bio;
+		this.isAdmin = isAdmin;
 		this.ts = System.currentTimeMillis();
 	}
+
 
 	@Override
 	public Id getId() {
@@ -66,7 +127,7 @@ public class PlainUser implements ClientUser {
 	 */
 	@Override
 	public boolean verifyPassphrase(String passphrase) {
-		return this.passphrase == null || passwordVerify(this.passphrase, passphrase);
+		return passwordVerify(this.passphrase, passphrase);
 	}
 
 	private static String passwordHash(String password) {
@@ -78,23 +139,28 @@ public class PlainUser implements ClientUser {
 	}
 
 	@Override
-	public String getName() {
-		return name;
+	public Optional<String> getName() {
+		return Optional.of(name);
 	}
 
 	@Override
-	public String getAvatar() {
-		return null;
+	public Optional<String> getAvatar() {
+		return Optional.ofNullable(avatar);
 	}
 
 	@Override
-	public String getEmail() {
-		return null;
+	public Optional<String> getEmail() {
+		return Optional.ofNullable(email);
 	}
 
 	@Override
-	public String getBio() {
-		return null;
+	public Optional<String> getBio() {
+		return Optional.ofNullable(bio);
+	}
+
+	@Override
+	public boolean isAdmin() {
+		return isAdmin;
 	}
 
 	@Override

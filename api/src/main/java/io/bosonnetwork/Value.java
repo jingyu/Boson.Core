@@ -58,17 +58,17 @@ public class Value {
 	public static final int NONCE_BYTES = 24;
 
 	/** The public key for mutable values. */
-	private final Id publicKey;
+	private final @Nullable Id publicKey;
 	/** The private key to sign or update the value. */
-	private final byte[] privateKey;
+	private final byte @Nullable [] privateKey;
 	/** The recipient's public key for encrypted values. */
-	private final Id recipient;
+	private final @Nullable Id recipient;
 	/** The nonce for mutable or encrypted values. */
-	private final byte[] nonce;
+	private final byte @Nullable [] nonce;
 	/** The sequence number for mutable values. */
 	private final int sequenceNumber;
 	/** The signature for mutable values. */
-	private final byte[] signature;
+	private final byte @Nullable [] signature;
 	/** The data of the value. */
 	private final byte[] data;
 
@@ -81,19 +81,29 @@ public class Value {
 	 */
 	private final transient Id id;
 
-	private Value(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
+	private Value(@Nullable Id publicKey, byte @Nullable [] privateKey, @Nullable Id recipient, byte @Nullable [] nonce,
+				  int sequenceNumber, byte @Nullable [] signature, byte[] data) {
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
+
 		this.publicKey = publicKey;
 		this.privateKey = privateKey != null ? privateKey.clone() : null;
 		this.recipient = recipient;
 		this.nonce = nonce != null ? nonce.clone() : null;
 		this.sequenceNumber = sequenceNumber;
 		this.signature = signature != null ? signature.clone() : null;
-		this.data = data != null ? data.clone() : null;
+		this.data = data.clone();
 
 		this.id = calculateId(publicKey, this.data);
 	}
 
 	private Value(Id id, byte[] data) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
+
 		this.id = id;
 		this.publicKey = null;
 		this.privateKey = null;
@@ -101,7 +111,7 @@ public class Value {
 		this.nonce = null;
 		this.sequenceNumber = 0;
 		this.signature = null;
-		this.data = data != null ? data.clone() : null;
+		this.data = data.clone();
 	}
 
 	/**
@@ -117,8 +127,8 @@ public class Value {
 	 * @return The new Value instance.
 	 * @throws IllegalArgumentException if parameters are invalid.
 	 */
-	public static Value of(Id publicKey, byte[] privateKey, Id recipient, byte[] nonce, int sequenceNumber,
-						   byte[] signature, byte[] data) {
+	public static Value of(@Nullable Id publicKey, byte @Nullable [] privateKey, @Nullable Id recipient,
+						   byte @Nullable [] nonce, int sequenceNumber, byte @Nullable [] signature, byte[] data) {
 		if (publicKey != null) {
 			// noinspection DuplicatedCode
 			if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
@@ -136,10 +146,6 @@ public class Value {
 				throw new IllegalArgumentException("Invalid signature: incorrect length");
 		}
 
-		Objects.requireNonNull(data, "data");
-		if (data.length == 0)
-			throw new IllegalArgumentException("Invalid data: must not be empty");
-
 		return new Value(publicKey, privateKey, recipient, nonce, sequenceNumber, signature, data);
 	}
 
@@ -155,6 +161,11 @@ public class Value {
 	 * @return The new Value instance.
 	 */
 	public static Value of(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
+		Objects.requireNonNull(publicKey, "publicKey");
+		Objects.requireNonNull(recipient, "recipient");
+		Objects.requireNonNull(nonce, "nonce");
+		Objects.requireNonNull(signature, "signature");
+		Objects.requireNonNull(data, "data");
 		return of(publicKey, null, recipient, nonce, sequenceNumber, signature, data);
 	}
 
@@ -169,6 +180,10 @@ public class Value {
 	 * @return The new Value instance.
 	 */
 	public static Value of(Id publicKey, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
+		Objects.requireNonNull(publicKey, "publicKey");
+		Objects.requireNonNull(nonce, "nonce");
+		Objects.requireNonNull(signature, "signature");
+		Objects.requireNonNull(data, "data");
 		return of(publicKey, null, null, nonce, sequenceNumber, signature, data);
 	}
 
@@ -180,11 +195,6 @@ public class Value {
 	 * @return The new Value instance.
 	 */
 	public static Value of(Id id, byte[] data) {
-		Objects.requireNonNull(id, "id");
-		Objects.requireNonNull(data, "data");
-		if (data.length == 0)
-			throw new IllegalArgumentException("Invalid data: must not be empty");
-
 		return new Value(id, data);
 	}
 
@@ -195,8 +205,9 @@ public class Value {
 	 * @return a new immutable {@code Value} object.
 	 */
 	private static Value create(byte[] data) {
-		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
 
 		return new Value(null, null, null, null, 0, null, data);
 	}
@@ -211,13 +222,14 @@ public class Value {
 	 * @return A new signed {@code Value} instance containing the specified data, nonce, sequence number, and signature.
 	 * @throws IllegalArgumentException if the sequence number is negative, or the data is null/empty.
 	 */
-	private static Value createSigned(Identity identity, byte[] privateKey, int sequenceNumber, byte[] data) {
+	private static Value createSigned(Identity identity, byte @Nullable[] privateKey, int sequenceNumber, byte[] data) {
 		// noinspection DuplicatedCode
 		if (sequenceNumber < 0)
 			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
-		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data: must not be null or empty");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
 
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
@@ -240,16 +252,18 @@ public class Value {
 	 * @return The new encrypted Value instance.
 	 * @throws IllegalArgumentException if parameters are invalid.
 	 */
-	private static Value createEncrypted(Identity identity, byte[] privateKey, Id recipient, int sequenceNumber, byte[] data) {
-		if (recipient == null)
-			throw new IllegalArgumentException("Invalid recipient: recipient id must not be null");
+	private static Value createEncrypted(Identity identity, byte @Nullable [] privateKey, Id recipient,
+										 int sequenceNumber, byte[] data) {
+		Objects.requireNonNull(identity, "identity");
+		Objects.requireNonNull(recipient, "recipient");
 
 		// noinspection DuplicatedCode
 		if (sequenceNumber < 0)
 			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
 
-		if (data == null || data.length == 0)
-			throw new IllegalArgumentException("Invalid data: must not be null or empty");
+		Objects.requireNonNull(data, "data");
+		if (data.length == 0)
+			throw new IllegalArgumentException("Invalid data: must not be empty");
 
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
@@ -374,7 +388,7 @@ public class Value {
 	 * @return the data of the value.
 	 */
 	public byte[] getData() {
-		return data != null ? data.clone() : null;
+		return data.clone();
 	}
 
 	/**
@@ -441,6 +455,8 @@ public class Value {
 	public byte[] decryptData(Identity recipientIdentity) throws CryptoException {
 		if (recipient == null)
 			throw new UnsupportedOperationException("Cannot decrypt: value is not encrypted");
+		Objects.requireNonNull(publicKey, "publicKey cannot be null");
+		Objects.requireNonNull(nonce, "nonce cannot be null");
 
 		Objects.requireNonNull(recipientIdentity, "recipientIdentity cannot be null");
 
@@ -460,7 +476,7 @@ public class Value {
 	 * @param data      The data contained in the value.
 	 * @return The calculated ID of the value.
 	 */
-	private static Id calculateId(Id publicKey, byte[] data) {
+	private static Id calculateId(@Nullable Id publicKey, byte[] data) {
 		return publicKey != null ? publicKey : new Id(Hash.sha256(data));
 	}
 
@@ -496,13 +512,14 @@ public class Value {
 	 *
 	 * @return the digest
 	 */
-	private static byte[] computeDigest(Id publicKey, Id recipient, byte[] nonce, int sequenceNumber, byte[] data) {
+	private static byte[] computeDigest(@Nullable Id publicKey, @Nullable Id recipient, byte @Nullable [] nonce,
+										int sequenceNumber, byte[] data) {
 		MessageDigest sha = Hash.sha256();
 		if (publicKey != null) {
 			sha.update(publicKey.bytesUnsafe());
 			if (recipient != null)
 				sha.update(recipient.bytesUnsafe());
-			sha.update(nonce);
+			sha.update(Objects.requireNonNull(nonce, "nonce must not be null"));
 			sha.update(Bytes.fromInteger(sequenceNumber));
 		}
 		sha.update(data);
@@ -518,10 +535,10 @@ public class Value {
 	 * @return {@code true} if the value is valid, {@code false} otherwise.
 	 */
 	public boolean isValid() {
-		if (data == null || data.length == 0)
+		if (data.length == 0)
 			return false;
 
-		if (isMutable()) {
+		if (publicKey != null) {
 			if (signature == null || signature.length != Signature.BYTES)
 				return false;
 
@@ -535,8 +552,7 @@ public class Value {
 			Signature.PublicKey pk = publicKey.toSignatureKey();
 			return Signature.verify(digest, signature, pk);
 		} else {
-			if (id == null || publicKey != null || recipient != null || nonce != null ||
-					sequenceNumber < 0 || signature != null)
+			if (recipient != null || nonce != null || sequenceNumber < 0 || signature != null)
 				return false;
 
 			return id.equals(calculateId(null, data));
@@ -626,14 +642,14 @@ public class Value {
 	public static class Builder {
 		private enum Type { IMMUTABLE, SIGNED, ENCRYPTED }
 
-		private final Value forUpdate;
+		private final @Nullable Value forUpdate;
 		private final Type type;
 
-		private Identity identity = null;
+		private @Nullable Identity identity = null;
 		private boolean keepPrivateKey;
-		private Id recipient = null;
+		private @Nullable Id recipient = null;
 		private int sequenceNumber = 0;
-		private byte[] data = null;
+		private byte @Nullable [] data = null;
 
 		private Builder(Type type) {
 			this.type = type;
@@ -645,7 +661,7 @@ public class Value {
 			this.type = value.isImmutable() ? Type.IMMUTABLE :
 					(value.isEncrypted() ? Type.ENCRYPTED : Type.SIGNED);
 
-			this.identity = value.hasPrivateKey() ? new CryptoIdentity(value.getPrivateKey()) : null;
+			this.identity = value.privateKey != null ? new CryptoIdentity(value.privateKey) : null;
 			this.keepPrivateKey = value.hasPrivateKey();
 			this.recipient = value.getRecipient();
 			this.sequenceNumber = value.getSequenceNumber() + 1;
@@ -664,8 +680,9 @@ public class Value {
 		 * @throws IllegalArgumentException if the data is null or empty
 		 */
 		public Builder data(byte[] value) {
-			if (value == null || value.length == 0)
-				throw new IllegalArgumentException("Data must not be null or empty");
+			Objects.requireNonNull(value, "data");
+			if (value.length == 0)
+				throw new IllegalArgumentException("Data must not be empty");
 			this.data = value;
 			return this;
 		}
@@ -781,7 +798,7 @@ public class Value {
 
 			Objects.requireNonNull(identity);
 
-			if (isUpdate()) {
+			if (forUpdate != null) {
 				if (!forUpdate.isMutable())
 					throw new UnsupportedOperationException("Identity is only applicable to mutable/encrypted values");
 
@@ -844,8 +861,9 @@ public class Value {
 
 			return switch (type) {
 				case IMMUTABLE -> create(data);
-				case SIGNED -> createSigned(identity, privateKey, sequenceNumber, data);
-				case ENCRYPTED -> createEncrypted(identity, privateKey, recipient, sequenceNumber, data);
+				case SIGNED -> createSigned(Objects.requireNonNull(identity), privateKey, sequenceNumber, data);
+				case ENCRYPTED -> createEncrypted(Objects.requireNonNull(identity), privateKey,
+						Objects.requireNonNull(recipient), sequenceNumber, data);
 			};
 		}
 	}

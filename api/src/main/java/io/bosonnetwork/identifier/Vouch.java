@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -104,7 +105,7 @@ public class Vouch {
 	 */
 	@JsonProperty("sat")
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	private final @Nullable Date signedAt;
+	private final Date signedAt;
 	/**
 	 * The signature over the presentation data.
 	 * <p>
@@ -127,8 +128,8 @@ public class Vouch {
 	 * @param signature   the signature over the presentation data
 	 */
 	@JsonCreator
-	protected Vouch(@JsonProperty(value = "id") String id,
-					@JsonProperty(value = "t") List<String> types,
+	protected Vouch(@JsonProperty(value = "id") @Nullable String id,
+					@JsonProperty(value = "t") @Nullable List<String> types,
 					@JsonProperty(value = "h", required = true) Id holder,
 					@JsonProperty(value = "c", required = true) List<Credential> credentials,
 					@JsonProperty(value = "sat", required = true) Date signedAt,
@@ -160,7 +161,7 @@ public class Vouch {
 	 * @param credentials the list of credentials
 	 * @param signedAt    the signing timestamp to embed
 	 */
-	protected Vouch(String id, List<String> types, Id holder, List<Credential> credentials, Date signedAt) {
+	protected Vouch(@Nullable String id, @Nullable List<String> types, Id holder, List<Credential> credentials, Date signedAt) {
 		this.id = id;
 		this.types = types == null || types.isEmpty() ? List.of() : List.copyOf(types);
 		this.holder = holder;
@@ -175,7 +176,7 @@ public class Vouch {
 	 * @param vouch     the original vouch to copy
 	 * @param signature the signature over the presentation data
 	 */
-	protected Vouch(Vouch vouch, byte[] signature) {
+	protected Vouch(Vouch vouch, byte @Nullable [] signature) {
 		this.id = vouch.id;
 		this.types = vouch.types;
 		this.holder = vouch.holder;
@@ -189,10 +190,10 @@ public class Vouch {
 	 * <p>
 	 * Mapped to the compact JSON/CBOR key {@code "id"}.
 	 *
-	 * @return the unique identifier, or {@code null} if not set
+	 * @return an {@link Optional} with the unique identifier, or empty if not set
 	 */
-	public @Nullable String getId() {
-		return id;
+	public Optional<String> getId() {
+		return Optional.ofNullable(id);
 	}
 
 	/**
@@ -242,17 +243,16 @@ public class Vouch {
 	}
 
 	/**
-	 * Returns the credential with the specified identifier, or {@code null} if not found.
+	 * Returns the credential with the specified identifier, or an empty {@link Optional} if not found.
 	 *
 	 * @param id the credential identifier to search for (must not be null)
-	 * @return the credential with the given id, or {@code null} if not present
+	 * @return an {@link Optional} with the credential, or empty if not present
 	 */
-	public @Nullable Credential getCredential(String id) {
+	public Optional<Credential> getCredential(String id) {
 		Objects.requireNonNull(id, "id");
 		return credentials.stream()
 				.filter(c -> c.getId().equals(id))
-				.findFirst()
-				.orElse(null);
+				.findFirst();
 	}
 
 	/**
@@ -261,9 +261,9 @@ public class Vouch {
 	 * Mapped to the compact JSON/CBOR key {@code "sat"}. Note: {@code signedAt} is metadata and is
 	 * <em>not</em> covered by the signature, so it is not cryptographically authenticated.
 	 *
-	 * @return the signing timestamp, or {@code null} if unsigned
+	 * @return the signing timestamp
 	 */
-	public @Nullable Date getSignedAt() {
+	public Date getSignedAt() {
 		return signedAt;
 	}
 
@@ -272,10 +272,11 @@ public class Vouch {
 	 * <p>
 	 * Mapped to the compact JSON/CBOR key {@code "sig"}.
 	 *
-	 * @return the signature byte array, or {@code null} if unsigned
+	 * @return a defensive copy of the signature byte array
 	 */
-	public byte @Nullable [] getSignature() {
-		return signature == null ? null : signature.clone();
+	public byte[] getSignature() {
+		Objects.requireNonNull(signature, "signature");
+		return signature.clone();
 	}
 
 	/**

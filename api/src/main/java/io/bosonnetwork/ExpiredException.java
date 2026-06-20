@@ -22,6 +22,8 @@
 
 package io.bosonnetwork;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Signals that an operation has failed due to an expired resource, token, or entity within the Boson network.
  * This exception is thrown when an action cannot be completed because the relevant item has passed its valid lifetime.
@@ -52,7 +54,7 @@ public class ExpiredException extends BosonException {
 	 *
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
 	 */
-	public ExpiredException(String message) {
+	public ExpiredException(@Nullable String message) {
 		super(message);
 	}
 
@@ -63,7 +65,7 @@ public class ExpiredException extends BosonException {
 	 * @param message the detail message saved for later retrieval by {@link #getMessage()}
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
-	public ExpiredException(String message, Throwable cause) {
+	public ExpiredException(@Nullable String message, @Nullable Throwable cause) {
 		super(message, cause);
 	}
 
@@ -73,7 +75,7 @@ public class ExpiredException extends BosonException {
 	 *
 	 * @param cause the cause saved for later retrieval by {@link #getCause()}, may be {@code null}
 	 */
-	public ExpiredException(Throwable cause) {
+	public ExpiredException(@Nullable Throwable cause) {
 		super(cause);
 	}
 }

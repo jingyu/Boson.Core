@@ -1,10 +1,15 @@
 package io.bosonnetwork.service.impl;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
@@ -23,16 +28,16 @@ public class StaticClientContextTests {
 	@Test
 	public void testAddAndGetUser() throws ExecutionException, InterruptedException {
 		Id userId = Id.random();
-		assertTrue(context.addUser(userId, "Alice", "pass"));
-		assertFalse(context.addUser(userId, "Alice", "pass")); // repeat
+		assertTrue(context.addUser(userId, "Alice"));
+		assertFalse(context.addUser(userId, "Alice")); // repeat
 
 		assertTrue(context.existsUser(userId).get());
 		assertFalse(context.existsUser(Id.random()).get());
 
 		ClientUser user = context.getUser(userId).get().orElseThrow();
 		assertNotNull(user);
-		assertEquals("Alice", user.getName());
-		assertTrue(user.verifyPassphrase("pass"));
+		assertEquals("Alice", user.getName().orElseThrow());
+		assertTrue(user.verifyPassphrase("secret"));
 
 		assertTrue(context.getUser(Id.random()).get().isEmpty());
 	}
@@ -41,7 +46,7 @@ public class StaticClientContextTests {
 	public void testAddAndGetDevice() throws ExecutionException, InterruptedException {
 		Id userId = Id.random();
 		Id deviceId = Id.random();
-		context.addUser(userId, "Bob", "pass");
+		context.addUser(userId, "Bob");
 
 		assertTrue(context.addDevice(userId, deviceId, "Phone", "App"));
 		assertFalse(context.addDevice(userId, deviceId, "Phone", "App")); // repeat
@@ -55,7 +60,7 @@ public class StaticClientContextTests {
 	public void testRemoveUserAndDevice() throws ExecutionException, InterruptedException {
 		Id userId = Id.random();
 		Id deviceId = Id.random();
-		context.addUser(userId, "Charlie", "pass");
+		context.addUser(userId, "Charlie");
 		context.addDevice(userId, deviceId, "Phone", "App");
 
 		assertTrue(context.removeDevice(userId, deviceId));
@@ -73,7 +78,7 @@ public class StaticClientContextTests {
 	public void testAuthentication() throws ExecutionException, InterruptedException {
 		Id userId = Id.random();
 		Id deviceId = Id.random();
-		context.addUser(userId, "Dan", "pass");
+		context.addUser(userId, "Dan");
 		context.addDevice(userId, deviceId, "Phone", "App");
 
 		assertTrue(context.getAuthenticator().authenticateUser(userId).get());

@@ -323,7 +323,7 @@ public class ConfigMap implements Map<String, Object> {
 	 */
 	public @Nullable Path getPath(String key, @Nullable Path def) {
 		Objects.requireNonNull(key);
-		return map.containsKey(key) ? getPath(key) : FileUtils.normalizePath(def);
+		return map.containsKey(key) ? getPath(key) : def == null ? null : FileUtils.normalizePath(def);
 	}
 
 	/**

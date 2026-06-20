@@ -86,7 +86,9 @@ public class DIDDocumentTests {
 		assertNotNull(doc.getCredential(doc.getId().toDIDString() + "#profile"));
 		assertEquals(1, doc.getCredentials("BosonProfile").size());
 
-		var credProfile = doc.getCredential("profile");
+		var oc = doc.getCredential("profile");
+		assertTrue(oc.isPresent());
+		var credProfile = oc.get();
 		assertTrue(credProfile.isGenuine());
 		assertTrue(credProfile.isValid());
 		assertTrue(credProfile.selfIssued());

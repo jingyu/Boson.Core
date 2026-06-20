@@ -28,6 +28,8 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.utils.Base58;
@@ -78,7 +80,7 @@ public class Id implements Comparable<Id> {
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private final byte[] bytes;
-	private transient String b58;	// Cached base58 string representation
+	private transient @Nullable String b58;	// Cached base58 string representation
 	private transient int hashCode;	// Cache hash code
 
 	/**
@@ -410,8 +412,8 @@ public class Id implements Comparable<Id> {
 	 */
 	@SuppressWarnings("UnnecessaryLocalVariable")
 	public static Id add(Id id1, Id id2) {
-		if (id1 == null || id2 == null)
-			throw new NullPointerException("Identifier cannot be null");
+		Objects.requireNonNull(id1, "Identifier 1 cannot be null");
+		Objects.requireNonNull(id2, "Identifier 2 cannot be null");
 
 		final Id result = new Id();
 
@@ -450,8 +452,8 @@ public class Id implements Comparable<Id> {
 	 */
 	@SuppressWarnings("UnnecessaryLocalVariable")
 	public static Id distance(Id id1, Id id2) {
-		if (id1 == null || id2 == null)
-			throw new NullPointerException("Identifier cannot be null");
+		Objects.requireNonNull(id1, "Identifier 1 cannot be null");
+		Objects.requireNonNull(id2, "Identifier 2 cannot be null");
 
 		final Id result = new Id();
 
@@ -512,8 +514,8 @@ public class Id implements Comparable<Id> {
 	 * @throws NullPointerException if either identifier is null.
 	 */
 	public static int approxDistance(Id id1, Id id2) {
-		if (id1 == null || id2 == null)
-			throw new NullPointerException("Identifier cannot be null");
+		Objects.requireNonNull(id1, "Identifier 1 cannot be null");
+		Objects.requireNonNull(id2, "Identifier 2 cannot be null");
 
 		return SIZE - id1.distance(id2).getLeadingZeros();
 	}
@@ -527,8 +529,8 @@ public class Id implements Comparable<Id> {
 	 * @throws NullPointerException if either identifier is null.
 	 */
 	public int threeWayCompare(Id id1, Id id2) {
-		if (id1 == null || id2 == null)
-			throw new NullPointerException("Identifier cannot be null");
+		Objects.requireNonNull(id1, "Identifier 1 cannot be null");
+		Objects.requireNonNull(id2, "Identifier 2 cannot be null");
 
 		final int mmi = Arrays.mismatch(id1.bytes, id2.bytes);
 		if (mmi == -1)
@@ -603,8 +605,8 @@ public class Id implements Comparable<Id> {
 	 * @throws IllegalArgumentException if {@code n} is out of range.
 	 */
 	public static boolean bitsEqual(Id id1, Id id2, int depth) {
-		if (id1 == null || id2 == null)
-			throw new NullPointerException("Identifiers cannot be null");
+		Objects.requireNonNull(id1, "Identifier 1 cannot be null");
+		Objects.requireNonNull(id2, "Identifier 2 cannot be null");
 
 		if (depth < 0 || depth >= SIZE)
 			throw new IllegalArgumentException("Depth of bits must be in range [0, " + SIZE + ")");
@@ -628,8 +630,8 @@ public class Id implements Comparable<Id> {
 	 * @throws IllegalArgumentException if {@code depth} out of range.
 	 */
 	protected static void bitsCopy(Id src, Id dest, int depth) {
-		if (src == null || dest == null)
-			throw new NullPointerException("Identifier cannot be null");
+		Objects.requireNonNull(src, "Identifier src cannot be null");
+		Objects.requireNonNull(dest, "Identifier dest cannot be null");
 
 		if (depth < 0 || depth >= SIZE)
 			throw new IllegalArgumentException("Depth of bits must be in range [0, " + SIZE + ")");
@@ -700,7 +702,7 @@ public class Id implements Comparable<Id> {
 	 *		 {@code false} otherwise.
 	 */
 	@Override
-	public boolean equals(Object o) {
+	public boolean equals(@Nullable Object o) {
 		if (o == this)
 			return true;
 

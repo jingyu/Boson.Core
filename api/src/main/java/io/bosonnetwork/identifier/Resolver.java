@@ -165,11 +165,11 @@ public interface Resolver {
 	 */
 	class ResolutionMetadata {
 		@JsonProperty("created")
-		private final @Nullable Date created;
+		private final Date created;
 		@JsonProperty("updated")
-		private final @Nullable Date updated;
+		private final Date updated;
 		@JsonProperty("resolved")
-		private final @Nullable Date resolved;
+		private final Date resolved;
 		@JsonProperty("deactivated")
 		private final boolean deactivated;
 		@JsonProperty("version")
@@ -182,7 +182,7 @@ public interface Resolver {
 		 * @param deactivated whether the resource is deactivated
 		 * @param version version number of the resource
 		 */
-		public ResolutionMetadata(@Nullable Date created, @Nullable Date updated, @Nullable Date resolved, boolean deactivated, int version) {
+		public ResolutionMetadata(Date created, Date updated, Date resolved, boolean deactivated, int version) {
 			this.created = created;
 			this.updated = updated;
 			this.resolved = resolved;
@@ -193,21 +193,21 @@ public interface Resolver {
 		/**
 		 * @return the creation date of the resource
 		 */
-		public @Nullable Date getCreated() {
+		public Date getCreated() {
 			return created;
 		}
 
 		/**
 		 * @return the last update date of the resource
 		 */
-		public @Nullable Date getUpdated() {
+		public Date getUpdated() {
 			return updated;
 		}
 
 		/**
 		 * @return the date/time when this result was resolved
 		 */
-		public @Nullable Date getResolved() {
+		public Date getResolved() {
 			return resolved;
 		}
 
@@ -339,7 +339,7 @@ public interface Resolver {
 	 * @param options options controlling caching and TTL
 	 * @return a future containing the resolution result (status, card, and metadata)
 	 */
-	CompletableFuture<ResolutionResult<Card>> resolve(Id id, ResolutionOptions options);
+	CompletableFuture<ResolutionResult<Card>> resolve(Id id, @Nullable ResolutionOptions options);
 
 	/**
 	 * Resolves a Boson {@link Id} to a {@link Card} asynchronously, using default resolution options.
@@ -366,10 +366,11 @@ public interface Resolver {
 		Objects.requireNonNull(id, "id");
 
 		// First resolve the Card, then map to a DIDDocument if successful
-		return resolve(id, options).thenApply(rr -> rr.succeeded() ?
-			// Map Card to DIDDocument and preserve status/metadata
-			new ResolutionResult<>(rr.getResolutionStatus(), DIDDocument.fromCard(rr.getResult()), rr.getResultMetadata()) :
-			new ResolutionResult<>(rr.getResolutionStatus(), null, rr.getResultMetadata()));
+		return resolve(id, options).thenApply(rr -> {
+			Card card = rr.getResult();
+			DIDDocument doc = card == null ? null : DIDDocument.fromCard(card);
+			return new ResolutionResult<>(rr.getResolutionStatus(), doc, rr.getResultMetadata());
+		});
 	}
 
 	/**

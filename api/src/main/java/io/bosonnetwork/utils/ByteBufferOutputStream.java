@@ -29,6 +29,7 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.ReadOnlyBufferException;
+import java.util.Objects;
 
 /**
  * Utility to collect data written to an OutputStream in ByteBuffers.
@@ -37,7 +38,8 @@ public class ByteBufferOutputStream extends OutputStream {
 	/**
 	 * The ByteBuffer object to which data is written.
 	 */
-	private ByteBuffer buffer;
+	private final ByteBuffer buffer;
+	private boolean closed;
 
 	/**
 	 * Construct a ByteBufferOutputStream on a ByteBuffer object.
@@ -45,6 +47,7 @@ public class ByteBufferOutputStream extends OutputStream {
 	 * @param buffer the ByteBuffer to write the data to
 	 */
 	public ByteBufferOutputStream(ByteBuffer buffer) {
+		Objects.requireNonNull(buffer);
 		this.buffer = buffer;
 	}
 
@@ -66,13 +69,12 @@ public class ByteBufferOutputStream extends OutputStream {
 	 */
 	@Override
 	public void write(int b) throws IOException {
+		if (closed)
+			throw new IOException("Stream closed");
+
+		ByteBuffer buf = getByteBuffer();
 		try {
-			getByteBuffer().put((byte) b);
-		} catch (NullPointerException e) {
-			if (getByteBuffer() == null)
-				throw new IOException("Stream closed");
-			else
-				throw e;
+			buf.put((byte) b);
 		} catch (BufferOverflowException e) {
 			throw new IOException("Stream capacity exceeded: " + e.getMessage(), e);
 		} catch (ReadOnlyBufferException e) {
@@ -99,17 +101,14 @@ public class ByteBufferOutputStream extends OutputStream {
 	 */
 	@Override
 	public void write(byte[] src, int offset, int len) throws IOException {
-		if (src == null || offset < 0 || len < 0 || offset + len > src.length)
-			throw new IllegalArgumentException(
-					src == null ? "null buffer" : "length=" + src.length + ", offset=" + offset + ", len=" + len);
+		Objects.requireNonNull(src);
+		Objects.checkFromIndexSize(offset, len, src.length);
+		if (closed)
+			throw new IOException("Stream closed");
 
+		ByteBuffer buf = getByteBuffer();
 		try {
-			getByteBuffer().put(src, offset, len);
-		} catch (NullPointerException e) {
-			if (getByteBuffer() == null)
-				throw new IOException("Stream closed");
-			else
-				throw e;
+			buf.put(src, offset, len);
 		} catch (BufferOverflowException e) {
 			throw new IOException("Stream capacity exceeded: " + e.getMessage(), e);
 		} catch (ReadOnlyBufferException e) {
@@ -139,7 +138,7 @@ public class ByteBufferOutputStream extends OutputStream {
 	 */
 	@Override
 	public void close() throws IOException {
+		closed = true;
 		flush();
-		buffer = null;
 	}
 }

@@ -212,13 +212,13 @@ public class ValueTests {
 		byte[] sig = Random.randomBytes(Signature.BYTES);
 
 		// Invalid sequence number
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, nonce, -1, sig, data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null,null, nonce, -1, sig, data));
 
 		// Invalid nonce length
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, new byte[10], 0, sig, data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, new byte[10], 0, sig, data));
 
 		// Invalid signature length
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, nonce, 0, new byte[10], data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, nonce, 0, new byte[10], data));
 	}
 
 	@Test

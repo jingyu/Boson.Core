@@ -23,6 +23,9 @@
 package io.bosonnetwork.service.impl;
 
 import java.util.Objects;
+import java.util.Optional;
+
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.service.ClientDevice;
@@ -38,11 +41,25 @@ public class PlainDevice implements ClientDevice {
 	private final String app;
 	private final long ts;
 
-	PlainDevice(Id id, Id userId) {
+	/**
+	 * Creates a device with no name or app, identified only by its id and owner.
+	 *
+	 * @param id     the device id
+	 * @param userId the id of the user that owns the device
+	 */
+	protected PlainDevice(Id id, Id userId) {
 		this(id, userId, null, null);
 	}
 
-	PlainDevice(Id id, Id userId, String name, String app) {
+	/**
+	 * Creates a device with the given attributes.
+	 *
+	 * @param id     the device id
+	 * @param userId the id of the user that owns the device
+	 * @param name   the device name; an abbreviated id is used when null or empty
+	 * @param app    the application name; {@code "unknown"} is used when null or empty
+	 */
+	protected PlainDevice(Id id, Id userId, @Nullable String name, @Nullable String app) {
 		this.id = Objects.requireNonNull(id);
 		this.userId = Objects.requireNonNull(userId);
 		this.name = name == null || name.isEmpty() ? id.toAbbrBase58String() : name;
@@ -86,7 +103,7 @@ public class PlainDevice implements ClientDevice {
 	}
 
 	@Override
-	public String getLastAddress() {
-		return "n/a";
+	public Optional<String> getLastAddress() {
+		return Optional.empty();
 	}
 }
