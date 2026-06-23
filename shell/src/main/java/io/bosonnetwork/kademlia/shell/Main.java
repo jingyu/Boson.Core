@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jline.builtins.ConfigurationPath;
 import org.jline.console.SystemRegistry;
@@ -182,18 +184,56 @@ public class Main implements Callable<Integer> {
 		}
 	}
 
+	// bootstrap formats:
+	// - ID:ADDRESS4:PORT4
+	// - ID:[ADDRESS6]:PORT4
+	// - ID:ADDRESS4:PORT4:[ADDRESS6]:PORT6
+
+	// Matches the ID at the beginning
+	private static final Pattern ID_PATTERN = Pattern.compile("^([^:]+)");
+	// Matches anything within brackets or any non-bracketed segment before a colon
+	private static final Pattern ADDR_PORT_PATTERN = Pattern.compile("(?:\\[([^\\]]+)\\]|([^:\\[]+)):?([0-9]+)?");
+
 	private NodeInfo parseBootstrap(String bootstrap) {
-		String[] parts = bootstrap.split(":");
-		if (parts.length != 3) {
+		// 1. Extract ID
+		String id = null;
+		Matcher idMatcher = ID_PATTERN.matcher(bootstrap);
+		if (idMatcher.find())
+			id = idMatcher.group(1);
+
+		if (id == null || id.isEmpty()) {
 			System.out.println("Invalid bootstrap format: " + bootstrap);
 			return null;
 		}
 
-		Id id = Id.of(parts[0]);
-		String addr = parts[1];
-		int port = Integer.parseInt(parts[2]);
+		String addr1 = null, port1 = null;
+		// 2. Extract Addresses and Ports
+		Matcher apMatcher = ADDR_PORT_PATTERN.matcher(bootstrap.substring(id.length() + 1));
+		if (apMatcher.find()) {
+			// Group 1 is matched for bracketed items (e.g. IPv6), Group 2 for unbracketed (e.g. IPv4)
+			addr1 = apMatcher.group(1) != null ? apMatcher.group(1) : apMatcher.group(2);
+			port1 = apMatcher.group(3);
 
-		return new NodeInfo(id, addr, port);
+			if (addr1 == null || addr1.isEmpty() || port1 == null || port1.isEmpty()) {
+				System.out.println("Invalid bootstrap format: " + bootstrap);
+				return null;
+			}
+		}
+
+		String addr2 = null, port2 = null;
+		if (apMatcher.find()) {
+			// Group 1 is matched for bracketed items (e.g. IPv6), Group 2 for unbracketed (e.g. IPv4)
+			addr2 = apMatcher.group(1) != null ? apMatcher.group(1) : apMatcher.group(2);
+			port2 = apMatcher.group(3);
+
+			if (addr2 == null || addr2.isEmpty() || port2 == null || port2.isEmpty()) {
+				System.out.println("Invalid bootstrap format: " + bootstrap);
+				return null;
+			}
+		}
+
+		return NodeInfo.of(Id.of(id), addr1, port1 != null ? Integer.parseInt(port1) : -1,
+				addr2, port2 != null ? Integer.parseInt(port2) : -1);
 	}
 
 	private void parseArgs() throws IOException {

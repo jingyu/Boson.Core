@@ -24,6 +24,7 @@
 package io.bosonnetwork.kademlia.tasks;
 
 import java.net.InetAddress;
+import java.net.StandardProtocolFamily;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -143,8 +144,10 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 * @param nodes the nodes to add
 	 */
 	protected void addCandidates(Collection<? extends NodeInfo> nodes) {
+		StandardProtocolFamily family = getContext().getNetwork().protocolFamily();
 		List<? extends NodeInfo> eligible = nodes.stream()
-				.filter(n -> isAddressEligible(n.getIpAddress()) &&
+				.filter(n -> n.hasAddress(family) &&
+						isAddressEligible(n.getIpAddress(family)) &&
 						!getContext().isLocalId(n.getId()) &&
 						!closest.contains(n.getId()))
 				.toList();

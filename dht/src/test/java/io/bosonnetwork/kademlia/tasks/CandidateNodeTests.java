@@ -18,7 +18,7 @@ class CandidateNodeTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
-		candidate = new CandidateNode(new NodeInfo(Id.random(), "100.1.1.8", 39001));
+		candidate = new CandidateNode(NodeInfo.of(Id.random(), "100.1.1.8", 39001));
 	}
 
 	@Test
@@ -46,7 +46,7 @@ class CandidateNodeTest {
 
 	@Test
 	void testReachability() {
-		KBucketEntry entry = new KBucketEntry(new NodeInfo(Id.random(), "100.1.1.8", 39001));
+		KBucketEntry entry = new KBucketEntry(NodeInfo.of(Id.random(), "100.1.1.8", 39001));
 		setReachable(entry, true);
 		candidate = new CandidateNode(entry);
 		assertTrue(candidate.isReachable());

@@ -134,6 +134,6 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		if (token != JsonToken.END_ARRAY)
 			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
 
-		return sockAddr6 == null ? new NodeInfo(id, sockAddr) : new NodeInfo(id, sockAddr, sockAddr6);
+		return sockAddr6 == null ? NodeInfo.of(id, sockAddr) : NodeInfo.of(id, sockAddr, sockAddr6);
 	}
 }

@@ -70,7 +70,7 @@ public class BootstrapCommand implements Callable<Integer> {
 			return -1;
 		}
 
-		NodeInfo n = new NodeInfo(nodeId, addr, port);
+		NodeInfo n = NodeInfo.of(nodeId, addr, port);
 		Main.getBosonNode().bootstrap(n);
 
 		return null;

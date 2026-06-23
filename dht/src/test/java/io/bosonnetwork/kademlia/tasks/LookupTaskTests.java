@@ -77,7 +77,7 @@ class LookupTaskTests {
 
 	@Test
 	void testIterationCount() {
-		task.addCandidates(List.of(new NodeInfo(Id.random(), "100.1.1.8", 39001)));
+		task.addCandidates(List.of(NodeInfo.of(Id.random(), "100.1.1.8", 39001)));
 		task.start();
 
 		for (int i = 0; i < LookupTask.MAX_ITERATIONS; i++)
@@ -90,7 +90,7 @@ class LookupTaskTests {
 	void testCandidateManagement() {
 		List<NodeInfo> nodes1 = new ArrayList<>(KBucket.MAX_ENTRIES * 2);
 		for (int i = 0; i < KBucket.MAX_ENTRIES * 2; i++)
-			nodes1.add(new NodeInfo(Id.random(), randomAddress()));
+			nodes1.add(NodeInfo.of(Id.random(), randomAddress()));
 
 		task.addCandidates(nodes1);
 		assertEquals(KBucket.MAX_ENTRIES * 2, task.getCandidateSize());
@@ -110,7 +110,7 @@ class LookupTaskTests {
 
 		List<NodeInfo> nodes2 = new ArrayList<>(KBucket.MAX_ENTRIES * 2);
 		for (int i = 0; i < KBucket.MAX_ENTRIES * 2; i++)
-			nodes2.add(new NodeInfo(Id.random(), randomAddress()));
+			nodes2.add(NodeInfo.of(Id.random(), randomAddress()));
 
 		task.addCandidates(nodes2);
 		assertEquals(KBucket.MAX_ENTRIES * 3, task.getCandidateSize());
@@ -128,7 +128,7 @@ class LookupTaskTests {
 
 	@Test
 	void testRpcHandlingOnCallError() {
-		NodeInfo node = new NodeInfo(Id.random(), "100.1.1.8", 39001);
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
 		task.addCandidates(List.of(node));
 		assertEquals(1, task.getCandidateSize());
 		CandidateNode cn = task.getCandidate(node.getId());
@@ -144,7 +144,7 @@ class LookupTaskTests {
 
 	@Test
 	void testRpcHandlingOnCallTimeoutReachable() {
-		NodeInfo node = new NodeInfo(Id.random(), "100.1.1.8", 39001);
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
 		task.addCandidates(List.of(node));
 		assertEquals(1, task.getCandidateSize());
 		CandidateNode cn = task.getCandidate(node.getId());
@@ -161,7 +161,7 @@ class LookupTaskTests {
 
 	@Test
 	void testRpcHandlingOnCallTimeoutUnreachable() {
-		NodeInfo node = new NodeInfo(Id.random(), "100.1.1.8", 39001);
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
 		task.addCandidates(List.of(node));
 		assertEquals(1, task.getCandidateSize());
 		CandidateNode cn = task.getCandidate(node.getId());

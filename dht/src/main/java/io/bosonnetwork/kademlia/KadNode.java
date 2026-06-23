@@ -158,7 +158,7 @@ public class KadNode extends BosonVerticle implements Node {
 		if (n4 == null && n6 == null)
 			return Optional.empty();
 
-		return Optional.of(new NodeInfo(getId(),
+		return Optional.of(NodeInfo.of(getId(),
 				n4 != null ? n4.getAddress4() : null,
 				n6 != null ? n6.getAddress6() : null));
 	}
@@ -416,7 +416,7 @@ public class KadNode extends BosonVerticle implements Node {
 					if (n4 == null && n6 == null)
 						return Optional.empty();
 
-					return Optional.of(new NodeInfo(id,
+					return Optional.of(NodeInfo.of(id,
 							n4 != null ? n4.getAddress4() : null,
 							n6 != null ? n6.getAddress6() : null));
 				});
@@ -431,7 +431,7 @@ public class KadNode extends BosonVerticle implements Node {
 				NodeInfo n4 = future4.isComplete() ? future4.result() : null;
 				NodeInfo n6 = future6.isComplete() ? future6.result() : null;
 
-				return Future.succeededFuture(Optional.of(new NodeInfo(id,
+				return Future.succeededFuture(Optional.of(NodeInfo.of(id,
 						n4 != null ? n4.getAddress4() : null,
 						n6 != null ? n6.getAddress6() : null)));
 			});

@@ -32,7 +32,6 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -375,7 +374,19 @@ public class NodeConfiguration {
 
 		if (!bootstraps.isEmpty()) {
 			List<List<Object>> lst = new ArrayList<>();
-			bootstraps.forEach(n -> lst.add(Arrays.asList(n.getId().toString(), n.getHost(), n.getPort())));
+			bootstraps.forEach(n -> {
+				List<Object> ni  = new ArrayList<>();
+				ni.add(n.getId().toString());
+				if (n.hasAddress4()) {
+					ni.add(n.getHost4());
+					ni.add(n.getPort4());
+				}
+				if (n.hasAddress6()) {
+					ni.add(n.getHost6());
+					ni.add(n.getPort6());
+				}
+				lst.add(ni);
+			});
 			map.put("bootstraps", lst);
 		}
 
@@ -754,7 +765,13 @@ public class NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder addBootstrap(String id, String addr, int port) {
-			NodeInfo node = new NodeInfo(Id.of(id), addr, port);
+			NodeInfo node = NodeInfo.of(Id.of(id), addr, port);
+			this.bootstraps.add(node);
+			return this;
+		}
+
+		public Builder addBootstrap(String id, String addr4, int port4, String addr6, int port6) {
+			NodeInfo node = NodeInfo.of(Id.of(id), addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
 			return this;
 		}
@@ -768,7 +785,13 @@ public class NodeConfiguration {
 		 * @return the builder instance for chaining
 		 */
 		public Builder addBootstrap(Id id, String addr, int port) {
-			NodeInfo node = new NodeInfo(id, addr, port);
+			NodeInfo node = NodeInfo.of(id, addr, port);
+			this.bootstraps.add(node);
+			return this;
+		}
+
+		public Builder addBootstrap(Id id, String addr4, int port4, String addr6, int port6) {
+			NodeInfo node = NodeInfo.of(id, addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
 			return this;
 		}
@@ -781,7 +804,13 @@ public class NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder addBootstrap(Id id, InetAddress addr, int port) {
-			NodeInfo node = new NodeInfo(id, addr, port);
+			NodeInfo node = NodeInfo.of(id, addr, port);
+			this.bootstraps.add(node);
+			return this;
+		}
+
+		public Builder addBootstrap(Id id, InetAddress addr4, int port4, InetAddress addr6, int port6) {
+			NodeInfo node = NodeInfo.of(id, addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
 			return this;
 		}
@@ -793,7 +822,13 @@ public class NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder addBootstrap(Id id, InetSocketAddress addr) {
-			NodeInfo node = new NodeInfo(id, addr);
+			NodeInfo node = NodeInfo.of(id, addr);
+			this.bootstraps.add(node);
+			return this;
+		}
+
+		public Builder addBootstrap(Id id, InetSocketAddress addr4, InetSocketAddress addr6) {
+			NodeInfo node = NodeInfo.of(id, addr4, addr6);
 			this.bootstraps.add(node);
 			return this;
 		}
@@ -907,15 +942,17 @@ public class NodeConfiguration {
 			List<List<Object>> lst = m.getList("bootstraps");
 			if (lst != null && !lst.isEmpty()) {
 				lst.forEach(b -> {
-					if (b.size() != 3)
+					int size = b.size();
+					if (size != 3 && size != 5)
 						throw new IllegalArgumentException("Invalid bootstrap node: missing fields - " + b);
 
 					try {
 						Id id = Id.of((String) b.get(0));
-						String host = (String) b.get(1);
-						int port = (int) b.get(2);
-
-						addBootstrap(new NodeInfo(id, host, port));
+						String host1 = (String) b.get(1);
+						int port1 = (int) b.get(2);
+						String host2 = size == 5 ? (String) b.get(3) : null;
+						int port2 = size == 5 ? (int) b.get(4) : 0;
+						addBootstrap(NodeInfo.of(id, host1, port1, host2, port2));
 					} catch (Exception e) {
 						throw new IllegalArgumentException("Invalid bootstrap node: " + b);
 					}

@@ -167,7 +167,7 @@ public class DHT extends BosonVerticle {
 			addBootstrapNodes(bootstrapNodes);
 
 		// TODO: improve
-		this.nodeInfo = new NodeInfo(identity.getId(), host, port);
+		this.nodeInfo = NodeInfo.of(identity.getId(), host, port);
 	}
 
 	public boolean isRunning() {
@@ -425,7 +425,7 @@ public class DHT extends BosonVerticle {
 		Promise<Void> promise = Promise.promise();
 
 		runOnContext(v -> {
-			addBootstrapNodes(nodes);
+			Collection<NodeInfo> added = addBootstrapNodes(nodes);
 			if (bootstrapping) {
 				promise.fail(new IllegalStateException("DHT is bootstrapping"));
 				return;
@@ -435,7 +435,7 @@ public class DHT extends BosonVerticle {
 			if (status == ConnectionStatus.Disconnected)
 				setStatus(ConnectionStatus.Connecting);
 
-			doBootstrap(nodes).onComplete(promise);
+			doBootstrap(added).onComplete(promise);
 		});
 
 		return promise.future();
@@ -532,16 +532,16 @@ public class DHT extends BosonVerticle {
 		});
 	}
 
-	private void addBootstrapNodes(Collection<NodeInfo> nodes) {
+	private Collection<NodeInfo> addBootstrapNodes(Collection<NodeInfo> nodes) {
 		if (nodes.isEmpty())
-			return;
+			return List.of();
 
 		Map<Id, NodeInfo> dedup = new HashMap<>(this.bootstrapNodes.size() + nodes.size());
 		bootstrapNodes.forEach(node -> dedup.put(node.getId(), node));
 
-		// List<NodeInfo> newNodes = new ArrayList<>(nodes.size());
+		Map<Id, NodeInfo> added = new HashMap<>(nodes.size());
 		for (NodeInfo node : nodes) {
-			if (!network.canUseAddress(node.getIpAddress()))
+			if (!node.hasAddress(network.protocolFamily()))
 				continue;
 
 			if (node.getId().equals(identity.getId())) {
@@ -549,15 +549,16 @@ public class DHT extends BosonVerticle {
 				continue;
 			}
 
-			dedup.put(node.getId(), node);
-			// NodeInfo old = dedup.put(node.getId(), node);
-			// if (old == null || !old.equals(node))
-			//	newNodes.add(node);
+			// Ensure bootstrap nodes only use a single address compatible with this DHT's network family.
+			NodeInfo bootstrapNode = node.hasMultiAddresses() ?
+					NodeInfo.of(node.getId(), Objects.requireNonNull(node.getAddress(network.protocolFamily()))) : node;
+			dedup.put(bootstrapNode.getId(), bootstrapNode);
+			added.put(bootstrapNode.getId(), bootstrapNode);
 		}
 
 		bootstrapNodes = List.copyOf(dedup.values());
 		bootstrapIds = List.copyOf(dedup.keySet());
-		return;
+		return added.values();
 	}
 
 	private Future<Void> fillHomeBucket(Collection<NodeInfo> nodes) {

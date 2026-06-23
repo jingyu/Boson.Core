@@ -160,7 +160,7 @@ public class TaskTests {
 
 		List<RpcCall> calls = new ArrayList<>();
 		for (int i = 0; i < TaskManager.MAX_CONCURRENT_TASK_REQUESTS; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
+			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
 			task.sendCall(node, message, calls::add);
 			assertEquals(i + 1, task.getInFlightCalls());
@@ -180,7 +180,7 @@ public class TaskTests {
 
 		List<RpcCall> calls = new ArrayList<>();
 		for (int i = 0; i < TaskManager.MAX_CONCURRENT_TASK_REQUESTS_LOW_PRIORITY; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
+			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
 			task.sendCall(node, message, calls::add);
 			assertEquals(i + 1, task.getInFlightCalls());

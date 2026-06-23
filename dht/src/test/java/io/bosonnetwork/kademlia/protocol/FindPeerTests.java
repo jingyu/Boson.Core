@@ -94,26 +94,26 @@ public class FindPeerTests extends MessageTests {
 		var port = 65535;
 
 		var nodes4 = new ArrayList<NodeInfo>();
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
 
 		var ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:7386";
 
 		var nodes6 = new ArrayList<NodeInfo>();
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
 
 		var peerKey = Signature.KeyPair.random();
 		var peers = new ArrayList<PeerInfo>();

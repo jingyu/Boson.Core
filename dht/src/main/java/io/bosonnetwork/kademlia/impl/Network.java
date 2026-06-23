@@ -26,7 +26,6 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 
 /**
@@ -43,7 +42,7 @@ public enum Network {
 	 */
 	IPv6(StandardProtocolFamily.INET6, Inet6Address.class, 40 + 8, 1200);
 
-	private final ProtocolFamily protocolFamily;
+	private final StandardProtocolFamily protocolFamily;
 	private final Class<? extends InetAddress> preferredAddressType;
 	private final int protocolHeaderSize;
 	private final int maxPacketSize;
@@ -57,7 +56,7 @@ public enum Network {
 	 * @param headerSize the size in bytes of the network and UDP headers for this protocol
 	 * @param maxPacketSize the maximum supported UDP packet size for this network type
 	 */
-	Network(ProtocolFamily family, Class<? extends InetAddress> addressType, int headerSize, int maxPacketSize) {
+	Network(StandardProtocolFamily family, Class<? extends InetAddress> addressType, int headerSize, int maxPacketSize) {
 		this.protocolFamily = family;
 		this.preferredAddressType = addressType;
 		this.protocolHeaderSize = headerSize;
@@ -109,7 +108,7 @@ public enum Network {
 	 *
 	 * @return the ProtocolFamily of this network type.
 	 */
-	ProtocolFamily protocolFamily() {
+	public StandardProtocolFamily protocolFamily() {
 		return protocolFamily;
 	}
 

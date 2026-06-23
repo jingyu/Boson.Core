@@ -77,7 +77,8 @@ database:
 
 # Initial entry points to the DHT network.
 # These nodes are contacted during startup to discover other peers.
-# Format: [ NodeID (Base58), IPAddress, Port ]
+# Format: [ NodeID (Base58), IPAddress, Port ] or
+#         [ NodeID (Base58), IPv4Address, Port4, IPv6Address, Port6 ]
 bootstraps:
   - - 2dLbPsaySh9EGWwpgreYiLEPG3NDhaojj7DBBfSsRr6k
     - 203.0.113.5

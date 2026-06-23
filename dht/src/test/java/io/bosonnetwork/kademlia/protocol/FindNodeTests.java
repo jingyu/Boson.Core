@@ -84,26 +84,26 @@ public class FindNodeTests extends MessageTests {
 		int port = 65535;
 
 		var nodes4 = new ArrayList<NodeInfo>();
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
 
 		var ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:7386";
 
 		var nodes6 = new ArrayList<NodeInfo>();
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port));
 
 		var token = 0x87654321;
 
@@ -188,24 +188,24 @@ public class FindNodeTests extends MessageTests {
 		int port = 65535;
 
 		List<NodeInfo> nodes4 = new ArrayList<>();
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
-		nodes4.add(new NodeInfo(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
+		nodes4.add(NodeInfo.of(Id.random(), ip4, port--));
 
 		List<NodeInfo> nodes6 = new ArrayList<>();
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port--));
-		nodes6.add(new NodeInfo(Id.random(), ip6, port));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port--));
+		nodes6.add(NodeInfo.of(Id.random(), ip6, port));
 
 		// warmup
 		var msg = Message.findNodeResponse(txid, nodes4, nodes6, token);

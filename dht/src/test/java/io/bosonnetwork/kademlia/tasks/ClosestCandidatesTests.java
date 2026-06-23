@@ -47,21 +47,21 @@ public class ClosestCandidatesTests {
 	void testDeduplication() {
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < 8; i++)
-			nodes.add(new NodeInfo(Id.random(), randomAddress()));
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
 		candidates.add(nodes);
 		assertEquals(8, candidates.size());
 
 		// Duplicated node id
 		List<NodeInfo> nodes2 = new ArrayList<>();
 		for (int i = 0; i < 8; i++)
-			nodes2.add(new NodeInfo(nodes.get(i).getId(), randomAddress()));
+			nodes2.add(NodeInfo.of(nodes.get(i).getId(), randomAddress()));
 		candidates.add(nodes2);
 		assertEquals(8, candidates.size());
 
 		// Duplicated node address
 		List<NodeInfo> nodes3 = new ArrayList<>();
 		for (int i = 0; i < 8; i++)
-			nodes3.add(new NodeInfo(Id.random(), nodes.get(i).getAddress()));
+			nodes3.add(NodeInfo.of(Id.random(), nodes.get(i).getAddress()));
 		candidates.add(nodes3);
 		assertEquals(8, candidates.size());
 
@@ -73,7 +73,7 @@ public class ClosestCandidatesTests {
 	public void testCandidateOrder() {
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < 32; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), randomAddress());
+			NodeInfo node = NodeInfo.of(Id.random(), randomAddress());
 			nodes.add(node);
 		}
 
@@ -89,7 +89,7 @@ public class ClosestCandidatesTests {
 	void testCandidateNext() {
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < 8; i++)
-			nodes.add(new NodeInfo(Id.random(), randomAddress()));
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
 		candidates.add(nodes);
 		assertEquals(8, candidates.size());
 
@@ -106,7 +106,7 @@ public class ClosestCandidatesTests {
 	void testRemove() {
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < 8; i++)
-			nodes.add(new NodeInfo(Id.random(), randomAddress()));
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
 		candidates.add(nodes);
 		assertEquals(8, candidates.size());
 
@@ -125,7 +125,7 @@ public class ClosestCandidatesTests {
 
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < 8; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), randomAddress());
+			NodeInfo node = NodeInfo.of(Id.random(), randomAddress());
 			nodes.add(node);
 			result.add(node);
 		}
@@ -138,7 +138,7 @@ public class ClosestCandidatesTests {
 
 		nodes.clear();
 		for (int i = 8; i < 12; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), randomAddress());
+			NodeInfo node = NodeInfo.of(Id.random(), randomAddress());
 			nodes.add(node);
 			result.add(node);
 		}
@@ -151,7 +151,7 @@ public class ClosestCandidatesTests {
 
 		nodes.clear();
 		for (int i = 12; i < 16; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), randomAddress());
+			NodeInfo node = NodeInfo.of(Id.random(), randomAddress());
 			nodes.add(node);
 			result.add(node);
 		}
@@ -164,7 +164,7 @@ public class ClosestCandidatesTests {
 
 		nodes.clear();
 		for (int i = 16; i < 32; i++) {
-			NodeInfo node = new NodeInfo(Id.random(), randomAddress());
+			NodeInfo node = NodeInfo.of(Id.random(), randomAddress());
 			nodes.add(node);
 			result.add(node);
 			result.remove(result.last());

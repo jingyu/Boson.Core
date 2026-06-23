@@ -49,7 +49,7 @@ class ClosestSetTests {
 	void testInsertion() {
 		List<CandidateNode> nodes = new ArrayList<>();
 		for (int i = 0; i < KBucket.MAX_ENTRIES + 3; i++) {
-			CandidateNode node = new CandidateNode(new NodeInfo(Id.random(), randomAddress()));
+			CandidateNode node = new CandidateNode(NodeInfo.of(Id.random(), randomAddress()));
 			closestSet.add(node);
 			nodes.add(node);
 			int expected = i < KBucket.MAX_ENTRIES ? i + 1 : KBucket.MAX_ENTRIES;
@@ -64,13 +64,13 @@ class ClosestSetTests {
 	void testEligibility() {
 		assertFalse(closestSet.isEligible());
 		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
-			CandidateNode node = new CandidateNode(new NodeInfo(target.getIdByDistance(8 - i), randomAddress()));
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(8 - i), randomAddress()));
 			closestSet.add(node);
 		}
 		assertFalse(closestSet.isEligible());
 
 		for (int i = 0; i < KBucket.MAX_ENTRIES + 1; i++) {
-			CandidateNode node = new CandidateNode(new NodeInfo(target.getIdByDistance(16 + i), randomAddress()));
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 + i), randomAddress()));
 			closestSet.add(node);
 		}
 		System.out.println(closestSet.getInsertAttemptsSinceTailModification());
@@ -80,14 +80,14 @@ class ClosestSetTests {
 	@Test
 	void testHeadStability() {
 		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
-			CandidateNode node = new CandidateNode(new NodeInfo(target.getIdByDistance(16 - i), randomAddress()));
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 - i), randomAddress()));
 			closestSet.add(node);
 		}
 
 		assertFalse(closestSet.isHeadStable());
 
 		for (int i = 0; i < KBucket.MAX_ENTRIES + 1; i++) {
-			CandidateNode node = new CandidateNode(new NodeInfo(target.getIdByDistance(16 + i), randomAddress()));
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 + i), randomAddress()));
 			closestSet.add(node);
 		}
 

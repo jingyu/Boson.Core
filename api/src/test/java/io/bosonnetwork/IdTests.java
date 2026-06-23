@@ -37,9 +37,9 @@ import java.util.Random;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.Hex;
-import io.bosonnetwork.json.Json;
 
 public class IdTests {
 	@Test

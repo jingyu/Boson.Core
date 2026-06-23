@@ -116,7 +116,7 @@ public class RPCServerTests {
 			this.port = port;
 
 			this.identity = new CryptoIdentity();
-			this.nodeInfo = new NodeInfo(identity.getId(), host, port);
+			this.nodeInfo = NodeInfo.of(identity.getId(), host, port);
 
 			this.simulateAbnormal = false;
 		}
@@ -303,7 +303,7 @@ public class RPCServerTests {
 	protected static List<NodeInfo> createRandomNodes(int count) {
 		List<NodeInfo> nodes = new ArrayList<>();
 		for (int i = 0; i < count; i++)
-			nodes.add(new NodeInfo(Id.random(), faker.internet().getPublicIpV4Address(), 39001));
+			nodes.add(NodeInfo.of(Id.random(), faker.internet().getPublicIpV4Address(), 39001));
 
 		return nodes;
 	}

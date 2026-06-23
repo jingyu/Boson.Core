@@ -165,26 +165,26 @@ public class CompatibilityTests {
 		int port = 65535;
 
 		var nodes4 = new ArrayList<NodeInfo>();
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(255)), ip4 + 1, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(254)), ip4 + 2, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(253)), ip4 + 3, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(252)), ip4 + 4, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(251)), ip4 + 5, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(250)), ip4 + 6, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(249)), ip4 + 7, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(248)), ip4 + 8, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(255)), ip4 + 1, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(254)), ip4 + 2, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(253)), ip4 + 3, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(252)), ip4 + 4, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(251)), ip4 + 5, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(250)), ip4 + 6, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(249)), ip4 + 7, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(248)), ip4 + 8, port--));
 
 		String ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:738";
 
 		var nodes6 = new ArrayList<NodeInfo>();
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(247)), ip6 + 1, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(246)), ip6 + 2, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(245)), ip6 + 3, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(243)), ip6 + 4, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(242)), ip6 + 5, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(241)), ip6 + 6, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(240)), ip6 + 7, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(239)), ip6 + 8, port));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(247)), ip6 + 1, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(246)), ip6 + 2, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(245)), ip6 + 3, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(243)), ip6 + 4, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(242)), ip6 + 5, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(241)), ip6 + 6, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(240)), ip6 + 7, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(239)), ip6 + 8, port));
 
 		String jsonV4 = """
 				{"y":66,"t":4321,"r":{"n4":[["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoA6","192.168.1.1",65535],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoA7","192.168.1.2",65534],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoA9","192.168.1.3",65533],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoAD","192.168.1.4",65532],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoAM","192.168.1.5",65531],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoAd","192.168.1.6",65530],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoBB","192.168.1.7",65529],["HVG7zCqPqKVyxwwwKtC43EasxA3U7uVDLDU2EkRdKoCH","192.168.1.8",65528]]},"v":1330774017}
@@ -346,26 +346,26 @@ public class CompatibilityTests {
 		int port = 65535;
 
 		var nodes4 = new ArrayList<NodeInfo>();
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(255)), ip4 + 1, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(254)), ip4 + 2, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(253)), ip4 + 3, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(252)), ip4 + 4, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(251)), ip4 + 5, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(250)), ip4 + 6, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(249)), ip4 + 7, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(248)), ip4 + 8, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(255)), ip4 + 1, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(254)), ip4 + 2, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(253)), ip4 + 3, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(252)), ip4 + 4, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(251)), ip4 + 5, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(250)), ip4 + 6, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(249)), ip4 + 7, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(248)), ip4 + 8, port--));
 
 		String ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:738";
 
 		var nodes6 = new ArrayList<NodeInfo>();
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(247)), ip6 + 1, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(246)), ip6 + 2, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(245)), ip6 + 3, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(243)), ip6 + 4, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(242)), ip6 + 5, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(241)), ip6 + 6, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(240)), ip6 + 7, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(239)), ip6 + 8, port));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(247)), ip6 + 1, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(246)), ip6 + 2, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(245)), ip6 + 3, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(243)), ip6 + 4, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(242)), ip6 + 5, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(241)), ip6 + 6, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(240)), ip6 + 7, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(239)), ip6 + 8, port));
 
 		Value immutable = Value.immutableBuilder().data("This is a immutable value".getBytes()).build();
 
@@ -700,26 +700,26 @@ public class CompatibilityTests {
 		int port = 65535;
 
 		var nodes4 = new ArrayList<NodeInfo>();
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(255)), ip4 + 1, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(254)), ip4 + 2, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(253)), ip4 + 3, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(252)), ip4 + 4, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(251)), ip4 + 5, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(250)), ip4 + 6, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(249)), ip4 + 7, port--));
-		nodes4.add(new NodeInfo(target.add(Id.ofBit(248)), ip4 + 8, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(255)), ip4 + 1, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(254)), ip4 + 2, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(253)), ip4 + 3, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(252)), ip4 + 4, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(251)), ip4 + 5, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(250)), ip4 + 6, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(249)), ip4 + 7, port--));
+		nodes4.add(NodeInfo.of(target.add(Id.ofBit(248)), ip4 + 8, port--));
 
 		String ip6 = "2001:0db8:85a3:8070:6543:8a2e:0370:738";
 
 		var nodes6 = new ArrayList<NodeInfo>();
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(247)), ip6 + 1, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(246)), ip6 + 2, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(245)), ip6 + 3, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(243)), ip6 + 4, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(242)), ip6 + 5, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(241)), ip6 + 6, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(240)), ip6 + 7, port--));
-		nodes6.add(new NodeInfo(target.add(Id.ofBit(239)), ip6 + 8, port));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(247)), ip6 + 1, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(246)), ip6 + 2, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(245)), ip6 + 3, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(243)), ip6 + 4, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(242)), ip6 + 5, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(241)), ip6 + 6, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(240)), ip6 + 7, port--));
+		nodes6.add(NodeInfo.of(target.add(Id.ofBit(239)), ip6 + 8, port));
 
 		String j0 = """
 				{"id":"2WssfJZmWESjfU1LrKsYNZQTyj9obAkn5mSqfyP6fqAe","n":"cQundi2gNo-43AcJwmjCsw64e2VH_8WP","sig":"EiltluuYTrQkQQ1GG9x2rAnBps4T6dC4kurFBVtnd8bjBOJoVqEz0ZG4lTa3RZVg8AMuQnglGTcHP1wiGZp9Ag","f":4660,"e":"tcp://203.0.113.10:65520"}
