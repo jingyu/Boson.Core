@@ -34,12 +34,14 @@
  * <h2>Addressing and DHT records</h2>
  * {@link io.bosonnetwork.Id} is the 256-bit Ed25519-based identifier used for nodes, values and
  * peers. {@link io.bosonnetwork.Value} (mutable/immutable stored data),
- * {@link io.bosonnetwork.PeerInfo} (announced peers) and {@link io.bosonnetwork.NodeInfo} /
- * {@link io.bosonnetwork.Network} describe what lives in and around the DHT.
+ * {@link io.bosonnetwork.PeerInfo} (announced peers) and {@link io.bosonnetwork.NodeInfo}
+ * (a transport-agnostic node with optional IPv4 and/or IPv6 addresses) describe what lives in and
+ * around the DHT.
  *
  * <h2>Operations and results</h2>
  * Lookups are tuned by {@link io.bosonnetwork.LookupOption} and return their outcome through
- * {@link io.bosonnetwork.Result}. Errors surface as {@link io.bosonnetwork.BosonException} and its
+ * {@link java.util.Optional} (single-result lookups) or a {@link java.util.List} (collection
+ * lookups). Errors surface as {@link io.bosonnetwork.BosonException} and its
  * subtypes (e.g. {@link io.bosonnetwork.ExpiredException}), and {@link io.bosonnetwork.Version}
  * carries node version metadata.
  *

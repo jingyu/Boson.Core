@@ -155,12 +155,20 @@ public class KadNode extends BosonVerticle implements Node {
 	public Optional<NodeInfo> getNodeInfo() {
 		NodeInfo n4 = dht4 != null ? dht4.getNodeInfo() : null;
 		NodeInfo n6 = dht6 != null ? dht6.getNodeInfo() : null;
-		if (n4 == null && n6 == null)
-			return Optional.empty();
+		return Optional.ofNullable(mergeNodeInfo(getId(), n4, n6));
+	}
 
-		return Optional.of(NodeInfo.of(getId(),
+	/**
+	 * Combine the per-family results into a single transport-agnostic {@link NodeInfo}, taking the IPv4
+	 * address from {@code n4} and the IPv6 address from {@code n6}. Returns {@code null} if both are null.
+	 */
+	private static @Nullable NodeInfo mergeNodeInfo(Id id, @Nullable NodeInfo n4, @Nullable NodeInfo n6) {
+		if (n4 == null && n6 == null)
+			return null;
+
+		return NodeInfo.of(id,
 				n4 != null ? n4.getAddress4() : null,
-				n6 != null ? n6.getAddress6() : null));
+				n6 != null ? n6.getAddress6() : null);
 	}
 
 	@Override
@@ -178,7 +186,14 @@ public class KadNode extends BosonVerticle implements Node {
 		return defaultLookupOption;
 	}
 
-	public DHT getDHT(Network network) {
+	/**
+	 * Returns the internal DHT instance for the given network family, or {@code null} if this node
+	 * does not run that family (single-stack node).
+	 *
+	 * @param network the network family.
+	 * @return the DHT instance, or {@code null} if not enabled for this node.
+	 */
+	public @Nullable DHT getDHT(Network network) {
 		return network == Network.IPv4 ? dht4 : dht6;
 	}
 
@@ -397,6 +412,18 @@ public class KadNode extends BosonVerticle implements Node {
 		return ContextualFuture.of(promise.future());
 	}
 
+	/**
+	 * Join two per-family lookup futures, tolerating a single-family failure: the result succeeds if
+	 * at least one family succeeds, and only fails when both families fail. Used for CONSERVATIVE
+	 * lookups that accumulate their results as a side effect.
+	 */
+	private static Future<Void> joinTolerant(Future<Void> future4, Future<Void> future6) {
+		// Future.join waits for both to complete; afterwards each original future is settled and can be
+		// inspected directly. Succeed if at least one succeeded; fail only if both failed.
+		return Future.join(future4, future6).transform(ar -> (future4.succeeded() || future6.succeeded()) ?
+				Future.succeededFuture() : Future.failedFuture(future4.cause()));
+	}
+
 	private Future<Optional<NodeInfo>> doFindNode(Id id, LookupOption option) {
 		if (dht4 == null && dht6 == null)
 			return Future.failedFuture(new IllegalStateException("No DHT available"));
@@ -408,18 +435,17 @@ public class KadNode extends BosonVerticle implements Node {
 			Future<@Nullable NodeInfo> future4 = dht4.findNode(id, option);
 			Future<@Nullable NodeInfo> future6 = dht6.findNode(id, option);
 
-			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).map(cf -> {
-					NodeInfo n4 = cf.resultAt(0);
-					NodeInfo n6 = cf.resultAt(1);
+			if (option == LookupOption.CONSERVATIVE) {
+				// Tolerate a single-family failure: merge whatever succeeded and only fail if BOTH fail.
+				return Future.join(future4, future6).transform(ar -> {
+					if (!future4.succeeded() && !future6.succeeded())
+						return Future.failedFuture(future4.cause());
 
-					if (n4 == null && n6 == null)
-						return Optional.empty();
-
-					return Optional.of(NodeInfo.of(id,
-							n4 != null ? n4.getAddress4() : null,
-							n6 != null ? n6.getAddress6() : null));
+					NodeInfo n4 = future4.succeeded() ? future4.result() : null;
+					NodeInfo n6 = future6.succeeded() ? future6.result() : null;
+					return Future.succeededFuture(Optional.ofNullable(mergeNodeInfo(id, n4, n6)));
 				});
+			}
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && future4.result() == null)
@@ -431,9 +457,7 @@ public class KadNode extends BosonVerticle implements Node {
 				NodeInfo n4 = future4.isComplete() ? future4.result() : null;
 				NodeInfo n6 = future6.isComplete() ? future6.result() : null;
 
-				return Future.succeededFuture(Optional.of(NodeInfo.of(id,
-						n4 != null ? n4.getAddress4() : null,
-						n6 != null ? n6.getAddress6() : null)));
+				return Future.succeededFuture(Optional.ofNullable(mergeNodeInfo(id, n4, n6)));
 			});
 		}
 	}
@@ -499,7 +523,7 @@ public class KadNode extends BosonVerticle implements Node {
 			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).mapEmpty();
+				return joinTolerant(future4, future6);
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && result.isEmpty())
@@ -640,7 +664,7 @@ public class KadNode extends BosonVerticle implements Node {
 			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).mapEmpty();
+				return joinTolerant(future4, future6);
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && !result.reachedCapacity())
@@ -865,7 +889,8 @@ public class KadNode extends BosonVerticle implements Node {
 	private static class ListenerProxy extends CopyOnWriteArrayList<ConnectionStatusListener> implements DHTConnectionStatusListener {
 		private static final long serialVersionUID = 2740228489813224483L;
 
-		private @Nullable Context context;
+		// Written on the KadNode context but read from the DHT verticles' own event-loop threads.
+		private volatile @Nullable Context context;
 		private volatile ConnectionStatus status4 = ConnectionStatus.Disconnected;
 		private volatile ConnectionStatus status6 = ConnectionStatus.Disconnected;
 

@@ -113,6 +113,20 @@ public class NodeInfoTests {
 		assertEquals(addr6.getHostAddress(), ni1.getHost6()); // IPv6 address maybe compressed
 		assertEquals(port6, ni1.getPort6());
 
+		// Generic accessors on a dual-stack node must prefer IPv4 (and must not throw).
+		assertTrue(ni1.hasMultiAddresses());
+		assertEquals(socketAddr4, ni1.getAddress());
+		assertEquals(addr4, ni1.getIpAddress());
+		assertEquals(host4, ni1.getHost());
+		assertEquals(port4, ni1.getPort());
+
+		// narrowDown switches the generic accessors to the requested family.
+		ni1.narrowDown(java.net.StandardProtocolFamily.INET6);
+		assertEquals(socketAddr6, ni1.getAddress());
+		assertEquals(port6, ni1.getPort());
+		ni1.narrowDown(java.net.StandardProtocolFamily.INET);
+		assertEquals(socketAddr4, ni1.getAddress());
+
 		// Test constructor with InetAddress and port
 		NodeInfo ni2 = NodeInfo.of(id, addr4, port4, addr6, port6);
 		assertEquals(id, ni2.getId());
@@ -306,10 +320,20 @@ public class NodeInfoTests {
 	}
 
 	@Test
-	void testWrongAddressPosition() {
-		String json1 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"2001:db8:85a3:0:0:8a2e:370:7334\",1234,\"203.0.113.10\",1234]";
-		assertThrows(IllegalArgumentException.class, () -> Json.parse(json1, NodeInfo.class));
+	void testAddressOrderIsLenient() {
+		// Deserialization is family-aware: an IPv6 address listed before IPv4 is accepted and routed
+		// to the correct slot regardless of position.
+		String json1 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"2001:db8:85a3:0:0:8a2e:370:7334\",1234,\"203.0.113.10\",5678]";
+		NodeInfo ni = Json.parse(json1, NodeInfo.class);
+		assertTrue(ni.hasMultiAddresses());
+		assertEquals(5678, ni.getPort4());
+		assertEquals(1234, ni.getPort6());
+		assertEquals("203.0.113.10", ni.getHost4());
+	}
 
+	@Test
+	void testDuplicateAddressFamilyRejected() {
+		// Two addresses of the same family is invalid (a node has at most one IPv4 and one IPv6).
 		String json2 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"203.0.113.10\",1234,\"203.0.113.11\",1234]";
 		assertThrows(IllegalArgumentException.class, () -> Json.parse(json2, NodeInfo.class));
 

@@ -36,8 +36,9 @@ import io.bosonnetwork.NodeInfo;
 /**
  * Serializer for {@link NodeInfo} objects.
  * <p>
- * Encodes NodeInfo as a triple/array: [id, host, port]. In binary formats (CBOR),
- * id and host are written as Base64-encoded binary; in text formats (JSON/YAML),
+ * Encodes NodeInfo as an array: {@code [id, host, port]} for a single-address node, or
+ * {@code [id, host4, port4, host6, port6]} for a dual-stack node (IPv4 first, then IPv6). In binary
+ * formats (CBOR), id and host are written as Base64-encoded binary; in text formats (JSON/YAML),
  * id is written as Base58 and host as a string (IP address or hostname).
  */
 public class NodeInfoSerializer extends StdSerializer<NodeInfo> {

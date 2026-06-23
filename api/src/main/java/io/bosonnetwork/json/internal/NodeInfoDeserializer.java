@@ -23,6 +23,8 @@
 package io.bosonnetwork.json.internal;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Objects;
@@ -40,8 +42,10 @@ import io.bosonnetwork.NodeInfo;
 /**
  * Deserializer for {@link NodeInfo} objects.
  * <p>
- * Expects an array of [id, host, port]. In binary formats, id and host are decoded from Base64-encoded binary;
- * in text formats, id is parsed from Base58 and host from a string (IP address or hostname).
+ * Expects an array of {@code [id, host, port]} (single address) or {@code [id, host1, port1, host2, port2]}
+ * (dual-stack). In binary formats, id and host are decoded from Base64-encoded binary; in text formats,
+ * id is parsed from Base58 and host from a string (IP address or hostname). Each {@code [host, port]} pair
+ * is routed to its address family, so the element order is not significant.
  */
 public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 	private static final long serialVersionUID = -1802423497777216345L;
@@ -78,9 +82,6 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		final boolean binaryFormat = DataFormat.isBinary(p);
 
 		Id id = null;
-		InetAddress addr = null;
-		String host = null;
-		int port = 0;
 
 		// id
 		JsonToken token = p.nextToken();
@@ -90,31 +91,24 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 
 		Objects.requireNonNull(id, "missing id");
 
-		// address
-		// text format: IP address string or hostname string
-		// binary format: binary ip address or host name string
+		// One or two [host, port] pairs follow. Each pair is routed to its address family, so the
+		// element order is irrelevant (IPv4 may appear before or after IPv6).
+		//
+		// host:
+		//   text format: IP address string or hostname string
+		//   binary format: binary ip address (or, exceptionally, a host name string)
 		//
 		// Note: a textual host that is a hostname (not an IP literal) is resolved here, mirroring
 		// NodeInfo's own (Id, String, port) constructor. NodeInfo deserialization can therefore
 		// perform a blocking name resolution; avoiding that would require a NodeInfo-level change to
 		// retain unresolved addresses, which would also alter equality semantics.
-		token = p.nextToken();
-		if (token == JsonToken.VALUE_STRING)
-			host = p.getText();
-		else if (token == JsonToken.VALUE_EMBEDDED_OBJECT)
-			addr = InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
-		else
-			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: invalid node address");
+		InetSocketAddress addr4 = null;
+		InetSocketAddress addr6 = null;
 
-		// port
-		if (p.nextToken() != JsonToken.VALUE_NULL)
-			port = p.getIntValue();
-
-		InetSocketAddress sockAddr = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
-		InetSocketAddress sockAddr6 = null;
-
-		token = p.nextToken();
-		if (token != JsonToken.END_ARRAY) {
+		while ((token = p.nextToken()) != JsonToken.END_ARRAY) {
+			// address element (locals scoped per pair so they cannot leak across iterations)
+			InetAddress addr = null;
+			String host = null;
 			if (token == JsonToken.VALUE_STRING)
 				host = p.getText();
 			else if (token == JsonToken.VALUE_EMBEDDED_OBJECT)
@@ -122,18 +116,32 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 			else
 				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: invalid node address");
 
-			// port
+			// port element
+			int port = 0;
 			if (p.nextToken() != JsonToken.VALUE_NULL)
 				port = p.getIntValue();
 
-			sockAddr6 = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
+			InetSocketAddress sockAddr = addr != null ?
+					new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
 
-			token = p.nextToken();
+			InetAddress resolved = sockAddr.getAddress();
+			if (resolved instanceof Inet4Address) {
+				if (addr4 != null)
+					throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: duplicate IPv4 address");
+				addr4 = sockAddr;
+			} else if (resolved instanceof Inet6Address) {
+				if (addr6 != null)
+					throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: duplicate IPv6 address");
+				addr6 = sockAddr;
+			} else {
+				// Unresolved hostname: cannot determine the address family.
+				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: unresolved node address");
+			}
 		}
 
-		if (token != JsonToken.END_ARRAY)
-			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
+		if (addr4 == null && addr6 == null)
+			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: missing node address");
 
-		return sockAddr6 == null ? NodeInfo.of(id, sockAddr) : NodeInfo.of(id, sockAddr, sockAddr6);
+		return NodeInfo.of(id, addr4, addr6);
 	}
 }

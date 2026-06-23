@@ -770,6 +770,16 @@ public class NodeConfiguration {
 			return this;
 		}
 
+		/**
+		 * Adds a dual-stack bootstrap node with both an IPv4 and an IPv6 address.
+		 *
+		 * @param id    the unique identifier of the bootstrap node
+		 * @param addr4 the IPv4 address of the bootstrap node
+		 * @param port4 the IPv4 port number of the bootstrap node
+		 * @param addr6 the IPv6 address of the bootstrap node
+		 * @param port6 the IPv6 port number of the bootstrap node
+		 * @return the builder instance for chaining
+		 */
 		public Builder addBootstrap(String id, String addr4, int port4, String addr6, int port6) {
 			NodeInfo node = NodeInfo.of(Id.of(id), addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
@@ -790,6 +800,16 @@ public class NodeConfiguration {
 			return this;
 		}
 
+		/**
+		 * Adds a dual-stack bootstrap node with both an IPv4 and an IPv6 address.
+		 *
+		 * @param id    the Id of the bootstrap node
+		 * @param addr4 the IPv4 address of the bootstrap node
+		 * @param port4 the IPv4 port of the bootstrap node
+		 * @param addr6 the IPv6 address of the bootstrap node
+		 * @param port6 the IPv6 port of the bootstrap node
+		 * @return this Builder for chaining
+		 */
 		public Builder addBootstrap(Id id, String addr4, int port4, String addr6, int port6) {
 			NodeInfo node = NodeInfo.of(id, addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
@@ -809,6 +829,16 @@ public class NodeConfiguration {
 			return this;
 		}
 
+		/**
+		 * Adds a dual-stack bootstrap node with both an IPv4 and an IPv6 address.
+		 *
+		 * @param id    the Id of the bootstrap node
+		 * @param addr4 the IPv4 InetAddress of the bootstrap node
+		 * @param port4 the IPv4 port of the bootstrap node
+		 * @param addr6 the IPv6 InetAddress of the bootstrap node
+		 * @param port6 the IPv6 port of the bootstrap node
+		 * @return this Builder for chaining
+		 */
 		public Builder addBootstrap(Id id, InetAddress addr4, int port4, InetAddress addr6, int port6) {
 			NodeInfo node = NodeInfo.of(id, addr4, port4, addr6, port6);
 			this.bootstraps.add(node);
@@ -827,7 +857,15 @@ public class NodeConfiguration {
 			return this;
 		}
 
-		public Builder addBootstrap(Id id, InetSocketAddress addr4, InetSocketAddress addr6) {
+		/**
+		 * Adds a dual-stack bootstrap node with both an IPv4 and an IPv6 socket address.
+		 *
+		 * @param id    the Id of the bootstrap node
+		 * @param addr4 the IPv4 InetSocketAddress of the bootstrap node, can be null
+		 * @param addr6 the IPv6 InetSocketAddress of the bootstrap node, can be null
+		 * @return this Builder for chaining
+		 */
+		public Builder addBootstrap(Id id, @Nullable InetSocketAddress addr4, @Nullable InetSocketAddress addr6) {
 			NodeInfo node = NodeInfo.of(id, addr4, addr6);
 			this.bootstraps.add(node);
 			return this;
@@ -948,11 +986,25 @@ public class NodeConfiguration {
 
 					try {
 						Id id = Id.of((String) b.get(0));
-						String host1 = (String) b.get(1);
-						int port1 = (int) b.get(2);
-						String host2 = size == 5 ? (String) b.get(3) : null;
-						int port2 = size == 5 ? (int) b.get(4) : 0;
-						addBootstrap(NodeInfo.of(id, host1, port1, host2, port2));
+
+						// Resolve each (host, port) pair and route it to its address family, so the
+						// declared order is irrelevant and a single address may be IPv4 or IPv6.
+						InetSocketAddress addr4 = null;
+						InetSocketAddress addr6 = null;
+						for (int i = 1; i + 1 < size; i += 2) {
+							InetSocketAddress sa = new InetSocketAddress((String) b.get(i), (int) b.get(i + 1));
+							if (sa.getAddress() instanceof java.net.Inet4Address) {
+								if (addr4 != null)
+									throw new IllegalArgumentException("Duplicate IPv4 address");
+								addr4 = sa;
+							} else {
+								if (addr6 != null)
+									throw new IllegalArgumentException("Duplicate IPv6 address");
+								addr6 = sa;
+							}
+						}
+
+						addBootstrap(NodeInfo.of(id, addr4, addr6));
 					} catch (Exception e) {
 						throw new IllegalArgumentException("Invalid bootstrap node: " + b);
 					}

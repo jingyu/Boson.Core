@@ -36,6 +36,16 @@ import org.jspecify.annotations.Nullable;
 /**
  * This class represents the node information in the Boson network; it contains
  * basic node network information. It supports both IPv4 and IPv6 addresses.
+ * <p>
+ * A node is identified by its {@link Id} and may carry an IPv4 address, an IPv6 address, or both.
+ * The generic accessors ({@link #getAddress()}, {@link #getHost()}, {@link #getPort()},
+ * {@link #getIpAddress()}) prefer the IPv4 address and fall back to IPv6; use the family-specific
+ * accessors to target a particular protocol family.
+ * <p>
+ * The id and addresses are immutable and define {@link #equals(Object)}/{@link #hashCode()}; the
+ * version and the default protocol family ({@link #narrowDown(StandardProtocolFamily)}) are mutable
+ * and excluded from equality. Instances are not thread-safe for the mutable fields; callers that
+ * share an instance across threads should treat it as effectively immutable.
  */
 public class NodeInfo {
 	private final Id id;
@@ -69,8 +79,9 @@ public class NodeInfo {
 		this.addr4 = sockAddr4;
 		this.addr6 = sockAddr6;
 
-		if (sockAddr4 == null || sockAddr6 == null)
-			defaultProtocolFamily = sockAddr4 != null ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
+		// Generic accessors prefer IPv4 and fall back to IPv6. For a dual-stack node both addresses
+		// are present, so default to IPv4; for a single-stack node default to the available family.
+		this.defaultProtocolFamily = sockAddr4 != null ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
 	}
 
 	protected NodeInfo(Id id, InetSocketAddress sockAddr) {
@@ -173,6 +184,16 @@ public class NodeInfo {
 		return new NodeInfo(id, sockAddr4, sockAddr6);
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object with an optional IPv4 and an optional IPv6 address.
+	 *
+	 * @param id the node id.
+	 * @param inetAddr4 the IPv4 address, can be null.
+	 * @param port4 the IPv4 port number, ignored if {@code inetAddr4} is null.
+	 * @param inetAddr6 the IPv6 address, can be null.
+	 * @param port6 the IPv6 port number, ignored if {@code inetAddr6} is null.
+	 * @throws IllegalArgumentException if both addresses are null, or if an address/port is invalid.
+	 */
 	public static NodeInfo of(Id id, @Nullable InetAddress inetAddr4, int port4, @Nullable InetAddress inetAddr6, int port6) {
 		Objects.requireNonNull(id, "id");
 		if (inetAddr4 == null && inetAddr6 == null)
@@ -201,6 +222,16 @@ public class NodeInfo {
 		return new NodeInfo(id, sockAddr4, sockAddr6);
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object with an optional IPv4 and an optional IPv6 host address.
+	 *
+	 * @param id the node id.
+	 * @param host4 the IPv4 host name or address string, can be null.
+	 * @param port4 the IPv4 port number, ignored if {@code host4} is null.
+	 * @param host6 the IPv6 host name or address string, can be null.
+	 * @param port6 the IPv6 port number, ignored if {@code host6} is null.
+	 * @throws IllegalArgumentException if both hosts are null, or if an address/port is invalid.
+	 */
 	public static NodeInfo of(Id id, @Nullable String host4, int port4, @Nullable String host6, int port6) {
 		Objects.requireNonNull(id, "id");
 		if (host4 == null && host6 == null)
@@ -229,6 +260,16 @@ public class NodeInfo {
 		return new NodeInfo(id, sockAddr4, sockAddr6);
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object with an optional IPv4 and an optional IPv6 raw address.
+	 *
+	 * @param id the node id.
+	 * @param inetAddr4 the raw IPv4 address bytes, can be null.
+	 * @param port4 the IPv4 port number, ignored if {@code inetAddr4} is null.
+	 * @param inetAddr6 the raw IPv6 address bytes, can be null.
+	 * @param port6 the IPv6 port number, ignored if {@code inetAddr6} is null.
+	 * @throws IllegalArgumentException if both addresses are null, or if an address/port is invalid.
+	 */
 	public static NodeInfo of(Id id, byte @Nullable [] inetAddr4, int port4, byte @Nullable [] inetAddr6, int port6) {
 		Objects.requireNonNull(id, "id");
 		if (inetAddr4 == null && inetAddr6 == null)
@@ -280,6 +321,14 @@ public class NodeInfo {
 		return id;
 	}
 
+	/**
+	 * Narrow the node down to a single protocol family, making the given family the one returned by
+	 * the generic accessors ({@link #getAddress()}, {@link #getHost()}, {@link #getPort()}, etc.).
+	 *
+	 * @param family the protocol family to make default; the node must have an address for it.
+	 * @throws IllegalStateException if no address of the requested family is available.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public void narrowDown(StandardProtocolFamily family) {
 		switch (family) {
 			case INET -> {
@@ -296,6 +345,13 @@ public class NodeInfo {
 		this.defaultProtocolFamily = family;
 	}
 
+	/**
+	 * Checks whether the node has an address of the given protocol family.
+	 *
+	 * @param family the protocol family (INET or INET6).
+	 * @return true if an address of that family is available.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public boolean hasAddress(StandardProtocolFamily family) {
 		return switch (family) {
 			case INET -> addr4 != null;
@@ -304,14 +360,29 @@ public class NodeInfo {
 		};
 	}
 
+	/**
+	 * Checks whether the node has an IPv4 address.
+	 *
+	 * @return true if an IPv4 address is available.
+	 */
 	public boolean hasAddress4() {
 		return addr4 != null;
 	}
 
+	/**
+	 * Checks whether the node has an IPv6 address.
+	 *
+	 * @return true if an IPv6 address is available.
+	 */
 	public boolean hasAddress6() {
 		return addr6 != null;
 	}
 
+	/**
+	 * Checks whether the node is dual-stack (has both an IPv4 and an IPv6 address).
+	 *
+	 * @return true if both an IPv4 and an IPv6 address are available.
+	 */
 	public boolean hasMultiAddresses() {
 		return addr4 != null && addr6 != null;
 	}
@@ -329,6 +400,13 @@ public class NodeInfo {
 		return Objects.requireNonNull(getAddress(defaultProtocolFamily));
 	}
 
+	/**
+	 * Gets the socket address of the node for the given protocol family.
+	 *
+	 * @param family the protocol family (INET or INET6).
+	 * @return the socket address, or null if not available for that family.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public @Nullable InetSocketAddress getAddress(StandardProtocolFamily family) {
 		return switch (family) {
 			case INET -> addr4;
@@ -367,6 +445,13 @@ public class NodeInfo {
 		return Objects.requireNonNull(getIpAddress(defaultProtocolFamily));
 	}
 
+	/**
+	 * Gets the IP address of the node for the given protocol family.
+	 *
+	 * @param family the protocol family (INET or INET6).
+	 * @return the IP address, or null if not available for that family.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public @Nullable InetAddress getIpAddress(StandardProtocolFamily family) {
 		return switch (family) {
 			case INET -> addr4 != null ? addr4.getAddress() : null;
@@ -406,6 +491,14 @@ public class NodeInfo {
 		return Objects.requireNonNull(getHost(defaultProtocolFamily));
 	}
 
+	/**
+	 * Returns the String form of the IP address or hostname for the given protocol family.
+	 * This method will <b>not</b> attempt to do a reverse lookup.
+	 *
+	 * @param family the protocol family (INET or INET6).
+	 * @return the host string, or null if not available for that family.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public @Nullable String getHost(StandardProtocolFamily family) {
 		return switch (family) {
 			case INET -> addr4 != null ? addr4.getHostString() : null;
@@ -446,6 +539,13 @@ public class NodeInfo {
 		return getPort(defaultProtocolFamily);
 	}
 
+	/**
+	 * Gets the port number of the node for the given protocol family.
+	 *
+	 * @param family the protocol family (INET or INET6).
+	 * @return the port number, or -1 if not available for that family.
+	 * @throws IllegalArgumentException if the family is not INET or INET6.
+	 */
 	public int getPort(StandardProtocolFamily family) {
 		return switch (family) {
 			case INET -> addr4 != null ? addr4.getPort() : -1;

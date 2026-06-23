@@ -45,11 +45,12 @@ import io.bosonnetwork.crypto.CryptoException;
  *     <li>Cryptographic operations: sign, verify, encrypt, decrypt</li>
  * </ul>
  * <p>
- * <b>Lookup result conventions:</b> {@link #findNode} returns a {@link Result} that may carry the
- * node's IPv4 and/or IPv6 address (either side may be {@code null}). Single-result lookups
- * ({@link #findValue}, {@link #getValue}, the single-result {@link #findPeer(Id)}, {@link #getPeer})
- * complete with an {@link java.util.Optional} that is empty when nothing is found, while collection
- * lookups ({@link #getPeers}, {@link #findPeer(Id, int, int, LookupOption)}) complete with an empty list.
+ * <b>Lookup result conventions:</b> {@link #findNode} completes with an {@link java.util.Optional}
+ * {@link NodeInfo} that, when present, may carry the node's IPv4 and/or IPv6 address (either side may
+ * be {@code null}). Single-result lookups ({@link #findValue}, {@link #getValue}, the single-result
+ * {@link #findPeer(Id)}, {@link #getPeer}) complete with an {@link java.util.Optional} that is empty
+ * when nothing is found, while collection lookups ({@link #getPeers},
+ * {@link #findPeer(Id, int, int, LookupOption)}) complete with an empty list.
  */
 public interface Node extends Identity {
 	/** The maximum age for a peer (2 hours). */
@@ -150,7 +151,7 @@ public interface Node extends Identity {
 	 * Finds a node by its ID using the default lookup option.
 	 *
 	 * @param id the {@link Id} of the node to find
-	 * @return a {@link CompletableFuture} containing the {@link Result} of the lookup
+	 * @return a {@link CompletableFuture} containing an {@link Optional} {@link NodeInfo} of the lookup
 	 */
 	default CompletableFuture<Optional<NodeInfo>> findNode(Id id) {
 		return findNode(id, null);
@@ -161,7 +162,7 @@ public interface Node extends Identity {
 	 *
 	 * @param id the {@link Id} of the node to find
 	 * @param option the {@link LookupOption} to use
-	 * @return a {@link CompletableFuture} containing the {@link Result} of the lookup
+	 * @return a {@link CompletableFuture} containing an {@link Optional} {@link NodeInfo} of the lookup
 	 */
 	CompletableFuture<Optional<NodeInfo>> findNode(Id id, @Nullable LookupOption option);
 
