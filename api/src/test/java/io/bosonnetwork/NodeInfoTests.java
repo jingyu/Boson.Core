@@ -104,9 +104,41 @@ public class NodeInfoTests {
 	}
 
 	@Test
-	void testJson() {
+	void testJson4() {
 		Id id = Id.random();
 		NodeInfo ni = new NodeInfo(id, "203.0.113.10", 1234);
+
+		String json = Json.toString(ni);
+		System.out.println(json);
+		System.out.println(Json.toPrettyString(ni));
+
+		NodeInfo ni2 = Json.parse(json, NodeInfo.class);
+		assertEquals(ni, ni2);
+
+		String json2 = Json.toString(ni2);
+		assertEquals(json, json2);
+	}
+
+	@Test
+	void testJson6() {
+		Id id = Id.random();
+		NodeInfo ni = new NodeInfo(id, "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1234);
+
+		String json = Json.toString(ni);
+		System.out.println(json);
+		System.out.println(Json.toPrettyString(ni));
+
+		NodeInfo ni2 = Json.parse(json, NodeInfo.class);
+		assertEquals(ni, ni2);
+
+		String json2 = Json.toString(ni2);
+		assertEquals(json, json2);
+	}
+
+	@Test
+	void testJson46() {
+		Id id = Id.random();
+		NodeInfo ni = new NodeInfo(id, new InetSocketAddress("203.0.113.10", 1234), new InetSocketAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1234));
 
 		String json = Json.toString(ni);
 		System.out.println(json);
@@ -136,9 +168,41 @@ public class NodeInfoTests {
 	}
 
 	@Test
-	void testCbor() {
+	void testCbor4() {
 		Id id = Id.random();
 		NodeInfo ni = new NodeInfo(id, "203.0.113.10", 1234);
+
+		byte[] cbor = Json.toBytes(ni);
+		System.out.println(Hex.encode(cbor));
+		System.out.println(Json.toPrettyString(Json.parse(cbor, List.class)));
+
+		NodeInfo ni2 = Json.parse(cbor, NodeInfo.class);
+		assertEquals(ni, ni2);
+
+		byte[] cbor2 = Json.toBytes(ni2);
+		assertArrayEquals(cbor, cbor2);
+	}
+
+	@Test
+	void testCbor6() {
+		Id id = Id.random();
+		NodeInfo ni = new NodeInfo(id, "2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1234);
+
+		byte[] cbor = Json.toBytes(ni);
+		System.out.println(Hex.encode(cbor));
+		System.out.println(Json.toPrettyString(Json.parse(cbor, List.class)));
+
+		NodeInfo ni2 = Json.parse(cbor, NodeInfo.class);
+		assertEquals(ni, ni2);
+
+		byte[] cbor2 = Json.toBytes(ni2);
+		assertArrayEquals(cbor, cbor2);
+	}
+
+	@Test
+	void testCbor46() {
+		Id id = Id.random();
+		NodeInfo ni = new NodeInfo(id, new InetSocketAddress("203.0.113.10", 1234), new InetSocketAddress("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 1234));
 
 		byte[] cbor = Json.toBytes(ni);
 		System.out.println(Hex.encode(cbor));
@@ -165,5 +229,17 @@ public class NodeInfoTests {
 
 		byte[] cbor2 = Json.toBytes(ni2);
 		assertArrayEquals(cbor, cbor2);
+	}
+
+	@Test
+	void testWrongAddressPosition() {
+		String json1 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"2001:db8:85a3:0:0:8a2e:370:7334\",1234,\"203.0.113.10\",1234]";
+		assertThrows(IllegalArgumentException.class, () -> Json.parse(json1, NodeInfo.class));
+
+		String json2 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"203.0.113.10\",1234,\"203.0.113.11\",1234]";
+		assertThrows(IllegalArgumentException.class, () -> Json.parse(json2, NodeInfo.class));
+
+		String json3 = "[\"GZgsJAKT9SCVsro1Uj7npAe88E7j5jWawZyYbdES1yJJ\",\"2001:db8:85a3:0:0:8a2e:370:7333\",1234,\"2001:db8:85a3:0:0:8a2e:370:7334\",1234]";
+		assertThrows(IllegalArgumentException.class, () -> Json.parse(json3, NodeInfo.class));
 	}
 }

@@ -42,10 +42,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.kademlia.rpc.RpcCallListener;
@@ -84,7 +84,7 @@ public class SybilTests {
 				.build());
 		target.start().get();
 
-		targetInfo = target.getNodeInfo().getV4();
+		targetInfo = target.getNodeInfo().orElseThrow();
 	}
 
 	@AfterEach

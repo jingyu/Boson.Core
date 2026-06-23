@@ -29,7 +29,6 @@ import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -53,8 +52,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public Result<NodeInfo> getNodeInfo() {
-				return null;
+			public Optional<NodeInfo> getNodeInfo() {
+				return Optional.empty();
 			}
 
 			@Override
@@ -137,8 +136,8 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Result<NodeInfo>> findNode(Id id, LookupOption option) {
-				return null;
+			public CompletableFuture<Optional<NodeInfo>> findNode(Id id, LookupOption option) {
+				return ContextualFuture.succeededFuture(Optional.empty());
 			}
 
 			@Override

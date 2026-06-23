@@ -10,7 +10,6 @@ import io.vertx.core.Vertx;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.kademlia.utils.Timer;
 
 public class KadContext implements Timer, Executor {

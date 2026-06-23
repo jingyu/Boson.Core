@@ -39,10 +39,10 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;

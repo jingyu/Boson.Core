@@ -29,10 +29,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.protocol.FindPeerResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;

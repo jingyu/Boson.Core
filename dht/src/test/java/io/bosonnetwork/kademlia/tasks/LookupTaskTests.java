@@ -20,11 +20,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.kademlia.rpc.RpcCall;

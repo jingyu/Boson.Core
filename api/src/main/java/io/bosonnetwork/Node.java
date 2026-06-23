@@ -68,9 +68,9 @@ public interface Node extends Identity {
 	/**
 	 * Retrieves detailed information about this node, including IPv4/IPv6 addresses.
 	 *
-	 * @return a {@link Result} containing {@link NodeInfo} for this node
+	 * @return a {@link Optional} containing {@link NodeInfo} for this node
 	 */
-	Result<NodeInfo> getNodeInfo();
+	Optional<NodeInfo> getNodeInfo();
 
 	/**
 	 * Get the software version.
@@ -152,7 +152,7 @@ public interface Node extends Identity {
 	 * @param id the {@link Id} of the node to find
 	 * @return a {@link CompletableFuture} containing the {@link Result} of the lookup
 	 */
-	default CompletableFuture<Result<NodeInfo>> findNode(Id id) {
+	default CompletableFuture<Optional<NodeInfo>> findNode(Id id) {
 		return findNode(id, null);
 	}
 
@@ -163,7 +163,7 @@ public interface Node extends Identity {
 	 * @param option the {@link LookupOption} to use
 	 * @return a {@link CompletableFuture} containing the {@link Result} of the lookup
 	 */
-	CompletableFuture<Result<NodeInfo>> findNode(Id id, @Nullable LookupOption option);
+	CompletableFuture<Optional<NodeInfo>> findNode(Id id, @Nullable LookupOption option);
 
 	/**
 	 * Finds a value by its ID without the expected sequence number and default lookup option.

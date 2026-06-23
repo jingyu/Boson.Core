@@ -23,6 +23,7 @@
 package io.bosonnetwork.json.internal;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -68,29 +69,58 @@ public class NodeInfoSerializer extends StdSerializer<NodeInfo> {
 	 */
 	@Override
 	public void serialize(NodeInfo value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-		// Format: triple
-		//   [id, host, port]
+		// Format: triple or 5-tuple:
+		//   [id, host, port] | [id, host4, port4, host6, port6]
 		//
 		// host:
 		//   text format: IP address string or hostname string
 		//   binary format: binary ip address
+
+		InetSocketAddress sockAddr4 = value.getAddress4();
+		InetSocketAddress sockAddr6 = value.getAddress6();
+		if (sockAddr4 == null && sockAddr6 == null)
+			throw new IllegalStateException("NodeInfo must have at least one address");
+
 		gen.writeStartArray();
 
 		if (DataFormat.isBinary(gen)) {
 			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, value.getId().bytesUnsafe(), 0, Id.BYTES);
-			if (value.getAddress().isUnresolved()) {
-				// not attempting to do name resolution
-				gen.writeString(value.getAddress().getHostString());
-			} else {
-				byte[] addr = value.getIpAddress().getAddress();
-				gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+
+			if (sockAddr4 != null) {
+				if (sockAddr4.isUnresolved()) {
+					// not attempting to do name resolution
+					gen.writeString(sockAddr4.getHostString());
+				} else {
+					byte[] addr = sockAddr4.getAddress().getAddress();
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+				}
+
+				gen.writeNumber(sockAddr4.getPort());
+			}
+
+			if (sockAddr6 != null) {
+				if (sockAddr6.isUnresolved()) {
+					// not attempting to do name resolution
+					gen.writeString(sockAddr6.getHostString());
+				} else {
+					byte[] addr = sockAddr6.getAddress().getAddress();
+					gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, addr, 0, addr.length); // binary ip address
+				}
+
+				gen.writeNumber(sockAddr6.getPort());
 			}
 		} else {
 			gen.writeString(value.getId().toBase58String());
-			gen.writeString(value.getHost()); // host name or ip address
-		}
+			if (sockAddr4 != null) {
+				gen.writeString(sockAddr4.getHostString()); // host name or ip address
+				gen.writeNumber(sockAddr4.getPort());
+			}
 
-		gen.writeNumber(value.getPort());
+			if (sockAddr6 != null) {
+				gen.writeString(sockAddr6.getHostString()); // host name or ip address
+				gen.writeNumber(sockAddr6.getPort());
+			}
+		}
 
 		gen.writeEndArray();
 	}

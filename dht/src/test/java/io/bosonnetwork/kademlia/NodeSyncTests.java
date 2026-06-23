@@ -30,13 +30,13 @@ import org.junit.jupiter.api.Timeout;
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -86,7 +86,7 @@ public class NodeSyncTests {
 					.generatePrivateKey()
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
 					.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "storage.db"))
-					.addBootstrap(bootstrap.getNodeInfo().getV4())
+					.addBootstrap(bootstrap.getNodeInfo().orElseThrow())
 					.setDeveloperMode(true)
 					.build();
 
@@ -94,7 +94,7 @@ public class NodeSyncTests {
 			CompletableFuture<Void> future = new CompletableFuture<>();
 			node.addConnectionStatusListener(new ConnectionStatusListener() {
 				@Override
-				public void connected(Network network) {
+				public void connected() {
 					future.complete(null);
 				}
 			});
@@ -209,12 +209,11 @@ public class NodeSyncTests {
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
 				System.out.format("\n\n\007⌛ %d:%d %s looking up node %s ...\n", i, j, node.getId(), target.getId());
-				var result = node.findNode(target.getId()).get();
+				var ni = node.findNode(target.getId()).get();
 				System.out.format("\007🟢 %s lookup node %s finished\n", node.getId(), target.getId());
 
-				assertNotNull(result);
-				assertFalse(result.isEmpty());
-				assertEquals(target.getNodeInfo().getV4(), result.getV4());
+				assertFalse(ni.isEmpty());
+				assertEquals(target.getNodeInfo(), ni);
 			}
 		}
 	}

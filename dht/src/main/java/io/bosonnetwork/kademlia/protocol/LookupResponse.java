@@ -28,8 +28,8 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.kademlia.impl.Network;
 
 public abstract class LookupResponse implements Response {
 	@JsonProperty("n4")

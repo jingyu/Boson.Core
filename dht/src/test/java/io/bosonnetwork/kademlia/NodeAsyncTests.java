@@ -36,15 +36,14 @@ import io.vertx.junit5.VertxTestContext;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -133,7 +132,7 @@ public class NodeAsyncTests {
 				.generatePrivateKey()
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + index))
 				.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-" + index + File.separator + "storage.db"))
-				.addBootstrap(bootstrap.getNodeInfo().getV4())
+				.addBootstrap(bootstrap.getNodeInfo().orElseThrow())
 				.setDeveloperMode(true)
 				.build();
 
@@ -143,7 +142,7 @@ public class NodeAsyncTests {
 		Promise<Void> promise = Promise.promise();
 		node.addConnectionStatusListener(new ConnectionStatusListener() {
 			@Override
-			public void connected(Network network) {
+			public void connected() {
 				System.out.printf("\007🟢 The node %d - %s is ready ...\n", index, node.getId());
 				promise.complete();
 			}
@@ -270,13 +269,12 @@ public class NodeAsyncTests {
 
 			return executeSequentially(testNodes, node -> {
 				System.out.format("\n\n\007⌛ %s looking up node %s ...\n", node.getId(), target.getId());
-				var future = (ContextualFuture<Result<NodeInfo>>) node.findNode(target.getId());
-				return future.thenAccept(result -> {
+				var future = (ContextualFuture<Optional<NodeInfo>>) node.findNode(target.getId());
+				return future.thenAccept(ni -> {
 					System.out.format("\007🟢 %s lookup node %s finished\n", node.getId(), target.getId());
 					context.verify(() -> {
-						assertNotNull(result);
-						assertFalse(result.isEmpty());
-						assertEquals(target.getNodeInfo().getV4(), result.getV4());
+						assertFalse(ni.isEmpty());
+						assertEquals(target.getNodeInfo(), ni);
 					});
 				});
 			});

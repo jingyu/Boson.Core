@@ -52,7 +52,6 @@ import io.vertx.junit5.VertxTestContext;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
@@ -60,6 +59,7 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
 import io.bosonnetwork.kademlia.protocol.FindValueRequest;
 import io.bosonnetwork.kademlia.protocol.Message;

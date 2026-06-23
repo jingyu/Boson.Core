@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
+import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.jspecify.annotations.NullMarked;
@@ -26,12 +27,10 @@ import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.CryptoContext;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
@@ -41,6 +40,8 @@ import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 import io.bosonnetwork.kademlia.impl.DHT;
+import io.bosonnetwork.kademlia.impl.DHTConnectionStatusListener;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.security.Blacklist;
@@ -81,8 +82,7 @@ public class KadNode extends BosonVerticle implements Node {
 	private final List<Long> timers;
 
 	private volatile boolean running;
-	private final Object listenersLock = new Object();
-	private volatile ConnectionStatusListener connectionStatusListener;
+	private ListenerProxy connectionStatusListener;
 
 	private static final Logger log = LoggerFactory.getLogger(KadNode.class);
 
@@ -106,6 +106,7 @@ public class KadNode extends BosonVerticle implements Node {
 		this.config = config;
 
 		this.defaultLookupOption = LookupOption.CONSERVATIVE;
+		this.connectionStatusListener = new ListenerProxy();
 		this.running = false;
 
 		this.timers = new ArrayList<>(4);
@@ -151,8 +152,15 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public Result<NodeInfo> getNodeInfo() {
-		return Result.of(dht4 != null ? dht4.getNodeInfo() : null, dht6 != null ? dht6.getNodeInfo() : null);
+	public Optional<NodeInfo> getNodeInfo() {
+		NodeInfo n4 = dht4 != null ? dht4.getNodeInfo() : null;
+		NodeInfo n6 = dht6 != null ? dht6.getNodeInfo() : null;
+		if (n4 == null && n6 == null)
+			return Optional.empty();
+
+		return Optional.of(new NodeInfo(getId(),
+				n4 != null ? n4.getAddress4() : null,
+				n6 != null ? n6.getAddress6() : null));
 	}
 
 	@Override
@@ -177,24 +185,13 @@ public class KadNode extends BosonVerticle implements Node {
 	@Override
 	public void addConnectionStatusListener(ConnectionStatusListener listener) {
 		Objects.requireNonNull(listener, "listener cannot be null");
-		synchronized (listenersLock) {
-			if (connectionStatusListener instanceof ListenerArray listeners)
-				listeners.add(listener);
-			else
-				connectionStatusListener = new ListenerArray(listener);
-		}
+		connectionStatusListener.add(listener);
 	}
 
 	@Override
 	public void removeConnectionStatusListener(ConnectionStatusListener listener) {
 		Objects.requireNonNull(listener, "listener cannot be null");
-		synchronized (listenersLock) {
-			if (connectionStatusListener instanceof ListenerArray listeners) {
-				listeners.remove(listener);
-				if (listeners.isEmpty())
-					connectionStatusListener = null;
-			}
-		}
+		connectionStatusListener.remove(listener);
 	}
 
 	@Override
@@ -246,45 +243,16 @@ public class KadNode extends BosonVerticle implements Node {
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
 
-		ConnectionStatusListener proxy = new ConnectionStatusListener() {
-			@Override
-			public void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
-				ConnectionStatusListener listener = connectionStatusListener;
-				if (listener != null)
-					runOnContext(unused -> listener.statusChanged(network, newStatus, oldStatus));
-			}
-
-			@Override
-			public void connecting(Network network) {
-				ConnectionStatusListener listener = connectionStatusListener;
-				if (listener != null)
-					runOnContext(unused -> listener.connecting(network));
-			}
-
-			@Override
-			public void connected(Network network) {
-				ConnectionStatusListener listener = connectionStatusListener;
-				if (listener != null)
-					runOnContext(unused -> listener.connected(network));
-			}
-
-			@Override
-			public void disconnected(Network network) {
-				ConnectionStatusListener listener = connectionStatusListener;
-				if (listener != null)
-					runOnContext(unused -> listener.disconnected(network));
-			}
-		};
-
 		return storage.initialize(vertx, MAX_VALUE_AGE, MAX_PEER_AGE).compose(unused -> {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
+			connectionStatusListener.setContext(vertxContext);
 			if (config.host4() != null) {
 				dht4 = new DHT(identity, Network.IPv4, config.host4(), config.port(), config.bootstrapNodes(),
 						storage, config.dataDir().resolve("dht4.cache"),
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
 
-				dht4.setConnectionStatusListener(proxy);
+				dht4.setConnectionStatusListener(connectionStatusListener);
 
 				Future<Void> future = vertx.deployVerticle(dht4).andThen(ar -> {
 					if (ar.failed())
@@ -300,7 +268,7 @@ public class KadNode extends BosonVerticle implements Node {
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
 
-				dht6.setConnectionStatusListener(proxy);
+				dht6.setConnectionStatusListener(connectionStatusListener);
 
 				Future<Void> future = vertx.deployVerticle(dht6).andThen(ar -> {
 					if (ar.failed())
@@ -367,7 +335,10 @@ public class KadNode extends BosonVerticle implements Node {
 				stopFutures.add(Future.succeededFuture());
 			}
 
-			return Future.all(stopFutures).mapEmpty();
+			return Future.all(stopFutures).map(cf -> {
+				connectionStatusListener.setContext(null);
+				return null;
+			});
 		}).compose(v ->
 			storage == null ? Future.succeededFuture() :
 					storage.close().andThen(ar -> storage = null).otherwiseEmpty()
@@ -415,39 +386,54 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<Result<NodeInfo>> findNode(Id id, LookupOption option) {
+	public ContextualFuture<Optional<NodeInfo>> findNode(Id id, @Nullable LookupOption option) {
 		Objects.requireNonNull(id, "Invalid node id");
 		checkRunning();
 
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 
-		Promise<Result<NodeInfo>> promise = Promise.promise();
+		Promise<Optional<NodeInfo>> promise = Promise.promise();
 		runOnContext(v -> doFindNode(id, lookupOption).onComplete(promise));
 		return ContextualFuture.of(promise.future());
 	}
 
-	private Future<Result<NodeInfo>> doFindNode(Id id, LookupOption option) {
+	private Future<Optional<NodeInfo>> doFindNode(Id id, LookupOption option) {
+		if (dht4 == null && dht6 == null)
+			return Future.failedFuture(new IllegalStateException("No DHT available"));
+
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.findNode(id, option).map(ni -> Result.ofNetwork(dht.getNetwork(), ni));
+			return dht.findNode(id, option).map(Optional::ofNullable);
 		} else {
-			Future<NodeInfo> future4 = dht4.findNode(id, option);
-			Future<NodeInfo> future6 = dht6.findNode(id, option);
+			Future<@Nullable NodeInfo> future4 = dht4.findNode(id, option);
+			Future<@Nullable NodeInfo> future6 = dht6.findNode(id, option);
 
 			if (option == LookupOption.CONSERVATIVE)
-				return Future.all(future4, future6).map(cf ->
-						Result.of(cf.resultAt(0), cf.resultAt(1))
-				);
+				return Future.all(future4, future6).map(cf -> {
+					NodeInfo n4 = cf.resultAt(0);
+					NodeInfo n6 = cf.resultAt(1);
+
+					if (n4 == null && n6 == null)
+						return Optional.empty();
+
+					return Optional.of(new NodeInfo(id,
+							n4 != null ? n4.getAddress4() : null,
+							n6 != null ? n6.getAddress6() : null));
+				});
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && future4.result() == null)
-					return future6.map(ni -> Result.of(null, ni));
+					return future6.map(Optional::ofNullable);
 
 				if (future6.isComplete() && future6.result() == null)
-					return future4.map(ni -> Result.of(ni, null));
+					return future4.map(Optional::ofNullable);
 
-				return Future.succeededFuture(Result.of(future4.isComplete() ? future4.result() : null,
-						future6.isComplete() ? future6.result() : null));
+				NodeInfo n4 = future4.isComplete() ? future4.result() : null;
+				NodeInfo n6 = future6.isComplete() ? future6.result() : null;
+
+				return Future.succeededFuture(Optional.of(new NodeInfo(id,
+						n4 != null ? n4.getAddress4() : null,
+						n6 != null ? n6.getAddress6() : null)));
 			});
 		}
 	}
@@ -490,6 +476,9 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	private Future<Void> doFindValue(Id id, int expectedSequenceNumber, LookupOption option, EligibleValue result) {
+		if (dht4 == null && dht6 == null)
+			return Future.failedFuture(new IllegalStateException("No DHT available"));
+
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.findValue(id, expectedSequenceNumber, option).map(v -> {
@@ -568,6 +557,9 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	private Future<Void> doStoreValue(Value value, int expectedSequenceNumber) {
+		if (dht4 == null && dht6 == null)
+			return Future.failedFuture(new IllegalStateException("No DHT available"));
+
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.storeValue(value, expectedSequenceNumber);
@@ -625,6 +617,9 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private Future<Void> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount,
 											  LookupOption option, EligiblePeers result) {
+		if (dht4 == null && dht6 == null)
+			return Future.failedFuture(new IllegalStateException("No DHT available"));
+
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.findPeer(id, expectedSequenceNumber, expectedCount, option).map(peers -> {
@@ -697,6 +692,9 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	private Future<Void> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
+		if (dht4 == null && dht6 == null)
+			return Future.failedFuture(new IllegalStateException("No DHT available"));
+
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.announcePeer(peer, expectedSequenceNumber);
@@ -864,51 +862,83 @@ public class KadNode extends BosonVerticle implements Node {
 		return "Kademlia node: " + identity.getId().toString();
 	}
 
-	private static class ListenerArray extends CopyOnWriteArrayList<ConnectionStatusListener> implements ConnectionStatusListener {
+	private static class ListenerProxy extends CopyOnWriteArrayList<ConnectionStatusListener> implements DHTConnectionStatusListener {
 		private static final long serialVersionUID = 2740228489813224483L;
 
-		public ListenerArray(ConnectionStatusListener listener) {
+		private @Nullable Context context;
+		private volatile ConnectionStatus status4 = ConnectionStatus.Disconnected;
+		private volatile ConnectionStatus status6 = ConnectionStatus.Disconnected;
+
+		public ListenerProxy() {
 			super();
-			add(listener);
 		}
 
-		public void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
-			for (ConnectionStatusListener listener : this) {
-				try {
-					listener.statusChanged(network, newStatus, oldStatus);
-				} catch (Exception e) {
-					log.error("Error dispatching statusChanged to listener: {}", listener, e);
-				}
-			}
+		private void setContext(@Nullable Context context) {
+			this.context = context;
 		}
 
+		private void runOnContext(Handler<Void> action) {
+			Objects.requireNonNull(context, "Vert.x context is not available.");
+			context.runOnContext(action);
+		}
+
+		@Override
 		public void connecting(Network network) {
+			if (network.isIPv4())
+				status4 = ConnectionStatus.Connecting;
+			if (network.isIPv6())
+				status6 = ConnectionStatus.Connecting;
+
+			// A KadNode is considered to be connecting if at least one DHT (IPv4 or IPv6) is in the connecting state.
 			for (ConnectionStatusListener listener : this) {
-				try {
-					listener.connecting(network);
-				} catch (Exception e) {
-					log.error("Error dispatching connecting to listener: {}", listener, e);
-				}
+				runOnContext(v -> {
+					try {
+						listener.connecting();
+					} catch (Exception e) {
+						log.error("Error dispatching connecting to listener: {}", listener, e);
+					}
+				});
 			}
 		}
 
+		@Override
 		public void connected(Network network) {
+			if (network.isIPv4())
+				status4 = ConnectionStatus.Connected;
+			if (network.isIPv6())
+				status6 = ConnectionStatus.Connected;
+
+			// A KadNode is considered to be connected if at least one DHT (IPv4 or IPv6) is in the connected state.
 			for (ConnectionStatusListener listener : this) {
-				try {
-					listener.connected(network);
-				} catch (Exception e) {
-					log.error("Error dispatching connected to listener: {}", listener, e);
-				}
+				runOnContext(v -> {
+					try {
+						listener.connected();
+					} catch (Exception e) {
+						log.error("Error dispatching connected to listener: {}", listener, e);
+					}
+				});
 			}
 		}
 
+		@Override
 		public void disconnected(Network network) {
+			if (network.isIPv4())
+				status4 = ConnectionStatus.Disconnected;
+			if (network.isIPv6())
+				status6 = ConnectionStatus.Disconnected;
+
+			if (status4 != ConnectionStatus.Disconnected || status6 != ConnectionStatus.Disconnected)
+				return;
+
+			// A KadNode is considered disconnected only when all enabled DHTs (IPv4 and IPv6) are disconnected.
 			for (ConnectionStatusListener listener : this) {
-				try {
-					listener.disconnected(network);
-				} catch (Exception e) {
-					log.error("Error dispatching disconnected to listener: {}", listener, e);
-				}
+				runOnContext(v -> {
+					try {
+						listener.disconnected();
+					} catch (Exception e) {
+						log.error("Error dispatching disconnected to listener: {}", listener, e);
+					}
+				});
 			}
 		}
 	}

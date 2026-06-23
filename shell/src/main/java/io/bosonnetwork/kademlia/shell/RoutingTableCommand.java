@@ -27,8 +27,8 @@ import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
 
-import io.bosonnetwork.Network;
 import io.bosonnetwork.kademlia.impl.DHT;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.vertx.ContextualFuture;
 
 /**

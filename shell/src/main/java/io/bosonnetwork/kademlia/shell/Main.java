@@ -52,12 +52,11 @@ import picocli.shell.jline3.PicocliCommands.PicocliCommandsFactory;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.json.Json;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.utils.ApplicationLock;
-import io.bosonnetwork.json.Json;
 
 /**
  * @hidden
@@ -269,18 +268,18 @@ public class Main implements Callable<Integer> {
 
 		bosonNode.addConnectionStatusListener(new ConnectionStatusListener() {
 			@Override
-			public void connecting(Network network) {
-				System.out.format("DHT/%s is connecting\n", network);
+			public void connecting() {
+				System.out.println("Boson node is connecting");
 			}
 
 			@Override
-			public void connected(Network network) {
-				System.out.format("DHT/%s connected\n", network);
+			public void connected() {
+				System.out.println("Boson node connected");
 			}
 
 			@Override
-			public void disconnected(Network network) {
-				System.out.format("DHT/%s disconnected\n", network);
+			public void disconnected() {
+				System.out.println("Boson node disconnected");
 			}
 		});
 

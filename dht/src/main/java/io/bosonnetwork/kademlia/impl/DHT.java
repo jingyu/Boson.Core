@@ -19,18 +19,16 @@ import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.ConnectionStatus;
-import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
-import io.bosonnetwork.Result;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.exceptions.InvalidPeerException;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
@@ -107,7 +105,7 @@ public class DHT extends BosonVerticle {
 
 	private volatile boolean running;
 	private ConnectionStatus status;
-	private ConnectionStatusListener connectionStatusListener;
+	private DHTConnectionStatusListener connectionStatusListener;
 
 	private List<NodeInfo> bootstrapNodes;
 	private List<Id> bootstrapIds;
@@ -127,6 +125,8 @@ public class DHT extends BosonVerticle {
 	private final Map<KBucket, Task<?>> maintenanceTasks = new IdentityHashMap<>();
 
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
+
+	private record ClosestNodes(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {}
 
 	public DHT(Identity identity, Network network, String host, int port, Collection<NodeInfo> bootstrapNodes,
 			   DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
@@ -202,7 +202,7 @@ public class DHT extends BosonVerticle {
 		this.sibling = dht;
 	}
 
-	public void setConnectionStatusListener(ConnectionStatusListener listener) {
+	public void setConnectionStatusListener(DHTConnectionStatusListener listener) {
 		this.connectionStatusListener = listener;
 	}
 
@@ -649,7 +649,6 @@ public class DHT extends BosonVerticle {
 		if (connectionStatusListener == null)
 			return;
 
-		connectionStatusListener.statusChanged(network, status, old);
 		switch (status) {
 			case Connecting -> connectionStatusListener.connecting(network);
 			case Connected -> connectionStatusListener.connected(network);
@@ -700,12 +699,12 @@ public class DHT extends BosonVerticle {
 		Id target = body.getTarget();
 		int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 		int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-		Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
+		ClosestNodes closest = populateClosestNodes(target, want4, want6);
 
 		int token = body.doesWantToken() ?
 				tokenManager.generateToken(request.getId(), request.getRemoteAddress(), target) : 0;
 
-		Message response = Message.findNodeResponse(request.getTxid(), closest.getV4(), closest.getV6(), token)
+		Message response = Message.findNodeResponse(request.getTxid(), closest.nodes4, closest.nodes6, token)
 				.setRemote(request.getId(), request.getRemoteAddress());
 		rpcServer.sendMessage(response);
 	}
@@ -723,8 +722,8 @@ public class DHT extends BosonVerticle {
 			} else {
 				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
-				response = Message.findValueResponse(request.getTxid(), closest.getV4(), closest.getV6());
+				ClosestNodes closest = populateClosestNodes(target, want4, want6);
+				response = Message.findValueResponse(request.getTxid(), closest.nodes4, closest.nodes6);
 			}
 
 			return response;
@@ -777,8 +776,8 @@ public class DHT extends BosonVerticle {
 			} else {
 				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-				Result<List<? extends NodeInfo>> closest = populateClosestNodes(target, want4, want6);
-				response = Message.findPeerResponse(request.getTxid(), closest.getV4(), closest.getV6());
+				ClosestNodes closest = populateClosestNodes(target, want4, want6);
+				response = Message.findPeerResponse(request.getTxid(), closest.nodes4, closest.nodes6);
 			}
 
 			return response;
@@ -972,7 +971,7 @@ public class DHT extends BosonVerticle {
 		}
 	}
 
-	private Result<List<? extends NodeInfo>> populateClosestNodes(Id target, int v4, int v6) {
+	private ClosestNodes populateClosestNodes(Id target, int v4, int v6) {
 		List<NodeInfo> nodes4 = List.of();
 		List<NodeInfo> nodes6 = List.of();
 
@@ -1004,10 +1003,10 @@ public class DHT extends BosonVerticle {
 			}
 		}
 
-		return Result.of(nodes4, nodes6);
+		return new ClosestNodes(nodes4, nodes6);
 	}
 
-	public Future<NodeInfo> findNode(Id id, LookupOption option) {
+	public Future<@Nullable NodeInfo> findNode(Id id, LookupOption option) {
 		Promise<NodeInfo> promise = Promise.promise();
 
 		runOnContext(v -> {

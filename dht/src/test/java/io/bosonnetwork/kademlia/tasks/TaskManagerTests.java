@@ -17,9 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 
-import io.bosonnetwork.Network;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 
 @ExtendWith(VertxExtension.class)

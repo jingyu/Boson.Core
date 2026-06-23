@@ -88,9 +88,16 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 			id = binaryFormat || token != JsonToken.VALUE_STRING ?
 					Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
 
+		Objects.requireNonNull(id, "missing id");
+
 		// address
 		// text format: IP address string or hostname string
 		// binary format: binary ip address or host name string
+		//
+		// Note: a textual host that is a hostname (not an IP literal) is resolved here, mirroring
+		// NodeInfo's own (Id, String, port) constructor. NodeInfo deserialization can therefore
+		// perform a blocking name resolution; avoiding that would require a NodeInfo-level change to
+		// retain unresolved addresses, which would also alter equality semantics.
 		token = p.nextToken();
 		if (token == JsonToken.VALUE_STRING)
 			host = p.getText();
@@ -103,15 +110,30 @@ public class NodeInfoDeserializer extends StdDeserializer<NodeInfo> {
 		if (p.nextToken() != JsonToken.VALUE_NULL)
 			port = p.getIntValue();
 
-		if (p.nextToken() != JsonToken.END_ARRAY)
+		InetSocketAddress sockAddr = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
+		InetSocketAddress sockAddr6 = null;
+
+		token = p.nextToken();
+		if (token != JsonToken.END_ARRAY) {
+			if (token == JsonToken.VALUE_STRING)
+				host = p.getText();
+			else if (token == JsonToken.VALUE_EMBEDDED_OBJECT)
+				addr = InetAddress.getByAddress(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL));
+			else
+				throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: invalid node address");
+
+			// port
+			if (p.nextToken() != JsonToken.VALUE_NULL)
+				port = p.getIntValue();
+
+			sockAddr6 = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
+
+			token = p.nextToken();
+		}
+
+		if (token != JsonToken.END_ARRAY)
 			throw MismatchedInputException.from(p, NodeInfo.class, "Invalid NodeInfo: too many elements in array");
 
-		// Note: a textual host that is a hostname (not an IP literal) is resolved here, mirroring
-		// NodeInfo's own (Id, String, port) constructor. NodeInfo deserialization can therefore
-		// perform a blocking name resolution; avoiding that would require a NodeInfo-level change to
-		// retain unresolved addresses, which would also alter equality semantics.
-		Objects.requireNonNull(id, "missing id");
-		InetSocketAddress isa = addr != null ? new InetSocketAddress(addr, port) : new InetSocketAddress(host, port);
-		return new NodeInfo(id, isa);
+		return sockAddr6 == null ? new NodeInfo(id, sockAddr) : new NodeInfo(id, sockAddr, sockAddr6);
 	}
 }

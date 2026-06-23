@@ -31,8 +31,6 @@ import picocli.CommandLine.Parameters;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
-import io.bosonnetwork.Network;
-import io.bosonnetwork.NodeInfo;
 
 /**
  * @hidden
@@ -65,17 +63,10 @@ public class FindNodeCommand implements Callable<Integer> {
 		}
 
 		Main.getBosonNode().findNode(id, option).thenAccept(result -> {
-			if (result.hasValue()) {
-				NodeInfo ni = result.getV4();
-				if (ni != null)
-					System.out.println(Network.IPv4 + ": " + ni);
-
-				ni = result.getV6();
-				if (ni != null)
-					System.out.println(Network.IPv6 + ": " + ni);
-			} else {
+			if (result.isPresent())
+				System.out.println(result.get());
+			else
 				System.out.println("Not found.");
-			}
 		}).get();
 
 		return 0;

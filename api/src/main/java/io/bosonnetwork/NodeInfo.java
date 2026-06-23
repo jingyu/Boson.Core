@@ -23,6 +23,8 @@
 
 package io.bosonnetwork;
 
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -32,51 +34,65 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * This class represents the node information in the Boson network; it contains
- * basic node network information.
+ * basic node network information. It supports both IPv4 and IPv6 addresses.
  */
 public class NodeInfo {
 	private final Id id;
-	private final InetSocketAddress addr;
+	private final @Nullable InetSocketAddress addr4;
+	private final @Nullable InetSocketAddress addr6;
 	private int version;
 
 	/**
 	 * Construct a {@code NodeInfo} object.
 	 *
 	 * @param id the node id.
-	 * @param addr the node socket address.
+	 * @param sockAddr the node socket address, can be IPv4 or IPv6.
 	 */
-	public NodeInfo(Id id, InetSocketAddress addr) {
+	public NodeInfo(Id id, InetSocketAddress sockAddr) {
 		Objects.requireNonNull(id, "id");
-		Objects.requireNonNull(addr, "addr");
-		if (addr.getPort() <= 0 || addr.getPort() > 65535)
-			throw new IllegalArgumentException("Invalid port: " + addr.getPort());
+		Objects.requireNonNull(sockAddr, "addr");
+		if (sockAddr.getPort() <= 0 || sockAddr.getPort() > 65535)
+			throw new IllegalArgumentException("Invalid port: " + sockAddr.getPort());
 
 		this.id = id;
-		this.addr = addr;
+		if (sockAddr.getAddress() instanceof Inet4Address) {
+			this.addr4 = sockAddr;
+			this.addr6 = null;
+		} else {
+			this.addr4 = null;
+			this.addr6 = sockAddr;
+		}
 	}
 
 	/**
 	 * Construct a {@code NodeInfo} object.
 	 *
 	 * @param id the node id.
-	 * @param addr the node IP address.
+	 * @param inetAddr the node IP address, can be IPv4 or IPv6.
 	 * @param port the node port number.
 	 */
-	public NodeInfo(Id id, InetAddress addr, int port) {
+	public NodeInfo(Id id, InetAddress inetAddr, int port) {
 		Objects.requireNonNull(id, "id");
-		Objects.requireNonNull(addr, "addr");
+		Objects.requireNonNull(inetAddr, "addr");
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
 		this.id = id;
-		this.addr = new InetSocketAddress(addr, port);
+		InetSocketAddress sockAddr = new InetSocketAddress(inetAddr, port);
+		if (inetAddr instanceof Inet4Address) {
+			this.addr4 = sockAddr;
+			this.addr6 = null;
+		} else {
+			this.addr4 = null;
+			this.addr6 = sockAddr;
+		}
 	}
 
 	/**
 	 * Construct a {@code NodeInfo} object.
 	 *
 	 * @param id the node id.
-	 * @param host the node host name or address.
+	 * @param host the node host name or address string.
 	 * @param port the node port number.
 	 */
 	public NodeInfo(Id id, String host, int port) {
@@ -86,29 +102,78 @@ public class NodeInfo {
 			throw new IllegalArgumentException("Invalid port: " + port);
 
 		this.id = id;
-		this.addr = new InetSocketAddress(host, port);
+		InetSocketAddress sockAddr = new InetSocketAddress(host, port);
+		if (sockAddr.getAddress() instanceof Inet4Address) {
+			this.addr4 = sockAddr;
+			this.addr6 = null;
+		} else {
+			this.addr4 = null;
+			this.addr6 = sockAddr;
+		}
 	}
 
 	/**
 	 * Construct a {@code NodeInfo} object.
 	 *
 	 * @param id the node id.
-	 * @param addr the node raw IP address.
+	 * @param inetAddr the node raw IP address, can be IPv4 or IPv6.
 	 * @param port the node port number.
 	 */
-	public NodeInfo(Id id, byte[] addr, int port) {
+	public NodeInfo(Id id, byte[] inetAddr, int port) {
 		Objects.requireNonNull(id, "id");
-		Objects.requireNonNull(addr, "addr");
+		Objects.requireNonNull(inetAddr, "addr");
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port: " + port);
 
+		InetSocketAddress sockAddr;
 		try {
-			this.addr = new InetSocketAddress(InetAddress.getByAddress(addr), port);
+			sockAddr = new InetSocketAddress(InetAddress.getByAddress(inetAddr), port);
 		} catch (UnknownHostException e) {
 			throw new IllegalArgumentException("Invalid binary network address", e);
 		}
 
 		this.id = id;
+		if (sockAddr.getAddress() instanceof Inet4Address) {
+			this.addr4 = sockAddr;
+			this.addr6 = null;
+		} else {
+			this.addr4 = null;
+			this.addr6 = sockAddr;
+		}
+	}
+
+	/**
+	 * Construct a {@code NodeInfo} object with both IPv4 and IPv6 addresses.
+	 *
+	 * @param id the node id.
+	 * @param sockAddr4 the IPv4 socket address, can be null.
+	 * @param sockAddr6 the IPv6 socket address, can be null.
+	 * @throws IllegalArgumentException if both addresses are null, or if the port is invalid.
+	 */
+	public NodeInfo(Id id, @Nullable InetSocketAddress sockAddr4, @Nullable InetSocketAddress sockAddr6) {
+		Objects.requireNonNull(id, "id");
+		if (sockAddr4 == null && sockAddr6 == null)
+			throw new IllegalArgumentException("At least one address must be specified");
+
+		if (sockAddr4 != null) {
+			if (!(sockAddr4.getAddress() instanceof Inet4Address))
+				throw new IllegalArgumentException("Invalid IPv4 address: " + sockAddr4.getAddress());
+
+			if (sockAddr4.getPort() <= 0 || sockAddr4.getPort() > 65535)
+				throw new IllegalArgumentException("Invalid port of IPv4 address: " + sockAddr4.getPort());
+		}
+
+		if (sockAddr6 != null) {
+			if (!(sockAddr6.getAddress() instanceof Inet6Address))
+				throw new IllegalArgumentException("Invalid IPv6 address: " + sockAddr6.getAddress());
+
+			if (sockAddr6.getPort() <= 0 || sockAddr6.getPort() > 65535)
+				throw new IllegalArgumentException("Invalid port of IPv6 address: " + sockAddr6.getPort());
+		}
+
+		this.id = id;
+		this.addr4 = sockAddr4;
+		this.addr6 = sockAddr6;
 	}
 
 	/**
@@ -120,7 +185,8 @@ public class NodeInfo {
 		Objects.requireNonNull(ni, "ni");
 
 		this.id = ni.id;
-		this.addr = ni.addr;
+		this.addr4 = ni.addr4;
+		this.addr6 = ni.addr6;
 		this.version = ni.version;
 	}
 
@@ -135,39 +201,121 @@ public class NodeInfo {
 
 	/**
 	 * Gets the socket address of the node.
+	 * Returns the IPv4 address if available, otherwise returns the IPv6 address.
 	 *
 	 * @return the socket address.
+	 * @throws IllegalStateException if no address is available.
 	 */
 	public InetSocketAddress getAddress() {
+		InetSocketAddress addr = addr4 != null ? addr4 : addr6;
+		if (addr == null)
+			throw new IllegalStateException("No address available");
 		return addr;
 	}
 
 	/**
+	 * Gets the IPv4 socket address of the node.
+	 *
+	 * @return the IPv4 socket address, or null if not available.
+	 */
+	public @Nullable InetSocketAddress getAddress4() {
+		return addr4;
+	}
+
+	/**
+	 * Gets the IPv6 socket address of the node.
+	 *
+	 * @return the IPv6 socket address, or null if not available.
+	 */
+	public @Nullable InetSocketAddress getAddress6() {
+		return addr6;
+	}
+
+	/**
 	 * Get the IP address of the node.
+	 * Returns the IPv4 address if available, otherwise returns the IPv6 address.
 	 *
 	 * @return the IP address.
 	 */
 	public InetAddress getIpAddress() {
-		return addr.getAddress();
+		return getAddress().getAddress();
+	}
+
+	/**
+	 * Get the IPv4 address of the node.
+	 *
+	 * @return the IPv4 address, or null if not available.
+	 */
+	public @Nullable InetAddress getIpAddress4() {
+		return addr4 != null ? addr4.getAddress() : null;
+	}
+
+	/**
+	 * Get the IPv6 address of the node.
+	 *
+	 * @return the IPv6 address, or null if not available.
+	 */
+	public @Nullable InetAddress getIpAddress6() {
+		return addr6 != null ? addr6.getAddress() : null;
 	}
 
 	/**
 	 * Returns the String form of the IP address or hostname.
 	 * This method will <b>not</b> attempt to do a reverse lookup.
+	 * Returns the IPv4 address if available, otherwise returns the IPv6 address.
 	 *
 	 * @return the host name or string of IP address.
 	 */
 	public String getHost() {
-		return addr.getHostString();
+		return getAddress().getHostString();
+	}
+
+	/**
+	 * Returns the String form of the IPv4 address or hostname.
+	 * This method will <b>not</b> attempt to do a reverse lookup.
+	 *
+	 * @return the host name or string of IPv4 address, or null if not available.
+	 */
+	public @Nullable String getHost4() {
+		return addr4 != null ? addr4.getHostString() : null;
+	}
+
+	/**
+	 * Returns the String form of the IPv6 address or hostname.
+	 * This method will <b>not</b> attempt to do a reverse lookup.
+	 *
+	 * @return the host name or string of IPv6 address, or null if not available.
+	 */
+	public @Nullable String getHost6() {
+		return addr6 != null ? addr6.getHostString() : null;
 	}
 
 	/**
 	 * Get the port number of the node.
+	 * Returns the IPv4 port if available, otherwise returns the IPv6 port.
 	 *
 	 * @return the port number.
 	 */
 	public int getPort() {
-		return addr.getPort();
+		return getAddress().getPort();
+	}
+
+	/**
+	 * Get the IPv4 port number of the node.
+	 *
+	 * @return the port number, or -1 if not available.
+	 */
+	public int getPort4() {
+		return addr4 != null ? addr4.getPort() : -1;
+	}
+
+	/**
+	 * Get the IPv6 port number of the node.
+	 *
+	 * @return the port number, or -1 if not available.
+	 */
+	public int getPort6() {
+		return addr6 != null ? addr6.getPort() : -1;
 	}
 
 	/**
@@ -198,14 +346,16 @@ public class NodeInfo {
 	 */
 	public boolean matches(@Nullable NodeInfo other) {
 		if (other != null)
-			return this.id.equals(other.id) || this.addr.equals(other.addr);
+			return this.id.equals(other.id) ||
+					((addr4 != null || other.addr4 != null) && Objects.equals(addr4, other.addr4)) ||
+					((addr6 != null || other.addr6 != null) && Objects.equals(addr6, other.addr6));
 		else
 			return false;
 	}
 
 	@Override
 	public int hashCode() {
-		return 0x6030A + Objects.hash(id, addr);
+		return 0x6030A + Objects.hash(id, addr4, addr6);
 	}
 
 	@Override
@@ -215,13 +365,17 @@ public class NodeInfo {
 
 		if (o instanceof NodeInfo that)
 			return this.id.equals(that.id) &&
-					this.addr.equals(that.addr);
+					Objects.equals(this.addr4, that.addr4) &&
+					Objects.equals(this.addr6, that.addr6);
 
 		return false;
 	}
 
 	@Override
 	public String toString() {
-		return id + "@" + getHost() + ":" + getPort();
+		return id + "@" +
+				(addr4 != null ? getHost() + ":" + getPort() : "") +
+				(addr4 != null && addr6 != null ? "|" : "") +
+				(addr6 != null ? " [" + getHost() + "]:" + getPort() : "");
 	}
 }

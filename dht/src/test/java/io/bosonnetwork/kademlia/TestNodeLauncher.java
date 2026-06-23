@@ -10,7 +10,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 
 import io.bosonnetwork.ConnectionStatusListener;
-import io.bosonnetwork.Network;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.crypto.Signature;
@@ -66,13 +65,13 @@ public class TestNodeLauncher {
 			node = Node.kadNode(config);
 			node.addConnectionStatusListener(new ConnectionStatusListener() {
 				@Override
-				public void connected(Network network) {
-					System.out.println("Kademlia node connected to " + network);
+				public void connected() {
+					System.out.println("Kademlia node is connected");
 				}
 
 				@Override
-				public void disconnected(Network network) {
-					System.out.println("Kademlia node disconnected from " + network);
+				public void disconnected() {
+					System.out.println("Kademlia node is disconnected");
 				}
 			});
 

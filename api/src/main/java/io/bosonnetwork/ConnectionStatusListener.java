@@ -28,38 +28,20 @@ package io.bosonnetwork;
  */
 public interface ConnectionStatusListener {
 	/**
-	 * Called when the Boson node connection status changed.
-	 *
-	 * @param network the DHT network, IPv4 or IPv6.
-	 * @param newStatus the new connection status.
-	 * @param oldStatus the old connection status.
-	 */
-	@SuppressWarnings("unused")
-	default void statusChanged(Network network, ConnectionStatus newStatus, ConnectionStatus oldStatus) {
-	}
-
-	/**
 	 * Called when the Boson node is connecting to the Boson network.
-	 *
-	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	default void connecting(Network network) {
+	default void connecting() {
 	}
 
 	/**
 	 * Called when the Boson node connected to the Boson network.
-	 *
-	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	default void connected(Network network) {
+	default void connected() {
 	}
 
 	/**
 	 * Called when the Boson node disconnected from the Boson network.
-	 *
-	 * @param network the DHT network, IPv4 or IPv6.
 	 */
-	@SuppressWarnings("unused")
-	default void disconnected(Network network) {
+	default void disconnected() {
 	}
 }
