@@ -161,6 +161,11 @@ public class KadNode extends BosonVerticle implements Node {
 	/**
 	 * Combine the per-family results into a single transport-agnostic {@link NodeInfo}, taking the IPv4
 	 * address from {@code n4} and the IPv6 address from {@code n6}. Returns {@code null} if both are null.
+	 * <p>
+	 * The presence of each address records which family answered: on the returned node,
+	 * {@link NodeInfo#hasAddress4()}/{@link NodeInfo#hasAddress6()} are true only for the families that
+	 * contributed a result. A dual-stack node that responded on only one family therefore yields a
+	 * single-address {@link NodeInfo}.
 	 */
 	private static @Nullable NodeInfo mergeNodeInfo(Id id, @Nullable NodeInfo n4, @Nullable NodeInfo n6) {
 		if (n4 == null && n6 == null)
@@ -169,6 +174,36 @@ public class KadNode extends BosonVerticle implements Node {
 		return NodeInfo.of(id,
 				n4 != null ? n4.getAddress4() : null,
 				n6 != null ? n6.getAddress6() : null);
+	}
+
+	/**
+	 * Normalize a lookup result to a plain {@link NodeInfo} before it crosses the public API boundary,
+	 * so internal mutable subtypes ({@code KBucketEntry}, {@code CandidateNode}) are never handed to
+	 * callers. A plain {@code NodeInfo} (immutable) is returned as-is.
+	 */
+	private static @Nullable NodeInfo toPublicNodeInfo(@Nullable NodeInfo n) {
+		return (n == null || n.getClass() == NodeInfo.class) ? n :
+				NodeInfo.of(n.getId(), n.getAddress4(), n.getAddress6());
+	}
+
+	/**
+	 * Log a warning when exactly one address family's DHT lookup failed while the other succeeded. The
+	 * lookup as a whole still succeeds with a partial result, but a persistent single-family outage
+	 * (e.g. the IPv6 path is down) is worth surfacing operationally. Both futures must be settled, so
+	 * this is only meaningful after a {@code Future.join}.
+	 *
+	 * @param operation the lookup name, for the log message.
+	 * @param target    the lookup target, for the log message.
+	 * @param future4   the settled IPv4 lookup future.
+	 * @param future6   the settled IPv6 lookup future.
+	 */
+	private static void logPartialFailure(String operation, Object target, Future<?> future4, Future<?> future6) {
+		if (future4.failed() && future6.succeeded())
+			log.warn("{} {}: IPv4 DHT lookup failed but IPv6 succeeded; returning partial result",
+					operation, target, future4.cause());
+		else if (future6.failed() && future4.succeeded())
+			log.warn("{} {}: IPv6 DHT lookup failed but IPv4 succeeded; returning partial result",
+					operation, target, future6.cause());
 	}
 
 	@Override
@@ -417,11 +452,14 @@ public class KadNode extends BosonVerticle implements Node {
 	 * at least one family succeeds, and only fails when both families fail. Used for CONSERVATIVE
 	 * lookups that accumulate their results as a side effect.
 	 */
-	private static Future<Void> joinTolerant(Future<Void> future4, Future<Void> future6) {
+	private static Future<Void> joinTolerant(String operation, Object target, Future<Void> future4, Future<Void> future6) {
 		// Future.join waits for both to complete; afterwards each original future is settled and can be
 		// inspected directly. Succeed if at least one succeeded; fail only if both failed.
-		return Future.join(future4, future6).transform(ar -> (future4.succeeded() || future6.succeeded()) ?
-				Future.succeededFuture() : Future.failedFuture(future4.cause()));
+		return Future.join(future4, future6).transform(ar -> {
+			logPartialFailure(operation, target, future4, future6);
+			return (future4.succeeded() || future6.succeeded()) ?
+					Future.succeededFuture() : Future.failedFuture(future4.cause());
+		});
 	}
 
 	private Future<Optional<NodeInfo>> doFindNode(Id id, LookupOption option) {
@@ -430,7 +468,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 		if (dht4 == null || dht6 == null) {
 			DHT dht = dht4 != null ? dht4 : dht6;
-			return dht.findNode(id, option).map(Optional::ofNullable);
+			return dht.findNode(id, option).map(n -> Optional.ofNullable(toPublicNodeInfo(n)));
 		} else {
 			Future<@Nullable NodeInfo> future4 = dht4.findNode(id, option);
 			Future<@Nullable NodeInfo> future6 = dht6.findNode(id, option);
@@ -441,6 +479,7 @@ public class KadNode extends BosonVerticle implements Node {
 					if (!future4.succeeded() && !future6.succeeded())
 						return Future.failedFuture(future4.cause());
 
+					logPartialFailure("findNode", id, future4, future6);
 					NodeInfo n4 = future4.succeeded() ? future4.result() : null;
 					NodeInfo n6 = future6.succeeded() ? future6.result() : null;
 					return Future.succeededFuture(Optional.ofNullable(mergeNodeInfo(id, n4, n6)));
@@ -523,7 +562,7 @@ public class KadNode extends BosonVerticle implements Node {
 			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return joinTolerant(future4, future6);
+				return joinTolerant("findValue", id, future4, future6);
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && result.isEmpty())
@@ -664,7 +703,7 @@ public class KadNode extends BosonVerticle implements Node {
 			});
 
 			if (option == LookupOption.CONSERVATIVE)
-				return joinTolerant(future4, future6);
+				return joinTolerant("findPeer", id, future4, future6);
 
 			return Future.any(future4, future6).compose(cf -> {
 				if (future4.isComplete() && !result.reachedCapacity())

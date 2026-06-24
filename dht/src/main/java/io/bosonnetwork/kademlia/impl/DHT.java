@@ -550,8 +550,7 @@ public class DHT extends BosonVerticle {
 			}
 
 			// Ensure bootstrap nodes only use a single address compatible with this DHT's network family.
-			NodeInfo bootstrapNode = node.hasMultiAddresses() ?
-					NodeInfo.of(node.getId(), Objects.requireNonNull(node.getAddress(network.protocolFamily()))) : node;
+			NodeInfo bootstrapNode = node.narrowDown(network.protocolFamily());
 			dedup.put(bootstrapNode.getId(), bootstrapNode);
 			added.put(bootstrapNode.getId(), bootstrapNode);
 		}

@@ -42,17 +42,15 @@ import org.jspecify.annotations.Nullable;
  * {@link #getIpAddress()}) prefer the IPv4 address and fall back to IPv6; use the family-specific
  * accessors to target a particular protocol family.
  * <p>
- * The id and addresses are immutable and define {@link #equals(Object)}/{@link #hashCode()}; the
- * version and the default protocol family ({@link #narrowDown(StandardProtocolFamily)}) are mutable
- * and excluded from equality. Instances are not thread-safe for the mutable fields; callers that
- * share an instance across threads should treat it as effectively immutable.
+ * Instances are immutable: the id and addresses define {@link #equals(Object)}/{@link #hashCode()},
+ * and the preferred protocol family is fixed at construction. {@link #narrowDown(StandardProtocolFamily)}
+ * returns a new instance rather than mutating. Immutable instances are safe to share across threads.
  */
 public class NodeInfo {
 	private final Id id;
 	private final @Nullable InetSocketAddress addr4;
 	private final @Nullable InetSocketAddress addr6;
-	private int version;
-	private @Nullable StandardProtocolFamily defaultProtocolFamily;
+	private final StandardProtocolFamily defaultProtocolFamily;
 
 	private NodeInfo(Id id, @Nullable InetSocketAddress sockAddr4, @Nullable InetSocketAddress sockAddr6) {
 		Objects.requireNonNull(id, "id");
@@ -115,7 +113,6 @@ public class NodeInfo {
 		this.id = ni.id;
 		this.addr4 = ni.addr4;
 		this.addr6 = ni.addr6;
-		this.version = ni.version;
 		this.defaultProtocolFamily = ni.defaultProtocolFamily;
 	}
 
@@ -322,27 +319,33 @@ public class NodeInfo {
 	}
 
 	/**
-	 * Narrow the node down to a single protocol family, making the given family the one returned by
-	 * the generic accessors ({@link #getAddress()}, {@link #getHost()}, {@link #getPort()}, etc.).
+	 * Returns a view of this node narrowed to a single protocol family, dropping any address of the
+	 * other family. The returned node carries only the requested family's address, so its generic
+	 * accessors unambiguously refer to that family and it compares equal only to other single-family
+	 * nodes with the same id and address. If this node already has only the requested family, it is
+	 * returned unchanged.
 	 *
-	 * @param family the protocol family to make default; the node must have an address for it.
+	 * @param family the protocol family to keep (INET or INET6); the node must have an address for it.
+	 * @return a single-address {@code NodeInfo} for the requested family.
 	 * @throws IllegalStateException if no address of the requested family is available.
 	 * @throws IllegalArgumentException if the family is not INET or INET6.
 	 */
-	public void narrowDown(StandardProtocolFamily family) {
-		switch (family) {
-			case INET -> {
-				if (addr4 == null)
-					throw new IllegalStateException("No IPv4 address is available");
-			}
-			case INET6 -> {
-				if (addr6 == null)
-					throw new IllegalStateException("No IPv6 address is available");
-			}
+	public NodeInfo narrowDown(StandardProtocolFamily family) {
+		InetSocketAddress addr = switch (family) {
+			case INET -> addr4;
+			case INET6 -> addr6;
 			default -> throw new IllegalArgumentException("Unsupported protocol family: " + family);
-		}
+		};
 
-		this.defaultProtocolFamily = family;
+		if (addr == null)
+			throw new IllegalStateException("No " +
+					(family == StandardProtocolFamily.INET ? "IPv4" : "IPv6") + " address is available");
+
+		// Already single-family (of the requested family, since its address is present): share it.
+		if (!hasMultiAddresses())
+			return this;
+
+		return new NodeInfo(id, addr);
 	}
 
 	/**
@@ -388,15 +391,25 @@ public class NodeInfo {
 	}
 
 	/**
-	 * Gets the socket address of the node.
-	 * Returns the IPv4 address if available, otherwise returns the IPv6 address.
+	 * Returns the protocol family used by the generic accessors ({@link #getAddress()},
+	 * {@link #getHost()}, {@link #getPort()}, {@link #getIpAddress()}). For a dual-stack node this is
+	 * IPv4 by default; for a single-stack node it is the only available family.
+	 *
+	 * @return the preferred protocol family (INET or INET6).
+	 */
+	public StandardProtocolFamily getPreferredFamily() {
+		return defaultProtocolFamily;
+	}
+
+	/**
+	 * Gets the socket address of the node for the {@linkplain #getPreferredFamily() preferred family}.
+	 * For a dual-stack node this is the IPv4 address; for a single-stack node it is the only available
+	 * address. Use {@link #getAddress4()}/{@link #getAddress6()} or {@link #getAddress(StandardProtocolFamily)}
+	 * to target a specific family.
 	 *
 	 * @return the socket address.
-	 * @throws IllegalStateException if no address is available.
 	 */
 	public InetSocketAddress getAddress() {
-		if (defaultProtocolFamily == null)
-			throw new IllegalStateException("No default protocol family is set");
 		return Objects.requireNonNull(getAddress(defaultProtocolFamily));
 	}
 
@@ -440,8 +453,6 @@ public class NodeInfo {
 	 * @return the IP address.
 	 */
 	public InetAddress getIpAddress() {
-		if (defaultProtocolFamily == null)
-			throw new IllegalStateException("No default protocol family is set");
 		return Objects.requireNonNull(getIpAddress(defaultProtocolFamily));
 	}
 
@@ -486,8 +497,6 @@ public class NodeInfo {
 	 * @return the host name or string of IP address.
 	 */
 	public String getHost() {
-		if (defaultProtocolFamily == null)
-			throw new IllegalStateException("No default protocol family is set");
 		return Objects.requireNonNull(getHost(defaultProtocolFamily));
 	}
 
@@ -534,8 +543,6 @@ public class NodeInfo {
 	 * @return the port number.
 	 */
 	public int getPort() {
-		if (defaultProtocolFamily == null)
-				throw new IllegalStateException("No default protocol family is set");
 		return getPort(defaultProtocolFamily);
 	}
 
@@ -570,24 +577,6 @@ public class NodeInfo {
 	 */
 	public int getPort6() {
 		return addr6 != null ? addr6.getPort() : -1;
-	}
-
-	/**
-	 * Sets the node version number.
-	 *
-	 * @param version the version number.
-	 */
-	public void setVersion(int version) {
-		this.version = version;
-	}
-
-	/**
-	 * Gets the node version.
-	 *
-	 * @return the version number.
-	 */
-	public int getVersion() {
-		return version;
 	}
 
 	/**

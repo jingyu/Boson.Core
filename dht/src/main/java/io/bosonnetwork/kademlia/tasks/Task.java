@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -525,7 +524,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 
 		// Ensure the target node only use a single address compatible with current network family.
 		if (node.hasMultiAddresses())
-			node = NodeInfo.of(node.getId(), Objects.requireNonNull(node.getAddress(getContext().getNetwork().protocolFamily())));
+			node = node.narrowDown(getContext().getNetwork().protocolFamily());
 
 		RpcCall call = new RpcCall(node, request)
 				.addListener(this::onCallStateChange);

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,10 +49,8 @@ public class NodeInfoTests {
 		assertEquals(socketAddr, ni4.getAddress4());
 
 		// Test copy constructor
-		ni1.setVersion(5);
 		NodeInfo ni5 = new NodeInfo(ni1);
 		assertEquals(ni1, ni5);
-		assertEquals(5, ni5.getVersion());
 	}
 
 	@Test
@@ -85,10 +84,8 @@ public class NodeInfoTests {
 		assertEquals(socketAddr, ni4.getAddress6());
 
 		// Test copy constructor
-		ni1.setVersion(5);
 		NodeInfo ni5 = new NodeInfo(ni1);
 		assertEquals(ni1, ni5);
-		assertEquals(5, ni5.getVersion());
 	}
 
 	@Test
@@ -115,17 +112,31 @@ public class NodeInfoTests {
 
 		// Generic accessors on a dual-stack node must prefer IPv4 (and must not throw).
 		assertTrue(ni1.hasMultiAddresses());
+		assertEquals(java.net.StandardProtocolFamily.INET, ni1.getPreferredFamily());
 		assertEquals(socketAddr4, ni1.getAddress());
 		assertEquals(addr4, ni1.getIpAddress());
 		assertEquals(host4, ni1.getHost());
 		assertEquals(port4, ni1.getPort());
 
-		// narrowDown switches the generic accessors to the requested family.
-		ni1.narrowDown(java.net.StandardProtocolFamily.INET6);
-		assertEquals(socketAddr6, ni1.getAddress());
-		assertEquals(port6, ni1.getPort());
-		ni1.narrowDown(java.net.StandardProtocolFamily.INET);
-		assertEquals(socketAddr4, ni1.getAddress());
+		// narrowDown returns a single-address copy for the requested family, leaving the original intact.
+		NodeInfo narrowed6 = ni1.narrowDown(java.net.StandardProtocolFamily.INET6);
+		assertFalse(narrowed6.hasMultiAddresses());
+		assertTrue(narrowed6.hasAddress6());
+		assertFalse(narrowed6.hasAddress4());
+		assertEquals(socketAddr6, narrowed6.getAddress());
+		assertEquals(port6, narrowed6.getPort());
+
+		NodeInfo narrowed4 = ni1.narrowDown(java.net.StandardProtocolFamily.INET);
+		assertFalse(narrowed4.hasMultiAddresses());
+		assertEquals(socketAddr4, narrowed4.getAddress());
+
+		// Original is unchanged (narrowDown does not mutate).
+		assertTrue(ni1.hasMultiAddresses());
+
+		// Narrowing an already single-family node to its own family returns the same instance.
+		assertSame(narrowed4, narrowed4.narrowDown(java.net.StandardProtocolFamily.INET));
+		// Narrowing to an absent family is rejected.
+		assertThrows(IllegalStateException.class, () -> narrowed4.narrowDown(java.net.StandardProtocolFamily.INET6));
 
 		// Test constructor with InetAddress and port
 		NodeInfo ni2 = NodeInfo.of(id, addr4, port4, addr6, port6);
@@ -146,10 +157,8 @@ public class NodeInfoTests {
 		assertEquals(socketAddr6, ni4.getAddress6());
 
 		// Test copy constructor
-		ni1.setVersion(5);
 		NodeInfo ni5 = new NodeInfo(ni1);
 		assertEquals(ni1, ni5);
-		assertEquals(5, ni5.getVersion());
 	}
 
 	@Test

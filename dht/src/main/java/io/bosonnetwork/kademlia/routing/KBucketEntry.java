@@ -88,6 +88,9 @@ public class KBucketEntry extends NodeInfo {
 	 */
 	private int failedRequests;
 
+	// The peer's software version as observed on the wire. Routing metadata only; not part of NodeInfo.
+	private int version;
+
 	private final ExponentialWeightedMovingAverage avgRTT = new ExponentialWeightedMovingAverage(RTT_EMA_WEIGHT);
 
 	/**
@@ -127,6 +130,25 @@ public class KBucketEntry extends NodeInfo {
 		lastSend = entry.lastSend();
 		reachable = entry.isReachable();
 		failedRequests = entry.failedRequests();
+		version = entry.version;
+	}
+
+	/**
+	 * Sets the peer's software version, as observed on the wire.
+	 *
+	 * @param version the version number.
+	 */
+	public void setVersion(int version) {
+		this.version = version;
+	}
+
+	/**
+	 * Gets the peer's software version, as observed on the wire.
+	 *
+	 * @return the version number, or 0 if unknown.
+	 */
+	public int getVersion() {
+		return version;
 	}
 
 	/**

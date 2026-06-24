@@ -4,22 +4,31 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
@@ -36,6 +45,8 @@ import io.vertx.junit5.VertxTestContext;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
+import io.bosonnetwork.LookupOption;
+import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
@@ -279,6 +290,73 @@ public class NodeAsyncTests {
 				});
 			});
 		}).toVertxFuture().onComplete(context.succeedingThenComplete());
+	}
+
+	/**
+	 * Enforces the invariant that the public {@link Node} API never leaks internal {@link NodeInfo}
+	 * subtypes ({@code KBucketEntry}, {@code CandidateNode}). Those are mutable and mutate on the DHT
+	 * event loop, so handing one to a caller would be an encapsulation and thread-safety leak (see
+	 * {@code KadNode.toPublicNodeInfo}).
+	 */
+	@Test
+	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
+	void testNodeApiDoesNotLeakNodeInfoSubtypes(VertxTestContext context) throws Exception {
+		// Structural tripwire: the set of NodeInfo-returning Node API methods must match this allowlist.
+		// If this fails, a new NodeInfo-returning method was added - make sure its result is normalized
+		// to a plain NodeInfo and extend the runtime checks below before updating the allowlist.
+		Set<String> nodeInfoReturningMethods = Arrays.stream(Node.class.getMethods())
+				.filter(m -> mentionsNodeInfo(m.getGenericReturnType()))
+				.map(Method::getName)
+				.collect(Collectors.toSet());
+		assertEquals(Set.of("findNode", "getNodeInfo"), nodeInfoReturningMethods,
+				"Unexpected NodeInfo-returning Node API method; ensure its result is normalized to a plain NodeInfo");
+
+		// Runtime: actual results must be exactly NodeInfo, never an internal subtype.
+		var node = testNodes.get(0);
+		var target = testNodes.get(TEST_NODES - 1);
+
+		// getNodeInfo() is built by merge - always a fresh, plain NodeInfo.
+		assertSame(NodeInfo.class, node.getNodeInfo().orElseThrow().getClass());
+
+		// findNode() conservative lookup - the single-stack passthrough is normalized.
+		Future.fromCompletionStage(node.findNode(target.getId()))
+				.onComplete(context.succeeding(found -> {
+					context.verify(() -> {
+						assertFalse(found.isEmpty());
+						assertSame(NodeInfo.class, found.get().getClass());
+					});
+				}));
+
+		// findNode(LOCAL) returns a routing-table entry (KBucketEntry) directly and must be normalized.
+		// After the conservative lookup the target is usually cached; assert only when present.
+		Future.fromCompletionStage(node.findNode(target.getId(), LookupOption.LOCAL))
+				.onComplete(context.succeeding(found -> {
+					context.verify(() -> {
+						assertFalse(found.isEmpty());
+						assertSame(NodeInfo.class, found.get().getClass());
+					});
+					context.completeNow();
+				}));
+	}
+
+	/** Recursively checks whether {@link NodeInfo} appears anywhere in a (possibly generic) type. */
+	private static boolean mentionsNodeInfo(Type type) {
+		if (type instanceof Class<?> clazz)
+			return clazz == NodeInfo.class;
+
+		if (type instanceof ParameterizedType pt) {
+			for (Type arg : pt.getActualTypeArguments())
+				if (mentionsNodeInfo(arg))
+					return true;
+		}
+
+		if (type instanceof WildcardType wt) {
+			for (Type bound : wt.getUpperBounds())
+				if (mentionsNodeInfo(bound))
+					return true;
+		}
+
+		return false;
 	}
 
 	@Test

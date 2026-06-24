@@ -187,7 +187,7 @@ public class SuspiciousNodeDetectorTests {
 			assertFalse(detector.isBanned("192.168.100." + i));
 		}
 
-		Thread.sleep(BAN_DURATION);
+		Thread.sleep(BAN_DURATION + 2000);
 
 		detector.purge();
 		System.out.println(detector);

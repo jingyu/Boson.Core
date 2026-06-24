@@ -159,6 +159,12 @@ public interface Node extends Identity {
 
 	/**
 	 * Finds a node by its ID with a specific lookup option.
+	 * <p>
+	 * When present, the returned {@link NodeInfo} records which address families answered the lookup:
+	 * {@link NodeInfo#hasAddress4()} and {@link NodeInfo#hasAddress6()} are true only for the families
+	 * that contributed a result. A dual-stack node that responded over a single family therefore yields
+	 * a single-address {@link NodeInfo} (a {@link LookupOption#CONSERVATIVE} lookup queries both families
+	 * and still succeeds with a partial result if only one responds).
 	 *
 	 * @param id the {@link Id} of the node to find
 	 * @param option the {@link LookupOption} to use
