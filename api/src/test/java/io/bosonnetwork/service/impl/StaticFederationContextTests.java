@@ -3,7 +3,6 @@ package io.bosonnetwork.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -16,8 +15,8 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.service.ServiceInfo;
+import io.bosonnetwork.service.SuperNodeInfo;
 
 public class StaticFederationContextTests {
 	private StaticFederationContext context;
@@ -41,7 +40,7 @@ public class StaticFederationContextTests {
 		SuperNodeInfo node = context.getNode(nodeId, true).get().orElseThrow();
 		assertNotNull(node);
 		assertEquals(nodeId, node.getId());
-		assertEquals("localhost", node.getHost());
+		assertEquals(List.of("localhost:8080"), node.getAddresses());
 
 		assertTrue(context.getNode(Id.random(), true).get().isEmpty());
 	}

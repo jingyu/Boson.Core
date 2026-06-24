@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.service.impl;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -40,8 +41,7 @@ import io.bosonnetwork.service.SuperNodeInfo;
  */
 public class PlainSuperNodeInfo implements SuperNodeInfo {
 	private final Id id;
-	private final String host;
-	private final int port;
+	private final List<String> addresses;
 	private final String apiEndpoint;
 	private final long ts;
 
@@ -53,27 +53,37 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 	 * @param port   the port (must be in 1-65535)
 	 */
 	protected PlainSuperNodeInfo(Id nodeId, String host, int port) {
-		this(nodeId, host, port, null);
+		Objects.requireNonNull(nodeId);
+		if (Objects.requireNonNull(host).isEmpty())
+			throw new IllegalArgumentException("Invalid host");
+		if (port <= 0 || port > 65535)
+			throw new IllegalArgumentException("Invalid port");
+
+		this.id = Objects.requireNonNull(nodeId);
+		this.addresses = List.of(host + ":" + port);
+		// noinspection HttpUrlsUsage
+		this.apiEndpoint = "http://" + this.addresses.get(0);
+		this.ts = System.currentTimeMillis();
 	}
 
 	/**
-	 * Creates a super node info with the given attributes.
+	 * Constructs a new PlainSuperNodeInfo instance with the specified node ID, a list of addresses, and an optional API endpoint.
 	 *
-	 * @param nodeId      the super node id
-	 * @param host        the host name or address
-	 * @param port        the port (must be in 1-65535)
-	 * @param apiEndpoint the API endpoint; a {@code http://host:port} URL is used when null or empty
-	 * @throws IllegalArgumentException if the port is out of range
+	 * @param nodeId      the unique identifier for the super node, must not be null.
+	 * @param addresses   the list of addresses associated with the super node, must not be empty.
+	 * @param apiEndpoint the optional API endpoint for the super node; if null or empty, it defaults to using the first address in the list with "http://" as the prefix.
+	 * @throws IllegalArgumentException if the addresses list is empty.
+	 * @throws NullPointerException     if the nodeId is null.
 	 */
-	protected PlainSuperNodeInfo(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
-		if (port <= 0 || port > 65535)
-			throw new IllegalArgumentException("Invalid port: " + port);
+	protected PlainSuperNodeInfo(Id nodeId, List<String> addresses, @Nullable String apiEndpoint) {
+		Objects.requireNonNull(nodeId);
+		if (Objects.requireNonNull(addresses).isEmpty())
+			throw new IllegalArgumentException("Empty addresses");
 
 		this.id = Objects.requireNonNull(nodeId);
-		this.host = Objects.requireNonNull(host);
-		this.port = port;
+		this.addresses = List.copyOf(addresses);
 		// noinspection HttpUrlsUsage
-		this.apiEndpoint = apiEndpoint == null || apiEndpoint.isEmpty() ? "http://" + host + ":" + port : apiEndpoint;
+		this.apiEndpoint = apiEndpoint == null || apiEndpoint.isEmpty() ? "http://" + addresses.get(0) : apiEndpoint;
 		this.ts = System.currentTimeMillis();
 	}
 
@@ -83,13 +93,8 @@ public class PlainSuperNodeInfo implements SuperNodeInfo {
 	}
 
 	@Override
-	public String getHost() {
-		return host;
-	}
-
-	@Override
-	public int getPort() {
-		return port;
+	public List<String> getAddresses() {
+		return addresses;
 	}
 
 	@Override

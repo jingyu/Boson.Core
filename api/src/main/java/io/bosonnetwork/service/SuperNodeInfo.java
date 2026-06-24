@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.service;
 
+import java.util.List;
 import java.util.Optional;
 
 import io.bosonnetwork.Id;
@@ -41,18 +42,11 @@ public non-sealed interface SuperNodeInfo extends Principal {
 	Id getId();
 
 	/**
-	 * Gets the hostname or IP address of the node.
+	 * Retrieves a list of addresses associated with the node.
 	 *
-	 * @return the host string, never {@code null}
+	 * @return a list of address strings; the list may be empty but will never be null
 	 */
-	String getHost();
-
-	/**
-	 * Gets the port number on which the node accepts connections.
-	 *
-	 * @return the port number
-	 */
-	int getPort();
+	List<String> getAddresses();
 
 	/**
 	 * Gets the API endpoint URL for the node.

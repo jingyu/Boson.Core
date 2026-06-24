@@ -99,7 +99,7 @@ public class StaticFederationContext implements FederationContext {
 			return false;
 
 		nodeServicesRegistry.computeIfAbsent(nodeId, k ->
-				new SuperNodeAndServices(new PlainSuperNodeInfo(nodeId, host, port, apiEndpoint), List.of()));
+				new SuperNodeAndServices(new PlainSuperNodeInfo(nodeId, List.of(host + ":" + port), apiEndpoint), List.of()));
 		return true;
 	}
 

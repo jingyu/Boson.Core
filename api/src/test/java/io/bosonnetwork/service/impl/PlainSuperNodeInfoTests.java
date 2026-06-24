@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
@@ -16,8 +18,7 @@ public class PlainSuperNodeInfoTests {
 		PlainSuperNodeInfo node = new PlainSuperNodeInfo(id, "127.0.0.1", 8080);
 
 		assertEquals(id, node.getId());
-		assertEquals("127.0.0.1", node.getHost());
-		assertEquals(8080, node.getPort());
+		assertEquals(List.of("127.0.0.1:8080"), node.getAddresses());
 		assertEquals("http://127.0.0.1:8080", node.getApiEndpoint());
 		assertFalse(node.getSoftware().isPresent());
 		assertFalse(node.getVersion().isPresent());
@@ -35,7 +36,7 @@ public class PlainSuperNodeInfoTests {
 	@Test
 	public void testCustomApiEndpoint() {
 		Id id = Id.random();
-		PlainSuperNodeInfo node = new PlainSuperNodeInfo(id, "127.0.0.1", 8080, "https://api.example.com");
+		PlainSuperNodeInfo node = new PlainSuperNodeInfo(id, List.of("127.0.0.1:8080"), "https://api.example.com");
 		assertEquals("https://api.example.com", node.getApiEndpoint());
 	}
 

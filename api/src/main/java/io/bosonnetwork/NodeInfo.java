@@ -29,6 +29,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnknownHostException;
+import java.util.List;
 import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
@@ -413,6 +414,24 @@ public class NodeInfo {
 	 */
 	public StandardProtocolFamily getPreferredFamily() {
 		return defaultProtocolFamily;
+	}
+
+	/**
+	 * Retrieves a list of network addresses, including both IPv4 and IPv6 addresses, if available.
+	 *
+	 * @return a list of InetSocketAddress objects containing the available network addresses.
+	 *         The list may include both IPv4 and IPv6 addresses, only IPv4 addresses,
+	 *         only IPv6 addresses, or be empty if no addresses are available.
+	 */
+	public List<InetSocketAddress> getAddresses() {
+		if (addr4 != null && addr6 != null)
+			return List.of(addr4, addr6);
+		else if (addr4 != null)
+			return List.of(addr4);
+		else if (addr6 != null)
+			return List.of(addr6);
+		else
+			return List.of();
 	}
 
 	/**
