@@ -180,6 +180,27 @@ public class NodeAsyncTests {
 				});
 	}
 
+	/**
+	 * Actively converge the freshly-joined network before running lookups. Nodes join sequentially, so
+	 * each node's bootstrap self-lookup ran against a partial network and the node was never re-announced
+	 * once the rest joined. Now that all nodes are present, have every node perform a final self-lookup:
+	 * each lookup announces the node to its neighborhood (the queried nodes add it to their routing
+	 * tables) and fills the node's own buckets - Kademlia's standard convergence step - so every node
+	 * becomes mutually findable. This targets reachability directly rather than inferring it from
+	 * routing-table sizes; Kademlia keeps only k entries per bucket, so no node ever holds every other
+	 * node anyway, and iterative routing - not full tables - is what makes a target findable.
+	 */
+	private static ContextualFuture<Void> awaitConvergence() {
+		System.out.println("\n\n\007⌛ Converging the network via self-lookups ...");
+		List<ContextualFuture<?>> lookups = new ArrayList<>(testNodes.size());
+		for (var node : testNodes)
+			// Result is irrelevant; the lookup's side effect (announce + bucket fill) is what converges.
+			lookups.add((ContextualFuture<?>) node.findNode(node.getId()));
+
+		return ContextualFuture.allOf(lookups)
+				.whenComplete((v, e) -> System.out.println("\007🟢 Network converged via self-lookups"));
+	}
+
 	private static ContextualFuture<Void> stopTestNodes() {
 		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
 		// cannot stop all the nodes in parallel, it will cause vertx internal error.
@@ -221,14 +242,16 @@ public class NodeAsyncTests {
 
 		Files.createDirectories(testDir);
 
-		startBootstrap().thenCompose(v -> startTestNodes()).whenComplete((v, e) -> {
-			if (e == null) {
-				System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
-				context.completeNow();
-			} else {
-				context.failNow(e);
-			}
-		});
+		startBootstrap().thenCompose(v -> startTestNodes())
+				.thenCompose(v -> awaitConvergence())
+				.whenComplete((v, e) -> {
+					if (e == null) {
+						System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
+						context.completeNow();
+					} else {
+						context.failNow(e);
+					}
+				});
 	}
 
 	@AfterAll
