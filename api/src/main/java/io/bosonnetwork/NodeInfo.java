@@ -82,6 +82,12 @@ public class NodeInfo {
 		this.defaultProtocolFamily = sockAddr4 != null ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
 	}
 
+	/**
+	 * Construct a {@code NodeInfo} object from a single socket address.
+	 *
+	 * @param id the node id.
+	 * @param sockAddr the node socket address, can be IPv4 or IPv6.
+	 */
 	protected NodeInfo(Id id, InetSocketAddress sockAddr) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(sockAddr, "sockAddr");
@@ -121,6 +127,7 @@ public class NodeInfo {
 	 *
 	 * @param id the node id.
 	 * @param sockAddr the node socket address, can be IPv4 or IPv6.
+	 * @return the constructed {@code NodeInfo}.
 	 */
 	public static NodeInfo of(Id id, InetSocketAddress sockAddr) {
 		return new NodeInfo(id, sockAddr);
@@ -132,6 +139,7 @@ public class NodeInfo {
 	 * @param id the node id.
 	 * @param inetAddr the node IP address, can be IPv4 or IPv6.
 	 * @param port the node port number.
+	 * @return the constructed {@code NodeInfo}.
 	 */
 	public static NodeInfo of(Id id, InetAddress inetAddr, int port) {
 		Objects.requireNonNull(id, "id");
@@ -145,6 +153,7 @@ public class NodeInfo {
 	 * @param id the node id.
 	 * @param host the node host name or address string.
 	 * @param port the node port number.
+	 * @return the constructed {@code NodeInfo}.
 	 */
 	public static NodeInfo of(Id id, String host, int port) {
 		Objects.requireNonNull(id, "id");
@@ -158,6 +167,7 @@ public class NodeInfo {
 	 * @param id the node id.
 	 * @param inetAddr the node raw IP address, can be IPv4 or IPv6.
 	 * @param port the node port number.
+	 * @return the constructed {@code NodeInfo}.
 	 */
 	public static NodeInfo of(Id id, byte[] inetAddr, int port) {
 		Objects.requireNonNull(id, "id");
@@ -175,6 +185,7 @@ public class NodeInfo {
 	 * @param id the node id.
 	 * @param sockAddr4 the IPv4 socket address, can be null.
 	 * @param sockAddr6 the IPv6 socket address, can be null.
+	 * @return the constructed {@code NodeInfo}.
 	 * @throws IllegalArgumentException if both addresses are null, or if the port is invalid.
 	 */
 	public static NodeInfo of(Id id, @Nullable InetSocketAddress sockAddr4, @Nullable InetSocketAddress sockAddr6) {
@@ -189,6 +200,7 @@ public class NodeInfo {
 	 * @param port4 the IPv4 port number, ignored if {@code inetAddr4} is null.
 	 * @param inetAddr6 the IPv6 address, can be null.
 	 * @param port6 the IPv6 port number, ignored if {@code inetAddr6} is null.
+	 * @return the constructed {@code NodeInfo}.
 	 * @throws IllegalArgumentException if both addresses are null, or if an address/port is invalid.
 	 */
 	public static NodeInfo of(Id id, @Nullable InetAddress inetAddr4, int port4, @Nullable InetAddress inetAddr6, int port6) {
@@ -227,6 +239,7 @@ public class NodeInfo {
 	 * @param port4 the IPv4 port number, ignored if {@code host4} is null.
 	 * @param host6 the IPv6 host name or address string, can be null.
 	 * @param port6 the IPv6 port number, ignored if {@code host6} is null.
+	 * @return the constructed {@code NodeInfo}.
 	 * @throws IllegalArgumentException if both hosts are null, or if an address/port is invalid.
 	 */
 	public static NodeInfo of(Id id, @Nullable String host4, int port4, @Nullable String host6, int port6) {
@@ -265,6 +278,7 @@ public class NodeInfo {
 	 * @param port4 the IPv4 port number, ignored if {@code inetAddr4} is null.
 	 * @param inetAddr6 the raw IPv6 address bytes, can be null.
 	 * @param port6 the IPv6 port number, ignored if {@code inetAddr6} is null.
+	 * @return the constructed {@code NodeInfo}.
 	 * @throws IllegalArgumentException if both addresses are null, or if an address/port is invalid.
 	 */
 	public static NodeInfo of(Id id, byte @Nullable [] inetAddr4, int port4, byte @Nullable [] inetAddr6, int port6) {
