@@ -40,7 +40,12 @@ import org.jspecify.annotations.Nullable;
  * A key object is owned by the provider that created it. A provider that is handed a foreign key
  * object (for example after the active provider was swapped) must still accept it by reconstructing
  * from its raw {@link Signature.PublicKey#bytes() bytes}. Once a key object has been destroyed it
- * must reject further use rather than read freed or zeroed material.
+ * must reject further use rather than read freed or zeroed material. The one exception to the
+ * foreign-object fallback is the precomputed {@link CryptoBox}: it exposes no shared-key bytes (a
+ * native backend may keep the key only in native memory), so it cannot be reconstructed from a
+ * foreign instance - {@link #boxEncrypt(byte[], CryptoBox.Nonce, CryptoBox)} and
+ * {@link #boxDecrypt(byte[], CryptoBox.Nonce, CryptoBox)} require a box created by the same provider
+ * and reject one from another.
  * <p>
  * Every implementation must be byte-for-byte compatible with the libsodium constructions:
  * Ed25519 detached signatures, {@code crypto_kdf} (keyed BLAKE2b), {@code crypto_box}
@@ -52,6 +57,15 @@ import org.jspecify.annotations.Nullable;
  * MAC tags and password hashes - in constant time (for example
  * {@code org.bouncycastle.util.Arrays.constantTimeAreEqual}). Public values such as public keys
  * and nonces may use ordinary equality.
+ * <p>
+ * <strong>Argument validation and errors:</strong> the public wrapper layer ({@link Signature},
+ * {@link CryptoBox}, {@link PasswordHash}) validates every caller-supplied argument - null checks,
+ * key/nonce/salt sizes and value ranges - before dispatching to this interface. Implementations may
+ * therefore assume non-null, correctly-sized inputs and are not expected to re-check them.
+ * Implementations also never throw a checked exception: an authentication or decryption failure is
+ * reported by returning {@code null} (see {@link #boxDecrypt} and {@link #boxSealOpen}), which the
+ * wrapper translates into a checked {@link CryptoException}. Keeping providers free of the Boson
+ * exception hierarchy keeps a backend a pure cryptographic mechanism.
  */
 public interface CryptoProvider {
 	/** Length in bytes of an Ed25519 seed. */
@@ -230,6 +244,33 @@ public interface CryptoProvider {
 	 * @return the precomputed crypto box.
 	 */
 	CryptoBox boxBeforeNm(CryptoBox.PublicKey publicKey, CryptoBox.PrivateKey secretKey);
+
+	/**
+	 * Encrypts a message with a precomputed shared key (libsodium {@code crypto_box_easy_afternm}).
+	 * <p>
+	 * Unlike a key object, a {@link CryptoBox} does not expose its shared key as bytes, so it cannot
+	 * be reconstructed from a foreign instance: {@code box} must be one returned by this provider's
+	 * {@link #boxBeforeNm}. Implementations should reject a box from another provider.
+	 *
+	 * @param message the plaintext.
+	 * @param nonce   the {@value #BOX_NONCE_BYTES}-byte nonce.
+	 * @param box     a precomputed crypto box created by this provider's {@link #boxBeforeNm}.
+	 * @return the ciphertext (MAC prepended).
+	 */
+	byte[] boxEncrypt(byte[] message, CryptoBox.Nonce nonce, CryptoBox box);
+
+	/**
+	 * Decrypts a message with a precomputed shared key (libsodium {@code crypto_box_open_easy_afternm}).
+	 * <p>
+	 * As with {@link #boxEncrypt(byte[], CryptoBox.Nonce, CryptoBox)}, {@code box} must be one returned
+	 * by this provider's {@link #boxBeforeNm}; implementations should reject a box from another provider.
+	 *
+	 * @param cipher the ciphertext.
+	 * @param nonce  the {@value #BOX_NONCE_BYTES}-byte nonce.
+	 * @param box    a precomputed crypto box created by this provider's {@link #boxBeforeNm}.
+	 * @return the plaintext, or {@code null} if authentication failed.
+	 */
+	byte @Nullable [] boxDecrypt(byte[] cipher, CryptoBox.Nonce nonce, CryptoBox box);
 
 	/**
 	 * Encrypts a message with explicit keys (libsodium {@code crypto_box_easy}).

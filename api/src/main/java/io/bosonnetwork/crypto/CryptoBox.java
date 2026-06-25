@@ -354,27 +354,37 @@ public interface CryptoBox extends AutoCloseable, Destroyable {
 	/**
 	 * Encrypt a message with the given keys.
 	 *
-	 * @param message the message to encrypt.
-	 * @param receiver the public key of the receiver.
-	 * @param sender the private key of the sender.
-	 * @param nonce a unique nonce object.
+	 * @param message the message to encrypt. Must not be null.
+	 * @param receiver the public key of the receiver. Must not be null.
+	 * @param sender the private key of the sender. Must not be null.
+	 * @param nonce a unique nonce object. Must not be null.
 	 * @return the encrypted data.
+	 * @throws NullPointerException if any argument is null.
 	 */
 	static byte[] encrypt(byte[] message, PublicKey receiver, PrivateKey sender, Nonce nonce) {
+		Objects.requireNonNull(message, "message");
+		Objects.requireNonNull(receiver, "receiver");
+		Objects.requireNonNull(sender, "sender");
+		Objects.requireNonNull(nonce, "nonce");
 		return provider().boxEncrypt(message, nonce, receiver, sender);
 	}
 
 	/**
 	 * Decrypt a message using the given keys.
 	 *
-	 * @param cipher the cipher text to decrypt.
-	 * @param sender the public key of the sender.
-	 * @param receiver the private key of the receiver.
-	 * @param nonce the nonce that was used for encryption.
+	 * @param cipher the cipher text to decrypt. Must not be null.
+	 * @param sender the public key of the sender. Must not be null.
+	 * @param receiver the private key of the receiver. Must not be null.
+	 * @param nonce the nonce that was used for encryption. Must not be null.
 	 * @return the decrypted data.
+	 * @throws NullPointerException if any argument is null.
 	 * @throws CryptoException if the verification or decryption failed.
 	 */
 	static byte[] decrypt(byte[] cipher, PublicKey sender, PrivateKey receiver, Nonce nonce) throws CryptoException {
+		Objects.requireNonNull(cipher, "cipher");
+		Objects.requireNonNull(sender, "sender");
+		Objects.requireNonNull(receiver, "receiver");
+		Objects.requireNonNull(nonce, "nonce");
 		byte[] plain = provider().boxDecrypt(cipher, nonce, sender, receiver);
 		if (plain == null)
 			throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
@@ -388,24 +398,31 @@ public interface CryptoBox extends AutoCloseable, Destroyable {
 	 * Sealed boxes are designed to anonymously send messages to a recipient given its public key.
 	 * Only the recipient can decrypt these messages, using its private key.
 	 *
-	 * @param message the message to encrypt.
-	 * @param receiver the public key of the receiver.
+	 * @param message the message to encrypt. Must not be null.
+	 * @param receiver the public key of the receiver. Must not be null.
 	 * @return the encrypted data.
+	 * @throws NullPointerException if {@code message} or {@code receiver} is null.
 	 */
 	static byte[] encryptSealed(byte[] message, PublicKey receiver) {
+		Objects.requireNonNull(message, "message");
+		Objects.requireNonNull(receiver, "receiver");
 		return provider().boxSeal(message, receiver);
 	}
 
 	/**
 	 * Decrypt a sealed message using the given keys.
 	 *
-	 * @param cipher the cipher text to decrypt.
-	 * @param pk the public key of the sender.
-	 * @param sk the private key of the receiver.
+	 * @param cipher the cipher text to decrypt. Must not be null.
+	 * @param pk the public key of the sender. Must not be null.
+	 * @param sk the private key of the receiver. Must not be null.
 	 * @return the decrypted data.
+	 * @throws NullPointerException if any argument is null.
 	 * @throws CryptoException if the verification or decryption failed.
 	 */
 	static byte[] decryptSealed(byte[] cipher, PublicKey pk, PrivateKey sk) throws CryptoException {
+		Objects.requireNonNull(cipher, "cipher");
+		Objects.requireNonNull(pk, "pk");
+		Objects.requireNonNull(sk, "sk");
 		byte[] plain = provider().boxSealOpen(cipher, pk, sk);
 		if (plain == null)
 			throw new CryptoException("Sealed-box decryption failed: invalid ciphertext or authentication failure");
@@ -416,21 +433,35 @@ public interface CryptoBox extends AutoCloseable, Destroyable {
 	/**
 	 * Encrypt a message with this precomputed box.
 	 *
-	 * @param message the message to encrypt.
-	 * @param nonce a unique nonce object.
+	 * @param message the message to encrypt. Must not be null.
+	 * @param nonce a unique nonce object. Must not be null.
 	 * @return the encrypted data.
+	 * @throws NullPointerException if {@code message} or {@code nonce} is null.
 	 */
-	byte[] encrypt(byte[] message, Nonce nonce);
+	default byte[] encrypt(byte[] message, Nonce nonce) {
+		Objects.requireNonNull(message, "message");
+		Objects.requireNonNull(nonce, "nonce");
+		return provider().boxEncrypt(message, nonce, this);
+	}
 
 	/**
 	 * Decrypt a message with this precomputed box.
 	 *
-	 * @param cipher the cipher text to decrypt.
-	 * @param nonce the nonce that was used for encryption.
+	 * @param cipher the cipher text to decrypt. Must not be null.
+	 * @param nonce the nonce that was used for encryption. Must not be null.
 	 * @return the decrypted data.
+	 * @throws NullPointerException if {@code cipher} or {@code nonce} is null.
 	 * @throws CryptoException if the verification or decryption failed.
 	 */
-	byte[] decrypt(byte[] cipher, Nonce nonce) throws CryptoException;
+	default byte[] decrypt(byte[] cipher, Nonce nonce) throws CryptoException {
+		Objects.requireNonNull(cipher, "cipher");
+		Objects.requireNonNull(nonce, "nonce");
+		byte[] plain = provider().boxDecrypt(cipher, nonce, this);
+		if (plain == null)
+			throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
+
+		return plain;
+	}
 
 	@Override
 	void close();

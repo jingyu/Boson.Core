@@ -142,7 +142,11 @@ public class CryptoCompatibilityTest {
 		// precomputed (beforenm/afternm) path equals the full path on both backends
 		try (CryptoBox bcPre = BC.boxBeforeNm(bcPkB, bcSkA); CryptoBox lsPre = LS.boxBeforeNm(lsPkB, lsSkA)) {
 			assertArrayEquals(lsBox, bcPre.encrypt(msg, CryptoBox.Nonce.fromBytes(nonce.bytes())), "BC afternm == full");
-			assertArrayEquals(lsBox, lsPre.encrypt(msg, CryptoBox.Nonce.fromBytes(nonce.bytes())), "libsodium afternm == full");
+			//assertArrayEquals(lsBox, lsPre.encrypt(msg, CryptoBox.Nonce.fromBytes(nonce.bytes())), "libsodium afternm == full");
+			// The libsodium backend (via Tuweni) encapsulates the shared key within its own
+			// Box object and does not expose the raw shared key bytes. This prevents
+			// sharing a precomputed CryptoBox across different providers.
+			assertThrows(IllegalStateException.class, () ->  lsPre.encrypt(msg, CryptoBox.Nonce.fromBytes(nonce.bytes())));
 		}
 
 		// receiver opens with sender public key + own secret key, across backends
@@ -304,6 +308,61 @@ public class CryptoCompatibilityTest {
 				assertArrayEquals(msg, BC.boxDecrypt(lsBox, nonce, bcPkA, bcSkB), "BC opens LS size=" + size);
 				assertArrayEquals(msg, LS.boxDecrypt(bcBox, lsNonce, lsPkA, lsSkB), "LS opens BC size=" + size);
 			}
+		}
+	}
+
+	@Test
+	void boxAfterNmMatches() {
+		// Direct differential coverage for the precomputed-box (afternm) SPI methods
+		// boxEncrypt(msg, nonce, CryptoBox) / boxDecrypt(cipher, nonce, CryptoBox). The public
+		// CryptoBox.encrypt/decrypt wrappers always dispatch to the default (BC) provider, so the
+		// libsodium implementation of these two methods is only reachable by calling LS directly.
+		byte[] seedA = rb(32);
+		byte[] seedB = rb(32);
+		CryptoBox.PrivateKey bcSkA = boxSk(BC, seedA);
+		CryptoBox.PublicKey bcPkA = BC.boxPublicKeyFromSecretKey(bcSkA);
+		CryptoBox.PrivateKey bcSkB = boxSk(BC, seedB);
+		CryptoBox.PublicKey bcPkB = BC.boxPublicKeyFromSecretKey(bcSkB);
+		CryptoBox.PrivateKey lsSkA = boxSk(LS, seedA);
+		CryptoBox.PublicKey lsPkA = LS.boxPublicKeyFromSecretKey(lsSkA);
+		CryptoBox.PrivateKey lsSkB = boxSk(LS, seedB);
+		CryptoBox.PublicKey lsPkB = LS.boxPublicKeyFromSecretKey(lsSkB);
+		CryptoBox.Nonce nonce = BC.boxNonceFromBytes(rb(24));
+		CryptoBox.Nonce lsNonce = LS.boxNonceFromBytes(nonce.bytes());
+
+		try (CryptoBox bcEnc = BC.boxBeforeNm(bcPkB, bcSkA);
+				CryptoBox lsEnc = LS.boxBeforeNm(lsPkB, lsSkA);
+				CryptoBox bcDec = BC.boxBeforeNm(bcPkA, bcSkB);
+				CryptoBox lsDec = LS.boxBeforeNm(lsPkA, lsSkB)) {
+
+			for (int size : SIZES) {
+				byte[] msg = rb(size);
+				byte[] bcBox = BC.boxEncrypt(msg, nonce, bcEnc);
+				byte[] lsBox = LS.boxEncrypt(msg, lsNonce, lsEnc);
+				// afternm ciphertext agrees across backends and equals the explicit-key path
+				assertArrayEquals(lsBox, bcBox, "afternm ciphertext size=" + size);
+				assertArrayEquals(BC.boxEncrypt(msg, nonce, bcPkB, bcSkA), bcBox, "BC afternm == explicit size=" + size);
+
+				// each backend opens the other's afternm box via its own precomputed box
+				assertArrayEquals(msg, BC.boxDecrypt(lsBox, nonce, bcDec), "BC afternm opens LS size=" + size);
+				assertArrayEquals(msg, LS.boxDecrypt(bcBox, lsNonce, lsDec), "LS afternm opens BC size=" + size);
+			}
+
+			// tampered ciphertext is rejected (null) by both afternm decryptors
+			byte[] tampered = BC.boxEncrypt(rb(64), nonce, bcEnc);
+			tampered[tampered.length - 1] ^= 0x01;
+			assertNull(BC.boxDecrypt(tampered, nonce, bcDec), "BC afternm rejects tampered");
+			assertNull(LS.boxDecrypt(tampered, lsNonce, lsDec), "LS afternm rejects tampered");
+		}
+
+		// a precomputed box from another provider cannot be reused (its shared key is opaque)
+		try (CryptoBox lsEnc = LS.boxBeforeNm(lsPkB, lsSkA)) {
+			assertThrows(IllegalStateException.class, () -> BC.boxEncrypt(rb(16), nonce, lsEnc),
+					"BC rejects a foreign CryptoBox");
+		}
+		try (CryptoBox bcEnc = BC.boxBeforeNm(bcPkB, bcSkA)) {
+			assertThrows(IllegalStateException.class, () -> LS.boxEncrypt(rb(16), lsNonce, bcEnc),
+					"LS rejects a foreign CryptoBox");
 		}
 	}
 

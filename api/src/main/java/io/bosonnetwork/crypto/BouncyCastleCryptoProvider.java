@@ -411,19 +411,6 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 		}
 
 		@Override
-		public byte[] encrypt(byte[] message, CryptoBox.Nonce nonce) {
-			return secretboxSeal(message, nonceOf(nonce), sharedKeyOrThrow());
-		}
-
-		@Override
-		public byte[] decrypt(byte[] cipher, CryptoBox.Nonce nonce) throws CryptoException {
-			byte[] plain = secretboxOpen(cipher, nonceOf(nonce), sharedKeyOrThrow());
-			if (plain == null)
-				throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
-			return plain;
-		}
-
-		@Override
 		public void close() {
 			destroy();
 		}
@@ -489,6 +476,23 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 	@Override
 	public CryptoBox boxBeforeNm(CryptoBox.PublicKey publicKey, CryptoBox.PrivateKey secretKey) {
 		return new BcCryptoBox(sharedKey(boxKeyOf(publicKey), boxKeyOf(secretKey)));
+	}
+
+	private static byte[] sharedKeyOf(CryptoBox box) {
+		if (box instanceof BcCryptoBox c)
+			return c.sharedKeyOrThrow();
+
+		throw new IllegalStateException("Not a BcCryptoBox: " + box.getClass().getName());
+	}
+
+	@Override
+	public byte[] boxEncrypt(byte[] message, CryptoBox.Nonce nonce, CryptoBox box) {
+		return secretboxSeal(message, nonceOf(nonce), sharedKeyOf(box));
+	}
+
+	@Override
+	public byte @Nullable [] boxDecrypt(byte[] cipher, CryptoBox.Nonce nonce, CryptoBox box) {
+		return secretboxOpen(cipher, nonceOf(nonce), sharedKeyOf(box));
 	}
 
 	private static byte[] nonceOf(CryptoBox.Nonce nonce) {

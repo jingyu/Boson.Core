@@ -78,11 +78,19 @@ public interface Signature {
 		/**
 		 * Verifies the signature of a message.
 		 *
-		 * @param message   the message to verify.
-		 * @param signature the signature of the message.
-		 * @return true if the signature matches the message according to this public key.
+		 * @param message   the message to verify. Must not be null.
+		 * @param signature the signature of the message. Must not be null.
+		 * @return true if the signature matches the message according to this public key; false if the
+		 *         signature is not {@link Signature#BYTES} bytes long or does not verify.
+		 * @throws NullPointerException if {@code message} or {@code signature} is null.
 		 */
 		default boolean verify(byte[] message, byte[] signature) {
+			Objects.requireNonNull(message, "message");
+			// A wrong-length signature is simply not a valid signature (verify is routinely called on
+			// untrusted input), so reject it with a false result rather than an exception.
+			if (Objects.requireNonNull(signature, "signature").length != Signature.BYTES)
+				return false;
+
 			return provider().ed25519Verify(message, signature, this);
 		}
 
@@ -179,10 +187,12 @@ public interface Signature {
 		/**
 		 * Signs a message with this private key.
 		 *
-		 * @param message the message to sign.
+		 * @param message the message to sign. Must not be null.
 		 * @return the signature of the message.
+		 * @throws NullPointerException if {@code message} is null.
 		 */
 		default byte[] sign(byte[] message) {
+			Objects.requireNonNull(message, "message");
 			return provider().ed25519Sign(message, this);
 		}
 
@@ -369,23 +379,27 @@ public interface Signature {
 	/**
 	 * Signs a message with a given key.
 	 *
-	 * @param message the message to sign.
-	 * @param key     the private key to sign the message with.
+	 * @param message the message to sign. Must not be null.
+	 * @param key     the private key to sign the message with. Must not be null.
 	 * @return the signature of the message.
+	 * @throws NullPointerException if {@code message} or {@code key} is null.
 	 */
 	static byte[] sign(byte[] message, PrivateKey key) {
-		return provider().ed25519Sign(message, key);
+		Objects.requireNonNull(key, "key");
+		return key.sign(message);
 	}
 
 	/**
 	 * Verifies the signature of a message.
 	 *
-	 * @param message   the message to verify.
-	 * @param signature the signature of the message.
-	 * @param key       the public key to verify the message with.
+	 * @param message   the message to verify. Must not be null.
+	 * @param signature the signature of the message. Must not be null.
+	 * @param key       the public key to verify the message with. Must not be null.
 	 * @return true if the signature matches the message according to this public key.
+	 * @throws NullPointerException if {@code message}, {@code signature} or {@code key} is null.
 	 */
 	static boolean verify(byte[] message, byte[] signature, PublicKey key) {
+		Objects.requireNonNull(key, "key");
 		return key.verify(message, signature);
 	}
 

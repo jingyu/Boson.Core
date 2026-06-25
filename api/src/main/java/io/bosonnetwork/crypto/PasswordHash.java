@@ -57,8 +57,33 @@ public class PasswordHash {
 	private static final long SENSITIVE_OPS = 4L;
 	private static final long SENSITIVE_MEM = 1073741824L;   // 1 GiB
 
+	// libsodium crypto_pwhash minimums (crypto_pwhash_argon2id_*_MIN); the wrapper rejects
+	// out-of-range parameters before they reach the provider.
+	private static final long OPSLIMIT_MIN = 1L;
+	private static final long MEMLIMIT_MIN = 8192L;
+
 	private static CryptoProvider provider() {
 		return CryptoProviders.getDefault();
+	}
+
+	// Validates the raw-hash parameters shared by every hash(...) overload.
+	private static void checkHashParams(byte[] password, int length, byte[] salt, long opsLimit,
+			long memLimit, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
+		Objects.requireNonNull(algorithm, "Algorithm must not be null");
+		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
+			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
+		if (length < MIN_HASH_BYTES)
+			throw new IllegalArgumentException("Invalid hash length: expected at least " + MIN_HASH_BYTES + " bytes, got " + length);
+		checkLimits(opsLimit, memLimit);
+	}
+
+	// Validates the operations and memory limits shared by the raw and string hash entry points.
+	private static void checkLimits(long opsLimit, long memLimit) {
+		if (opsLimit < OPSLIMIT_MIN)
+			throw new IllegalArgumentException("Invalid opsLimit: expected at least " + OPSLIMIT_MIN + ", got " + opsLimit);
+		if (memLimit < MEMLIMIT_MIN)
+			throw new IllegalArgumentException("Invalid memLimit: expected at least " + MEMLIMIT_MIN + " bytes, got " + memLimit);
 	}
 
 	/**
@@ -126,6 +151,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashInteractive(String password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return hashInteractive(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -140,10 +166,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashInteractive(byte[] password, int length, byte[] salt, Algorithm algorithm) {
-		Objects.requireNonNull(password, "Password must not be null");
-		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
-			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
-
+		checkHashParams(password, length, salt, INTERACTIVE_OPS, INTERACTIVE_MEM, algorithm);
 		return provider().pwHash(password, length, salt, INTERACTIVE_OPS, INTERACTIVE_MEM, algorithm.id());
 	}
 
@@ -158,6 +181,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashModerate(String password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return hashModerate(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -172,10 +196,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashModerate(byte[] password, int length, byte[] salt, Algorithm algorithm) {
-		Objects.requireNonNull(password, "Password must not be null");
-		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
-			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
-
+		checkHashParams(password, length, salt, MODERATE_OPS, MODERATE_MEM, algorithm);
 		return provider().pwHash(password, length, salt, MODERATE_OPS, MODERATE_MEM, algorithm.id());
 	}
 
@@ -190,6 +211,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashSensitive(String password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return hashSensitive(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -204,10 +226,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hashSensitive(byte[] password, int length, byte[] salt, Algorithm algorithm) {
-		Objects.requireNonNull(password, "Password must not be null");
-		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
-			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
-
+		checkHashParams(password, length, salt, SENSITIVE_OPS, SENSITIVE_MEM, algorithm);
 		return provider().pwHash(password, length, salt, SENSITIVE_OPS, SENSITIVE_MEM, algorithm.id());
 	}
 
@@ -223,6 +242,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hash(String password, int length, byte[] salt, long opsLimit, long memLimit, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return hash(password.getBytes(UTF_8), length, salt, opsLimit, memLimit, algorithm);
 	}
 
@@ -238,10 +258,7 @@ public class PasswordHash {
 	 * @return The derived key.
 	 */
 	public static byte[] hash(byte[] password, int length, byte[] salt, long opsLimit, long memLimit, Algorithm algorithm) {
-		Objects.requireNonNull(password, "Password must not be null");
-		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
-			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
-
+		checkHashParams(password, length, salt, opsLimit, memLimit, algorithm);
 		return provider().pwHash(password, length, salt, opsLimit, memLimit, algorithm.id());
 	}
 
@@ -253,6 +270,7 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashInteractive(String password) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return provider().pwHashString(password.getBytes(UTF_8), INTERACTIVE_OPS, INTERACTIVE_MEM,
 				Algorithm.DEFAULT.id());
 	}
@@ -265,6 +283,7 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashModerate(String password) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return provider().pwHashString(password.getBytes(UTF_8), MODERATE_OPS, MODERATE_MEM, Algorithm.DEFAULT.id());
 	}
 
@@ -276,6 +295,7 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashSensitive(String password) {
+		Objects.requireNonNull(password, "Password must not be null");
 		return provider().pwHashString(password.getBytes(UTF_8), SENSITIVE_OPS, SENSITIVE_MEM, Algorithm.DEFAULT.id());
 	}
 
@@ -288,6 +308,8 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hash(String password, long opsLimit, long memLimit) {
+		Objects.requireNonNull(password, "Password must not be null");
+		checkLimits(opsLimit, memLimit);
 		return provider().pwHashString(password.getBytes(UTF_8), opsLimit, memLimit, Algorithm.DEFAULT.id());
 	}
 
@@ -299,6 +321,8 @@ public class PasswordHash {
 	 * @return {@code true} if the password matches the hash.
 	 */
 	public static boolean verify(String hash, String password) {
+		Objects.requireNonNull(hash, "Hash must not be null");
+		Objects.requireNonNull(password, "Password must not be null");
 		return provider().pwHashVerify(hash, password.getBytes(UTF_8));
 	}
 
@@ -310,6 +334,7 @@ public class PasswordHash {
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForInteractive(String hash) {
+		Objects.requireNonNull(hash, "Hash must not be null");
 		return provider().pwHashNeedsRehash(hash, INTERACTIVE_OPS, INTERACTIVE_MEM);
 	}
 
@@ -321,6 +346,7 @@ public class PasswordHash {
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForModerate(String hash) {
+		Objects.requireNonNull(hash, "Hash must not be null");
 		return provider().pwHashNeedsRehash(hash, MODERATE_OPS, MODERATE_MEM);
 	}
 
@@ -332,6 +358,7 @@ public class PasswordHash {
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForSensitive(String hash) {
+		Objects.requireNonNull(hash, "Hash must not be null");
 		return provider().pwHashNeedsRehash(hash, SENSITIVE_OPS, SENSITIVE_MEM);
 	}
 }

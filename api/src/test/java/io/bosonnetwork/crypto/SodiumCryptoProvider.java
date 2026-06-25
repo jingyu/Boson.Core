@@ -312,19 +312,6 @@ public class SodiumCryptoProvider implements CryptoProvider {
 		}
 
 		@Override
-		public byte[] encrypt(byte[] message, CryptoBox.Nonce nonce) {
-			return box.encrypt(message, nonceOf(nonce));
-		}
-
-		@Override
-		public byte[] decrypt(byte[] cipher, CryptoBox.Nonce nonce) throws CryptoException {
-			byte[] plain = box.decrypt(cipher, nonceOf(nonce));
-			if (plain == null)
-				throw new CryptoException("Decryption failed: invalid ciphertext or authentication failure");
-			return plain;
-		}
-
-		@Override
 		public void close() {
 			destroy();
 		}
@@ -389,6 +376,23 @@ public class SodiumCryptoProvider implements CryptoProvider {
 	@Override
 	public CryptoBox boxBeforeNm(CryptoBox.PublicKey publicKey, CryptoBox.PrivateKey secretKey) {
 		return new SodiumCryptoBox(Box.forKeys(keyOf(publicKey), keyOf(secretKey)));
+	}
+
+	private static Box boxOf(CryptoBox box) {
+		if (box instanceof SodiumCryptoBox b)
+			return b.box;
+		else
+			throw new IllegalStateException("Not a SodiumCryptoBox: " + box.getClass().getName());
+	}
+
+	@Override
+	public byte[] boxEncrypt(byte[] message, CryptoBox.Nonce nonce, CryptoBox box) {
+		return boxOf(box).encrypt(message, nonceOf(nonce));
+	}
+
+	@Override
+	public byte @Nullable [] boxDecrypt(byte[] cipher, CryptoBox.Nonce nonce, CryptoBox box) {
+		return boxOf(box).decrypt(cipher, nonceOf(nonce));
 	}
 
 	private static Box.Nonce nonceOf(CryptoBox.Nonce nonce) {
