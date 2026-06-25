@@ -110,11 +110,9 @@ public class SignatureTests {
 		assertTrue(keyPair.privateKey().isDestroyed());
 		assertTrue(keyPair.publicKey().isDestroyed());
 
-		var ex = assertThrows(IllegalStateException.class, () -> keyPair.privateKey().bytes());
-		assertEquals("allocated value has been destroyed", ex.getMessage());
+		assertThrows(IllegalStateException.class, () -> keyPair.privateKey().bytes());
 
-		ex = assertThrows(IllegalStateException.class, () -> keyPair.publicKey().bytes());
-		assertEquals("allocated value has been destroyed", ex.getMessage());
+		assertThrows(IllegalStateException.class, () -> keyPair.publicKey().bytes());
 	}
 
 	@Test

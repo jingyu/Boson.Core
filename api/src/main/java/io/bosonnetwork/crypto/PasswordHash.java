@@ -24,54 +24,66 @@ package io.bosonnetwork.crypto;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import org.jspecify.annotations.Nullable;
+import java.util.Objects;
 
 /**
  * Utility class for hashing passwords using different security levels and Argon2 algorithms.
  * <p>
  * This class provides static methods for hashing passwords using interactive, moderate, or sensitive security levels,
  * as well as direct parameterized hashing. It supports Argon2i and Argon2id algorithms, and delegates cryptographic
- * operations to Tuweni Sodium.
- * </p>
+ * operations to the active {@link CryptoProvider}. The encoded hash strings use the standard Argon2 PHC format and
+ * are interoperable with libsodium's {@code crypto_pwhash_str}.
  */
 public class PasswordHash {
 	/**
-	 * Maximum allowed size (in bytes) for password hash output as defined by the underlying sodium implementation.
+	 * The fixed number of bytes required for a valid salt.
 	 */
-	public static final int MAX_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.maxHashLength();
+	public static final int SALT_BYTES = CryptoProvider.PWHASH_SALT_BYTES;
+
 	/**
-	 * Minimum allowed size (in bytes) for password hash output as defined by the underlying sodium implementation.
+	 * Maximum allowed size (in bytes) for password hash output.
 	 */
-	public static final int MIN_HASH_BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.minHashLength();
+	public static final int MAX_HASH_BYTES = Integer.MAX_VALUE;
+	/**
+	 * Minimum allowed size (in bytes) for password hash output.
+	 */
+	public static final int MIN_HASH_BYTES = 16;
+
+	// libsodium crypto_pwhash predefined limits (Argon2id based).
+	private static final long INTERACTIVE_OPS = 2L;
+	private static final long INTERACTIVE_MEM = 67108864L;   // 64 MiB
+	private static final long MODERATE_OPS = 3L;
+	private static final long MODERATE_MEM = 268435456L;     // 256 MiB
+	private static final long SENSITIVE_OPS = 4L;
+	private static final long SENSITIVE_MEM = 1073741824L;   // 1 GiB
+
+	private static CryptoProvider provider() {
+		return CryptoProviders.getDefault();
+	}
 
 	/**
 	 * Enum representing the Argon2 algorithms available for password hashing.
 	 * <p>
-	 * Provides Argon2i (version 1.3) and Argon2id (version 1.3) algorithms. The {@link #DEFAULT} selection checks
-	 * if Argon2id is supported in the native library and uses it; otherwise, falls back to Argon2i.
+	 * Provides Argon2i (version 1.3) and Argon2id (version 1.3) algorithms. The {@link #DEFAULT} selection uses
+	 * Argon2id.
 	 * </p>
 	 */
 	public enum Algorithm {
 		/**
 		 * Argon2i version 1.3 algorithm.
 		 */
-		ARGON2I13(1),
+		ARGON2I13(CryptoProvider.PWHASH_ALG_ARGON2I13),
 		/**
 		 * Argon2id version 1.3 algorithm.
 		 */
-		ARGON2ID13(2);
+		ARGON2ID13(CryptoProvider.PWHASH_ALG_ARGON2ID13);
 
 		private final int id;
 
 		/**
-		 * The default algorithm to use for password hashing.
-		 * <p>
-		 * If Argon2id is supported by the loaded sodium library, it is selected; otherwise, Argon2i is used.
-		 * </p>
+		 * The default algorithm to use for password hashing (Argon2id).
 		 */
-		public static final Algorithm DEFAULT =
-				org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm.argon2id13().isSupported() ?
-				ARGON2ID13 : ARGON2I13;
+		public static final Algorithm DEFAULT = ARGON2ID13;
 
 		Algorithm(int id) {
 			this.id = id;
@@ -85,9 +97,9 @@ public class PasswordHash {
 		 * @throws IllegalArgumentException if the id is invalid
 		 */
 		public static Algorithm valueOf(int id) {
-			if (id == 1)
+			if (id == CryptoProvider.PWHASH_ALG_ARGON2I13)
 				return ARGON2I13;
-			else if (id == 2)
+			else if (id == CryptoProvider.PWHASH_ALG_ARGON2ID13)
 				return ARGON2ID13;
 			else
 				throw new IllegalArgumentException("Invalid algorithm id: " + id);
@@ -101,87 +113,6 @@ public class PasswordHash {
 		public int id() {
 			return id;
 		}
-
-		org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm raw() {
-			if (id == 1)
-				return org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm.argon2i13();
-			else
-				return org.apache.tuweni.crypto.sodium.PasswordHash.Algorithm.argon2id13();
-		}
-	}
-
-	/**
-	 * Represents a salt value used for password hashing.
-	 * <p>
-	 * Provides methods to generate a random salt or create a salt from an existing byte array.
-	 * </p>
-	 */
-	public static class Salt {
-		/**
-		 * The fixed number of bytes required for a valid salt.
-		 */
-		public static final int BYTES = org.apache.tuweni.crypto.sodium.PasswordHash.Salt.length();
-
-		private final org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt;
-		private byte @Nullable [] bytes;
-
-		private Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt salt) {
-			this.salt = salt;
-		}
-
-		/**
-		 * Creates a salt object from the given byte array.
-		 *
-		 * @param salt the byte array containing the salt value
-		 * @return a new {@code Salt} instance wrapping the given bytes
-		 * @throws IllegalArgumentException if the byte array is not of the correct length
-		 */
-		public static Salt fromBytes(byte[] salt) {
-			// No SodiumException raised
-			return new Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt.fromBytes(salt));
-		}
-
-		/**
-		 * Generates a new random salt suitable for password hashing.
-		 *
-		 * @return a new randomly generated {@code Salt} instance
-		 */
-		public static Salt random() {
-			// No SodiumException raised
-			return new Salt(org.apache.tuweni.crypto.sodium.PasswordHash.Salt.random());
-		}
-
-		org.apache.tuweni.crypto.sodium.PasswordHash.Salt raw() {
-			return salt;
-		}
-
-		/**
-		 * Provides the bytes of this salt.
-		 *
-		 * @return the bytes of this salt
-		 */
-		public byte[] bytes() {
-			if (bytes == null)
-				bytes = salt.bytesArray();
-
-			return bytes.clone();
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (obj == this)
-				return true;
-
-			if (obj instanceof Salt that)
-				return salt.equals(that.salt);
-
-			return false;
-		}
-
-		@Override
-		public int hashCode() {
-			return 0x6030A + salt.hashCode();
-		}
 	}
 
 	/**
@@ -194,7 +125,7 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashInteractive(String password, int length, Salt salt, Algorithm algorithm) {
+	public static byte[] hashInteractive(String password, int length, byte[] salt, Algorithm algorithm) {
 		return hashInteractive(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -208,8 +139,12 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashInteractive(byte[] password, int length, Salt salt, Algorithm algorithm) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hashInteractive(password, length, salt.raw(), algorithm.raw());
+	public static byte[] hashInteractive(byte[] password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
+		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
+			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
+
+		return provider().pwHash(password, length, salt, INTERACTIVE_OPS, INTERACTIVE_MEM, algorithm.id());
 	}
 
 	/**
@@ -222,7 +157,7 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashModerate(String password, int length, Salt salt, Algorithm algorithm) {
+	public static byte[] hashModerate(String password, int length, byte[] salt, Algorithm algorithm) {
 		return hashModerate(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -236,8 +171,12 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashModerate(byte[] password, int length, Salt salt, Algorithm algorithm) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hash(password, length, salt.raw(), algorithm.raw());
+	public static byte[] hashModerate(byte[] password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
+		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
+			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
+
+		return provider().pwHash(password, length, salt, MODERATE_OPS, MODERATE_MEM, algorithm.id());
 	}
 
 	/**
@@ -250,7 +189,7 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashSensitive(String password, int length, Salt salt, Algorithm algorithm) {
+	public static byte[] hashSensitive(String password, int length, byte[] salt, Algorithm algorithm) {
 		return hashSensitive(password.getBytes(UTF_8), length, salt, algorithm);
 	}
 
@@ -264,8 +203,12 @@ public class PasswordHash {
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
 	 */
-	public static byte[] hashSensitive(byte[] password, int length, Salt salt, Algorithm algorithm) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hashSensitive(password, length, salt.raw(), algorithm.raw());
+	public static byte[] hashSensitive(byte[] password, int length, byte[] salt, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
+		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
+			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
+
+		return provider().pwHash(password, length, salt, SENSITIVE_OPS, SENSITIVE_MEM, algorithm.id());
 	}
 
 	/**
@@ -274,15 +217,12 @@ public class PasswordHash {
 	 * @param password The password to hash.
 	 * @param length The key length to generate.
 	 * @param salt A salt.
-	 * @param opsLimit The operations limit, which must be in the range minOpsLimit to maxOpsLimit.
-	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
+	 * @param opsLimit The operations limit.
+	 * @param memLimit The memory limit in bytes.
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
-	 * @throws IllegalArgumentException If the opsLimit is too low for the specified algorithm.
-	 * @throws UnsupportedOperationException If the specified algorithm is not supported by the currently loaded sodium
-	 *         native library.
 	 */
-	public static byte[] hash(String password, int length, Salt salt, long opsLimit, long memLimit, Algorithm algorithm) {
+	public static byte[] hash(String password, int length, byte[] salt, long opsLimit, long memLimit, Algorithm algorithm) {
 		return hash(password.getBytes(UTF_8), length, salt, opsLimit, memLimit, algorithm);
 	}
 
@@ -292,16 +232,17 @@ public class PasswordHash {
 	 * @param password The password to hash.
 	 * @param length The key length to generate.
 	 * @param salt A salt.
-	 * @param opsLimit The operations limit, which must be in the range minOpsLimit to maxOpsLimit.
-	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
+	 * @param opsLimit The operations limit.
+	 * @param memLimit The memory limit in bytes.
 	 * @param algorithm The algorithm to use.
 	 * @return The derived key.
-	 * @throws IllegalArgumentException If the opsLimit is too low for the specified algorithm.
-	 * @throws UnsupportedOperationException If the specified algorithm is not supported by the currently loaded sodium
-	 *         native library.
 	 */
-	public static byte[] hash(byte[] password, int length, Salt salt, long opsLimit, long memLimit, Algorithm algorithm) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hash(password, length, salt.raw(), opsLimit, memLimit, algorithm.raw());
+	public static byte[] hash(byte[] password, int length, byte[] salt, long opsLimit, long memLimit, Algorithm algorithm) {
+		Objects.requireNonNull(password, "Password must not be null");
+		if (Objects.requireNonNull(salt, "Salt must not be null").length != SALT_BYTES)
+			throw new IllegalArgumentException("Invalid salt length: expected " + SALT_BYTES + " bytes, got " + salt.length);
+
+		return provider().pwHash(password, length, salt, opsLimit, memLimit, algorithm.id());
 	}
 
 	/**
@@ -312,7 +253,8 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashInteractive(String password) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hashInteractive(password);
+		return provider().pwHashString(password.getBytes(UTF_8), INTERACTIVE_OPS, INTERACTIVE_MEM,
+				Algorithm.DEFAULT.id());
 	}
 
 	/**
@@ -323,7 +265,7 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashModerate(String password) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hash(password);
+		return provider().pwHashString(password.getBytes(UTF_8), MODERATE_OPS, MODERATE_MEM, Algorithm.DEFAULT.id());
 	}
 
 	/**
@@ -334,19 +276,19 @@ public class PasswordHash {
 	 * @return The hash string.
 	 */
 	public static String hashSensitive(String password) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hashSensitive(password);
+		return provider().pwHashString(password.getBytes(UTF_8), SENSITIVE_OPS, SENSITIVE_MEM, Algorithm.DEFAULT.id());
 	}
 
 	/**
 	 * Compute a hash from a password.
 	 *
 	 * @param password The password to hash.
-	 * @param opsLimit The operations limit, which must be in the range minOpsLimit to maxOpsLimit.
-	 * @param memLimit The memory limit, which must be in the range minMemLimit to maxMemLimit.
+	 * @param opsLimit The operations limit.
+	 * @param memLimit The memory limit in bytes.
 	 * @return The hash string.
 	 */
 	public static String hash(String password, long opsLimit, long memLimit) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.hash(password, opsLimit, memLimit);
+		return provider().pwHashString(password.getBytes(UTF_8), opsLimit, memLimit, Algorithm.DEFAULT.id());
 	}
 
 	/**
@@ -357,51 +299,39 @@ public class PasswordHash {
 	 * @return {@code true} if the password matches the hash.
 	 */
 	public static boolean verify(String hash, String password) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.verify(hash, password);
+		return provider().pwHashVerify(hash, password.getBytes(UTF_8));
 	}
 
 	/**
 	 * Check if a hash needs to be regenerated using limits on operations and memory
 	 * that are suitable for interactive use-cases.
 	 *
-	 * <p>
-	 * Note: only supported when the sodium native library version &gt;= 10.0.14 is
-	 * available.
-	 *
 	 * @param hash The hash.
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForInteractive(String hash) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.needsRehashForInteractive(hash);
+		return provider().pwHashNeedsRehash(hash, INTERACTIVE_OPS, INTERACTIVE_MEM);
 	}
 
 	/**
 	 * Check if a hash needs to be regenerated using limits on operations and memory
 	 * that are suitable for most moderate use-cases.
 	 *
-	 * <p>
-	 * Note: only supported when the sodium native library version &gt;= 10.0.14 is
-	 * available.
-	 *
 	 * @param hash The hash.
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForModerate(String hash) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.needsRehash(hash);
+		return provider().pwHashNeedsRehash(hash, MODERATE_OPS, MODERATE_MEM);
 	}
 
 	/**
 	 * Check if a hash needs to be regenerated using limits on operations and memory
 	 * that are suitable for sensitive use-cases.
 	 *
-	 * <p>
-	 * Note: only supported when the sodium native library version &gt;= 10.0.14 is
-	 * available.
-	 *
 	 * @param hash The hash.
 	 * @return {@code true} if the hash should be regenerated.
 	 */
 	public static boolean needsRehashForSensitive(String hash) {
-		return org.apache.tuweni.crypto.sodium.PasswordHash.needsRehashForSensitive(hash);
+		return provider().pwHashNeedsRehash(hash, SENSITIVE_OPS, SENSITIVE_MEM);
 	}
 }

@@ -222,14 +222,8 @@ public class CryptoBoxTests {
 		assertTrue(keyPair.privateKey().isDestroyed());
 		assertTrue(keyPair.publicKey().isDestroyed());
 
-		IllegalStateException ex = assertThrows(IllegalStateException.class, () -> {
-			keyPair.privateKey().bytes();
-		});
-		assertEquals("allocated value has been destroyed", ex.getMessage());
+		assertThrows(IllegalStateException.class, () -> keyPair.privateKey().bytes());
 
-		ex = assertThrows(IllegalStateException.class, () -> {
-			keyPair.publicKey().bytes();
-		});
-		assertEquals("allocated value has been destroyed", ex.getMessage());
+		assertThrows(IllegalStateException.class, () -> keyPair.publicKey().bytes());
 	}
 }

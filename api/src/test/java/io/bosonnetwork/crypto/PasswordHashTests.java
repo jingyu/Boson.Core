@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.crypto.PasswordHash.Algorithm;
-import io.bosonnetwork.crypto.PasswordHash.Salt;
 
 public class PasswordHashTests {
 	@Test
@@ -75,14 +74,11 @@ public class PasswordHashTests {
 	void testKeyDeriveInteractive() {
 		var password = "secret";
 
-		var salt = Salt.random();
+		var salt = Random.randomBytesSecure(PasswordHash.SALT_BYTES);
 		var key = PasswordHash.hashInteractive(password, 32, salt, Algorithm.ARGON2ID13);
 		assertEquals(32, key.length);
 
-		var salt2 = Salt.fromBytes(salt.bytes());
-		assertEquals(salt, salt2);
-
-		var key2 = PasswordHash.hashInteractive(password, 32, salt2, Algorithm.DEFAULT);
+		var key2 = PasswordHash.hashInteractive(password, 32, salt, Algorithm.DEFAULT);
 		assertEquals(32, key2.length);
 		assertArrayEquals(key, key2);
 	}
@@ -91,14 +87,11 @@ public class PasswordHashTests {
 	void testKeyDeriveModerate() {
 		var password = "secret";
 
-		var salt = Salt.random();
+		var salt = Random.randomBytesSecure(PasswordHash.SALT_BYTES);
 		var key = PasswordHash.hashModerate(password, 32, salt, Algorithm.ARGON2ID13);
 		assertEquals(32, key.length);
 
-		var salt2 = Salt.fromBytes(salt.bytes());
-		assertEquals(salt, salt2);
-
-		var key2 = PasswordHash.hashModerate(password, 32, salt2, Algorithm.DEFAULT);
+		var key2 = PasswordHash.hashModerate(password, 32, salt, Algorithm.DEFAULT);
 		assertEquals(32, key2.length);
 		assertArrayEquals(key, key2);
 	}
@@ -107,14 +100,11 @@ public class PasswordHashTests {
 	void testKeyDeriveSensitive() {
 		var password = "secret";
 
-		var salt = Salt.random();
+		var salt = Random.randomBytesSecure(PasswordHash.SALT_BYTES);
 		var key = PasswordHash.hashSensitive(password, 32, salt, Algorithm.ARGON2ID13);
 		assertEquals(32, key.length);
 
-		var salt2 = Salt.fromBytes(salt.bytes());
-		assertEquals(salt, salt2);
-
-		var key2 = PasswordHash.hashSensitive(password, 32, salt2, Algorithm.DEFAULT);
+		var key2 = PasswordHash.hashSensitive(password, 32, salt, Algorithm.DEFAULT);
 		assertEquals(32, key2.length);
 		assertArrayEquals(key, key2);
 	}

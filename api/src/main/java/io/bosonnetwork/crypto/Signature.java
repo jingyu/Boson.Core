@@ -26,34 +26,21 @@ package io.bosonnetwork.crypto;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.Objects;
 import javax.security.auth.Destroyable;
-
-import org.apache.tuweni.crypto.sodium.KeyDerivation;
-import org.apache.tuweni.crypto.sodium.Signature.Seed;
-import org.apache.tuweni.crypto.sodium.Sodium;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Public-key(Ed25519) signatures.
  */
-public class Signature {
+public interface Signature {
 	/**
 	 * The signing(Ed25519) public key object.
 	 */
-	public static class PublicKey implements Destroyable {
+	interface PublicKey extends Destroyable {
 		/**
 		 * The number of bytes used to represent a public key.
 		 */
-		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.PublicKey.length();
-
-		private final org.apache.tuweni.crypto.sodium.Signature.PublicKey key;
-		private byte @Nullable [] bytes;
-
-		private PublicKey(org.apache.tuweni.crypto.sodium.Signature.PublicKey key) {
-			this.key = key;
-		}
+		int BYTES = CryptoProvider.SIGN_PUBLIC_KEY_BYTES;
 
 		/**
 		 * Create a PublicKey from an array of bytes. The byte array must be of
@@ -61,14 +48,24 @@ public class Signature {
 		 *
 		 * @param key the bytes for the public key.
 		 * @return the created public key object.
+		 * @throws IllegalArgumentException if {@code key} is not {@link #BYTES} bytes long.
 		 */
-		public static PublicKey fromBytes(byte[] key) {
-			// No SodiumException raised
-			return new PublicKey(org.apache.tuweni.crypto.sodium.Signature.PublicKey.fromBytes(key));
+		static PublicKey fromBytes(byte[] key) {
+			if (Objects.requireNonNull(key, "key").length != BYTES)
+				throw new IllegalArgumentException("Invalid public key size: expected " + BYTES + " bytes, got " + key.length);
+
+			return provider().ed25519PublicKeyFromBytes(key);
 		}
 
-		org.apache.tuweni.crypto.sodium.Signature.PublicKey raw() {
-			return key;
+		/**
+		 * Derive the public key that corresponds to the given private key.
+		 *
+		 * @param key the private key.
+		 * @return the matching public key.
+		 */
+		static PublicKey fromPrivateKey(PrivateKey key) {
+			Objects.requireNonNull(key, "key");
+			return provider().ed25519PublicKeyFromSecretKey(key);
 		}
 
 		/**
@@ -76,12 +73,7 @@ public class Signature {
 		 *
 		 * @return the bytes of this key.
 		 */
-		public byte[] bytes() {
-			if (bytes == null)
-				bytes = key.bytesArray();
-
-			return bytes.clone();
-		}
+		byte[] bytes();
 
 		/**
 		 * Verifies the signature of a message.
@@ -90,67 +82,38 @@ public class Signature {
 		 * @param signature the signature of the message.
 		 * @return true if the signature matches the message according to this public key.
 		 */
-		public boolean verify(byte[] message, byte[] signature) {
-			return Signature.verify(message, signature, this);
+		default boolean verify(byte[] message, byte[] signature) {
+			return provider().ed25519Verify(message, signature, this);
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			if (obj == this)
-				return true;
-
-			if (obj instanceof PublicKey that)
-				return key.equals(that.key);
-
-			return false;
-		}
+		void destroy();
 
 		@Override
-		public int hashCode() {
-			return 0x6030A + key.hashCode();
-		}
-
-		/**
-		 * Destroy this PublicKey object.
-		 * Sensitive information associated with this object is destroyed or cleared.
-		 */
-		@Override
-		public void destroy() {
-			if (!key.isDestroyed()) {
-				key.destroy();
-
-				if (bytes != null) {
-					Arrays.fill(bytes, (byte) 0);
-					bytes = null;
-				}
-			}
-		}
-
-		/**
-		 * Determine if this object has been destroyed.
-		 *
-		 * @return true if this object has been destroyed, false otherwise.
-		 */
-		@Override
-		public boolean isDestroyed() {
-			return key.isDestroyed();
-		}
+		boolean isDestroyed();
 	}
 
 	/**
 	 * The signing(Ed25519) private key object.
 	 */
-	public static class PrivateKey implements Destroyable {
+	interface PrivateKey extends Destroyable {
 		/**
-		 * The number of bytes used to represent a public key.
+		 * The number of bytes used to represent a private key (seed followed by public key).
 		 */
-		public static final int BYTES = org.apache.tuweni.crypto.sodium.Signature.SecretKey.length();
+		int BYTES = CryptoProvider.SIGN_SECRET_KEY_BYTES;
 
-		private final org.apache.tuweni.crypto.sodium.Signature.SecretKey key;
-		private byte @Nullable [] bytes;
+		/**
+		 * Creates a new {@code PrivateKey} object from the specified seed.
+		 *
+		 * @param seed the {@link KeyPair#SEED_BYTES}-byte seed for the private key. Must not be null.
+		 * @return a new {@code PrivateKey} created from the given seed.
+		 * @throws IllegalArgumentException if {@code seed} is not {@link KeyPair#SEED_BYTES} bytes long.
+		 */
+		static PrivateKey fromSeed(byte[] seed) {
+			if (Objects.requireNonNull(seed, "seed").length != KeyPair.SEED_BYTES)
+				throw new IllegalArgumentException("Invalid seed size: expected " + KeyPair.SEED_BYTES + " bytes, got " + seed.length);
 
-		private PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey key) {
-			this.key = key;
+			return provider().ed25519SecretKeyFromSeed(seed);
 		}
 
 		/**
@@ -159,38 +122,28 @@ public class Signature {
 		 *
 		 * @param key the bytes for the secret key.
 		 * @return the created private key object.
+		 * @throws IllegalArgumentException if {@code key} is not {@link #BYTES} bytes long.
 		 */
-		public static PrivateKey fromBytes(byte[] key) {
-			// no SodiumException raised
-			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromBytes(key));
+		static PrivateKey fromBytes(byte[] key) {
+			if (Objects.requireNonNull(key, "key").length != BYTES)
+				throw new IllegalArgumentException("Invalid private key size: expected " + BYTES + " bytes, got " + key.length);
+
+			return provider().ed25519SecretKeyFromBytes(key);
 		}
 
 		/**
-		 * Creates a new {@code PrivateKey} object from the specified seed.
+		 * Provides the {@link KeyPair#SEED_BYTES}-byte seed of this secret key.
 		 *
-		 * @param seed the byte array representing the seed for the private key. Must not be null.
-		 * @return a new {@code PrivateKey} created from the given seed.
+		 * @return the seed bytes.
 		 */
-		public static PrivateKey fromSeed(byte[] seed) {
-			return new PrivateKey(org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromSeed(Seed.fromBytes(seed)));
-		}
-
-		org.apache.tuweni.crypto.sodium.Signature.SecretKey raw() {
-			return key;
-		}
+		byte[] seed();
 
 		/**
 		 * Provides the bytes of this secret key.
 		 *
 		 * @return the bytes of this secret key.
 		 */
-		public byte[] bytes() {
-			if (bytes == null)
-				bytes = key.bytesArray();
-
-			return bytes.clone();
-		}
-
+		byte[] bytes();
 
 		/**
 		 * Derives a new {@code PrivateKey} based on the provided subkey ID and context string.
@@ -200,11 +153,8 @@ public class Signature {
 		 * @param context  the context string used during the key derivation process. Must not be null.
 		 * @return a newly derived {@code PrivateKey} created using the specified subkey ID and context.
 		 */
-		public PrivateKey derive(long subKeyId, String context) {
-			byte[] contextBytes = deriveContextBytes(context);
-			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(bytes(), 0, 32));
-			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
-			return PrivateKey.fromSeed(subSeed);
+		default PrivateKey derive(long subKeyId, String context) {
+			return derive(subKeyId, deriveContextBytes(context));
 		}
 
 		/**
@@ -216,10 +166,13 @@ public class Signature {
 		 *                 array and cannot be null.
 		 * @return a new {@code PrivateKey} derived using the specified subkey ID and context.
 		 */
-		public PrivateKey derive(long subKeyId, byte[] context) {
-			Objects.requireNonNull(context, "context");
-			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(bytes(), 0, 32));
-			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, context);
+		default PrivateKey derive(long subKeyId, byte[] context) {
+			if (Objects.requireNonNull(context, "context").length != CryptoProvider.KDF_CONTEXT_BYTES)
+				throw new IllegalArgumentException("Invalid context size: expected "
+						+ CryptoProvider.KDF_CONTEXT_BYTES + " bytes, got " + context.length);
+
+			byte[] master = seed();
+			byte[] subSeed = provider().kdfDeriveFromKey(master, subKeyId, context, KeyPair.SEED_BYTES);
 			return PrivateKey.fromSeed(subSeed);
 		}
 
@@ -229,70 +182,32 @@ public class Signature {
 		 * @param message the message to sign.
 		 * @return the signature of the message.
 		 */
-		public byte[] sign(byte[] message) {
-			return Signature.sign(message, this);
+		default byte[] sign(byte[] message) {
+			return provider().ed25519Sign(message, this);
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			if (obj == this)
-				return true;
-
-			if (obj instanceof PrivateKey that)
-				return key.equals(that.key);
-
-			return false;
-		}
+		void destroy();
 
 		@Override
-		public int hashCode() {
-			return 0x6030A + key.hashCode();
-		}
-
-		/**
-		 * Destroy this private key.
-		 * Sensitive information associated with this private key
-		 * is destroyed or cleared.
-		 */
-		@Override
-		public void destroy() {
-			if (!key.isDestroyed()) {
-				key.destroy();
-
-				if (bytes != null) {
-					Arrays.fill(bytes, (byte) 0);
-					bytes = null;
-				}
-			}
-		}
-
-		/**
-		 * Determine if this object has been destroyed.
-		 *
-		 * @return true if this object has been destroyed, false otherwise.
-		 */
-		@Override
-		public boolean isDestroyed() {
-			return key.isDestroyed();
-		}
+		boolean isDestroyed();
 	}
 
 	/**
 	 * The signing(Ed25519) key pair.
 	 */
-	public static class KeyPair implements Destroyable {
+	class KeyPair implements Destroyable {
 		/**
 		 * The seed length in bytes.
 		 */
-		public static final int SEED_BYTES = Seed.length();
+		public static final int SEED_BYTES = CryptoProvider.SIGN_SEED_BYTES;
 
-		private final org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair;
-		private @Nullable PublicKey pk;
-		private @Nullable PrivateKey sk;
-		private boolean destroyed = false;
+		private final PublicKey pk;
+		private final PrivateKey sk;
 
-		private KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair keyPair) {
-			this.keyPair = keyPair;
+		private KeyPair(PrivateKey sk) {
+			this.sk = sk;
+			this.pk = PublicKey.fromPrivateKey(sk);
 		}
 
 		/**
@@ -303,9 +218,7 @@ public class Signature {
 		 * @return the created key pair object.
 		 */
 		public static KeyPair fromPrivateKey(byte[] privateKey) {
-			org.apache.tuweni.crypto.sodium.Signature.SecretKey sk = org.apache.tuweni.crypto.sodium.Signature.SecretKey.fromBytes(privateKey);
-			// Normally, should never raise Exception
-			return new KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair.forSecretKey(sk));
+			return new KeyPair(PrivateKey.fromBytes(privateKey));
 		}
 
 		/**
@@ -315,8 +228,7 @@ public class Signature {
 		 * @return the created key pair object.
 		 */
 		public static KeyPair fromPrivateKey(PrivateKey privateKey) {
-			// Normally, should never raise Exception
-			return new KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair.forSecretKey(privateKey.raw()));
+			return new KeyPair(privateKey);
 		}
 
 		/**
@@ -327,9 +239,7 @@ public class Signature {
 		 * @return the created key pair object.
 		 */
 		public static KeyPair fromSeed(byte[] seed) {
-			org.apache.tuweni.crypto.sodium.Signature.Seed sd = org.apache.tuweni.crypto.sodium.Signature.Seed.fromBytes(seed);
-			// Normally, should never raise Exception
-			return new KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair.fromSeed(sd));
+			return new KeyPair(PrivateKey.fromSeed(seed));
 		}
 
 		/**
@@ -338,12 +248,7 @@ public class Signature {
 		 * @return a randomly generated key pair.
 		 */
 		public static KeyPair random() {
-			// Normally, should never raise Exception
-			return new KeyPair(org.apache.tuweni.crypto.sodium.Signature.KeyPair.random());
-		}
-
-		org.apache.tuweni.crypto.sodium.Signature.KeyPair raw() {
-			return keyPair;
+			return fromSeed(Random.randomBytesSecure(SEED_BYTES));
 		}
 
 		/**
@@ -352,9 +257,6 @@ public class Signature {
 		 * @return the public key of the key pair.
 		 */
 		public PublicKey publicKey() {
-			if (pk == null)
-				pk = new PublicKey(keyPair.publicKey());
-
 			return pk;
 		}
 
@@ -364,9 +266,6 @@ public class Signature {
 		 * @return the private key of the key pair.
 		 */
 		public PrivateKey privateKey() {
-			if (sk == null)
-				sk = new PrivateKey(keyPair.secretKey());
-
 			return sk;
 		}
 
@@ -379,10 +278,7 @@ public class Signature {
 		 * @return the derived {@code KeyPair} instance.
 		 */
 		public KeyPair derive(long subKeyId, String context) {
-			byte[] contextBytes = deriveContextBytes(context);
-			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(privateKey().bytes(), 0, 32));
-			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, contextBytes);
-			return KeyPair.fromSeed(subSeed);
+			return new KeyPair(sk.derive(subKeyId, context));
 		}
 
 		/**
@@ -390,15 +286,12 @@ public class Signature {
 		 *
 		 * @param subKeyId the identifier for the derived subkey. This is used to ensure the generated key
 		 *                 is unique per subkey ID.
-		 * @param context  the context-specific data used during key derivation. Must be provided as a byte
-		 *                 array and cannot be null.
+		 * @param context  the context-specific data used during the key derivation process. Must be provided
+		 *                 as a byte array and cannot be null.
 		 * @return the derived {@code KeyPair} instance.
 		 */
 		public KeyPair derive(long subKeyId, byte[] context) {
-			Objects.requireNonNull(context, "context");
-			KeyDerivation.MasterKey master = KeyDerivation.MasterKey.fromBytes(Arrays.copyOfRange(privateKey().bytes(), 0, 32));
-			byte[] subSeed = master.deriveKeyArray(KeyPair.SEED_BYTES, subKeyId, context);
-			return KeyPair.fromSeed(subSeed);
+			return new KeyPair(sk.derive(subKeyId, context));
 		}
 
 		@Override
@@ -407,14 +300,14 @@ public class Signature {
 				return true;
 
 			if (obj instanceof KeyPair that)
-				return keyPair.equals(that.keyPair);
+				return sk.equals(that.sk) && pk.equals(that.pk);
 
 			return false;
 		}
 
 		@Override
 		public int hashCode() {
-			return 0x6030A + keyPair.hashCode();
+			return Objects.hash(sk, pk);
 		}
 
 		/**
@@ -422,11 +315,8 @@ public class Signature {
 		 */
 		@Override
 		public void destroy() {
-			if (!destroyed) {
-				publicKey().destroy();
-				privateKey().destroy();
-				destroyed = true;
-			}
+			pk.destroy();
+			sk.destroy();
 		}
 
 		/**
@@ -436,24 +326,22 @@ public class Signature {
 		 */
 		@Override
 		public boolean isDestroyed() {
-			return destroyed;
+			return sk.isDestroyed();
 		}
 	}
 
-	// Can not access internal method
-	// should be (int)Sodium.crypto_sign_bytes();
 	/**
 	 * The number of bytes used to represent a signature.
 	 */
-	public static final int BYTES = 64;
+	public static final int BYTES = CryptoProvider.SIGN_BYTES;
 
 	/**
-	 * Derives the fixed-length (8-byte) libsodium key-derivation context from a context string.
+	 * Derives the fixed-length (8-byte) key-derivation context from a context string.
 	 * <p>
 	 * The string is hashed with SHA-256 and the 32-byte digest is folded down to the 8 bytes
-	 * required by {@link KeyDerivation#contextLength()}.
+	 * required by the {@code crypto_kdf} context.
 	 * <p>
-	 * <strong>Note:</strong> the 8-byte context is a lossy reduction (libsodium's fixed context
+	 * <strong>Note:</strong> the 8-byte context is a lossy reduction (the fixed context
 	 * size), so distinct context strings can still collide and, for the same sub-key id, derive the
 	 * same key. Use distinct sub-key ids when strong domain separation is required.
 	 *
@@ -465,7 +353,7 @@ public class Signature {
 		if (context.isEmpty())
 			throw new IllegalArgumentException("context must not be empty");
 
-		final int len = KeyDerivation.contextLength(); // 8 bytes
+		final int len = CryptoProvider.KDF_CONTEXT_BYTES; // 8 bytes
 		byte[] contextBytes = new byte[len];
 		try {
 			MessageDigest sha = MessageDigest.getInstance("SHA-256");
@@ -485,9 +373,8 @@ public class Signature {
 	 * @param key     the private key to sign the message with.
 	 * @return the signature of the message.
 	 */
-	public static byte[] sign(byte[] message, PrivateKey key) {
-		// Normally, should never raise SodiumException
-		return org.apache.tuweni.crypto.sodium.Signature.signDetached(message, key.raw());
+	static byte[] sign(byte[] message, PrivateKey key) {
+		return provider().ed25519Sign(message, key);
 	}
 
 	/**
@@ -498,14 +385,11 @@ public class Signature {
 	 * @param key       the public key to verify the message with.
 	 * @return true if the signature matches the message according to this public key.
 	 */
-	public static boolean verify(byte[] message, byte[] signature, PublicKey key) {
-		// Normally, should never raise SodiumException
-		return org.apache.tuweni.crypto.sodium.Signature.verifyDetached(message, signature, key.raw());
+	static boolean verify(byte[] message, byte[] signature, PublicKey key) {
+		return key.verify(message, signature);
 	}
 
-	static {
-		if (!Sodium.isAvailable()) {
-			throw new RuntimeException("Sodium native library is not available!");
-		}
+	private static CryptoProvider provider() {
+		return CryptoProviders.getDefault();
 	}
 }

@@ -26,8 +26,6 @@ import java.util.Arrays;
 import java.util.Objects;
 import javax.security.auth.Destroyable;
 
-import org.apache.tuweni.crypto.sodium.SodiumException;
-
 import io.bosonnetwork.CryptoContext;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -105,20 +103,16 @@ public class CryptoIdentity implements Identity, Destroyable {
 		Objects.requireNonNull(recipient, "recipient");
 		Objects.requireNonNull(data, "data");
 
-		try {
-			// TODO: how to avoid the memory copy?!
-			CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
-			CryptoBox.PublicKey pk = recipient.toEncryptionKey();
-			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
-			byte[] cipher = CryptoBox.encrypt(data, pk, sk, nonce);
+		// TODO: how to avoid the memory copy?!
+		CryptoBox.Nonce nonce = CryptoBox.Nonce.random();
+		CryptoBox.PublicKey pk = recipient.toEncryptionKey();
+		CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
+		byte[] cipher = CryptoBox.encrypt(data, pk, sk, nonce);
 
-			byte[] buf = new byte[CryptoBox.Nonce.BYTES + cipher.length];
-			System.arraycopy(nonce.bytes(), 0, buf, 0, CryptoBox.Nonce.BYTES);
-			System.arraycopy(cipher, 0, buf, CryptoBox.Nonce.BYTES, cipher.length);
-			return buf;
-		} catch (SodiumException e) {
-			throw new CryptoException(e);
-		}
+		byte[] buf = new byte[CryptoBox.Nonce.BYTES + cipher.length];
+		System.arraycopy(nonce.bytes(), 0, buf, 0, CryptoBox.Nonce.BYTES);
+		System.arraycopy(cipher, 0, buf, CryptoBox.Nonce.BYTES, cipher.length);
+		return buf;
 	}
 
 	/**
@@ -130,14 +124,10 @@ public class CryptoIdentity implements Identity, Destroyable {
 		Objects.requireNonNull(nonce, "nonce");
 		Objects.requireNonNull(data, "data");
 
-		try {
-			CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
-			CryptoBox.PublicKey pk = recipient.toEncryptionKey();
-			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
-			return CryptoBox.encrypt(data, pk, sk, n);
-		} catch (SodiumException e) {
-			throw new CryptoException(e);
-		}
+		CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
+		CryptoBox.PublicKey pk = recipient.toEncryptionKey();
+		CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
+		return CryptoBox.encrypt(data, pk, sk, n);
 	}
 
 	/**
@@ -152,17 +142,13 @@ public class CryptoIdentity implements Identity, Destroyable {
 			throw new CryptoException("Invalid cipher size");
 
 		// TODO: how to avoid the memory copy?!
-		try {
-			byte[] n = Arrays.copyOfRange(data, 0, CryptoBox.Nonce.BYTES);
-			CryptoBox.Nonce nonce = CryptoBox.Nonce.fromBytes(n);
+		byte[] n = Arrays.copyOfRange(data, 0, CryptoBox.Nonce.BYTES);
+		CryptoBox.Nonce nonce = CryptoBox.Nonce.fromBytes(n);
 
-			CryptoBox.PublicKey pk = sender.toEncryptionKey();
-			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
-			byte[] cipher = Arrays.copyOfRange(data, CryptoBox.Nonce.BYTES, data.length);
-			return CryptoBox.decrypt(cipher, pk, sk, nonce);
-		} catch (SodiumException e) {
-			throw new CryptoException(e);
-		}
+		CryptoBox.PublicKey pk = sender.toEncryptionKey();
+		CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
+		byte[] cipher = Arrays.copyOfRange(data, CryptoBox.Nonce.BYTES, data.length);
+		return CryptoBox.decrypt(cipher, pk, sk, nonce);
 	}
 
 	/**
@@ -177,15 +163,11 @@ public class CryptoIdentity implements Identity, Destroyable {
 		if (data.length <= CryptoBox.MAC_BYTES)
 			throw new CryptoException("Invalid cipher size");
 
-		try {
-			CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
+		CryptoBox.Nonce n = CryptoBox.Nonce.fromBytes(nonce);
 
-			CryptoBox.PublicKey pk = sender.toEncryptionKey();
-			CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
-			return CryptoBox.decrypt(data, pk, sk, n);
-		} catch (SodiumException e) {
-			throw new CryptoException(e);
-		}
+		CryptoBox.PublicKey pk = sender.toEncryptionKey();
+		CryptoBox.PrivateKey sk = encryptionKeyPair.privateKey();
+		return CryptoBox.decrypt(data, pk, sk, n);
 	}
 
 	/**
@@ -195,13 +177,9 @@ public class CryptoIdentity implements Identity, Destroyable {
 	public CryptoContext createCryptoContext(Id id) throws CryptoException {
 		Objects.requireNonNull(id, "id");
 
-		try {
-			CryptoBox.PublicKey pk = id.toEncryptionKey();
-			CryptoBox box = CryptoBox.fromKeys(pk, encryptionKeyPair.privateKey());
-			return new CryptoContext(id, box);
-		} catch (SodiumException e) {
-			throw new CryptoException(e);
-		}
+		CryptoBox.PublicKey pk = id.toEncryptionKey();
+		CryptoBox box = CryptoBox.fromKeys(pk, encryptionKeyPair.privateKey());
+		return new CryptoContext(id, box);
 	}
 
 	/**
