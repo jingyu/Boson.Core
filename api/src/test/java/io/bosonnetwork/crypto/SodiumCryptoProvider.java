@@ -434,6 +434,8 @@ public class SodiumCryptoProvider implements CryptoProvider {
 
 	@Override
 	public boolean pwHashNeedsRehash(String hash, long opsLimit, long memLimit) {
-		return PasswordHash.needsRehash(hash);
+		// Honour the requested limits (matches libsodium crypto_pwhash_str_needs_rehash);
+		// the no-arg needsRehash(hash) would compare against the MODERATE defaults instead.
+		return PasswordHash.needsRehash(hash, opsLimit, memLimit);
 	}
 }

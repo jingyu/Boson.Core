@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -215,6 +216,195 @@ public class CryptoCompatibilityTest {
 
 		assertArrayEquals(msg, BC.boxSealOpen(LS.boxSeal(msg, lsPk), bcPk, bcSk), "BC opens libsodium sealed box");
 		assertArrayEquals(msg, LS.boxSealOpen(BC.boxSeal(msg, bcPk), lsPk, lsSk), "libsodium opens BC sealed box");
+	}
+
+	// Message sizes exercising XSalsa20 / Poly1305 block boundaries (empty, sub-block, exact
+	// block multiples, +/- 1) plus a multi-block payload.
+	private static final int[] SIZES = {0, 1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 255, 256, 1000};
+
+	@Test
+	void ed25519PublicKeyFromBytesMatches() {
+		for (int i = 0; i < 16; i++) {
+			byte[] seed = rb(32);
+			byte[] msg = rb(1 + (i * 13));
+			byte[] pkBytes = BC.ed25519PublicKeyFromSecretKey(BC.ed25519SecretKeyFromSeed(seed)).bytes();
+
+			// round-trip identical on both backends
+			assertArrayEquals(pkBytes, BC.ed25519PublicKeyFromBytes(pkBytes).bytes());
+			assertArrayEquals(pkBytes, LS.ed25519PublicKeyFromBytes(pkBytes).bytes());
+
+			// a from-bytes public key verifies a real signature on both backends
+			byte[] sig = LS.ed25519Sign(msg, LS.ed25519SecretKeyFromSeed(seed));
+			assertTrue(BC.ed25519Verify(msg, sig, BC.ed25519PublicKeyFromBytes(pkBytes)));
+			assertTrue(LS.ed25519Verify(msg, sig, LS.ed25519PublicKeyFromBytes(pkBytes)));
+		}
+	}
+
+	@Test
+	void ed25519SignMatchesAcrossSizesAndSeeds() {
+		for (int iter = 0; iter < 8; iter++) {
+			byte[] seed = rb(32);
+			Signature.PrivateKey bcSk = BC.ed25519SecretKeyFromSeed(seed);
+			Signature.PrivateKey lsSk = LS.ed25519SecretKeyFromSeed(seed);
+			assertArrayEquals(lsSk.seed(), bcSk.seed(), "seed()");
+			Signature.PublicKey bcPk = BC.ed25519PublicKeyFromSecretKey(bcSk);
+			Signature.PublicKey lsPk = LS.ed25519PublicKeyFromSecretKey(lsSk);
+
+			for (int size : SIZES) {
+				byte[] msg = rb(size);
+				byte[] bcSig = BC.ed25519Sign(msg, bcSk);
+				byte[] lsSig = LS.ed25519Sign(msg, lsSk);
+				assertArrayEquals(lsSig, bcSig, "signature size=" + size);
+				assertTrue(BC.ed25519Verify(msg, lsSig, bcPk), "BC verify size=" + size);
+				assertTrue(LS.ed25519Verify(msg, bcSig, lsPk), "LS verify size=" + size);
+			}
+		}
+	}
+
+	@Test
+	void kdfMatchesAcrossLengthsIdsAndContexts() {
+		byte[][] contexts = {
+				"boson-kd".getBytes(StandardCharsets.US_ASCII),
+				"01234567".getBytes(StandardCharsets.US_ASCII),
+				new byte[8] };
+		long[] ids = {0L, 1L, 42L, 0xFFFFFFFFL, Long.MAX_VALUE};
+		int[] lengths = {16, 24, 32, 48, 64};
+		for (int i = 0; i < 8; i++) {
+			byte[] master = rb(32);
+			for (byte[] ctx : contexts)
+				for (long id : ids)
+					for (int len : lengths)
+						assertArrayEquals(LS.kdfDeriveFromKey(master, id, ctx, len),
+								BC.kdfDeriveFromKey(master, id, ctx, len),
+								"kdf len=" + len + " id=" + id);
+		}
+	}
+
+	@Test
+	void boxMatchesAcrossSizes() throws CryptoException {
+		for (int iter = 0; iter < 4; iter++) {
+			byte[] seedA = rb(32);
+			byte[] seedB = rb(32);
+			CryptoBox.PrivateKey bcSkA = boxSk(BC, seedA);
+			CryptoBox.PublicKey bcPkA = BC.boxPublicKeyFromSecretKey(bcSkA);
+			CryptoBox.PrivateKey bcSkB = boxSk(BC, seedB);
+			CryptoBox.PublicKey bcPkB = BC.boxPublicKeyFromSecretKey(bcSkB);
+			CryptoBox.PrivateKey lsSkA = boxSk(LS, seedA);
+			CryptoBox.PublicKey lsPkA = LS.boxPublicKeyFromSecretKey(lsSkA);
+			CryptoBox.PrivateKey lsSkB = boxSk(LS, seedB);
+			CryptoBox.PublicKey lsPkB = LS.boxPublicKeyFromSecretKey(lsSkB);
+			CryptoBox.Nonce nonce = BC.boxNonceFromBytes(rb(24));
+			CryptoBox.Nonce lsNonce = LS.boxNonceFromBytes(nonce.bytes());
+
+			for (int size : SIZES) {
+				byte[] msg = rb(size);
+				byte[] bcBox = BC.boxEncrypt(msg, nonce, bcPkB, bcSkA);
+				byte[] lsBox = LS.boxEncrypt(msg, lsNonce, lsPkB, lsSkA);
+				assertArrayEquals(lsBox, bcBox, "box ciphertext size=" + size);
+				assertArrayEquals(msg, BC.boxDecrypt(lsBox, nonce, bcPkA, bcSkB), "BC opens LS size=" + size);
+				assertArrayEquals(msg, LS.boxDecrypt(bcBox, lsNonce, lsPkA, lsSkB), "LS opens BC size=" + size);
+			}
+		}
+	}
+
+	@Test
+	void boxFromBytesRoundTrips() {
+		byte[] seedA = rb(32);
+		byte[] seedB = rb(32);
+		byte[] skABytes = BC.boxSecretKeyFromSeed(seedA).bytes();
+		byte[] skBBytes = BC.boxSecretKeyFromSeed(seedB).bytes();
+		byte[] pkBBytes = BC.boxPublicKeyFromSecretKey(BC.boxSecretKeyFromBytes(skBBytes)).bytes();
+
+		// raw bytes survive the round trip identically on both backends
+		assertArrayEquals(skABytes, BC.boxSecretKeyFromBytes(skABytes).bytes());
+		assertArrayEquals(skABytes, LS.boxSecretKeyFromBytes(skABytes).bytes());
+		assertArrayEquals(pkBBytes, BC.boxPublicKeyFromBytes(pkBBytes).bytes());
+		assertArrayEquals(pkBBytes, LS.boxPublicKeyFromBytes(pkBBytes).bytes());
+
+		// and from-bytes keys produce byte-identical ciphertext
+		byte[] msg = rb(100);
+		byte[] nonceBytes = rb(24);
+		byte[] bcBox = BC.boxEncrypt(msg, BC.boxNonceFromBytes(nonceBytes),
+				BC.boxPublicKeyFromBytes(pkBBytes), BC.boxSecretKeyFromBytes(skABytes));
+		byte[] lsBox = LS.boxEncrypt(msg, LS.boxNonceFromBytes(nonceBytes),
+				LS.boxPublicKeyFromBytes(pkBBytes), LS.boxSecretKeyFromBytes(skABytes));
+		assertArrayEquals(lsBox, bcBox, "from-bytes key ciphertext");
+	}
+
+	@Test
+	void boxAuthFailureRejectedByBoth() {
+		byte[] seedA = rb(32);
+		byte[] seedB = rb(32);
+		CryptoBox.PrivateKey bcSkA = boxSk(BC, seedA);
+		CryptoBox.PublicKey bcPkA = BC.boxPublicKeyFromSecretKey(bcSkA);
+		CryptoBox.PrivateKey bcSkB = boxSk(BC, seedB);
+		CryptoBox.PublicKey bcPkB = BC.boxPublicKeyFromSecretKey(bcSkB);
+		CryptoBox.PrivateKey lsSkA = boxSk(LS, seedA);
+		CryptoBox.PublicKey lsPkA = LS.boxPublicKeyFromSecretKey(lsSkA);
+		CryptoBox.PrivateKey lsSkB = boxSk(LS, seedB);
+
+		CryptoBox.Nonce nonce = BC.boxNonceFromBytes(rb(24));
+		byte[] box = BC.boxEncrypt(rb(64), nonce, bcPkB, bcSkA);
+
+		// tampered ciphertext is rejected (null) by both backends
+		byte[] tampered = box.clone();
+		tampered[tampered.length - 1] ^= 0x01;
+		assertNull(BC.boxDecrypt(tampered, nonce, bcPkA, bcSkB), "BC rejects tampered");
+		assertNull(LS.boxDecrypt(tampered, nonce, lsPkA, lsSkB), "LS rejects tampered");
+
+		// wrong nonce is rejected by both
+		CryptoBox.Nonce wrong = BC.boxNonceFromBytes(rb(24));
+		assertNull(BC.boxDecrypt(box, wrong, bcPkA, bcSkB), "BC rejects wrong nonce");
+		assertNull(LS.boxDecrypt(box, LS.boxNonceFromBytes(wrong.bytes()), lsPkA, lsSkB), "LS rejects wrong nonce");
+	}
+
+	@Test
+	void sealedBoxAuthFailureRejectedByBoth() {
+		byte[] seed = rb(32);
+		CryptoBox.PrivateKey bcSk = boxSk(BC, seed);
+		CryptoBox.PublicKey bcPk = BC.boxPublicKeyFromSecretKey(bcSk);
+		CryptoBox.PrivateKey lsSk = boxSk(LS, seed);
+		CryptoBox.PublicKey lsPk = LS.boxPublicKeyFromSecretKey(lsSk);
+
+		byte[] sealed = BC.boxSeal(rb(48), bcPk);
+		byte[] tampered = sealed.clone();
+		tampered[tampered.length - 1] ^= 0x01;
+		assertNull(BC.boxSealOpen(tampered, bcPk, bcSk), "BC rejects tampered sealed box");
+		assertNull(LS.boxSealOpen(tampered, lsPk, lsSk), "LS rejects tampered sealed box");
+	}
+
+	@Test
+	void pwHashArgon2iMatches() {
+		// Argon2i (distinct from Argon2id): interactive limits (ops=4, mem=32 MiB).
+		byte[] pw = "correct horse battery staple".getBytes(StandardCharsets.UTF_8);
+		byte[] salt = rb(16);
+		long ops = 4L;
+		long mem = 33554432L;
+		assertArrayEquals(
+				LS.pwHash(pw, 32, salt, ops, mem, CryptoProvider.PWHASH_ALG_ARGON2I13),
+				BC.pwHash(pw, 32, salt, ops, mem, CryptoProvider.PWHASH_ALG_ARGON2I13),
+				"argon2i raw");
+		// a different output length, still byte-identical
+		assertArrayEquals(
+				LS.pwHash(pw, 64, salt, ops, mem, CryptoProvider.PWHASH_ALG_ARGON2I13),
+				BC.pwHash(pw, 64, salt, ops, mem, CryptoProvider.PWHASH_ALG_ARGON2I13),
+				"argon2i raw len=64");
+	}
+
+	@Test
+	void pwHashNeedsRehashMatches() {
+		byte[] pw = "correct horse battery staple".getBytes(StandardCharsets.UTF_8);
+		String phc = BC.pwHashString(pw, OPS, MEM, CryptoProvider.PWHASH_ALG_ARGON2ID13);
+
+		// same limits -> no rehash; changed ops or mem -> rehash. Both backends must agree.
+		assertEquals(LS.pwHashNeedsRehash(phc, OPS, MEM), BC.pwHashNeedsRehash(phc, OPS, MEM));
+		assertFalse(BC.pwHashNeedsRehash(phc, OPS, MEM), "matching params -> no rehash");
+
+		assertEquals(LS.pwHashNeedsRehash(phc, OPS + 1, MEM), BC.pwHashNeedsRehash(phc, OPS + 1, MEM));
+		assertTrue(BC.pwHashNeedsRehash(phc, OPS + 1, MEM), "more ops -> rehash");
+
+		assertEquals(LS.pwHashNeedsRehash(phc, OPS, MEM * 2), BC.pwHashNeedsRehash(phc, OPS, MEM * 2));
+		assertTrue(BC.pwHashNeedsRehash(phc, OPS, MEM * 2), "more mem -> rehash");
 	}
 
 	@Test
