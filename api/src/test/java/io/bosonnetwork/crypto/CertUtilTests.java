@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.crypto;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -7,21 +29,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
+import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.utils.Base58;
 
-public class CryptoUtilTests {
+public class CertUtilTests {
 	@BeforeAll
-	public static void setup() {
-		CertUtilBouncyCastle.init();
+	static void setup() {
+		Security.addProvider(new BouncyCastleProvider());
 	}
 
 	@Test
@@ -29,7 +54,7 @@ public class CryptoUtilTests {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 		String ipAddress = "127.0.0.1";
 
-		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, null, false);
+		PemCertificateAndKey result = CertUtil.certificateFromSignatureKey(kp.privateKey(), ipAddress, null, false);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -49,7 +74,7 @@ public class CryptoUtilTests {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 		String hostName = "localhost";
 
-		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), null, hostName, true);
+		PemCertificateAndKey result = CertUtil.certificateFromSignatureKey(kp.privateKey(), null, hostName, true);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -70,7 +95,7 @@ public class CryptoUtilTests {
 		String ipAddress = "127.0.0.1";
 		String hostName = "localhost";
 
-		CryptoUtil.PemCertificateAndKey result = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
+		PemCertificateAndKey result = CertUtil.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -87,8 +112,8 @@ public class CryptoUtilTests {
 	public void testCertificateFromSignatureKeyBCNoSAN() {
 		Signature.KeyPair kp = Signature.KeyPair.random();
 
-		assertThrows(CryptoUtil.KeyConvertException.class, () ->
-				CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), null, null, false)
+		assertThrows(IllegalArgumentException.class, () ->
+				CertUtil.certificateFromSignatureKey(kp.privateKey(), null, null, false)
 		);
 	}
 
@@ -98,7 +123,7 @@ public class CryptoUtilTests {
 		String ipAddress = "127.0.0.1";
 		String hostName = "localhost";
 
-		CryptoUtil.PemCertificateAndKey result = CryptoUtil.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
+		PemCertificateAndKey result = CertUtil.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
 
 		assertNotNull(result);
 		assertNotNull(result.cert());
@@ -112,7 +137,7 @@ public class CryptoUtilTests {
 		assertTrue(result.privateKey().contains("-----BEGIN PRIVATE KEY-----"));
 
 		// Compare with reference implementation
-		CryptoUtil.PemCertificateAndKey ref = CertUtilBouncyCastle.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
+		PemCertificateAndKey ref = CertUtil.certificateFromSignatureKey(kp.privateKey(), ipAddress, hostName, true);
 
 		System.out.println("Reference Implementation Result:");
 		System.out.println(ref.cert());

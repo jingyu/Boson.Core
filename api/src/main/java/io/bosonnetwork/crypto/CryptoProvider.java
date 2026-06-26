@@ -359,4 +359,24 @@ public interface CryptoProvider {
 	 * @return true if the hash should be regenerated.
 	 */
 	boolean pwHashNeedsRehash(String hash, long opsLimit, long memLimit);
+
+	// ---- PEM certification -------------------------------------------
+
+	/**
+	 * Generates a self-signed Ed25519 X.509 certificate and private key from a signature private key.
+	 * <p>
+	 * At least one Subject Alternative Name (SAN) entry must be produced: if both {@code ipAddress}
+	 * and {@code hostName} are {@code null} the implementation throws {@link IllegalArgumentException}.
+	 *
+	 * @param privateKey     the signature private key
+	 * @param ipAddress      the IP address to include in the Subject Alternative Name (SAN), or
+	 *                       {@code null} to omit an IP SAN entry
+	 * @param hostName       the host name to include in the Subject Alternative Name (SAN), or
+	 *                       {@code null} to omit a DNS SAN entry
+	 * @param enableWildcard whether to include a wildcard host name in the SAN
+	 * @return a {@link PemCertificateAndKey} containing the PEM-encoded certificate and private key
+	 * @throws CryptoException if an error occurs during key conversion or certificate generation
+	 */
+	PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey privateKey, @Nullable String ipAddress,
+	                                                 @Nullable String hostName, boolean enableWildcard) throws CryptoException;
 }

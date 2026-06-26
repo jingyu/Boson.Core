@@ -24,11 +24,35 @@ package io.bosonnetwork.crypto;
 
 import static org.bouncycastle.util.Arrays.constantTimeAreEqual;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Date;
+import java.util.List;
 
+import org.bouncycastle.asn1.edec.EdECObjectIdentifiers;
+import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.x509.KeyPurposeId;
+import org.bouncycastle.asn1.x509.KeyUsage;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509ExtensionUtils;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.engines.XSalsa20Engine;
@@ -40,8 +64,19 @@ import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 import org.bouncycastle.crypto.signers.Ed25519Signer;
+import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
+import org.bouncycastle.crypto.util.SubjectPublicKeyInfoFactory;
 import org.bouncycastle.math.ec.rfc7748.X25519;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DigestCalculator;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
+import org.bouncycastle.operator.bc.BcEdECContentSignerBuilder;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
 import org.jspecify.annotations.Nullable;
+
+import io.bosonnetwork.utils.Base58;
 
 /**
  * Pure-Java {@link CryptoProvider} backed by Bouncy Castle. This is the default Boson crypto
@@ -697,6 +732,104 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 			return true;
 		int memKiB = (int) (memLimit / 1024);
 		return phc.algorithm != PWHASH_ALG_ARGON2ID13 || phc.t != opsLimit || phc.m != memKiB || phc.p != 1;
+	}
+
+	@Override
+	public PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey secretKey,
+	                                                        @Nullable String ipAddress, @Nullable String hostName,
+	                                                        boolean enableWildcard) throws CryptoException {
+		try {
+			// Extract the 32-byte seed and public key from libsodium 64-byte SK
+			byte[] sk = secretKey.bytes();
+			byte[] seed = new byte[32];
+			System.arraycopy(sk, 0, seed, 0, 32);
+			byte[] pk = new byte[32];
+			System.arraycopy(sk, 32, pk, 0, 32);
+			String keyId = Base58.encode(pk);
+
+			// Build Bouncy Castle Ed25519 key parameters. The whole certificate is produced with the
+			// Bouncy Castle low-level API (no JCA provider), so callers do not have to register the BC
+			// JCE provider via Security.addProvider().
+			Ed25519PrivateKeyParameters privateKeyParams = new Ed25519PrivateKeyParameters(seed);
+			Ed25519PublicKeyParameters publicKeyParams = new Ed25519PublicKeyParameters(pk);
+
+			/*/ PKCS#8 v2 OneAsymmetricKey for Ed25519 (RFC 8410)
+			// Convert to JCA PrivateKey / PublicKey via PKCS#8 v2 DER encoding (version=1, include public key)
+			// Encode to PKCS#8 DER, then load via JCA KeyFactory
+			byte[] pkcs8Bytes = PrivateKeyInfoFactory.createPrivateKeyInfo(privateKeyParams).getEncoded();
+			*/
+
+			// Encode the private key as PKCS#8 v1 DER (version=0, no public key).
+			// BC defaults to v2 (RFC 5958) for Ed25519 which Vert.x (Netty) rejects.
+			PrivateKeyInfo v2PrivateKeyInfo = PrivateKeyInfoFactory.createPrivateKeyInfo(privateKeyParams);
+			PrivateKeyInfo v1PrivateKeyInfo = new PrivateKeyInfo(
+					v2PrivateKeyInfo.getPrivateKeyAlgorithm(),
+					v2PrivateKeyInfo.parsePrivateKey()
+			);
+			byte[] pkcs8Bytes = v1PrivateKeyInfo.getEncoded();
+
+			SubjectPublicKeyInfo spki = SubjectPublicKeyInfoFactory.createSubjectPublicKeyInfo(publicKeyParams);
+
+			// Build a self-signed X.509 certificate
+			X500Name subject = new X500Name("CN=" + keyId);
+			BigInteger serial = new BigInteger(128, new SecureRandom());
+
+			// Subtract 10 minutes to handle clock skew
+			Instant now = Instant.now();
+			Date notBefore = Date.from(now.minus(10, ChronoUnit.MINUTES));
+			Date notAfter = Date.from(now.plus(3650, ChronoUnit.DAYS));
+
+			// Without SAN, modern browsers and most TLS clients REJECT the cert
+			// Chrome/Firefox dropped CN-only matching in 2017
+			List<GeneralName> subjectAltNames = new ArrayList<>();
+			if (hostName != null)
+				subjectAltNames.add(new GeneralName(GeneralName.dNSName, hostName));
+			if (enableWildcard && hostName != null)
+				subjectAltNames.add(new GeneralName(GeneralName.dNSName, "*." + hostName));
+			if (ipAddress != null)
+				subjectAltNames.add(new GeneralName(GeneralName.iPAddress, ipAddress));
+			if (subjectAltNames.isEmpty())
+				throw new IllegalArgumentException("At least one SAN (hostname or IP) must be provided");
+
+			// Sign with the Bouncy Castle Ed25519 implementation directly (no JCA provider).
+			ContentSigner signer = new BcEdECContentSignerBuilder(new AlgorithmIdentifier(EdECObjectIdentifiers.id_Ed25519))
+					.build(privateKeyParams);
+
+			DigestCalculator digestCalc = new BcDigestCalculatorProvider()
+					.get(new AlgorithmIdentifier(OIWObjectIdentifiers.idSHA1));
+
+			X509CertificateHolder certHolder = new X509v3CertificateBuilder(subject, serial, notBefore, notAfter, subject, spki)
+					// Subject Key Identifier (optional but good practice)
+					.addExtension(Extension.subjectKeyIdentifier, false,
+							new X509ExtensionUtils(digestCalc).createSubjectKeyIdentifier(spki))
+					// KeyUsage: required for TLS
+					.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature))
+					// SAN - critical for client acceptance
+					.addExtension(Extension.subjectAlternativeName, false,
+							new GeneralNames(subjectAltNames.toArray(new GeneralName[0])))
+					// BasicConstraints: CA=false, this is a server/end-entity cert
+					.addExtension(Extension.basicConstraints, true, new BasicConstraints(false))
+					// Extended Key Usage: HTTPS, WSS, MQTTS server, only if also used for mTLS client certs
+					.addExtension(Extension.extendedKeyUsage, false,
+							new ExtendedKeyUsage(new KeyPurposeId[]{KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth}))
+					.build(signer);
+
+			// Write private key and certificate to PEM strings
+			String keyPem = toPem("PRIVATE KEY", pkcs8Bytes);
+			String certPem = toPem("CERTIFICATE", certHolder.getEncoded());
+
+			return new PemCertificateAndKey(certPem, keyPem);
+		} catch (IOException | OperatorCreationException e) {
+			throw new CryptoException("Failed to convert key to PEM format key and certificate", e);
+		}
+	}
+
+	private static String toPem(String type, byte[] der) throws IOException {
+		StringWriter sw = new StringWriter();
+		try (PemWriter writer = new PemWriter(sw)) {
+			writer.writeObject(new PemObject(type, der));
+		}
+		return sw.toString();
 	}
 
 	private static byte[] argon2(byte[] password, byte[] salt, int length, long opsLimit, long memLimit, int algorithm) {

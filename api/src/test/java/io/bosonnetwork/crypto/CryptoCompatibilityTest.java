@@ -23,18 +23,30 @@
 package io.bosonnetwork.crypto;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Base64;
+import java.util.Date;
 
 import org.apache.tuweni.crypto.sodium.Sodium;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -515,5 +527,120 @@ public class CryptoCompatibilityTest {
 		assertTrue(LS.pwHashVerify(bcPhc, pw), "libsodium verifies a BC-generated PHC string");
 		assertTrue(BC.pwHashVerify(bcPhc, pw), "BC verifies its own PHC string");
 		assertFalse(BC.pwHashVerify(bcPhc, "wrong".getBytes(StandardCharsets.UTF_8)), "wrong password rejected");
+	}
+
+	private static byte[] pemToDer(String pem) {
+		String base64 = pem.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");
+		return Base64.getDecoder().decode(base64);
+	}
+
+	private static void assertCertEquals(PemCertificateAndKey cnk1, PemCertificateAndKey cnk2) {
+		// Compare the decoded PKCS#8 DER rather than the raw PEM text, so the check is independent
+		// of PEM line wrapping or line terminators between the two implementations.
+		assertArrayEquals(pemToDer(cnk1.privateKey()), pemToDer(cnk2.privateKey()), "PKCS#8 private key DER");
+
+		// Verify the certificate can be parsed by standard JDK CertificateFactory
+		CertificateFactory cf;
+		try {
+			cf = CertificateFactory.getInstance("X.509");
+		} catch (CertificateException e) {
+			fail("CertificateFactory", e);
+			return;
+		}
+
+		X509Certificate cert1;
+		X509Certificate cert2;
+		try {
+			cert1 = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(cnk1.cert().getBytes()));
+			cert2 = (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(cnk2.cert().getBytes()));
+		} catch (CertificateException e) {
+			fail("generateCertificate", e);
+			return;
+		}
+
+		assertNotNull(cert1);
+		assertNotNull(cert2);
+
+		assertDoesNotThrow(() -> cert1.checkValidity());
+		assertDoesNotThrow(() -> cert2.checkValidity());
+
+		// Each certificate is self-signed, so it must verify against its own public key.
+		assertDoesNotThrow(() -> cert1.verify(cert1.getPublicKey()), "cert1 self-signature");
+		assertDoesNotThrow(() -> cert2.verify(cert2.getPublicKey()), "cert2 self-signature");
+
+		assertEquals(3, cert1.getVersion(), "Cert Version should be 3");
+		assertEquals(cert1.getVersion(), cert2.getVersion(), "Cert version");
+
+		assertEquals("X.509", cert1.getType(), "Cert type should be X.509");
+		assertEquals(cert1.getType(), cert2.getType(), "Cert type");
+
+		assertEquals("Ed25519", cert1.getSigAlgName(), "SigAlgorithm should be Ed25519");
+		assertEquals(cert1.getSigAlgName(), cert2.getSigAlgName(), "Cert SigAlgorithm");
+
+
+		Instant now = Instant.now();
+		Date notBefore = Date.from(now.minus(10, ChronoUnit.MINUTES));
+		Date notAfter = Date.from(now.plus(3650, ChronoUnit.DAYS));
+
+		assertTrue(cert1.getNotAfter().getTime() <= notAfter.getTime(), "Cert NotAfter");
+		assertTrue(cert2.getNotAfter().getTime() <= notAfter.getTime(), "Cert NotAfter");
+		assertTrue(Math.abs(cert1.getNotAfter().getTime() - cert2.getNotAfter().getTime()) < 1000, "Cert NotAfter");
+
+		assertTrue(cert1.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
+		assertTrue(cert2.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
+
+		assertTrue(cert1.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
+		assertTrue(cert2.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
+		assertTrue(Math.abs(cert1.getNotBefore().getTime() - cert2.getNotBefore().getTime()) < 1000, "Cert NotBefore");
+
+		assertTrue(cert1.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
+		assertTrue(cert2.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
+
+		assertEquals(cert1.getSubjectX500Principal().getName(), cert2.getSubjectX500Principal().getName(), "Cert Subject");
+		assertEquals(cert1.getIssuerX500Principal().getName(), cert2.getIssuerX500Principal().getName(), "Cert Issuer");
+		assertNotEquals(cert1.getSerialNumber().toString(16), cert2.getSerialNumber().toString(16), "Cert SerialNumber");
+		assertEquals(cert1.getPublicKey().getAlgorithm(), cert2.getPublicKey().getAlgorithm(), "Cert PublicKey Algorithm");
+		assertEquals(cert1.getPublicKey().getFormat(), cert2.getPublicKey().getFormat(), "Cert PublicKey Format");
+		assertArrayEquals(cert1.getPublicKey().getEncoded(), cert2.getPublicKey().getEncoded(), "Cert PublicKey Encoded");
+		assertEquals(cert1.getSigAlgOID(), cert2.getSigAlgOID(), "Cert SigAlgOID");
+
+		assertEquals(cert1.getCriticalExtensionOIDs(), cert2.getCriticalExtensionOIDs(), "Cert critical extension OIDs");
+		for (String oid : cert1.getCriticalExtensionOIDs())
+			assertArrayEquals(cert1.getExtensionValue(oid), cert2.getExtensionValue(oid), "Cert extension " + oid);
+
+		assertEquals(cert1.getNonCriticalExtensionOIDs(), cert2.getNonCriticalExtensionOIDs(), "Cert non-critical extension OIDs");
+		for (String oid : cert1.getNonCriticalExtensionOIDs())
+			assertArrayEquals(cert1.getExtensionValue(oid), cert2.getExtensionValue(oid), "Cert  non-critical extension " + oid);
+	}
+
+	@Test
+	void certFromEd25519SeedMatches() throws CryptoException {
+		Signature.PrivateKey secretKey = Signature.PrivateKey.fromSeed(rb(32));
+
+		PemCertificateAndKey bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
+		PemCertificateAndKey lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
+		assertCertEquals(bcCert, lsCert);
+
+		bcCert = BC.certificateFromSignatureKey(secretKey, null, "example.com", false);
+		lsCert = LS.certificateFromSignatureKey(secretKey, null, "example.com", false);
+		assertCertEquals(bcCert, lsCert);
+
+		bcCert = BC.certificateFromSignatureKey(secretKey, null, "example.com", true);
+		lsCert = LS.certificateFromSignatureKey(secretKey, null, "example.com", true);
+		assertCertEquals(bcCert, lsCert);
+
+		bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", false);
+		lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", false);
+		assertCertEquals(bcCert, lsCert);
+
+		bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", true);
+		lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", true);
+		assertCertEquals(bcCert, lsCert);
+
+		// Both providers must reject a request with no SAN entry.
+		assertThrows(IllegalArgumentException.class,
+				() -> BC.certificateFromSignatureKey(secretKey, null, null, false), "BC requires a SAN");
+		assertThrows(IllegalArgumentException.class,
+				() -> LS.certificateFromSignatureKey(secretKey, null, null, false), "LS requires a SAN");
 	}
 }
