@@ -29,8 +29,6 @@ import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
-import javax.naming.InvalidNameException;
-import javax.naming.ldap.LdapName;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -139,16 +137,9 @@ public class HybridTrustManager implements X509TrustManager {
 
 			// 3. Validate CN
 			String dn = cert.getSubjectX500Principal().getName();
-			LdapName ldapName;
-			try {
-				ldapName = new LdapName(dn);
-			} catch (InvalidNameException e) {
-				throw new CertificateException(e);
-			}
-			String cn = ldapName.getRdns().stream()
-					.filter(r -> r.getType().equalsIgnoreCase("CN"))
-					.map(r -> r.getValue().toString())
-					.findFirst().orElseThrow(() -> new CertificateException("No CN in certificate"));
+			String cn = extractCn(dn);
+			if (cn == null)
+				throw new CertificateException("No CN in certificate");
 			if (!cn.equals(expectedCn))
 				throw new CertificateException("CN mismatch");
 
@@ -166,6 +157,57 @@ public class HybridTrustManager implements X509TrustManager {
 			else
 				defaultTrustManager.checkServerTrusted(chain, authType);
 		}
+	}
+
+	/**
+	 * Extracts the Common Name (CN) value from an RFC 2253 distinguished name, as returned by
+	 * {@link javax.security.auth.x500.X500Principal#getName()}.
+	 *
+	 * <p>This intentionally avoids {@code javax.naming.ldap.LdapName}, which is unavailable on Android.
+	 * It handles backslash escapes and double-quoted values, and stops an attribute value at an
+	 * unescaped RDN separator ({@code ,} or {@code +}).
+	 *
+	 * @param dn the RFC 2253 distinguished name
+	 * @return the first CN value found, or {@code null} if the DN has no CN attribute
+	 */
+	private static @Nullable String extractCn(String dn) {
+		int i = 0;
+		final int n = dn.length();
+		while (i < n) {
+			int eq = i;
+			while (eq < n && dn.charAt(eq) != '=')
+				eq++;
+			if (eq >= n)
+				break;
+
+			String type = dn.substring(i, eq).trim();
+			StringBuilder value = new StringBuilder();
+			int j = eq + 1;
+			boolean quoted = false;
+			while (j < n) {
+				char c = dn.charAt(j);
+				if (c == '\\' && j + 1 < n) {
+					value.append(dn.charAt(j + 1));
+					j += 2;
+					continue;
+				}
+				if (c == '"') {
+					quoted = !quoted;
+					j++;
+					continue;
+				}
+				if (!quoted && (c == ',' || c == '+'))
+					break;
+				value.append(c);
+				j++;
+			}
+
+			if (type.equalsIgnoreCase("CN"))
+				return value.toString().trim();
+
+			i = j + 1;
+		}
+		return null;
 	}
 
 	/**
