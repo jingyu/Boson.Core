@@ -295,11 +295,11 @@ public class Variable<T extends @Nullable Object> {
 	 *
 	 * @return the optional value as a {@code Stream}
 	 */
+	// Suppress NullAway: value is non-null past the guard, but T's @Nullable bound
+	// defeats Optional.of's non-null type parameter (JSpecify non-null projection limit).
+	@SuppressWarnings("NullAway")
 	public Stream<T> stream() {
-		if (!isPresent())
-			return Stream.empty();
-		else
-			return Stream.of(value);
+		return Stream.ofNullable(value);
 	}
 
 	/**
@@ -405,11 +405,11 @@ public class Variable<T extends @Nullable Object> {
 	 * @return an {@code Optional} containing the value of this {@code Variable}
 	 *         if present, otherwise an empty {@code Optional}
 	 */
+	// Suppress NullAway: value is non-null past the guard, but T's @Nullable bound
+	// defeats Optional.of's non-null type parameter (JSpecify non-null projection limit).
+	@SuppressWarnings("NullAway")
 	public Optional<T> toOptional() {
-		if (value == null)
-			return Optional.empty();
-
-		return Optional.of(value);
+		return Optional.ofNullable(value);
 	}
 
 	/**

@@ -104,7 +104,7 @@ public abstract class BosonVerticle implements Deployable {
 	 *
 	 * @return the configuration as a {@link JsonObject}
 	 */
-	protected final JsonObject vertxConfig() {
+	protected final @Nullable JsonObject vertxConfig() {
 		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.config();
 	}
