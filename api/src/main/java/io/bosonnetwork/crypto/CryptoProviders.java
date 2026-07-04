@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.crypto;
 
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.ServiceLoader;
 
@@ -59,8 +60,10 @@ public final class CryptoProviders {
 	}
 
 	private static CryptoProvider resolve() {
-		return ServiceLoader.load(CryptoProvider.class)
-				.findFirst()
-				.orElseGet(BouncyCastleCryptoProvider::new);
+		// Note: use iterator() rather than the Java 9 findFirst()/stream() ServiceLoader helpers,
+		// which are not present on older Android runtimes (e.g. API 33) and fail with
+		// NoSuchMethodError there. iterator() is available on every supported JDK/Android level.
+		Iterator<CryptoProvider> it = ServiceLoader.load(CryptoProvider.class).iterator();
+		return it.hasNext() ? it.next() : new BouncyCastleCryptoProvider();
 	}
 }

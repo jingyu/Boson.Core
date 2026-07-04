@@ -24,6 +24,7 @@
 package io.bosonnetwork;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.ServiceLoader;
@@ -487,8 +488,11 @@ public interface Node extends Identity {
 	 * @throws BosonException if no node implementation is available, or it cannot be initialized
 	 */
 	static Node kadNode(NodeConfiguration config) throws BosonException {
-		NodeFactory factory = ServiceLoader.load(NodeFactory.class).findFirst()
-				.orElseThrow(() -> new BosonException("No NodeFactory implementation found in classpath"));
-		return factory.create(config);
+		// Note: use iterator() rather than the Java 9 findFirst()/stream() ServiceLoader helpers,
+		// which are absent on older Android runtimes (e.g. API 33) and fail with NoSuchMethodError.
+		Iterator<NodeFactory> it = ServiceLoader.load(NodeFactory.class).iterator();
+		if (!it.hasNext())
+			throw new BosonException("No NodeFactory implementation found in classpath");
+		return it.next().create(config);
 	}
 }

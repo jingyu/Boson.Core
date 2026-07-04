@@ -27,6 +27,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -113,10 +114,10 @@ class FileSystemResolutionCache implements ResolutionCache {
 		String homeDir = System.getProperty("user.home");
 		if (homeDir != null && !homeDir.isEmpty()) {
 			// current user has home directory, using the user home directory
-			return Path.of(homeDir, ".cache", "boson", "identifier", "resolver");
+			return Paths.get(homeDir, ".cache", "boson", "identifier", "resolver");
 		} else {
 			// using the temp directory
-			return Path.of(System.getProperty("java.io.tmpdir"), "boson-resolver-cache");
+			return Paths.get(System.getProperty("java.io.tmpdir"), "boson-resolver-cache");
 		}
 	}
 

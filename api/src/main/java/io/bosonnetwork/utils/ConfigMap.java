@@ -24,6 +24,7 @@ package io.bosonnetwork.utils;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
@@ -300,9 +301,9 @@ public class ConfigMap implements Map<String, Object> {
 			throw new IllegalArgumentException("Missing value - " + key);
 		} else if (val instanceof String s) {
 			try {
-				Path path = Path.of(s);
+				Path path = Paths.get(s);
 				if (path.startsWith("~"))
-					path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
+					path = Paths.get(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
 				return FileUtils.normalizePath(path);
 			} catch (InvalidPathException e) {
 				throw new IllegalArgumentException("Invalid path value - " + key + ": " + s, e);

@@ -31,6 +31,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -672,7 +673,7 @@ public class NodeConfiguration {
 		 * @return this Builder for chaining
 		 */
 		public Builder dataDir(@Nullable String dir) {
-			return dataDir(dir != null ? Path.of(dir) : null);
+			return dataDir(dir != null ? Paths.get(dir) : null);
 		}
 
 		/**

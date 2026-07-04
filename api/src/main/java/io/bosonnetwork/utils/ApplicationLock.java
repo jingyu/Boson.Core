@@ -30,6 +30,7 @@ import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 
@@ -78,7 +79,7 @@ public class ApplicationLock implements AutoCloseable {
 	 * @throws IllegalStateException if another application instance already took the lock.
 	 */
 	public ApplicationLock(String lockFile) throws IOException, IllegalStateException {
-		this(Path.of(lockFile));
+		this(Paths.get(lockFile));
 	}
 
 	private void tryLock() throws IOException, IllegalStateException {

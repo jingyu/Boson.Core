@@ -65,8 +65,8 @@ public final class FileUtils {
 	private static Path xdgPath(String envVar, String relativeFallback) {
 		String xdg = System.getenv(envVar);
 		if (xdg != null && !xdg.isEmpty())
-			return Path.of(xdg);
-		return Path.of(System.getProperty("user.home"), relativeFallback);
+			return Paths.get(xdg);
+		return Paths.get(System.getProperty("user.home"), relativeFallback);
 	}
 
 	/**
@@ -112,7 +112,7 @@ public final class FileUtils {
 	public static Path normalizePath(Path path) {
 		Objects.requireNonNull(path, "Path must not be null");
 		if (path.startsWith("~"))
-			path = Path.of(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
+			path = Paths.get(System.getProperty("user.home")).resolve(path.subpath(1, path.getNameCount()));
 
 		return path.normalize();
 	}
@@ -136,12 +136,12 @@ public final class FileUtils {
 	public static Path getSystemConfigDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
-			return Path.of(System.getenv("ProgramData"));
+			return Paths.get(System.getenv("ProgramData"));
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Preferences");
+			return Paths.get("/Library/Preferences");
 		} else {
 			// Unix like OS
-			return Path.of("/etc");
+			return Paths.get("/etc");
 		}
 	}
 
@@ -165,12 +165,12 @@ public final class FileUtils {
 	public static Path getSiteConfigDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
-			return Path.of(System.getenv("ProgramData"));
+			return Paths.get(System.getenv("ProgramData"));
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Preferences");
+			return Paths.get("/Library/Preferences");
 		} else {
 			// Unix like OS
-			return Path.of("/usr/local/etc");
+			return Paths.get("/usr/local/etc");
 		}
 	}
 
@@ -194,7 +194,7 @@ public final class FileUtils {
 	public static Path getUserConfigDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows"))
-			return Path.of(System.getenv("APPDATA"));
+			return Paths.get(System.getenv("APPDATA"));
 		// macOS uses XDG style here (intentionally - see class doc)
 		return xdgPath("XDG_CONFIG_HOME", ".config");
 	}
@@ -219,12 +219,12 @@ public final class FileUtils {
 	public static Path getSystemDataDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
-			return Path.of(System.getenv("ProgramData"));
+			return Paths.get(System.getenv("ProgramData"));
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Application Support");
+			return Paths.get("/Library/Application Support");
 		} else {
 			// Unix like OS
-			return Path.of("/var/lib");
+			return Paths.get("/var/lib");
 		}
 	}
 
@@ -248,7 +248,7 @@ public final class FileUtils {
 	public static Path getUserDataDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows"))
-			return Path.of(System.getenv("LOCALAPPDATA"));
+			return Paths.get(System.getenv("LOCALAPPDATA"));
 		return xdgPath("XDG_DATA_HOME", ".local/share");
 	}
 
@@ -271,12 +271,12 @@ public final class FileUtils {
 	public static Path getSystemCacheDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
-			return Path.of(System.getenv("SystemRoot"), "Temp");
+			return Paths.get(System.getenv("SystemRoot"), "Temp");
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Caches");
+			return Paths.get("/Library/Caches");
 		} else {
 			// Unix like OS
-			return Path.of("/var/cache");
+			return Paths.get("/var/cache");
 		}
 	}
 
@@ -299,7 +299,7 @@ public final class FileUtils {
 	public static Path getUserCacheDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows"))
-			return Path.of(System.getenv("LOCALAPPDATA"));
+			return Paths.get(System.getenv("LOCALAPPDATA"));
 		return xdgPath("XDG_CACHE_HOME", ".cache");
 	}
 
@@ -322,12 +322,12 @@ public final class FileUtils {
 	public static Path getSystemLogDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows")) {
-			return Path.of(System.getenv("SystemRoot"), "Logs");
+			return Paths.get(System.getenv("SystemRoot"), "Logs");
 		} else if (osName.startsWith("mac")) {
-			return Path.of("/Library/Logs");
+			return Paths.get("/Library/Logs");
 		} else {
 			// Unix like OS
-			return Path.of("/var/log");
+			return Paths.get("/var/log");
 		}
 	}
 
@@ -350,7 +350,7 @@ public final class FileUtils {
 	public static Path getUserLogDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
 		if (osName.startsWith("windows"))
-			return Path.of(System.getenv("LOCALAPPDATA"));
+			return Paths.get(System.getenv("LOCALAPPDATA"));
 		return xdgPath("XDG_STATE_HOME", ".local/state");
 	}
 
