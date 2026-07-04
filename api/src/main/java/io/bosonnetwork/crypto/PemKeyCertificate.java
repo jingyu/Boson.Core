@@ -28,5 +28,5 @@ package io.bosonnetwork.crypto;
  * @param cert       the PEM-encoded certificate
  * @param privateKey the PEM-encoded private key
  */
-public record PemCertificateAndKey(String cert, String privateKey) {
+public record PemKeyCertificate(String cert, String privateKey) {
 }

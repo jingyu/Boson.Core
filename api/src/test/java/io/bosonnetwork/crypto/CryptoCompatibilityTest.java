@@ -534,10 +534,12 @@ public class CryptoCompatibilityTest {
 		return Base64.getDecoder().decode(base64);
 	}
 
-	private static void assertCertEquals(PemCertificateAndKey cnk1, PemCertificateAndKey cnk2) {
-		// Compare the decoded PKCS#8 DER rather than the raw PEM text, so the check is independent
-		// of PEM line wrapping or line terminators between the two implementations.
-		assertArrayEquals(pemToDer(cnk1.privateKey()), pemToDer(cnk2.privateKey()), "PKCS#8 private key DER");
+	private static void assertCertEquals(PemKeyCertificate cnk1, PemKeyCertificate cnk2, boolean ed25519) {
+		if (ed25519) {
+			// Compare the decoded PKCS#8 DER rather than the raw PEM text, so the check is independent
+			// of PEM line wrapping or line terminators between the two implementations.
+			assertArrayEquals(pemToDer(cnk1.privateKey()), pemToDer(cnk2.privateKey()), "PKCS#8 private key DER");
+		}
 
 		// Verify the certificate can be parsed by standard JDK CertificateFactory
 		CertificateFactory cf;
@@ -574,7 +576,11 @@ public class CryptoCompatibilityTest {
 		assertEquals("X.509", cert1.getType(), "Cert type should be X.509");
 		assertEquals(cert1.getType(), cert2.getType(), "Cert type");
 
-		assertEquals("Ed25519", cert1.getSigAlgName(), "SigAlgorithm should be Ed25519");
+		if (ed25519)
+			assertEquals("Ed25519", cert1.getSigAlgName(), "SigAlgorithm should be Ed25519");
+		else
+			assertEquals("SHA256withECDSA", cert1.getSigAlgName(), "SigAlgorithm should be SHA256withECDSA");
+
 		assertEquals(cert1.getSigAlgName(), cert2.getSigAlgName(), "Cert SigAlgorithm");
 
 
@@ -584,14 +590,19 @@ public class CryptoCompatibilityTest {
 
 		assertTrue(cert1.getNotAfter().getTime() <= notAfter.getTime(), "Cert NotAfter");
 		assertTrue(cert2.getNotAfter().getTime() <= notAfter.getTime(), "Cert NotAfter");
-		assertTrue(Math.abs(cert1.getNotAfter().getTime() - cert2.getNotAfter().getTime()) < 1000, "Cert NotAfter");
+		// Ed25519 certs are generated deterministically and back-to-back; ECDSA keygen is slow enough
+		// that the two providers' independent Instant.now() calls can drift past 1s, so only require the
+		// tight cross-cert timestamp match for the deterministic Ed25519 path.
+		if (ed25519)
+			assertTrue(Math.abs(cert1.getNotAfter().getTime() - cert2.getNotAfter().getTime()) < 1000, "Cert NotAfter");
 
 		assertTrue(cert1.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
 		assertTrue(cert2.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
 
 		assertTrue(cert1.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
 		assertTrue(cert2.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
-		assertTrue(Math.abs(cert1.getNotBefore().getTime() - cert2.getNotBefore().getTime()) < 1000, "Cert NotBefore");
+		if (ed25519)
+			assertTrue(Math.abs(cert1.getNotBefore().getTime() - cert2.getNotBefore().getTime()) < 1000, "Cert NotBefore");
 
 		assertTrue(cert1.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
 		assertTrue(cert2.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
@@ -601,7 +612,8 @@ public class CryptoCompatibilityTest {
 		assertNotEquals(cert1.getSerialNumber().toString(16), cert2.getSerialNumber().toString(16), "Cert SerialNumber");
 		assertEquals(cert1.getPublicKey().getAlgorithm(), cert2.getPublicKey().getAlgorithm(), "Cert PublicKey Algorithm");
 		assertEquals(cert1.getPublicKey().getFormat(), cert2.getPublicKey().getFormat(), "Cert PublicKey Format");
-		assertArrayEquals(cert1.getPublicKey().getEncoded(), cert2.getPublicKey().getEncoded(), "Cert PublicKey Encoded");
+		if (ed25519)
+			assertArrayEquals(cert1.getPublicKey().getEncoded(), cert2.getPublicKey().getEncoded(), "Cert PublicKey Encoded");
 		assertEquals(cert1.getSigAlgOID(), cert2.getSigAlgOID(), "Cert SigAlgOID");
 
 		assertEquals(cert1.getCriticalExtensionOIDs(), cert2.getCriticalExtensionOIDs(), "Cert critical extension OIDs");
@@ -609,38 +621,99 @@ public class CryptoCompatibilityTest {
 			assertArrayEquals(cert1.getExtensionValue(oid), cert2.getExtensionValue(oid), "Cert extension " + oid);
 
 		assertEquals(cert1.getNonCriticalExtensionOIDs(), cert2.getNonCriticalExtensionOIDs(), "Cert non-critical extension OIDs");
-		for (String oid : cert1.getNonCriticalExtensionOIDs())
+		for (String oid : cert1.getNonCriticalExtensionOIDs()) {
+			// For random-key ECDSA certs the Subject Key Identifier (2.5.29.14) and the identity binding
+			// in issuerAltName (2.5.29.18) are key-dependent and legitimately differ between two
+			// independently generated certificates; only their presence (asserted above) is required.
+			if (!ed25519 && (oid.equals("2.5.29.14") || oid.equals("2.5.29.18")))
+				continue;
 			assertArrayEquals(cert1.getExtensionValue(oid), cert2.getExtensionValue(oid), "Cert  non-critical extension " + oid);
+		}
 	}
 
 	@Test
 	void certFromEd25519SeedMatches() throws CryptoException {
 		Signature.PrivateKey secretKey = Signature.PrivateKey.fromSeed(rb(32));
 
-		PemCertificateAndKey bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
-		PemCertificateAndKey lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
-		assertCertEquals(bcCert, lsCert);
+		PemKeyCertificate bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
+		PemKeyCertificate lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", null, false);
+		assertCertEquals(bcCert, lsCert, true);
 
 		bcCert = BC.certificateFromSignatureKey(secretKey, null, "example.com", false);
 		lsCert = LS.certificateFromSignatureKey(secretKey, null, "example.com", false);
-		assertCertEquals(bcCert, lsCert);
+		assertCertEquals(bcCert, lsCert, true);
 
 		bcCert = BC.certificateFromSignatureKey(secretKey, null, "example.com", true);
 		lsCert = LS.certificateFromSignatureKey(secretKey, null, "example.com", true);
-		assertCertEquals(bcCert, lsCert);
+		assertCertEquals(bcCert, lsCert, true);
 
 		bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", false);
 		lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", false);
-		assertCertEquals(bcCert, lsCert);
+		assertCertEquals(bcCert, lsCert, true);
 
 		bcCert = BC.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", true);
 		lsCert = LS.certificateFromSignatureKey(secretKey, "192.168.8.1", "example.com", true);
-		assertCertEquals(bcCert, lsCert);
+		assertCertEquals(bcCert, lsCert, true);
 
 		// Both providers must reject a request with no SAN entry.
 		assertThrows(IllegalArgumentException.class,
 				() -> BC.certificateFromSignatureKey(secretKey, null, null, false), "BC requires a SAN");
 		assertThrows(IllegalArgumentException.class,
 				() -> LS.certificateFromSignatureKey(secretKey, null, null, false), "LS requires a SAN");
+	}
+
+	@Test
+	void ecdsaCertMatches() throws CryptoException {
+		Signature.PrivateKey secretKey = Signature.PrivateKey.fromSeed(rb(32));
+
+		PemKeyCertificate bcCert = BC.certificateSelfSignedEcdsa("192.168.8.1", null, false, secretKey);
+		PemKeyCertificate lsCert = LS.certificateSelfSignedEcdsa("192.168.8.1", null, false, secretKey);
+		assertCertEquals(bcCert, lsCert, false);
+
+		bcCert = BC.certificateSelfSignedEcdsa(null, "example.com", false, secretKey);
+		lsCert = LS.certificateSelfSignedEcdsa(null, "example.com", false, secretKey);
+		assertCertEquals(bcCert, lsCert, false);
+
+		bcCert = BC.certificateSelfSignedEcdsa(null, "example.com", true, secretKey);
+		lsCert = LS.certificateSelfSignedEcdsa(null, "example.com", true, secretKey);
+		assertCertEquals(bcCert, lsCert, false);
+
+		bcCert = BC.certificateSelfSignedEcdsa("192.168.8.1", "example.com", false, secretKey);
+		lsCert = LS.certificateSelfSignedEcdsa("192.168.8.1", "example.com", false, secretKey);
+		assertCertEquals(bcCert, lsCert, false);
+
+		bcCert = BC.certificateSelfSignedEcdsa("192.168.8.1", "example.com", true, secretKey);
+		lsCert = LS.certificateSelfSignedEcdsa("192.168.8.1", "example.com", true, secretKey);
+		assertCertEquals(bcCert, lsCert, false);
+
+		// Both providers must reject a request with no SAN entry.
+		assertThrows(IllegalArgumentException.class,
+				() -> BC.certificateFromSignatureKey(secretKey, null, null, false), "BC requires a SAN");
+		assertThrows(IllegalArgumentException.class,
+				() -> LS.certificateFromSignatureKey(secretKey, null, null, false), "LS requires a SAN");
+	}
+
+	@Test
+	void ecdsaCertBindingVerifiesForBothProviders() throws Exception {
+		// Each provider (Bouncy Castle and the BC-free libsodium impl) must produce a browser-compatible
+		// ECDSA certificate whose Ed25519 identity binding verifies against the correct id and no other.
+		for (CryptoProvider provider : java.util.List.of(BC, LS)) {
+			Signature.KeyPair id = Signature.KeyPair.fromSeed(rb(32));
+			PemKeyCertificate cnk = provider.certificateSelfSignedEcdsa("127.0.0.1", "example.com", false, id.privateKey());
+
+			CertificateFactory cf = CertificateFactory.getInstance("X.509");
+			X509Certificate cert = (X509Certificate) cf.generateCertificate(
+					new ByteArrayInputStream(cnk.cert().getBytes(StandardCharsets.US_ASCII)));
+			cert.checkValidity();
+			assertEquals("EC", cert.getPublicKey().getAlgorithm(), provider + " must produce an ECDSA cert");
+			assertNotNull(cert.getIssuerAlternativeNames(), provider + " must carry an issuerAltName binding");
+
+			X509Certificate[] chain = {cert};
+			HybridTrustManager good = new HybridTrustManager("cn-ignored", id.publicKey().bytes());
+			assertDoesNotThrow(() -> good.checkServerTrusted(chain, "ECDHE_ECDSA"), provider + " correct id accepts");
+
+			HybridTrustManager bad = new HybridTrustManager("cn-ignored", Signature.KeyPair.fromSeed(rb(32)).publicKey().bytes());
+			assertThrows(CertificateException.class, () -> bad.checkServerTrusted(chain, "ECDHE_ECDSA"), provider + " wrong id rejects");
+		}
 	}
 }

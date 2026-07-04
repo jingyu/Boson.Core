@@ -374,9 +374,32 @@ public interface CryptoProvider {
 	 * @param hostName       the host name to include in the Subject Alternative Name (SAN), or
 	 *                       {@code null} to omit a DNS SAN entry
 	 * @param enableWildcard whether to include a wildcard host name in the SAN
-	 * @return a {@link PemCertificateAndKey} containing the PEM-encoded certificate and private key
+	 * @return a {@link PemKeyCertificate} containing the PEM-encoded certificate and private key
 	 * @throws CryptoException if an error occurs during key conversion or certificate generation
 	 */
-	PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey privateKey, @Nullable String ipAddress,
-	                                                 @Nullable String hostName, boolean enableWildcard) throws CryptoException;
+	PemKeyCertificate certificateFromSignatureKey(Signature.PrivateKey privateKey, @Nullable String ipAddress,
+	                                              @Nullable String hostName, boolean enableWildcard) throws CryptoException;
+
+	/**
+	 * Generates a self-signed ECDSA P-256 X.509 certificate with a freshly generated key pair, optionally
+	 * carrying a Boson Ed25519 identity binding.
+	 * <p>
+	 * Browsers do not support Ed25519 server certificates, so this produces a browser-compatible ECDSA
+	 * certificate. When {@code identityKey} is non-null, an {@code issuerAltName} URI
+	 * ({@code boson:ed25519:<base58 public key>:<base64url signature>}) binds the ECDSA key to a Boson
+	 * identity: the signature covers the certificate's {@code SubjectPublicKeyInfo} DER, letting
+	 * {@link HybridTrustManager} pin the identity even though the TLS key is not the identity key.
+	 * <p>
+	 * At least one Subject Alternative Name (SAN) entry must be produced: if both {@code ipAddress} and
+	 * {@code hostName} are {@code null} the implementation throws {@link IllegalArgumentException}.
+	 *
+	 * @param ipAddress      the IP address SAN entry, or {@code null}
+	 * @param hostName       the host name SAN entry, or {@code null}
+	 * @param enableWildcard whether to include a wildcard host name in the SAN
+	 * @param identityKey    the Ed25519 identity key to bind the certificate to, or {@code null} for none
+	 * @return a {@link PemKeyCertificate} containing the PEM-encoded certificate and private key
+	 * @throws CryptoException if an error occurs during key or certificate generation
+	 */
+	PemKeyCertificate certificateSelfSignedEcdsa(@Nullable String ipAddress, @Nullable String hostName,
+	                                             boolean enableWildcard, Signature.@Nullable PrivateKey identityKey) throws CryptoException;
 }

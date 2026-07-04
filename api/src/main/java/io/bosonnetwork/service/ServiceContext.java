@@ -31,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
+import io.bosonnetwork.crypto.PemKeyCertificate;
 
 /**
  * The ServiceContext interface represents a context in which the services can access the
@@ -82,6 +83,21 @@ public interface ServiceContext {
 	 *         functionalities, such as querying other nodes and their services.
 	 */
 	FederationContext getFederationContext();
+
+	/**
+	 * Returns the PEM-encoded TLS certificate and private key provisioned by the host for this service's
+	 * HTTPS/MQTTS listeners, or {@code null} if the host has no TLS material (for example, when SSL is
+	 * disabled). Returning a framework-neutral {@link PemKeyCertificate} keeps this API free of any
+	 * transport-library types; callers adapt it to their server (for example, Vert.x
+	 * {@code PemKeyCertOptions}) themselves.
+	 * <p>
+	 * Services should use this instead of generating their own certificate. The host provides either a
+	 * real certificate configured out of band, or a self-signed ECDSA P-256 certificate bound to this
+	 * service's Boson identity so pinning clients can authenticate it.
+	 *
+	 * @return the TLS certificate and key, or {@code null} if no TLS material
+	 */
+	@Nullable PemKeyCertificate getKeyCertificate();
 
 	/**
 	 * Gets the service configuration data.

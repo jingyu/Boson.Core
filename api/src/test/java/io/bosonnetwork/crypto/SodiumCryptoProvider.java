@@ -29,11 +29,14 @@ import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.SignatureException;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.text.SimpleDateFormat;
@@ -465,9 +468,9 @@ public class SodiumCryptoProvider implements CryptoProvider {
 	}
 
 	@Override
-	public PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey signaturePrivateKey,
-															@Nullable String ipAddress, @Nullable String hostName,
-															boolean enableWildcard) throws CryptoException {
+	public PemKeyCertificate certificateFromSignatureKey(Signature.PrivateKey signaturePrivateKey,
+	                                                     @Nullable String ipAddress, @Nullable String hostName,
+	                                                     boolean enableWildcard) throws CryptoException {
 		// Mirror BouncyCastleCryptoProvider: at least one SAN entry is required.
 		if (ipAddress == null && hostName == null)
 			throw new IllegalArgumentException("At least one SAN (hostname or IP) must be provided");
@@ -543,11 +546,132 @@ public class SodiumCryptoProvider implements CryptoProvider {
 					Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(certDer) +
 					"\n-----END CERTIFICATE-----\n";
 
-			return new PemCertificateAndKey(certPem, keyPem);
+			return new PemKeyCertificate(certPem, keyPem);
 		} catch (IOException | InvalidKeyException | SignatureException | NoSuchAlgorithmException |
 		         InvalidKeySpecException e) {
 			throw new CryptoException("Failed to convert key using simple implementation", e);
 		}
+	}
+
+	@Override
+	public PemKeyCertificate certificateSelfSignedEcdsa(@Nullable String ipAddress, @Nullable String hostName,
+	                                                    boolean enableWildcard, Signature.@Nullable PrivateKey identityKey) throws CryptoException {
+		if (ipAddress == null && hostName == null)
+			throw new IllegalArgumentException("At least one SAN (hostname or IP) must be provided");
+
+		try {
+			// Fresh ECDSA P-256 key pair via the JDK (SunEC) - no Bouncy Castle.
+			KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+			kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
+			KeyPair keyPair = kpg.generateKeyPair();
+			byte[] spki = keyPair.getPublic().getEncoded(); // full SubjectPublicKeyInfo DER
+
+			String cn = hostName != null ? hostName : ipAddress;
+			BigInteger serial = new BigInteger(128, new SecureRandom());
+			Instant now = Instant.now();
+			Date notBefore = Date.from(now.minus(10, ChronoUnit.MINUTES));
+			Date notAfter = Date.from(now.plus(3650, ChronoUnit.DAYS));
+
+			// Boson identity binding: Ed25519 signature over the ECDSA SPKI, encoded as an issuerAltName URI.
+			String bindingUri = null;
+			if (identityKey != null) {
+				byte[] sk = identityKey.bytes();
+				byte[] publicKey = Arrays.copyOfRange(sk, 32, 64);
+				byte[] signature = ed25519Sign(Arrays.copyOfRange(sk, 0, 32), spki);
+				bindingUri = CertUtil.formatIdentityBinding(publicKey, signature);
+			}
+
+			byte[] tbs = encodeEcdsaTBS(serial, cn, notBefore, notAfter, spki, ipAddress, hostName, enableWildcard, bindingUri);
+
+			java.security.Signature ecdsa = java.security.Signature.getInstance("SHA256withECDSA");
+			ecdsa.initSign(keyPair.getPrivate());
+			ecdsa.update(tbs);
+			byte[] signatureValue = ecdsa.sign();
+
+			byte[] certDer = new DerBuilder()
+					.addRaw(tbs)
+					.addSeq(new DerBuilder().addOid("1.2.840.10045.4.3.2")) // ecdsa-with-SHA256
+					.addBitString(signatureValue)
+					.buildSeq();
+
+			String keyPem = "-----BEGIN PRIVATE KEY-----\n" +
+					Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(keyPair.getPrivate().getEncoded()) +
+					"\n-----END PRIVATE KEY-----\n";
+			String certPem = "-----BEGIN CERTIFICATE-----\n" +
+					Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(certDer) +
+					"\n-----END CERTIFICATE-----\n";
+			return new PemKeyCertificate(certPem, keyPem);
+		} catch (IOException | InvalidKeyException | SignatureException | NoSuchAlgorithmException |
+		         InvalidKeySpecException | java.security.InvalidAlgorithmParameterException e) {
+			throw new CryptoException("Failed to generate self-signed ECDSA certificate", e);
+		}
+	}
+
+	// Signs a message with a JDK (SunEC) Ed25519 key rebuilt from the libsodium seed - Bouncy Castle free.
+	private static byte[] ed25519Sign(byte[] seed, byte[] message)
+			throws IOException, NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException, SignatureException {
+		byte[] pkcs8 = new byte[48];
+		System.arraycopy(new byte[]{
+				0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
+		}, 0, pkcs8, 0, 16);
+		System.arraycopy(seed, 0, pkcs8, 16, 32);
+		PrivateKey key = KeyFactory.getInstance("Ed25519").generatePrivate(new PKCS8EncodedKeySpec(pkcs8));
+		java.security.Signature ed = java.security.Signature.getInstance("Ed25519");
+		ed.initSign(key);
+		ed.update(message);
+		return ed.sign();
+	}
+
+	private static byte[] encodeEcdsaTBS(BigInteger serial, String cn, Date notBefore, Date notAfter, byte[] spki,
+	                                     @Nullable String ip, @Nullable String host, boolean wildcard,
+	                                     @Nullable String bindingUri) throws IOException {
+		DerBuilder tbs = new DerBuilder();
+		tbs.addTag((byte) 0xA0, new DerBuilder().addInt(2).build()); // Version v3
+		tbs.addInt(serial);
+		tbs.addSeq(new DerBuilder().addOid("1.2.840.10045.4.3.2")); // Algorithm: ecdsa-with-SHA256
+		tbs.addSeq(new DerBuilder().addSet(new DerBuilder().addSeq(new DerBuilder().addOid("2.5.4.3").addPrintableString(cn)))); // Issuer
+		tbs.addSeq(new DerBuilder().addTime(notBefore).addTime(notAfter)); // Validity
+		tbs.addSeq(new DerBuilder().addSet(new DerBuilder().addSeq(new DerBuilder().addOid("2.5.4.3").addPrintableString(cn)))); // Subject
+		tbs.addRaw(spki); // SubjectPublicKeyInfo (complete SEQUENCE from the JDK EC public key)
+
+		DerBuilder exts = new DerBuilder();
+
+		// Subject Key Identifier (critical=false): SHA-1 over the subjectPublicKey bit-string content
+		// (RFC 5280 method 1), matching BouncyCastle. For secp256r1 the uncompressed EC point is the
+		// trailing 65 bytes (0x04 || X32 || Y32) of the SPKI.
+		try {
+			byte[] point = Arrays.copyOfRange(spki, spki.length - 65, spki.length);
+			byte[] ski = MessageDigest.getInstance("SHA-1").digest(point);
+			exts.addSeq(new DerBuilder().addOid("2.5.29.14").addOctetString(new DerBuilder().addOctetString(ski).build()));
+		} catch (NoSuchAlgorithmException e) {
+			throw new IOException("SHA-1 not found", e);
+		}
+
+		// KeyUsage (critical=true, digitalSignature=bit 0)
+		exts.addSeq(new DerBuilder().addOid("2.5.29.15").addBool(true).addOctetString(new DerBuilder().addBitString(new byte[]{(byte) 0x80}, 7).build()));
+
+		// SAN (critical=false)
+		DerBuilder san = new DerBuilder();
+		if (host != null) san.addTag((byte) 0x82, host.getBytes(StandardCharsets.US_ASCII));
+		if (wildcard && host != null) san.addTag((byte) 0x82, ("*." + host).getBytes(StandardCharsets.US_ASCII));
+		if (ip != null) san.addTag((byte) 0x87, InetAddress.getByName(ip).getAddress());
+		if (ip != null || host != null)
+			exts.addSeq(new DerBuilder().addOid("2.5.29.17").addOctetString(new DerBuilder().addSeq(san).build()));
+
+		// BasicConstraints (critical=true, CA=false)
+		exts.addSeq(new DerBuilder().addOid("2.5.29.19").addBool(true).addOctetString(new DerBuilder().addSeq(new DerBuilder()).build()));
+
+		// ExtendedKeyUsage (critical=false, serverAuth, clientAuth)
+		exts.addSeq(new DerBuilder().addOid("2.5.29.37").addOctetString(new DerBuilder().addSeq(new DerBuilder().addOid("1.3.6.1.5.5.7.3.1").addOid("1.3.6.1.5.5.7.3.2")).build()));
+
+		// issuerAltName with Boson identity binding URI (critical=false): SEQUENCE { [6] IA5String uri }
+		if (bindingUri != null) {
+			DerBuilder ian = new DerBuilder().addTag((byte) 0x86, bindingUri.getBytes(StandardCharsets.US_ASCII));
+			exts.addSeq(new DerBuilder().addOid("2.5.29.18").addOctetString(new DerBuilder().addSeq(ian).build()));
+		}
+
+		tbs.addTag((byte) 0xA3, new DerBuilder().addSeq(exts).build());
+		return tbs.buildSeq();
 	}
 
 	private static byte[] encodeTBS(BigInteger serial, String cn, Date notBefore, Date notAfter, byte[] pubKey,

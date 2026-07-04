@@ -28,7 +28,12 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -53,6 +58,8 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509ExtensionUtils;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.engines.XSalsa20Engine;
@@ -72,6 +79,7 @@ import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.bc.BcEdECContentSignerBuilder;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
 import org.jspecify.annotations.Nullable;
@@ -735,9 +743,9 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 	}
 
 	@Override
-	public PemCertificateAndKey certificateFromSignatureKey(Signature.PrivateKey secretKey,
-	                                                        @Nullable String ipAddress, @Nullable String hostName,
-	                                                        boolean enableWildcard) throws CryptoException {
+	public PemKeyCertificate certificateFromSignatureKey(Signature.PrivateKey secretKey,
+	                                                     @Nullable String ipAddress, @Nullable String hostName,
+	                                                     boolean enableWildcard) throws CryptoException {
 		try {
 			// Extract the 32-byte seed and public key from libsodium 64-byte SK
 			byte[] sk = secretKey.bytes();
@@ -818,9 +826,80 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 			String keyPem = toPem("PRIVATE KEY", pkcs8Bytes);
 			String certPem = toPem("CERTIFICATE", certHolder.getEncoded());
 
-			return new PemCertificateAndKey(certPem, keyPem);
+			return new PemKeyCertificate(certPem, keyPem);
 		} catch (IOException | OperatorCreationException e) {
 			throw new CryptoException("Failed to convert key to PEM format key and certificate", e);
+		}
+	}
+
+	@Override
+	public PemKeyCertificate certificateSelfSignedEcdsa(@Nullable String ipAddress, @Nullable String hostName,
+	                                                    boolean enableWildcard, Signature.@Nullable PrivateKey identityKey) throws CryptoException {
+		if (ipAddress == null && hostName == null)
+			throw new IllegalArgumentException("At least one SAN (hostname or IP) must be provided");
+
+		try {
+			// Fresh ECDSA P-256 (secp256r1) key pair from the platform JCA provider (SunEC). Browsers do
+			// not support Ed25519 server certificates, so the TLS key is ECDSA.
+			KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+			kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
+			KeyPair keyPair = kpg.generateKeyPair();
+
+			// CN is ignored by browsers (they match on SAN) but keeps the certificate readable.
+			String cn = hostName != null ? hostName : ipAddress;
+			X500Name subject = new X500Name("CN=" + cn);
+			BigInteger serial = new BigInteger(128, new SecureRandom());
+
+			Instant now = Instant.now();
+			Date notBefore = Date.from(now.minus(10, ChronoUnit.MINUTES));
+			Date notAfter = Date.from(now.plus(3650, ChronoUnit.DAYS));
+
+			List<GeneralName> subjectAltNames = new ArrayList<>();
+			if (hostName != null)
+				subjectAltNames.add(new GeneralName(GeneralName.dNSName, hostName));
+			if (enableWildcard && hostName != null)
+				subjectAltNames.add(new GeneralName(GeneralName.dNSName, "*." + hostName));
+			if (ipAddress != null)
+				subjectAltNames.add(new GeneralName(GeneralName.iPAddress, ipAddress));
+
+			ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(keyPair.getPrivate());
+			JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
+
+			X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+					subject, serial, notBefore, notAfter, subject, keyPair.getPublic())
+					.addExtension(Extension.subjectKeyIdentifier, false,
+							extUtils.createSubjectKeyIdentifier(keyPair.getPublic()))
+					// KeyUsage: digitalSignature is required for ECDHE_ECDSA TLS cipher suites
+					.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature))
+					.addExtension(Extension.subjectAlternativeName, false,
+							new GeneralNames(subjectAltNames.toArray(new GeneralName[0])))
+					.addExtension(Extension.basicConstraints, true, new BasicConstraints(false))
+					.addExtension(Extension.extendedKeyUsage, false,
+							new ExtendedKeyUsage(new KeyPurposeId[]{KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth}));
+
+			// Optional Boson identity binding as a standard issuerAltName URI GeneralName: an Ed25519
+			// signature over the ECDSA SubjectPublicKeyInfo, so peers can pin the identity via HybridTrustManager.
+			if (identityKey != null) {
+				byte[] spki = keyPair.getPublic().getEncoded();
+				byte[] sk = identityKey.bytes();
+				byte[] publicKey = Arrays.copyOfRange(sk, 32, 64);
+				Ed25519Signer ed = new Ed25519Signer();
+				ed.init(true, keyOf(identityKey));
+				ed.update(spki, 0, spki.length);
+				byte[] signature = ed.generateSignature();
+				String uri = CertUtil.formatIdentityBinding(publicKey, signature);
+				builder.addExtension(Extension.issuerAlternativeName, false,
+						new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, uri)));
+			}
+
+			X509CertificateHolder certHolder = builder.build(signer);
+
+			// getEncoded() on a JCA EC private key yields a standard PKCS#8 encoding that Netty accepts.
+			String keyPem = toPem("PRIVATE KEY", keyPair.getPrivate().getEncoded());
+			String certPem = toPem("CERTIFICATE", certHolder.getEncoded());
+			return new PemKeyCertificate(certPem, keyPem);
+		} catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException | OperatorCreationException | IOException e) {
+			throw new CryptoException("Failed to generate self-signed ECDSA certificate", e);
 		}
 	}
 

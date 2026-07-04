@@ -27,8 +27,11 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateParsingException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -135,28 +138,105 @@ public class HybridTrustManager implements X509TrustManager {
 				throw new CertificateException("Invalid self signature", e);
 			}
 
-			// 3. Validate CN
-			String dn = cert.getSubjectX500Principal().getName();
-			String cn = extractCn(dn);
-			if (cn == null)
-				throw new CertificateException("No CN in certificate");
-			if (!cn.equals(expectedCn))
-				throw new CertificateException("CN mismatch");
-
-			// 4. Validate public key (Ed25519 raw key = last 32 bytes of the SPKI encoding)
-			PublicKey publicKey = cert.getPublicKey();
-			byte[] spki = publicKey.getEncoded();
-			if (spki == null || spki.length < 32)
-				throw new CertificateException("Unexpected public key encoding");
-			byte[] pk = Arrays.copyOfRange(spki, spki.length - 32, spki.length);
-			if (!Arrays.equals(pk, expectedPublicKey))
-				throw new CertificateException("Public key mismatch");
+			CertUtil.IdentityBinding binding = extractIdentityBinding(cert);
+			if (binding != null)
+				// Modern: a browser-compatible ECDSA certificate carrying an Ed25519 identity binding.
+				verifyIdentityBinding(cert, binding);
+			else
+				// Legacy: an Ed25519 identity certificate pinned directly by CN and raw public key.
+				verifyLegacyEd25519Pin(cert);
 		} else {
 			if (client)
 				defaultTrustManager.checkClientTrusted(chain, authType);
 			else
 				defaultTrustManager.checkServerTrusted(chain, authType);
 		}
+	}
+
+	/**
+	 * Extracts a Boson identity binding from the certificate's standard {@code issuerAltName} extension,
+	 * parsed with the JDK ({@link X509Certificate#getIssuerAlternativeNames()}) so no ASN.1 library is
+	 * required on the verify path.
+	 *
+	 * @param cert the certificate
+	 * @return the parsed binding, or {@code null} if the certificate carries no Boson binding URI
+	 * @throws CertificateException if the issuerAltName extension is malformed
+	 */
+	private static CertUtil.@Nullable IdentityBinding extractIdentityBinding(X509Certificate cert) throws CertificateException {
+		Collection<List<?>> names;
+		try {
+			names = cert.getIssuerAlternativeNames();
+		} catch (CertificateParsingException e) {
+			throw new CertificateException("Malformed issuerAltName extension", e);
+		}
+		if (names == null)
+			return null;
+
+		for (List<?> entry : names) {
+			// GeneralName type 6 == uniformResourceIdentifier; value is the URI String.
+			if (entry.size() >= 2 && entry.get(0) instanceof Integer type && type == 6
+					&& entry.get(1) instanceof String uri) {
+				CertUtil.IdentityBinding binding = CertUtil.parseIdentityBinding(uri);
+				if (binding != null)
+					return binding;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Verifies the Boson Ed25519 identity binding carried by a self-signed certificate. The binding proves
+	 * that the holder of the expected Ed25519 identity key endorsed this certificate's public key, so the
+	 * TLS key itself need not be the identity key. This is what allows browser-compatible ECDSA
+	 * certificates to be pinned to a Boson id.
+	 *
+	 * @param cert    the self-signed certificate
+	 * @param binding the parsed identity binding
+	 * @throws CertificateException if the binding does not match or verify against the expected identity
+	 */
+	private void verifyIdentityBinding(X509Certificate cert, CertUtil.IdentityBinding binding) throws CertificateException {
+		if (expectedPublicKey == null)
+			throw new CertificateException("No expected identity to verify certificate binding against");
+
+		if (!Arrays.equals(binding.publicKey(), expectedPublicKey))
+			throw new CertificateException("Identity binding public key mismatch");
+
+		// The binding signature covers the certificate's SubjectPublicKeyInfo DER encoding.
+		byte[] spki = cert.getPublicKey().getEncoded();
+		boolean valid;
+		try {
+			valid = Signature.verify(spki, binding.signature(), Signature.PublicKey.fromBytes(binding.publicKey()));
+		} catch (Exception e) {
+			throw new CertificateException("Invalid identity binding signature", e);
+		}
+		if (!valid)
+			throw new CertificateException("Identity binding signature verification failed");
+	}
+
+	/**
+	 * Legacy pinning for self-signed Ed25519 identity certificates: the CN must equal the expected id
+	 * and the raw Ed25519 public key (last 32 bytes of the SPKI) must equal the expected public key.
+	 *
+	 * @param cert the self-signed certificate
+	 * @throws CertificateException if the CN or public key does not match the expected identity
+	 */
+	private void verifyLegacyEd25519Pin(X509Certificate cert) throws CertificateException {
+		// Validate CN
+		String dn = cert.getSubjectX500Principal().getName();
+		String cn = extractCn(dn);
+		if (cn == null)
+			throw new CertificateException("No CN in certificate");
+		if (!cn.equals(expectedCn))
+			throw new CertificateException("CN mismatch");
+
+		// Validate public key (Ed25519 raw key = last 32 bytes of the SPKI encoding)
+		PublicKey publicKey = cert.getPublicKey();
+		byte[] spki = publicKey.getEncoded();
+		if (spki == null || spki.length < 32)
+			throw new CertificateException("Unexpected public key encoding");
+		byte[] pk = Arrays.copyOfRange(spki, spki.length - 32, spki.length);
+		if (!Arrays.equals(pk, expectedPublicKey))
+			throw new CertificateException("Public key mismatch");
 	}
 
 	/**
