@@ -25,8 +25,8 @@ package io.bosonnetwork.crypto;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyStore;
@@ -199,9 +199,9 @@ public class CertUtil {
 	public static PemKeyCertificate selfSignedEcdsaFor(String endpoint, Signature.PrivateKey identityKey) throws CryptoException {
 		String host;
 		try {
-			host = new URL(endpoint).getHost();
-		} catch (MalformedURLException e) {
-			throw new CryptoException("Invalid endpoint URL: " + endpoint, e);
+			host = new URI(endpoint).getHost();
+		} catch (URISyntaxException e) {
+			throw new CryptoException("Invalid endpoint URI: " + endpoint, e);
 		}
 
 		String ipAddress = null;
