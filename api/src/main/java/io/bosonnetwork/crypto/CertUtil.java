@@ -25,6 +25,8 @@ package io.bosonnetwork.crypto;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyStore;
@@ -41,6 +43,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import java.util.Objects;
 
+import io.netty.util.NetUtil;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.PemKeyCertOptions;
 import io.vertx.core.net.PfxOptions;
@@ -175,6 +178,40 @@ public class CertUtil {
 			throw new IllegalArgumentException("At least one SAN entry must be specified");
 
 		return CryptoProviders.getDefault().certificateSelfSignedEcdsa(ipAddress, hostName, enableWildcard, identityKey);
+	}
+
+	/**
+	 * Generates a self-signed ECDSA P-256 certificate whose SAN matches the host of the given endpoint URL,
+	 * bound to the supplied Boson identity key (see {@link #certificateSelfSignedEcdsa}).
+	 * <p>
+	 * This is the fallback path taken by the Director portal and by each service when the host provides no
+	 * user-provisioned certificate (that is, when
+	 * {@link io.bosonnetwork.service.ServiceContext#getKeyCertificate()} returns {@code null}). The endpoint's
+	 * host component becomes the certificate SAN: a literal IPv4/IPv6 address is emitted as an IP SAN,
+	 * otherwise it is emitted as a DNS host SAN. Because the Ed25519 binding covers {@code identityKey},
+	 * pinning clients authenticate the endpoint by its Boson identity regardless of the ephemeral TLS key.
+	 *
+	 * @param endpoint    the public endpoint URL whose host/IP becomes the certificate SAN
+	 * @param identityKey the Ed25519 identity key to bind the certificate to
+	 * @return a {@link PemKeyCertificate} containing the PEM-encoded certificate and PKCS#8 private key
+	 * @throws CryptoException if the endpoint is malformed or certificate generation fails
+	 */
+	public static PemKeyCertificate selfSignedEcdsaFor(String endpoint, Signature.PrivateKey identityKey) throws CryptoException {
+		String host;
+		try {
+			host = new URL(endpoint).getHost();
+		} catch (MalformedURLException e) {
+			throw new CryptoException("Invalid endpoint URL: " + endpoint, e);
+		}
+
+		String ipAddress = null;
+		String hostName = null;
+		if (NetUtil.isValidIpV4Address(host) || NetUtil.isValidIpV6Address(host))
+			ipAddress = host;
+		else
+			hostName = host;
+
+		return certificateSelfSignedEcdsa(ipAddress, hostName, false, identityKey);
 	}
 
 	/**

@@ -85,17 +85,18 @@ public interface ServiceContext {
 	FederationContext getFederationContext();
 
 	/**
-	 * Returns the PEM-encoded TLS certificate and private key provisioned by the host for this service's
-	 * HTTPS/MQTTS listeners, or {@code null} if the host has no TLS material (for example, when SSL is
-	 * disabled). Returning a framework-neutral {@link PemKeyCertificate} keeps this API free of any
-	 * transport-library types; callers adapt it to their server (for example, Vert.x
-	 * {@code PemKeyCertOptions}) themselves.
+	 * Returns the user-provisioned PEM-encoded TLS certificate and private key for this service's
+	 * HTTPS/MQTTS listeners, or {@code null} if the host has no such material configured. Returning a
+	 * framework-neutral {@link PemKeyCertificate} keeps this API free of any transport-library types;
+	 * callers adapt it to their server (for example, Vert.x {@code PemKeyCertOptions}) themselves.
 	 * <p>
-	 * Services should use this instead of generating their own certificate. The host provides either a
-	 * real certificate configured out of band, or a self-signed ECDSA P-256 certificate bound to this
-	 * service's Boson identity so pinning clients can authenticate it.
+	 * This returns <b>only</b> a real certificate configured out of band on the host; the host does not
+	 * synthesize one. When it returns {@code null}, the service is responsible for its own fallback -
+	 * typically a self-signed ECDSA P-256 certificate bound to the service's Boson identity, generated for
+	 * its own public endpoint via {@link io.bosonnetwork.crypto.CertUtil#selfSignedEcdsaFor}. The service
+	 * owns this because only it knows its externally visible host name(s) for the certificate SAN.
 	 *
-	 * @return the TLS certificate and key, or {@code null} if no TLS material
+	 * @return the user-provisioned TLS certificate and key, or {@code null} if none is configured
 	 */
 	@Nullable PemKeyCertificate getKeyCertificate();
 
