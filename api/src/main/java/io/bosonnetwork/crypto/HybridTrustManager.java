@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.crypto;
 
+import java.net.Socket;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -32,8 +33,10 @@ import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.jspecify.annotations.Nullable;
@@ -45,8 +48,14 @@ import org.jspecify.annotations.Nullable;
  * <p>For self-signed certificates, this trust manager validates the Common Name (CN)
  * and the public key against expected values. For other certificates, it delegates
  * to the system's default trust manager.</p>
+ *
+ * <p>Extends {@link X509ExtendedTrustManager} so TLS stacks hand over the hostname-aware
+ * ({@link Socket}/{@link SSLEngine}) check variants, which are forwarded to the default
+ * trust manager for CA-signed chains. Android's network-security-config trust manager
+ * REQUIRES the hostname-aware variants whenever the app has per-domain rules and rejects
+ * the plain two-argument check outright.</p>
  */
-public class HybridTrustManager implements X509TrustManager {
+public class HybridTrustManager extends X509ExtendedTrustManager {
 	private final X509TrustManager defaultTrustManager;
 	private final String expectedCn;
 	private final byte @Nullable [] expectedPublicKey;
@@ -93,7 +102,37 @@ public class HybridTrustManager implements X509TrustManager {
 	 */
 	@Override
 	public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		checkTrusted(chain, authType, false);
+		checkTrusted(chain, authType, false, null, null);
+	}
+
+	/**
+	 * Socket-aware variant of {@link #checkServerTrusted(X509Certificate[], String)}: same pinning for
+	 * self-signed chains; CA-signed chains are delegated with the socket so hostname-aware default
+	 * trust managers (e.g. Android network security config) can apply per-domain rules.
+	 *
+	 * @param chain the certificate chain
+	 * @param authType the authentication type based on the client certificate
+	 * @param socket the socket used for this connection
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	@Override
+	public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+		checkTrusted(chain, authType, false, socket, null);
+	}
+
+	/**
+	 * Engine-aware variant of {@link #checkServerTrusted(X509Certificate[], String)}: same pinning for
+	 * self-signed chains; CA-signed chains are delegated with the engine so hostname-aware default
+	 * trust managers (e.g. Android network security config) can apply per-domain rules.
+	 *
+	 * @param chain the certificate chain
+	 * @param authType the authentication type based on the client certificate
+	 * @param engine the SSL engine used for this connection
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	@Override
+	public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+		checkTrusted(chain, authType, false, null, engine);
 	}
 
 	/**
@@ -109,7 +148,35 @@ public class HybridTrustManager implements X509TrustManager {
 	 */
 	@Override
 	public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-		checkTrusted(chain, authType, true);
+		checkTrusted(chain, authType, true, null, null);
+	}
+
+	/**
+	 * Socket-aware variant of {@link #checkClientTrusted(X509Certificate[], String)}; see
+	 * {@link #checkServerTrusted(X509Certificate[], String, Socket)} for the delegation rationale.
+	 *
+	 * @param chain the certificate chain
+	 * @param authType the key exchange algorithm used
+	 * @param socket the socket used for this connection
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	@Override
+	public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
+		checkTrusted(chain, authType, true, socket, null);
+	}
+
+	/**
+	 * Engine-aware variant of {@link #checkClientTrusted(X509Certificate[], String)}; see
+	 * {@link #checkServerTrusted(X509Certificate[], String, SSLEngine)} for the delegation rationale.
+	 *
+	 * @param chain the certificate chain
+	 * @param authType the key exchange algorithm used
+	 * @param engine the SSL engine used for this connection
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	@Override
+	public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
+		checkTrusted(chain, authType, true, null, engine);
 	}
 
 	/**
@@ -119,9 +186,12 @@ public class HybridTrustManager implements X509TrustManager {
 	 * @param chain    the certificate chain
 	 * @param authType the authentication type
 	 * @param client   {@code true} to delegate non-self-signed chains as a client cert, {@code false} as a server cert
+	 * @param socket   the connection's socket, when checked through the socket-aware variant
+	 * @param engine   the connection's SSL engine, when checked through the engine-aware variant
 	 * @throws CertificateException if the certificate chain is invalid or not trusted
 	 */
-	private void checkTrusted(X509Certificate[] chain, String authType, boolean client) throws CertificateException {
+	private void checkTrusted(X509Certificate[] chain, String authType, boolean client,
+			@Nullable Socket socket, @Nullable SSLEngine engine) throws CertificateException {
 		if (chain == null || chain.length == 0)
 			throw new CertificateException("Null or empty certificate chain");
 
@@ -146,11 +216,45 @@ public class HybridTrustManager implements X509TrustManager {
 				// Legacy: an Ed25519 identity certificate pinned directly by CN and raw public key.
 				verifyLegacyEd25519Pin(cert);
 		} else {
-			if (client)
-				defaultTrustManager.checkClientTrusted(chain, authType);
-			else
-				defaultTrustManager.checkServerTrusted(chain, authType);
+			delegateToDefault(chain, authType, client, socket, engine);
 		}
+	}
+
+	/**
+	 * Delegates a CA-signed chain to the system default trust manager, preferring the hostname-aware
+	 * {@link X509ExtendedTrustManager} variants when both sides support them. Android's
+	 * network-security-config trust manager throws on the plain two-argument check whenever the app
+	 * declares per-domain rules, so the socket/engine context must be passed through when available.
+	 *
+	 * @param chain    the certificate chain
+	 * @param authType the authentication type
+	 * @param client   {@code true} to check as a client cert, {@code false} as a server cert
+	 * @param socket   the connection's socket, or {@code null}
+	 * @param engine   the connection's SSL engine, or {@code null}
+	 * @throws CertificateException if the certificate chain is invalid or not trusted
+	 */
+	private void delegateToDefault(X509Certificate[] chain, String authType, boolean client,
+			@Nullable Socket socket, @Nullable SSLEngine engine) throws CertificateException {
+		if (defaultTrustManager instanceof X509ExtendedTrustManager extended) {
+			if (engine != null) {
+				if (client)
+					extended.checkClientTrusted(chain, authType, engine);
+				else
+					extended.checkServerTrusted(chain, authType, engine);
+				return;
+			}
+			if (socket != null) {
+				if (client)
+					extended.checkClientTrusted(chain, authType, socket);
+				else
+					extended.checkServerTrusted(chain, authType, socket);
+				return;
+			}
+		}
+		if (client)
+			defaultTrustManager.checkClientTrusted(chain, authType);
+		else
+			defaultTrustManager.checkServerTrusted(chain, authType);
 	}
 
 	/**
