@@ -64,8 +64,8 @@ public class NodeConfiguration {
 	/**
 	 * The default port for the DHT node, chosen from the IANA unassigned range (38866-39062).
 	 * See: <a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml">
-	 *     IANA unassigned range (38866-39062)
-	 *     </a>
+	 * IANA unassigned range (38866-39062)
+	 * </a>
 	 */
 	public static final int DEFAULT_DHT_PORT = 39001;
 
@@ -74,55 +74,111 @@ public class NodeConfiguration {
 	 */
 	private final Vertx vertx;
 
-	/** IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4. */
+	/**
+	 * The IPv4 address for the DHT node.
+	 * DHT support for IPv4 is disabled if both {@code host4} and
+	 * {@code networkInterface4} are null or empty.
+	 */
 	private final @Nullable String host4;
 
-	/** IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.*/
+	/**
+	 * The network interface used by the DHT node for IPv4 communications.
+	 * DHT support for IPv4 is disabled if both {@code host4} and
+	 * {@code networkInterface4} are null or empty.
+	 */
+	private final @Nullable String networkInterface4;
+
+	/**
+	 * The IPv6 address for the DHT node.
+	 * DHT support for IPv6 is disabled if both {@code host6} and
+	 * {@code networkInterface6} are null or empty.
+	 */
 	private final @Nullable String host6;
 
-	/** The port number for the DHT node. */
+	/**
+	 * The network interface used by the DHT node for IPv6 communications.
+	 * DHT support for IPv6 is disabled if both {@code host6} and
+	 * {@code networkInterface6} are null or empty.
+	 */
+	private final @Nullable String networkInterface6;
+
+	/**
+	 * The port number for the DHT node.
+	 */
 	private final int port;
 
-	/** The node's private key, encoded in Base58. */
+	/**
+	 * The node's private key, encoded in Base58.
+	 */
 	private final Signature.PrivateKey privateKey;
 
-	/** Path to the directory for persistent DHT data storage. disables persistence if null. */
+	/**
+	 * Path to the directory for persistent DHT data storage. disables persistence if null.
+	 */
 	private final @Nullable Path dataDir;
 
-	/** Database storage URI for the node. */
+	/**
+	 * Database storage URI for the node.
+	 */
 	private final String databaseUri;
 
-	/** Database connection pool size. */
+	/**
+	 * Database connection pool size.
+	 */
 	private final int databasePoolSize;
 
-	/** Database schema name. Available for PostgreSQL only*/
+	/**
+	 * Database schema name. Available for PostgreSQL only
+	 */
 	private final @Nullable String databaseSchemaName;
 
-	/** Set of bootstrap nodes for joining the DHT network. */
+	/**
+	 * Set of bootstrap nodes for joining the DHT network.
+	 */
 	private final Set<NodeInfo> bootstraps;
 
-	/** Whether spam throttling is enabled for this node. */
+	/**
+	 * Whether spam throttling is enabled for this node.
+	 */
 	private final boolean enableSpamThrottling;
 
-	/** Whether suspicious node detection is enabled for this node. */
+	/**
+	 * Whether suspicious node detection is enabled for this node.
+	 */
 	private final boolean enableSuspiciousNodeDetector;
 
-	/** Whether developer mode is enabled for this node. */
+	/**
+	 * Whether developer mode is enabled for this node.
+	 */
 	private final boolean enableDeveloperMode;
 
-	/** Whether metrics is enabled for this node. */
+	/**
+	 * Whether metrics is enabled for this node.
+	 */
 	private final boolean enableMetrics;
 
 	private NodeConfiguration(Builder builder) {
-		Objects.requireNonNull(builder.vertx, "Vertx instance must be provided");
-		if ((builder.host4 == null || builder.host4.isEmpty()) && (builder.host6 == null || builder.host6.isEmpty()))
-			throw new IllegalArgumentException("Either IPv4 or IPv6 address must be provided");
-		Objects.requireNonNull(builder.privateKey, "Private key must be provided");
-		Objects.requireNonNull(builder.databaseUri, "Database URI must be provided");
+		Objects.requireNonNull(builder.vertx, "Vert.x instance must be provided");
+
+		if (builder.host4 != null && !builder.host4.isEmpty() && builder.networkInterface4 != null && !builder.networkInterface4.isEmpty())
+			throw new IllegalArgumentException("Both IPv4 host and network interface are specified for the node; only one is allowed");
+		if (builder.host6 != null && !builder.host6.isEmpty() && builder.networkInterface6 != null && !builder.networkInterface6.isEmpty())
+			throw new IllegalArgumentException("Both IPv6 host and network interface are specified for the node; only one is allowed");
+
+		if ((builder.host4 == null || builder.host4.isEmpty()) &&
+				(builder.networkInterface4 == null || builder.networkInterface4.isEmpty()) &&
+				(builder.host6 == null || builder.host6.isEmpty()) &&
+				(builder.networkInterface6 == null || builder.networkInterface6.isEmpty()))
+			throw new IllegalArgumentException("No network configuration found; either IPv4 or IPv6 host or network interface must be provided");
+
+		Objects.requireNonNull(builder.privateKey, "The node's private key must be provided");
+		Objects.requireNonNull(builder.databaseUri, "The database URI must be provided");
 
 		this.vertx = builder.vertx;
 		this.host4 = builder.host4;
+		this.networkInterface4 = builder.networkInterface4;
 		this.host6 = builder.host6;
+		this.networkInterface6 = builder.networkInterface6;
 		this.port = builder.port;
 		this.privateKey = builder.privateKey;
 		this.dataDir = builder.dataDir;
@@ -134,6 +190,32 @@ public class NodeConfiguration {
 		enableSuspiciousNodeDetector = builder.enableSuspiciousNodeDetector;
 		enableDeveloperMode = builder.enableDeveloperMode;
 		enableMetrics = builder.enableMetrics;
+	}
+
+	/**
+	 * Creates a new builder for constructing a {@link NodeConfiguration} instance.
+	 *
+	 * @return a new {@link Builder} instance.
+	 */
+	public static Builder builder() {
+		return new Builder();
+	}
+
+	/**
+	 * Creates a NodeConfiguration from a Map representation.
+	 * This static factory method deserializes a configuration from a Map structure.
+	 *
+	 * @param map the map containing configuration data, the map must not be null or empty
+	 * @return a new {@link NodeConfiguration} instance
+	 * @throws NullPointerException     if the map is null
+	 * @throws IllegalArgumentException if the map is empty, required fields are missing, or values are invalid
+	 */
+	public static NodeConfiguration fromMap(Map<String, Object> map) {
+		Objects.requireNonNull(map, "Configuration map must not be null");
+		if (map.isEmpty())
+			throw new IllegalArgumentException("Configuration map is empty");
+
+		return builder().fromMap(map).build();
 	}
 
 	/**
@@ -158,6 +240,15 @@ public class NodeConfiguration {
 	}
 
 	/**
+	 * Retrieves the IPv4 network interface to which the DHT node should bind.
+	 *
+	 * @return the name of the IPv4 network interface as a string, or {@code null} if no specific interface is configured.
+	 */
+	public @Nullable String networkInterface4() {
+		return networkInterface4;
+	}
+
+	/**
 	 * Specifies the IPv6 address to which the DHT node should bind.
 	 * <p>
 	 * Returning {@code null} disables IPv6 binding.
@@ -167,6 +258,15 @@ public class NodeConfiguration {
 	 */
 	public @Nullable String host6() {
 		return host6;
+	}
+
+	/**
+	 * Retrieves the IPv6 network interface to which the DHT node should bind.
+	 *
+	 * @return the name of the IPv6 network interface as a string, or {@code null} if no specific interface is configured.
+	 */
+	public @Nullable String networkInterface6() {
+		return networkInterface6;
 	}
 
 	/**
@@ -243,7 +343,7 @@ public class NodeConfiguration {
 	 * </p>
 	 *
 	 * @return a collection of {@link NodeInfo} instances representing bootstrap nodes,
-	 *         or an empty collection if none are specified.
+	 * or an empty collection if none are specified.
 	 */
 	public Set<NodeInfo> bootstrapNodes() {
 		return bootstraps;
@@ -298,49 +398,6 @@ public class NodeConfiguration {
 	}
 
 	/**
-	 * Creates a new builder for constructing a {@link NodeConfiguration} instance.
-	 *
-	 * @return a new {@link Builder} instance.
-	 */
-	public static Builder builder() {
-		return new Builder();
-	}
-
-	/**
-	 * Creates a NodeConfiguration from a Map representation.
-	 * <p>
-	 * This static factory method deserializes a configuration from a Map structure.
-	 * The map should contain the following keys:
-	 * <ul>
-	 *   <li>{@code host4} (String, optional) - IPv4 address</li>
-	 *   <li>{@code host6} (String, optional) - IPv6 address (at least one of host4/host6 required)</li>
-	 *   <li>{@code port} (Integer, optional) - DHT port (defaults to 39001)</li>
-	 *   <li>{@code privateKey} (String, required) - Base58 or hex-encoded private key</li>
-	 *   <li>{@code dataDir} (String, optional) - Path to persistent data directory</li>
-	 *   <li>{@code databaseUri} (String, required) - Database URI (defaults to "jdbc:sqlite:node.db")</li>
-	 *   <li>{@code databasePoolSize} (int, optional) - Database pool size (defaults to 0)</li>
-	 *   <li>{@code databaseSchemaName} (String, optional) - Database schema name (defaults to null)</li>
-	 *   <li>{@code bootstraps} (List&lt;List&lt;Object&gt;&gt; optional) - Bootstrap nodes as [id, host, port] triplets</li>
-	 *   <li>{@code enableSpamThrottling} (Boolean, optional) - Enable spam throttling (default: true)</li>
-	 *   <li>{@code enableSuspiciousNodeDetector} (Boolean, optional) - Enable suspicious node detection (default: true)</li>
-	 *   <li>{@code enableDeveloperMode} (Boolean, optional) - Enable developer mode (default: false)</li>
-	 *   <li>{@code enableMetrics} (Boolean, optional) - Enable metrics (default: false)</li>
-	 * </ul>
-	 *
-	 * @param map the map containing configuration data, the map must not be null or empty
-	 * @return a new {@link NodeConfiguration} instance
-	 * @throws NullPointerException if the map is null
-	 * @throws IllegalArgumentException if the map is empty, required fields are missing, or values are invalid
-	 */
-	public static NodeConfiguration fromMap(Map<String, Object> map) {
-		Objects.requireNonNull(map, "map");
-		if (map.isEmpty())
-			throw new IllegalArgumentException("Configuration is empty");
-
-		return builder().fromMap(map).build();
-	}
-
-	/**
 	 * Serializes this configuration to a Map representation.
 	 * <p>
 	 * The returned map contains all configured values and can be used for persistence,
@@ -355,9 +412,13 @@ public class NodeConfiguration {
 
 		if (host4 != null)
 			map.put("host4", host4);
+		if (networkInterface4 != null)
+			map.put("interface4", networkInterface4);
 
 		if (host6 != null)
 			map.put("host6", host6);
+		if (networkInterface6 != null)
+			map.put("interface6", networkInterface6);
 
 		map.put("port", port);
 		map.put("privateKey", Base58.encode(privateKey.bytes()));
@@ -376,7 +437,7 @@ public class NodeConfiguration {
 		if (!bootstraps.isEmpty()) {
 			List<List<Object>> lst = new ArrayList<>();
 			bootstraps.forEach(n -> {
-				List<Object> ni  = new ArrayList<>();
+				List<Object> ni = new ArrayList<>();
 				ni.add(n.getId().toString());
 				if (n.hasAddress4()) {
 					ni.add(n.getHost4());
@@ -408,48 +469,80 @@ public class NodeConfiguration {
 	 */
 	public static class Builder {
 		/**
+		 * Set of bootstrap nodes for joining the DHT network.
+		 */
+		private final Set<NodeInfo> bootstraps;
+		/**
 		 * Vert.x instance used for the node's asynchronous operations.
 		 * May be null if not set.
 		 */
 		private @Nullable Vertx vertx;
-
-		/** IPv4 address string for the DHT node. If null or empty, disables DHT on IPv4. */
-		private @Nullable String host4 = null;
-
-		/** IPv6 address string for the DHT node. If null or empty, disables DHT on IPv6.*/
-		private @Nullable String host6 = null;
-
-		/** The port number for the DHT node. */
+		/**
+		 * The IPv4 address for the DHT node.
+		 * DHT support for IPv4 is disabled if both {@code host4} and
+		 * {@code networkInterface4} are null or empty.
+		 */
+		private @Nullable String host4;
+		/**
+		 * The network interface used by the DHT node for IPv4 communications.
+		 * DHT support for IPv4 is disabled if both {@code host4} and
+		 * {@code networkInterface4} are null or empty.
+		 */
+		private @Nullable String networkInterface4;
+		/**
+		 * The IPv6 address for the DHT node.
+		 * DHT support for IPv6 is disabled if both {@code host6} and
+		 * {@code networkInterface6} are null or empty.
+		 */
+		private @Nullable String host6;
+		/**
+		 * The network interface used by the DHT node for IPv6 communications.
+		 * DHT support for IPv6 is disabled if both {@code host6} and
+		 * {@code networkInterface6} are null or empty.
+		 */
+		private @Nullable String networkInterface6;
+		/**
+		 * The port number for the DHT node.
+		 */
 		private int port = DEFAULT_DHT_PORT;
-
-		/** The node's private key, encoded in Base58. */
+		/**
+		 * The node's private key, encoded in Base58.
+		 */
 		private Signature.@Nullable PrivateKey privateKey;
-
-		/** Path to the directory for persistent DHT data storage. disables persistence if null. */
+		/**
+		 * Path to the directory for persistent DHT data storage. disables persistence if null.
+		 */
 		private @Nullable Path dataDir = null;
-
-		/** Database storage URI for the node. */
+		/**
+		 * Database storage URI for the node.
+		 */
 		private String databaseUri;
-
-		/** Database connection pool size. */
+		/**
+		 * Database connection pool size.
+		 */
 		private int databasePoolSize = 0;
-
-		/** Database schema name. Available for PostgreSQL only*/
+		/**
+		 * Database schema name. Available for PostgreSQL only
+		 */
 		private @Nullable String databaseSchemaName = null;
-
-		/** Set of bootstrap nodes for joining the DHT network. */
-		private final Set<NodeInfo> bootstraps;
-
-		/** Whether spam throttling is enabled for this node. */
+		/**
+		 * Whether spam throttling is enabled for this node.
+		 */
 		private boolean enableSpamThrottling = true;
 
-		/** Whether suspicious node detection is enabled for this node. */
+		/**
+		 * Whether suspicious node detection is enabled for this node.
+		 */
 		private boolean enableSuspiciousNodeDetector = true;
 
-		/** Whether developer mode is enabled for this node. */
+		/**
+		 * Whether developer mode is enabled for this node.
+		 */
 		private boolean enableDeveloperMode = false;
 
-		/** Whether metrics is enabled for this node. */
+		/**
+		 * Whether metrics is enabled for this node.
+		 */
 		private boolean enableMetrics = false;
 
 		/**
@@ -463,18 +556,20 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the Vert.x instance to be used by the node.
+		 *
 		 * @param vertx the Vert.x instance (must not be null)
 		 * @return this Builder for chaining
 		 * @throws NullPointerException if vertx is null
 		 */
 		public Builder vertx(Vertx vertx) {
-			Objects.requireNonNull(vertx, "vertx");
+			Objects.requireNonNull(vertx, "Vert.x instance must not be null");
 			this.vertx = vertx;
 			return this;
 		}
 
 		/**
 		 * Automatically detects and sets the first available unicast IPv4 address for the node.
+		 *
 		 * @return this Builder for chaining
 		 * @throws IllegalStateException if no suitable IPv4 address is found
 		 */
@@ -483,12 +578,12 @@ public class NodeConfiguration {
 			if (addr == null)
 				throw new IllegalStateException("No available IPv4 address");
 
-			this.host4 = addr.getHostAddress();
-			return this;
+			return address4(addr);
 		}
 
 		/**
 		 * Automatically detects and sets the first available unicast IPv6 address for the node.
+		 *
 		 * @return this Builder for chaining
 		 * @throws IllegalStateException if no suitable IPv6 address is found
 		 */
@@ -497,12 +592,12 @@ public class NodeConfiguration {
 			if (addr == null)
 				throw new IllegalStateException("No available IPv6 address");
 
-			this.host6 = addr.getHostAddress();
-			return this;
+			return address6(addr);
 		}
 
 		/**
 		 * Automatically detects and sets both IPv4 and IPv6 addresses for the node.
+		 *
 		 * @return this Builder for chaining
 		 * @throws IllegalStateException if neither IPv4 nor IPv6 addresses are found
 		 */
@@ -525,97 +620,128 @@ public class NodeConfiguration {
 				throw new IllegalStateException("No available IPv4/6 address");
 
 			if (addr4 != null)
-				this.host4 = addr4.getHostAddress();
+				address4(addr4);
 
 			if (addr6 != null)
-				this.host6 = addr6.getHostAddress();
+				address6(addr6);
 
 			return this;
 		}
 
 		/**
 		 * Set the IPv4 address for the DHT node.
+		 *
 		 * @param host the string host name or IPv4 address (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the host is not a valid IPv4 address
-		 * @throws NullPointerException if the host is null
+		 * @throws NullPointerException     if the host is null
 		 */
 		public Builder host4(String host) {
-			Objects.requireNonNull(host, "host");
+			Objects.requireNonNull(host, "IPv4 host must not be null");
 
 			try {
 				return address4(InetAddress.getByName(host));
 			} catch (UnknownHostException e) {
-				throw new IllegalArgumentException("Invalid host name or address: " + host, e);
+				throw new IllegalArgumentException("Invalid IPv4 host name or address: " + host, e);
 			}
 		}
 
 		/**
 		 * Set the IPv4 address for the DHT node.
+		 *
 		 * @param addr the IPv4 InetAddress (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if addr is not an unicast IPv4 address
-		 * @throws NullPointerException if addr is null
+		 * @throws NullPointerException     if addr is null
 		 */
 		public Builder address4(InetAddress addr) {
-			Objects.requireNonNull(addr, "addr");
+			Objects.requireNonNull(addr, "IPv4 address must not be null");
 			if (!AddressUtils.isAnyUnicast(addr))
-				throw new IllegalArgumentException("Not a unicast address: " + addr);
+				throw new IllegalArgumentException("The IPv4 address is not a unicast address: " + addr);
 
 			if (addr instanceof Inet4Address)
 				this.host4 = addr.getHostAddress();
 			else
-				throw new IllegalArgumentException("Invalid IPv4 address: " + addr);
+				throw new IllegalArgumentException("The provided address is not an IPv4 address: " + addr);
 
 			return this;
 		}
 
 		/**
+		 * Sets the value of the network interface to be used for IPv4.
+		 *
+		 * @param networkInterface the name or identifier of the network interface. Must not be null.
+		 * @return the builder instance for method chaining.
+		 * @throws NullPointerException if the networkInterface parameter is null.
+		 */
+		public Builder networkInterface4(String networkInterface) {
+			Objects.requireNonNull(networkInterface, "IPv4 network interface must not be null");
+			this.networkInterface4 = networkInterface;
+			return this;
+		}
+
+		/**
 		 * Set the IPv6 address for the DHT node.
+		 *
 		 * @param host the string host name or IPv6 address (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the host is not a valid IPv6 address
-		 * @throws NullPointerException if the host is null
+		 * @throws NullPointerException     if the host is null
 		 */
 		public Builder host6(String host) {
-			Objects.requireNonNull(host, "host");
+			Objects.requireNonNull(host, "IPv6 host must not be null");
 
 			try {
 				return address6(InetAddress.getByName(host));
 			} catch (IOException | IllegalArgumentException e) {
-				throw new IllegalArgumentException("Invalid host name or address: " + host, e);
+				throw new IllegalArgumentException("Invalid IPv6 host name or address: " + host, e);
 			}
 		}
 
 		/**
 		 * Set the IPv6 address for the DHT node.
+		 *
 		 * @param addr the IPv6 InetAddress (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if addr is not an unicast IPv6 address
-		 * @throws NullPointerException if addr is null
+		 * @throws NullPointerException     if addr is null
 		 */
 		public Builder address6(InetAddress addr) {
-			Objects.requireNonNull(addr, "addr");
+			Objects.requireNonNull(addr, "IPv6 address must not be null");
 			if (!AddressUtils.isAnyUnicast(addr))
-				throw new IllegalArgumentException("Not a unicast address: " + addr);
+				throw new IllegalArgumentException("The IPv6 address is not a unicast address: " + addr);
 
 			if (addr instanceof Inet6Address)
 				this.host6 = addr.getHostAddress();
 			else
-				throw new IllegalArgumentException("Invalid IPv6 address: " + addr);
+				throw new IllegalArgumentException("The provided address is not an IPv6 address: " + addr);
 
+			return this;
+		}
+
+		/**
+		 * Sets the value of the network interface to be used for IPv6.
+		 *
+		 * @param networkInterface the name of the IPv6 network interface to set; must not be null
+		 * @return the Builder instance for method chaining
+		 * @throws NullPointerException if the provided networkInterface is null
+		 */
+		public Builder networkInterface6(String networkInterface) {
+			Objects.requireNonNull(networkInterface, "IPv6 network interface must not be null");
+			this.networkInterface6 = networkInterface;
 			return this;
 		}
 
 		/**
 		 * Set the DHT listen port. IPv4 and IPv6 networks will use the same port.
+		 *
 		 * @param port the port to listen (must be 1-65535)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if port is not in the valid range
 		 */
 		public Builder port(int port) {
 			if (port <= 0 || port > 65535)
-				throw new IllegalArgumentException("Invalid port: " + port);
+				throw new IllegalArgumentException("Invalid DHT port: " + port + ". Port must be between 1 and 65535.");
 
 			this.port = port;
 			return this;
@@ -623,6 +749,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Generates a new random private key for the node.
+		 *
 		 * @return this Builder for chaining
 		 */
 		public Builder generatePrivateKey() {
@@ -632,25 +759,27 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the node's private key from a raw byte array.
+		 *
 		 * @param privateKey the private key bytes (must be 64 bytes)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the key is not 64 bytes
 		 */
 		public Builder privateKey(byte[] privateKey) {
-			Objects.requireNonNull(privateKey, "privateKey");
+			Objects.requireNonNull(privateKey, "Private key must not be null");
 			this.privateKey = Signature.PrivateKey.fromBytes(privateKey);
 			return this;
 		}
 
 		/**
 		 * Set the node's private key from a Base58-encoded string.
+		 *
 		 * @param privateKey the Base58-encoded or hex-encoded private key string (must not be null)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the key is not 64 bytes when decoded
-		 * @throws NullPointerException if privateKey is null
+		 * @throws NullPointerException     if privateKey is null
 		 */
 		public Builder privateKey(String privateKey) {
-			Objects.requireNonNull(privateKey, "privateKey");
+			Objects.requireNonNull(privateKey, "Private key must not be null");
 			byte[] key = privateKey.startsWith("0x") ?
 					Hex.decode(privateKey, 2, privateKey.length() - 2) :
 					Base58.decode(privateKey);
@@ -669,6 +798,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the storage path for DHT persistent data using a string path.
+		 *
 		 * @param dir the string path (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
@@ -678,6 +808,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the storage path for DHT persistent data using a File object.
+		 *
 		 * @param path the File pointing to the storage directory (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
@@ -688,6 +819,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the storage path for DHT persistent data using a Path.
+		 *
 		 * @param path the Path to the storage directory (maybe null to disable persistence)
 		 * @return this Builder for chaining
 		 */
@@ -698,10 +830,11 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the database URI for the node.
-		 * @param uri the database URI (must not be null)
+		 *
+		 * @param uri      the database URI (must not be null)
 		 * @param poolSize the database connection pool size
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if storageURI is null
+		 * @throws NullPointerException     if storageURI is null
 		 * @throws IllegalArgumentException if the URI is not supported or the pool size is invalid
 		 */
 		public Builder database(String uri, int poolSize) {
@@ -712,28 +845,30 @@ public class NodeConfiguration {
 
 		/**
 		 * Set the database URI for the node.
+		 *
 		 * @param uri the database URI (must not be null)
 		 * @return this Builder for chaining
-		 * @throws NullPointerException if storageURI is null
+		 * @throws NullPointerException     if storageURI is null
 		 * @throws IllegalArgumentException if the URI is not supported or the pool size is invalid
 		 */
 		public Builder databaseUri(String uri) {
-			Objects.requireNonNull(uri, "uri");
+			Objects.requireNonNull(uri, "Database URI must not be null");
 			if (!uri.startsWith("postgresql://") && !uri.startsWith("jdbc:sqlite:"))
-				throw new IllegalArgumentException("Unsupported storage URL: " + uri);
+				throw new IllegalArgumentException("Unsupported database URI: " + uri + ". Only PostgreSQL and SQLite are supported.");
 			this.databaseUri = uri;
 			return this;
 		}
 
 		/**
 		 * Set the database connection pool size.
+		 *
 		 * @param poolSize the connection pool size (must be non-negative)
 		 * @return this Builder for chaining
 		 * @throws IllegalArgumentException if the pool size is negative
 		 */
 		public Builder databasePoolSize(int poolSize) {
 			if (poolSize < 0)
-				throw new IllegalArgumentException("Invalid pool size: " + poolSize);
+				throw new IllegalArgumentException("Invalid database pool size: " + poolSize + ". Pool size must be non-negative.");
 			this.databasePoolSize = poolSize;
 			return this;
 		}
@@ -745,12 +880,12 @@ public class NodeConfiguration {
 		 * empty, the schema name will be set to null.
 		 * <p>
 		 * NOTICE: the schema only available to PostgreSQL databases.
-		 *         It will be ignored for SQLite databases.
+		 * It will be ignored for SQLite databases.
 		 *
 		 * @param schema the name of the database schema
 		 * @return the builder instance for method chaining
 		 * @throws IllegalArgumentException if the schema name does not match the
-		 *         required pattern or exceeds the maximum length
+		 *                                  required pattern or exceeds the maximum length
 		 */
 		public Builder databaseSchemaName(@Nullable String schema) {
 			this.databaseSchemaName = SqlSafety.validateSchema(schema);
@@ -760,7 +895,7 @@ public class NodeConfiguration {
 		/**
 		 * Add a new bootstrap node to the configuration.
 		 *
-		 * @param id the Id of the bootstrap node
+		 * @param id   the Id of the bootstrap node
 		 * @param addr the string address of the bootstrap node
 		 * @param port the port of the bootstrap node
 		 * @return this Builder for chaining
@@ -819,7 +954,8 @@ public class NodeConfiguration {
 
 		/**
 		 * Add a new bootstrap node to the configuration.
-		 * @param id the Id of the bootstrap node
+		 *
+		 * @param id   the Id of the bootstrap node
 		 * @param addr the InetAddress of the bootstrap node
 		 * @param port the port of the bootstrap node
 		 * @return this Builder for chaining
@@ -848,7 +984,8 @@ public class NodeConfiguration {
 
 		/**
 		 * Add a new bootstrap node to the configuration.
-		 * @param id the Id of the bootstrap node
+		 *
+		 * @param id   the Id of the bootstrap node
 		 * @param addr the InetSocketAddress of the bootstrap node
 		 * @return this Builder for chaining
 		 */
@@ -874,30 +1011,33 @@ public class NodeConfiguration {
 
 		/**
 		 * Add a new bootstrap node to the configuration.
+		 *
 		 * @param node the NodeInfo of the bootstrap node (must not be null)
 		 * @return this Builder for chaining
 		 * @throws NullPointerException if the node is null
 		 */
 		public Builder addBootstrap(NodeInfo node) {
-			Objects.requireNonNull(node, "node");
+			Objects.requireNonNull(node, "Bootstrap node info must not be null");
 			this.bootstraps.add(node);
 			return this;
 		}
 
 		/**
 		 * Add multiple bootstrap nodes to the configuration.
+		 *
 		 * @param nodes the collection of NodeInfo bootstrap nodes (must not be null)
 		 * @return this Builder for chaining
 		 * @throws NullPointerException if the nodes parameter is null
 		 */
 		public Builder addBootstrap(Collection<NodeInfo> nodes) {
-			Objects.requireNonNull(nodes, "nodes");
+			Objects.requireNonNull(nodes, "Bootstrap nodes collection must not be null");
 			this.bootstraps.addAll(nodes);
 			return this;
 		}
 
 		/**
 		 * Sets whether spam throttling is enabled for the node.
+		 *
 		 * @param enable true to enable spam throttling, false to disable
 		 * @return this Builder for chaining
 		 */
@@ -908,6 +1048,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Sets whether suspicious node detection is enabled for the node.
+		 *
 		 * @param enable true to enable suspicious node detection, false to disable
 		 * @return this Builder for chaining
 		 */
@@ -918,6 +1059,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Sets whether developer mode is enabled for the node.
+		 *
 		 * @param enable true to enable developer mode, false to disable
 		 * @return this Builder for chaining
 		 */
@@ -928,6 +1070,7 @@ public class NodeConfiguration {
 
 		/**
 		 * Enables metrics for the node.
+		 *
 		 * @param enable true to enable metrics, false to disable
 		 * @return this Builder for chaining
 		 */
@@ -955,9 +1098,17 @@ public class NodeConfiguration {
 			if (host4 != null && !host4.isEmpty())
 				host4(host4);
 
+			String interface4 = m.getString("interface4", null);
+			if (interface4 != null && !interface4.isEmpty())
+				networkInterface4(interface4);
+
 			String host6 = m.getString("host6", null);
 			if (host6 != null && !host6.isEmpty())
 				host6(host6);
+
+			String interface6 = m.getString("interface6", null);
+			if (interface6 != null && !interface6.isEmpty())
+				networkInterface6(interface6);
 
 			port(m.getPort("port", DEFAULT_DHT_PORT));
 			String sk = m.getString("privateKey", null);
@@ -983,7 +1134,7 @@ public class NodeConfiguration {
 				lst.forEach(b -> {
 					int size = b.size();
 					if (size != 3 && size != 5)
-						throw new IllegalArgumentException("Invalid bootstrap node: missing fields - " + b);
+						throw new IllegalArgumentException("Invalid bootstrap node entry size: " + size + ". Expected 3 or 5 fields.");
 
 					try {
 						Id id = Id.of((String) b.get(0));
@@ -996,18 +1147,18 @@ public class NodeConfiguration {
 							InetSocketAddress sa = new InetSocketAddress((String) b.get(i), (int) b.get(i + 1));
 							if (sa.getAddress() instanceof java.net.Inet4Address) {
 								if (addr4 != null)
-									throw new IllegalArgumentException("Duplicate IPv4 address");
+									throw new IllegalArgumentException("Duplicate IPv4 address found in bootstrap node: " + sa.getAddress());
 								addr4 = sa;
 							} else {
 								if (addr6 != null)
-									throw new IllegalArgumentException("Duplicate IPv6 address");
+									throw new IllegalArgumentException("Duplicate IPv6 address found in bootstrap node: " + sa.getAddress());
 								addr6 = sa;
 							}
 						}
 
 						addBootstrap(NodeInfo.of(id, addr4, addr6));
 					} catch (Exception e) {
-						throw new IllegalArgumentException("Invalid bootstrap node: " + b);
+						throw new IllegalArgumentException("Invalid bootstrap node entry: " + b + ", " + e.getMessage(), e);
 					}
 				});
 			}
@@ -1024,7 +1175,7 @@ public class NodeConfiguration {
 		 *
 		 * @return the {@link NodeConfiguration} instance
 		 * @throws IllegalStateException if the current settings do not form a valid configuration
-		 *         (for example, no Vert.x instance, no IPv4/IPv6 address, or no private key)
+		 *                               (for example, no Vert.x instance, no IPv4/IPv6 address, or no private key)
 		 */
 		public NodeConfiguration build() {
 			try {

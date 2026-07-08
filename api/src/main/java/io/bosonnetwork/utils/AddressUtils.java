@@ -628,6 +628,23 @@ public final class AddressUtils {
 	}
 
 	/**
+	 * Retrieves a network interface by its name.
+	 *
+	 * @param name the name of the network interface to retrieve
+	 * @return the {@link NetworkInterface} object, or {@code null} if no interface
+	 *         with that name exists
+	 * @throws RuntimeException if an I/O error occurs while querying network interfaces
+	 */
+	public static @Nullable NetworkInterface getNetworkInterface(String name) {
+		Objects.requireNonNull(name, "Network interface name cannot be null");
+		try {
+			return NetworkInterface.getByName(name);
+		} catch (SocketException e) {
+			throw new RuntimeException("Failed to get network interface: " + name, e);
+		}
+	}
+
+	/**
 	 * Converts a socket address to a readable string, with optional alignment.
 	 * IPv6 addresses are enclosed in square brackets.
 	 *

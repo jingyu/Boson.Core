@@ -1,6 +1,10 @@
 package io.bosonnetwork.kademlia;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,6 +52,7 @@ import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.EligibleValue;
+import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -68,6 +73,9 @@ public class KadNode extends BosonVerticle implements Node {
 	private final NodeConfiguration config;
 
 	private final CachedCryptoIdentity identity;
+	private final @Nullable String host4;
+	private final @Nullable String host6;
+	private final int port;
 
 	private @Nullable DHT dht4;
 	private @Nullable DHT dht6;
@@ -105,6 +113,54 @@ public class KadNode extends BosonVerticle implements Node {
 
 		this.config = config;
 
+		try {
+			if (config.host4() != null) {
+				this.host4 = config.host4();
+			} else if (config.networkInterface4() != null) {
+				NetworkInterface nif = AddressUtils.getNetworkInterface(config.networkInterface4());
+				if (nif == null)
+					throw new IllegalArgumentException("Invalid network interface: " + config.networkInterface4());
+
+				this.host4 = nif.inetAddresses()
+						.filter(a -> a instanceof Inet4Address)
+						.filter(AddressUtils::isAnyUnicast)
+						.findFirst()
+						.map(InetAddress::getHostAddress)
+						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv4 address found on " + config.networkInterface4()));
+
+				log.debug("Network interface {} configured for IPv4, resolved to address: {}", config.networkInterface4(), this.host4);
+			} else {
+				this.host4 = null;
+			}
+
+			if (config.host6() != null) {
+				this.host6 = config.host6();
+			} else if (config.networkInterface6() != null) {
+				NetworkInterface nif = AddressUtils.getNetworkInterface(config.networkInterface6());
+				if (nif == null)
+					throw new IllegalArgumentException("Invalid network interface: " + config.networkInterface6());
+
+				this.host6 = nif.inetAddresses()
+						.filter(a -> a instanceof Inet6Address)
+						.filter(AddressUtils::isAnyUnicast)
+						.findFirst()
+						.map(InetAddress::getHostAddress)
+						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv6 address found on " + config.networkInterface6()));
+
+				log.debug("Network interface {} configured for IPv6, resolved to address: {}", config.networkInterface6(), this.host6);
+			} else {
+				this.host6 = null;
+			}
+
+			if (host4 == null && host6 == null)
+				throw new IllegalArgumentException("At least one host/address/interface must be specified");
+		} catch (Exception e) {
+			log.error("Invalid configuration: {}", e.getMessage(), e);
+			throw new IllegalArgumentException("Invalid configuration", e);
+		}
+
+		this.port = config.port();
+
 		this.defaultLookupOption = LookupOption.CONSERVATIVE;
 		this.connectionStatusListener = new ListenerProxy();
 		this.running = false;
@@ -115,8 +171,9 @@ public class KadNode extends BosonVerticle implements Node {
 	private void checkConfig(NodeConfiguration config) {
 		Objects.requireNonNull(config.vertx(), "Vertx can not be null");
 		Objects.requireNonNull(config.privateKey(), "Private key can not be null");
-		if (config.host4() == null && config.host6() == null)
-			throw new IllegalArgumentException("At least one host/address must be specified");
+		if (config.host4() == null && config.host6() == null &&
+				config.networkInterface4() == null && config.networkInterface6() == null)
+			throw new IllegalArgumentException("At least one host/address/interface must be specified");
 
 		if (config.port() < 0 || config.port() > 65535)
 			throw new IllegalArgumentException("Invalid port number: " + config.port());
@@ -156,6 +213,33 @@ public class KadNode extends BosonVerticle implements Node {
 		NodeInfo n4 = dht4 != null ? dht4.getNodeInfo() : null;
 		NodeInfo n6 = dht6 != null ? dht6.getNodeInfo() : null;
 		return Optional.ofNullable(mergeNodeInfo(getId(), n4, n6));
+	}
+
+	/**
+	 * Retrieves the IPv4 host address associated with this node.
+	 *
+	 * @return the IPv4 host address as a string, or {@code null} if no IPv4 address is configured.
+	 */
+	public @Nullable String getHost4() {
+		return host4;
+	}
+
+	/**
+	 * Retrieves the IPv6 host address associated with this node.
+	 *
+	 * @return the IPv6 host address as a string, or {@code null} if no IPv6 address is configured.
+	 */
+	public @Nullable String getHost6() {
+		return host6;
+	}
+
+	/**
+	 * Retrieves the port number on which this node is operating.
+	 *
+	 * @return the port number as an integer.
+	 */
+	public int getPort() {
+		return port;
 	}
 
 	/**
@@ -296,8 +380,8 @@ public class KadNode extends BosonVerticle implements Node {
 		return storage.initialize(vertx, MAX_VALUE_AGE, MAX_PEER_AGE).compose(unused -> {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
 			connectionStatusListener.setContext(vertxContext);
-			if (config.host4() != null) {
-				dht4 = new DHT(identity, Network.IPv4, config.host4(), config.port(), config.bootstrapNodes(),
+			if (host4 != null) {
+				dht4 = new DHT(identity, Network.IPv4, host4, port, config.bootstrapNodes(),
 						storage, config.dataDir().resolve("dht4.cache"),
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());
@@ -312,8 +396,8 @@ public class KadNode extends BosonVerticle implements Node {
 				futures.add(future);
 			}
 
-			if (config.host6() != null) {
-				dht6 = new DHT(identity, Network.IPv6, config.host6(), config.port(), config.bootstrapNodes(),
+			if (host6 != null) {
+				dht6 = new DHT(identity, Network.IPv6, host6, port, config.bootstrapNodes(),
 						storage, config.dataDir().resolve("dht6.cache"),
 						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
 						config.enableSpamThrottling(), null, config.enableDeveloperMode());

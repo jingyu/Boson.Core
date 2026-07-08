@@ -25,11 +25,23 @@
 #
 # Using 0.0.0.0 (wildcard) is generally discouraged as the node needs a 
 # deterministic external IP to advertise its presence to peers.
+# Only one of host4 or interface4 can be configured.
 host4: PUBLIC_IPV4_ADDRESS
+
+# Network interface to bind for IPv4 DHT protocol communication, instead of a
+# fixed host4 address. The node uses the first available unicast IPv4 address
+# on this interface, re-resolved on every restart - useful when the machine's
+# address changes (e.g. a laptop moving between networks).
+# interface4: eth0
 
 # IPv6 address to bind. 
 # Uncomment and set to a globally reachable IPv6 address to enable IPv6 support.
+# Only one of host6 or interface6 can be configured.
 # host6: 2001:db8:85a3::8a2e:370:7334
+
+# Network interface to bind for IPv6 DHT protocol communication, instead of a
+# fixed host6 address. Same re-resolution behavior as interface4.
+# interface6: eth0
 
 # Port number for DHT UDP traffic.
 # The default port is 39001. Ensure this port is open in your firewall (UDP).
