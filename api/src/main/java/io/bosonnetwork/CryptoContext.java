@@ -47,22 +47,22 @@ import io.bosonnetwork.crypto.CryptoException;
  * for other operations.
  * </p>
  */
-public class CryptoContext {
+public class CryptoContext implements AutoCloseable {
 	private final Id id;
 	private final CryptoBox box;
 
 	private Nonce nextNonce;
 	private volatile @Nullable Nonce lastPeerNonce;
 
-    /**
-     * Constructs a CryptoContext with the given Id and CryptoBox.
-     * <p>
-     * This constructor is typically used internally or for advanced use cases.
-     * </p>
-     *
-     * @param id   The identity associated with this context.
-     * @param box  The CryptoBox instance used for encryption and decryption.
-     */
+	/**
+	 * Constructs a CryptoContext with the given Id and CryptoBox.
+	 * <p>
+	 * This constructor is typically used internally or for advanced use cases.
+	 * </p>
+	 *
+	 * @param id  The identity associated with this context.
+	 * @param box The CryptoBox instance used for encryption and decryption.
+	 */
 	public CryptoContext(Id id, CryptoBox box) {
 		Objects.requireNonNull(id, "id");
 		Objects.requireNonNull(box, "box");
@@ -71,65 +71,65 @@ public class CryptoContext {
 		this.nextNonce = Nonce.random();
 	}
 
-    /**
-     * Constructs a CryptoContext from the given identity, public key, and private key.
-     *
-     * @param id         The identity associated with this context.
-     * @param publicKey  The public key of the remote party.
-     * @param privateKey The private key of the local party.
-     */
+	/**
+	 * Constructs a CryptoContext from the given identity, public key, and private key.
+	 *
+	 * @param id         The identity associated with this context.
+	 * @param publicKey  The public key of the remote party.
+	 * @param privateKey The private key of the local party.
+	 */
 	public CryptoContext(Id id, PublicKey publicKey, PrivateKey privateKey) {
 		this(id, CryptoBox.fromKeys(publicKey, privateKey));
 	}
 
-    /**
-     * Constructs a CryptoContext from the given identity and private key.
-     * <p>
-     * The public key is derived from the identity.
-     * </p>
-     *
-     * @param id         The identity associated with this context.
-     * @param privateKey The private key of the local party.
-     */
+	/**
+	 * Constructs a CryptoContext from the given identity and private key.
+	 * <p>
+	 * The public key is derived from the identity.
+	 * </p>
+	 *
+	 * @param id         The identity associated with this context.
+	 * @param privateKey The private key of the local party.
+	 */
 	public CryptoContext(Id id, PrivateKey privateKey) {
 		this(id, CryptoBox.fromKeys(id.toEncryptionKey(), privateKey));
 	}
 
 
-    /**
-     * Returns the identity associated with this CryptoContext.
-     *
-     * @return The {@link Id} of this context.
-     */
+	/**
+	 * Returns the identity associated with this CryptoContext.
+	 *
+	 * @return The {@link Id} of this context.
+	 */
 	public Id getId() {
 		return id;
 	}
 
-    /**
-     * Generates and returns the next unique nonce for encryption, then increments the internal counter.
-     * <p>
-     * This method is synchronized to ensure thread safety for nonce generation.
-     * </p>
-     *
-     * @return The next {@link Nonce} to use for encryption.
-     */
+	/**
+	 * Generates and returns the next unique nonce for encryption, then increments the internal counter.
+	 * <p>
+	 * This method is synchronized to ensure thread safety for nonce generation.
+	 * </p>
+	 *
+	 * @return The next {@link Nonce} to use for encryption.
+	 */
 	private synchronized Nonce getAndIncrementNonce() {
 		Nonce nonce = nextNonce;
 		nextNonce = nonce.increment();
 		return nonce;
 	}
 
-    /**
-     * Encrypts the given plaintext data and prepends a unique nonce to the ciphertext.
-     * <p>
-     * The nonce is automatically generated and incremented for each call, ensuring
-     * message uniqueness and replay protection.
-     * </p>
-     *
-     * @param data The plaintext data to encrypt.
-     * @return The encrypted data, with the nonce prepended (nonce || ciphertext).
-     * @throws NullPointerException if {@code data} is {@code null}.
-     */
+	/**
+	 * Encrypts the given plaintext data and prepends a unique nonce to the ciphertext.
+	 * <p>
+	 * The nonce is automatically generated and incremented for each call, ensuring
+	 * message uniqueness and replay protection.
+	 * </p>
+	 *
+	 * @param data The plaintext data to encrypt.
+	 * @return The encrypted data, with the nonce prepended (nonce || ciphertext).
+	 * @throws NullPointerException if {@code data} is {@code null}.
+	 */
 	public byte[] encrypt(byte[] data) {
 		// TODO: how to avoid the memory copy?!
 		Nonce nonce = getAndIncrementNonce();
@@ -141,21 +141,21 @@ public class CryptoContext {
 		return buf;
 	}
 
-    /**
-     * Decrypts the given data, verifying and extracting the prepended nonce.
-     * <p>
-     * As a basic safeguard this rejects an exact repeat of the <em>immediately previous</em>
-     * peer nonce (throwing {@link CryptoException}). This is <strong>not</strong> full replay
-     * protection: it does not detect reuse of any earlier nonce, and the check is not thread-safe
-     * (concurrent {@code decrypt} calls may race). Callers that need strong replay protection must
-     * track seen nonces themselves.
-     * </p>
-     *
-     * @param data The encrypted data, with the nonce prepended (nonce || ciphertext).
-     * @return The decrypted plaintext data.
-     * @throws CryptoException If the input is invalid, the nonce repeats the previous one, or decryption fails.
-     * @throws NullPointerException if {@code data} is {@code null}.
-     */
+	/**
+	 * Decrypts the given data, verifying and extracting the prepended nonce.
+	 * <p>
+	 * As a basic safeguard this rejects an exact repeat of the <em>immediately previous</em>
+	 * peer nonce (throwing {@link CryptoException}). This is <strong>not</strong> full replay
+	 * protection: it does not detect reuse of any earlier nonce, and the check is not thread-safe
+	 * (concurrent {@code decrypt} calls may race). Callers that need strong replay protection must
+	 * track seen nonces themselves.
+	 * </p>
+	 *
+	 * @param data The encrypted data, with the nonce prepended (nonce || ciphertext).
+	 * @return The decrypted plaintext data.
+	 * @throws CryptoException      If the input is invalid, the nonce repeats the previous one, or decryption fails.
+	 * @throws NullPointerException if {@code data} is {@code null}.
+	 */
 	public byte[] decrypt(byte[] data) throws CryptoException {
 		Objects.requireNonNull(data, "data");
 		if (data.length <= Nonce.BYTES + CryptoBox.MAC_BYTES)
@@ -186,12 +186,18 @@ public class CryptoContext {
 		lastPeerNonce = null;
 	}
 
-    /**
-     * Closes this CryptoContext and releases any underlying cryptographic resources.
-     * <p>
-     * After calling this method, the CryptoContext should not be used for further encryption or decryption.
-     * </p>
-     */
+	/**
+	 * Closes this CryptoContext and releases any underlying cryptographic resources,
+	 * wiping the derived shared key.
+	 * <p>
+	 * After calling this method, the CryptoContext should not be used for further encryption or decryption.
+	 * </p>
+	 * <p>
+	 * {@link AutoCloseable} does not require {@code close()} to be idempotent, but this
+	 * implementation is: closing an already closed context has no effect.
+	 * </p>
+	 */
+	@Override
 	public void close() {
 		box.close();
 	}

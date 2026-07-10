@@ -41,6 +41,11 @@ import io.bosonnetwork.Identity;
  * providing better performance compared to a non-caching {@code CryptoIdentity}.
  * <p>
  * The cache is implemented using Caffeine with configurable settings to control resource usage and cache expiration.
+ * <p>
+ * The cache is strictly internal: it backs the one-shot {@link #encrypt(Id, byte[])} and
+ * {@link #decrypt(Id, byte[])} methods only. Cached contexts are closed when evicted, so they are
+ * never handed out to callers; {@link #createCryptoContext(Id)} always returns a new, caller-owned
+ * instance.
  */
 public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	private volatile @Nullable LoadingCache<Id, CryptoContext> cryptoContexts;
@@ -179,16 +184,22 @@ public class CachedCryptoIdentity extends CryptoIdentity implements Identity {
 	/**
 	 * Creates a {@link CryptoContext} for secure communications with the specified identity.
 	 * <p>
-	 * This method returns a cached {@link CryptoContext} instance if available, minimizing
-	 * repeated computation and improving performance.
+	 * The returned context is a new, caller-owned instance; it is never taken from the internal
+	 * cache. Sharing a cached context with callers is unsafe, because cache eviction closes the
+	 * context and would invalidate any reference the caller still holds. The internal cache backs
+	 * only the one-shot {@link #encrypt(Id, byte[])} and {@link #decrypt(Id, byte[])} methods,
+	 * which are the only operations that benefit from it: a caller of this method holds a single
+	 * context per peer and therefore derives the shared key once either way.
+	 * <p>
+	 * The caller must {@link CryptoContext#close()} the returned context when done.
 	 *
 	 * @param id the identity to create the crypto context for; must not be {@code null}
-	 * @return a {@link CryptoContext} instance associated with the specified identity
+	 * @return a new {@link CryptoContext} instance associated with the specified identity
 	 * @throws CryptoException if an error occurs during context creation
 	 */
 	@Override
 	public CryptoContext createCryptoContext(Id id) throws CryptoException {
 		Objects.requireNonNull(id, "id");
-		return getContext(id);
+		return super.createCryptoContext(id);
 	}
 }

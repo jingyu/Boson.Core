@@ -117,6 +117,12 @@ public interface Identity {
 	 * The returned {@link CryptoContext} can be used for multiple encryption and decryption operations
 	 * with the given peer.
 	 * </p>
+	 * <p>
+	 * The caller owns the returned context and is responsible for its lifecycle: implementations
+	 * always return a new instance, never a shared or internally cached one. Call
+	 * {@link CryptoContext#close()} when the context is no longer needed to wipe the derived
+	 * shared key.
+	 * </p>
 	 *
 	 * @param id the {@link Id} of the peer to establish a context with
 	 * @return a new {@link CryptoContext} for secure communication

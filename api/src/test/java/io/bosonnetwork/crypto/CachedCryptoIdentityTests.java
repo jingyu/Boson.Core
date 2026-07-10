@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -120,7 +119,7 @@ public class CachedCryptoIdentityTests {
 	}
 
 	@Test
-	void testCache() throws Exception {
+	void testCreateCryptoContextAlwaysReturnsANewInstance() throws Exception {
 		CachedCryptoIdentity alice = new CachedCryptoIdentity(null);
 		Identity bob = new CryptoIdentity();
 
@@ -128,9 +127,37 @@ public class CachedCryptoIdentityTests {
 		CryptoContext ctx2 = alice.createCryptoContext(bob.getId());
 		assertNotSame(ctx1, ctx2);
 
+		// The internal cache backs only the one-shot encrypt/decrypt methods; createCryptoContext
+		// must never hand out the cached instance, because eviction closes it.
 		alice.initCache(Caffeine.newBuilder());
-		ctx1 = alice.createCryptoContext(bob.getId());
-		ctx2 = alice.createCryptoContext(bob.getId());
-		assertSame(ctx1, ctx2);
+		CryptoContext ctx3 = alice.createCryptoContext(bob.getId());
+		CryptoContext ctx4 = alice.createCryptoContext(bob.getId());
+		assertNotSame(ctx3, ctx4);
+
+		ctx1.close();
+		ctx2.close();
+		ctx3.close();
+		ctx4.close();
+	}
+
+	@Test
+	void testCacheEvictionDoesNotCloseCallerOwnedContext() throws Exception {
+		// Caffeine runs the removal listener on ForkJoinPool.commonPool() by default, which would
+		// make the eviction below race this thread. Run it inline so the close is observable.
+		CachedCryptoIdentity alice = new CachedCryptoIdentity(Caffeine.newBuilder().executor(Runnable::run));
+		Identity bob = new CryptoIdentity();
+
+		CryptoContext ctxAlice = alice.createCryptoContext(bob.getId());
+
+		// Populate the internal cache for bob, then evict it. Eviction closes the cache-owned
+		// context; it must not touch the one the caller holds.
+		byte[] message = "context message".getBytes();
+		assertNotNull(alice.encrypt(bob.getId(), message));
+		alice.clearCache();
+
+		byte[] cipher = ctxAlice.encrypt(message);
+		assertArrayEquals(message, bob.decrypt(alice.getId(), cipher));
+
+		ctxAlice.close();
 	}
 }
