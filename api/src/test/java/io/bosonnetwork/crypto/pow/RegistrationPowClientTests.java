@@ -50,6 +50,8 @@ public class RegistrationPowClientTests {
 				effort, challengeNonce, 512);
 		byte[] deviceSig = RegistrationPowClient.sign(superNodeId, deviceKey, challengeNonce, r.powNonce(), effort);
 
+		// The device key signs a message bound to its OWN identity (deviceId); the server verifies it
+		// against the device key, exactly as it verifies userSig against the user key.
 		byte[] deviceMsg = ProofOfWork.signingMessage(superNodeId, deviceKey.publicKey().bytes(),
 				challengeNonce, r.powNonce(), effort);
 		assertTrue(deviceKey.publicKey().verify(deviceMsg, deviceSig));

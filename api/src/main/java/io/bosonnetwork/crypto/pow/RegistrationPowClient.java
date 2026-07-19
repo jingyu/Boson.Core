@@ -82,15 +82,20 @@ public final class RegistrationPowClient {
 	}
 
 	/**
-	 * Signs the registration message for an additional identity that shares the same solution (for
+	 * Signs the registration message with an additional key that co-signs the same solution (for
 	 * example the initial device key in {@code POST /client/usersAndInitialDevice}).
 	 *
-	 * @param superNodeId the 32-byte super node id.
-	 * @param signerKey   the additional identity keypair.
-	 * @param challengeNonce    the challenge nonce.
-	 * @param powNonce    the 8-byte proof-of-work nonce from a prior {@link #solve} result.
-	 * @param effort      the effort target from the challenge.
-	 * @return the signature over the shared registration signing message.
+	 * <p>The message binds {@code signerKey}'s own public key: each signer on a registration request
+	 * signs a message bound to its own identity (the user key over the userId, the device key over the
+	 * deviceId), and the server verifies each signature against its signer's key (see
+	 * {@code director/docs/RegistrationPoW.md} section 7). No re-solving.
+	 *
+	 * @param superNodeId    the 32-byte super node id.
+	 * @param signerKey      the additional keypair that co-signs (e.g. the initial device key).
+	 * @param challengeNonce the challenge nonce.
+	 * @param powNonce       the 8-byte proof-of-work nonce from a prior {@link #solve} result.
+	 * @param effort         the effort target from the challenge.
+	 * @return the signature over the registration signing message bound to {@code signerKey}.
 	 */
 	public static byte[] sign(byte[] superNodeId, Signature.KeyPair signerKey, byte[] challengeNonce,
 			byte[] powNonce, int effort) {
