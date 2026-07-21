@@ -529,6 +529,59 @@ public class CryptoCompatibilityTest {
 		assertFalse(BC.pwHashVerify(bcPhc, "wrong".getBytes(StandardCharsets.UTF_8)), "wrong password rejected");
 	}
 
+	@Test
+	void secretStreamMatches() {
+		byte[] key = rb(32);
+		byte[] msg1 = rb(2048);
+		byte[] msg2 = rb(123);
+		byte[] msg3 = rb(1567);
+
+		CryptoProvider.SecretStreamState bcState = BC.secretStreamInitPush(key);
+		byte[] ciphertext1 = bcState.push(msg1, null, false);
+		assertEquals(msg1.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext1.length, "BC ciphertext length");
+		assertFalse(bcState.isComplete());
+		byte[] ciphertext2 = bcState.push(msg2, null, false);
+		assertEquals(msg2.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext2.length, "BC ciphertext length");
+		assertFalse(bcState.isComplete());
+		byte[] ciphertext3 = bcState.push(msg3, null, true);
+		assertEquals(msg3.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext3.length, "BC ciphertext length");
+		assertTrue(bcState.isComplete());
+
+		CryptoProvider.SecretStreamState lsState = LS.secretStreamInitPull(bcState.header(), key);
+		byte[] plaintext1 = lsState.pull(ciphertext1, null);
+		assertArrayEquals(msg1, plaintext1, "LS plaintext length");
+		assertFalse(lsState.isComplete());
+		byte[] plaintext2 = lsState.pull(ciphertext2, null);
+		assertArrayEquals(msg2, plaintext2, "LS plaintext length");
+		assertFalse(lsState.isComplete());
+		byte[] plaintext3 = lsState.pull(ciphertext3, null);
+		assertArrayEquals(msg3, plaintext3, "LS plaintext length");
+		assertTrue(lsState.isComplete());
+
+		key = rb(32);
+		lsState = LS.secretStreamInitPush(key);
+		ciphertext1 = lsState.push(msg1, null, false);
+		assertEquals(msg1.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext1.length, "BC ciphertext length");
+		assertFalse(lsState.isComplete());
+		ciphertext2 = lsState.push(msg2, null, false);
+		assertEquals(msg2.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext2.length, "BC ciphertext length");
+		assertFalse(lsState.isComplete());
+		ciphertext3 = lsState.push(msg3, null, true);
+		assertEquals(msg3.length + CryptoProvider.SECRET_STREAM_ABYTES, ciphertext3.length, "BC ciphertext length");
+		assertTrue(lsState.isComplete());
+
+		bcState = BC.secretStreamInitPull(lsState.header(), key);
+		plaintext1 = bcState.pull(ciphertext1, null);
+		assertArrayEquals(msg1, plaintext1, "LS plaintext length");
+		assertFalse(bcState.isComplete());
+		plaintext2 = bcState.pull(ciphertext2, null);
+		assertArrayEquals(msg2, plaintext2, "LS plaintext length");
+		assertFalse(bcState.isComplete());
+		plaintext3 = bcState.pull(ciphertext3, null);
+		assertArrayEquals(msg3, plaintext3, "LS plaintext length");
+		assertTrue(bcState.isComplete());
+	}
+
 	private static byte[] pemToDer(String pem) {
 		String base64 = pem.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");
 		return Base64.getDecoder().decode(base64);

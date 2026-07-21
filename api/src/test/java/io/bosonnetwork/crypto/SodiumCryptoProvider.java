@@ -46,11 +46,15 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Objects;
 import java.util.TimeZone;
 
 import org.apache.tuweni.crypto.sodium.Box;
 import org.apache.tuweni.crypto.sodium.KeyDerivation;
 import org.apache.tuweni.crypto.sodium.PasswordHash;
+import org.apache.tuweni.crypto.sodium.SecretDecryptionStream;
+import org.apache.tuweni.crypto.sodium.SecretEncryptionStream;
+import org.apache.tuweni.crypto.sodium.XChaCha20Poly1305;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -465,6 +469,88 @@ public class SodiumCryptoProvider implements CryptoProvider {
 		// Honour the requested limits (matches libsodium crypto_pwhash_str_needs_rehash);
 		// the no-arg needsRehash(hash) would compare against the MODERATE defaults instead.
 		return PasswordHash.needsRehash(hash, opsLimit, memLimit);
+	}
+
+	private static class SecretStreamStateImpl implements SecretStreamState {
+		private final @Nullable SecretEncryptionStream encryptionStream;
+		private final @Nullable SecretDecryptionStream decryptionStream;
+		private final byte[] header;
+		private boolean complete = false;
+
+		private SecretStreamStateImpl(SecretEncryptionStream encryptionStream) {
+			this.encryptionStream = encryptionStream;
+			this.decryptionStream = null;
+			this.header = encryptionStream.headerArray();
+		}
+
+		private SecretStreamStateImpl(SecretDecryptionStream decryptionStream, byte[] header) {
+			this.decryptionStream = decryptionStream;
+			this.encryptionStream = null;
+			this.header = header;
+		}
+
+		@Override
+		public byte[] header() {
+			return header.clone();
+		}
+
+		@Override
+		public boolean isComplete() {
+			return complete;
+		}
+
+		@Override
+		public byte[] push(byte[] message, byte @Nullable [] additional, boolean finalBlock) {
+			SecretEncryptionStream stream = Objects.requireNonNull(encryptionStream);
+			if (additional != null)
+				throw new UnsupportedOperationException("Additional data not supported");
+			byte[] ciphertext = stream.push(message, finalBlock);
+			if (finalBlock)
+				complete = true;
+			return ciphertext;
+		}
+
+		@Override
+		public byte[] pull(byte[] ciphertext, byte @Nullable [] additional) {
+			SecretDecryptionStream stream = Objects.requireNonNull(decryptionStream);
+			if (additional != null)
+				throw new UnsupportedOperationException("Additional data not supported");
+			byte[] plaintext = stream.pull(ciphertext);
+			complete = stream.isComplete();
+			return plaintext;
+		}
+
+		public void destroy() {
+			try {
+				if (encryptionStream != null)
+					encryptionStream.destroy();
+				if (decryptionStream != null)
+					decryptionStream.destroy();
+			} catch (Exception ignore) {
+				// no exception thrown from XChaCha20Poly1305 SSEncrypt or SSDecrypt destroy methods
+			}
+		}
+
+		public boolean isDestroyed() {
+			if (encryptionStream != null)
+				return encryptionStream.isDestroyed();
+			else if (decryptionStream != null)
+				return decryptionStream.isDestroyed();
+			else
+				return true; // dead code
+		}
+	}
+
+	@Override
+	public SecretStreamState secretStreamInitPush(byte[] key) {
+		SecretEncryptionStream stream = XChaCha20Poly1305.openEncryptionStream(XChaCha20Poly1305.Key.fromBytes(key));
+		return new SecretStreamStateImpl(stream);
+	}
+
+	@Override
+	public SecretStreamState secretStreamInitPull(byte[] header, byte[] key) {
+		SecretDecryptionStream stream = XChaCha20Poly1305.openDecryptionStream(XChaCha20Poly1305.Key.fromBytes(key), header);
+		return new SecretStreamStateImpl(stream, header.clone());
 	}
 
 	@Override

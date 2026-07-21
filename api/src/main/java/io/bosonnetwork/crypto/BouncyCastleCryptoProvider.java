@@ -62,6 +62,7 @@ import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
+import org.bouncycastle.crypto.engines.ChaCha7539Engine;
 import org.bouncycastle.crypto.engines.XSalsa20Engine;
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.macs.Poly1305;
@@ -741,6 +742,776 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 		int memKiB = (int) (memLimit / 1024);
 		return phc.algorithm != PWHASH_ALG_ARGON2ID13 || phc.t != opsLimit || phc.m != memKiB || phc.p != 1;
 	}
+
+	// ---- crypto_secretstream -------------------------------------------
+
+	/**
+	 * Implementation of {@link SecretStreamState} wrapping an {@link Xchacha20poly1305State}.
+	 */
+	private static class SecretStreamStateImpl implements SecretStreamState {
+		/** The underlying XChaCha20-Poly1305 streaming state. */
+		private final Xchacha20poly1305State state;
+
+		/** The stream header copy. */
+		private final byte[] header;
+
+		/** Flag indicating if the final block has been pushed or pulled. */
+		private boolean complete = false;
+
+		/** Flag indicating if the state has been destroyed/closed. */
+		private boolean destroyed = false;
+
+		/**
+		 * Constructs a {@code SecretStreamStateImpl} with the given state and header.
+		 *
+		 * @param state  the underlying state
+		 * @param header the header byte array
+		 */
+		private SecretStreamStateImpl(Xchacha20poly1305State state, byte[] header) {
+			this.state = state;
+			this.header = header;
+		}
+
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public byte[] header() {
+			return header.clone();
+		}
+
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public boolean isComplete() {
+			return complete;
+		}
+
+		/**
+		 * {@inheritDoc}
+		 *
+		 * @throws IllegalStateException if the state has been destroyed or is already complete
+		 */
+		@Override
+		public byte[] push(byte @Nullable [] message, byte @Nullable [] additional, boolean finalBlock) {
+			/*/
+			// already checked in public API level
+			if (destroyed)
+				throw new IllegalStateException("SecretStreamState has been destroyed");
+			if (complete)
+				throw new IllegalStateException("SecretStreamState is already complete");
+			*/
+
+			byte[] ciphertext = state.push(message, additional, finalBlock ? SECRET_STREAM_TAG_FINAL : SECRET_STREAM_TAG_MESSAGE);
+			if (finalBlock)
+				complete = true;
+			return ciphertext;
+		}
+
+		/**
+		 * {@inheritDoc}
+		 *
+		 * @throws IllegalStateException if the state has been destroyed or is already complete
+		 */
+		@Override
+		public byte[] pull(byte[] ciphertext, byte @Nullable [] additional) {
+			/*/
+			// already checked in public API level
+			if (destroyed)
+				throw new IllegalStateException("SecretStreamState has been destroyed");
+			if (complete)
+				throw new IllegalStateException("SecretStreamState is already complete");
+			*/
+
+			Xchacha20poly1305State.PullResult result = state.pull(ciphertext, additional);
+			if (result.tag == SECRET_STREAM_TAG_FINAL)
+				complete = true;
+			return result.message;
+		}
+
+		/**
+		 * Destroys this state and zeroes out sensitive key material.
+		 */
+		@Override
+		public void destroy() {
+			destroyed = true;
+			state.clear();
+		}
+
+		/**
+		 * Returns whether this state has been destroyed.
+		 *
+		 * @return {@code true} if destroyed; {@code false} otherwise
+		 */
+		@Override
+		public boolean isDestroyed() {
+			return destroyed;
+		}
+	}
+
+	/**
+	 * Initializes a secret stream encryption state with the specified key.
+	 *
+	 * @param key the {@value #SECRET_STREAM_KEY_BYTES}-byte secret key
+	 * @return a new {@link SecretStreamState} configured for encryption
+	 * @throws NullPointerException if {@code key} is null
+	 * @throws IllegalArgumentException if {@code key} length is not equal to {@link #SECRET_STREAM_KEY_BYTES}
+	 */
+	@Override
+	public SecretStreamState secretStreamInitPush(byte[] key) {
+		/*/
+		// already checked in public API level
+		Objects.requireNonNull(key, "key cannot be null");
+		if (key.length != SECRET_STREAM_KEY_BYTES)
+			throw new IllegalArgumentException("key must be " + SECRET_STREAM_KEY_BYTES + " bytes");
+		*/
+		Xchacha20poly1305State state = new Xchacha20poly1305State();
+		byte[] header = new byte[SECRET_STREAM_HEADER_BYTES];
+		state.initPush(header, key);
+		return new SecretStreamStateImpl(state, header);
+	}
+
+	/**
+	 * Initializes a secret stream decryption state with the specified header and key.
+	 *
+	 * @param header the {@value #SECRET_STREAM_HEADER_BYTES}-byte stream header
+	 * @param key    the {@value #SECRET_STREAM_KEY_BYTES}-byte secret key
+	 * @return a new {@link SecretStreamState} configured for decryption
+	 * @throws NullPointerException if {@code header} or {@code key} is null
+	 * @throws IllegalArgumentException if {@code header} length is not {@link #SECRET_STREAM_HEADER_BYTES} or {@code key} length is not {@link #SECRET_STREAM_KEY_BYTES}
+	 */
+	@Override
+	public SecretStreamState secretStreamInitPull(byte[] header, byte[] key) {
+		/*/
+		// already checked in public API level
+		Objects.requireNonNull(header, "header cannot be null");
+		if (header.length != SECRET_STREAM_HEADER_BYTES)
+			throw new IllegalArgumentException("header must be " + SECRET_STREAM_HEADER_BYTES + " bytes");
+		Objects.requireNonNull(key, "key cannot be null");
+		if (key.length != SECRET_STREAM_KEY_BYTES)
+			throw new IllegalArgumentException("key must be " + SECRET_STREAM_KEY_BYTES + " bytes");
+		*/
+		Xchacha20poly1305State state = new Xchacha20poly1305State();
+		state.initPull(header, key);
+		return new SecretStreamStateImpl(state, header.clone());
+	}
+
+	// =====================================================================================
+	//  crypto_secretstream_xchacha20poly1305_state  ->  Java: the Xchacha20poly1305State class below
+	// =====================================================================================
+
+	/**
+	 * Mutable streaming state, equivalent to
+	 * {@code crypto_secretstream_xchacha20poly1305_state}.
+	 *
+	 * <p>Layout (52 bytes):
+	 * <pre>
+	 *   k[32]       IETF ChaCha20 stream key (derived, NOT the master key)
+	 *   nonce[12]   counter(4) || inonce(8)
+	 *   pad[8]      unused (kept only to match STATEBYTES)
+	 * </pre>
+	 */
+	public static final class Xchacha20poly1305State {
+		/**
+		 * Width of the 32-bit counter occupying nonce[0..4).
+		 */
+		private static final int COUNTERBYTES = 4;
+		/**
+		 * Width of the 64-bit "initial nonce" occupying nonce[4..12).
+		 */
+		private static final int INONCEBYTES = 8;
+		/**
+		 * HChaCha20 input length: 16 bytes (a 256-bit key / 128-bit input).
+		 */
+		private static final int HCHACHA20_INPUTBYTES = 16;
+		/**
+		 * IETF ChaCha20 nonce length: 12 bytes (counter || inonce).
+		 */
+		private static final int IETF_NONCEBYTES = 12;
+
+		/** ChaCha20 block size in bytes (64 bytes). */
+		private static final int BLOCKBYTES = 64;
+		/** Poly1305 authentication tag length in bytes (16 bytes). */
+		private static final int POLY1305_BYTES = 16;
+		/**
+		 * Poly1305 key length = 32 bytes (r || s), taken from the first 32 bytes of block 0.
+		 */
+		private static final int POLY1305_KEYBYTES = 32;
+
+		/** Constant empty byte array for default parameters. */
+		private static final byte[] EMPTY = new byte[0];
+
+		/**
+		 * 16 zero bytes used for the Poly1305 padding (the {@code _pad0[16]} in libsodium).
+		 */
+		private static final byte[] PAD0 = new byte[16];
+
+		/** Shared SecureRandom instance for header generation. */
+		private static final SecureRandom RNG = new SecureRandom();
+
+		/** Derived 32-byte IETF ChaCha20 key. */
+		final byte[] k = new byte[SECRET_STREAM_KEY_BYTES];
+
+		/**
+		 * 12-byte IETF nonce: bytes [0..4) are the counter, [4..12) the inonce.
+		 */
+		final byte[] nonce = new byte[IETF_NONCEBYTES];
+
+		/** 8-byte padding buffer matching libsodium STATEBYTES layout. */
+		final byte[] pad = new byte[8];
+
+		/**
+		 * Constructs an uninitialized {@code Xchacha20poly1305State}.
+		 */
+		private Xchacha20poly1305State() {}
+
+		/**
+		 * Index into {@link #nonce} of the 4-byte counter region.
+		 *
+		 * @return the counter byte offset (0)
+		 */
+		private static int counterOffset() {
+			return 0;
+		}
+
+		/**
+		 * Index into {@link #nonce} of the 8-byte inonce region.
+		 *
+		 * @return the inonce byte offset (4)
+		 */
+		private static int inonceOffset() {
+			return COUNTERBYTES;
+		}
+
+		/**
+		 * Validates that the key array has length {@link #SECRET_STREAM_KEY_BYTES}.
+		 *
+		 * @param key the key byte array
+		 * @throws IllegalArgumentException if the key length is invalid
+		 */
+		private static void requireKey(byte[] key) {
+			if (key.length != SECRET_STREAM_KEY_BYTES) {
+				throw new IllegalArgumentException("key must be " + SECRET_STREAM_KEY_BYTES + " bytes");
+			}
+		}
+
+		/**
+		 * Resets the 4-byte counter in {@link #nonce} to 1 (little-endian: nonce[0] = 1, nonce[1..4) = 0).
+		 */
+		private void counterReset() {
+			Arrays.fill(nonce, 0, COUNTERBYTES, (byte) 0);
+			nonce[0] = 1;   // _crypto_secretstream_..._counter_reset sets nonce[0] = 1
+		}
+
+		/**
+		 * Zeroes out all sensitive state memory (key, nonce, pad).
+		 */
+		public void clear() {
+			Arrays.fill(k, (byte) 0);
+			Arrays.fill(nonce, (byte) 0);
+			Arrays.fill(pad, (byte) 0);
+		}
+
+		// =====================================================================================
+		//  crypto_secretstream_xchacha20poly1305_init_push
+		// =====================================================================================
+
+		/**
+		 * Initialize the push (encrypt) side of a stream.
+		 *
+		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_init_push}.
+		 *
+		 * @param header output buffer of length {@link #SECRET_STREAM_HEADER_BYTES}; receives the header that must
+		 *               be transmitted to the receiver (it is random — that is what makes each
+		 *               stream unique).
+		 * @param key    the master key ({@link #SECRET_STREAM_KEY_BYTES} bytes)
+		 * @throws IllegalArgumentException if header or key length is invalid
+		 */
+		public void initPush(byte[] header, byte[] key) {
+			if (header.length != SECRET_STREAM_HEADER_BYTES) {
+				throw new IllegalArgumentException("header must be " + SECRET_STREAM_HEADER_BYTES + " bytes");
+			}
+			requireKey(key);
+
+			// randombytes_buf(out, HEADERBYTES) — header = HChaCha20-input(16) || inonce(8)
+			RNG.nextBytes(header);
+
+			// crypto_core_hchacha20(state->k, out, k, NULL)
+			hChaCha20(k, header, 0, key);
+
+			// _crypto_secretstream_..._counter_reset(state)
+			counterReset();
+
+			// memcpy(STATE_INONCE(state), out + HCHACHA20_INPUTBYTES, INONCEBYTES)
+			System.arraycopy(header, HCHACHA20_INPUTBYTES, nonce, Xchacha20poly1305State.inonceOffset(), INONCEBYTES);
+
+			// memset(state->_pad, 0, ...)
+			Arrays.fill(pad, (byte) 0);
+		}
+
+		// =====================================================================================
+		//  crypto_secretstream_xchacha20poly1305_init_pull
+		// =====================================================================================
+
+		/**
+		 * Initialize the pull (decrypt) side of a stream.
+		 *
+		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_init_pull}.
+		 *
+		 * @param header input stream header buffer of length {@link #SECRET_STREAM_HEADER_BYTES}
+		 * @param key    the master key ({@link #SECRET_STREAM_KEY_BYTES} bytes)
+		 * @throws IllegalArgumentException if header or key length is invalid
+		 */
+		public void initPull(byte[] header, byte[] key) {
+			if (header.length != SECRET_STREAM_HEADER_BYTES) {
+				throw new IllegalArgumentException("header must be " + SECRET_STREAM_HEADER_BYTES + " bytes");
+			}
+			requireKey(key);
+
+			hChaCha20(k, header, 0, key);
+			counterReset();
+			System.arraycopy(header, HCHACHA20_INPUTBYTES, nonce, Xchacha20poly1305State.inonceOffset(), INONCEBYTES);
+			Arrays.fill(pad, (byte) 0);
+		}
+
+		// =====================================================================================
+		//  crypto_secretstream_xchacha20poly1305_push
+		// =====================================================================================
+
+		/**
+		 * Encrypt one message chunk.
+		 *
+		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_push}.
+		 *
+		 * @param m   plaintext message (length 0..MESSAGEBYTES_MAX)
+		 * @param ad  additional data to authenticate but not encrypt (may be empty/null)
+		 * @param tag one of {@link #SECRET_STREAM_TAG_MESSAGE}, {@link #SECRET_STREAM_TAG_PUSH},
+		 *            {@link #SECRET_STREAM_TAG_REKEY}, {@link #SECRET_STREAM_TAG_FINAL}
+		 * @return the ciphertext
+		 */
+		public byte[] push(byte @Nullable [] m, byte @Nullable [] ad, byte tag) {
+			if (m == null) m = EMPTY;
+			if (ad == null) ad = EMPTY;
+			int mlen = m.length;
+
+			byte[] c = new byte[mlen + SECRET_STREAM_ABYTES];
+
+			// --- Poly1305 key = ChaCha20 block 0 over (nonce, key) -------------------------
+			byte[] block = new byte[BLOCKBYTES];
+			chacha20IetfXor(block, block, BLOCKBYTES, nonce, 0L, k);
+
+			Poly1305 poly = new Poly1305();
+			// libsodium: crypto_onetimeauth_poly1305_init(poly, block). Poly1305 is keyed with
+			// the first 32 bytes of the ChaCha20 keystream block (r=block[0..16) clamped,
+			// s=block[16..32)). BC's Poly1305 expects the full 32-byte key and clamps r itself.
+			poly.init(new KeyParameter(block, 0, POLY1305_KEYBYTES));
+			Arrays.fill(block, (byte) 0);
+
+			// --- AD + 0x10-alignment padding -----------------------------------------------
+			poly.update(ad, 0, ad.length);
+			poly.update(PAD0, 0, (0x10 - ad.length) & 0xf);
+
+			// --- The 64-byte tag-bearing block ---------------------------------------------
+			// block = zeros; block[0] = tag; then XOR with ChaCha20 block 1.
+			block[0] = tag;
+			chacha20IetfXor(block, block, BLOCKBYTES, nonce, 1L, k);
+			// libsodium updates Poly1305 with the whole 64-byte block, then writes block[0]
+			// (the now-encrypted tag byte) to out[0].
+			poly.update(block, 0, BLOCKBYTES);
+			c[0] = block[0];
+
+			// --- Encrypt the message with ChaCha20 starting at block 2 --------------------
+			int cOff = 1;   // out + sizeof(tag)
+			chacha20IetfXor(c, cOff, m, 0, mlen, nonce, 2L, k);
+			poly.update(c, cOff, mlen);
+			// NOTE: libsodium pads with (0x10 - sizeof(block) + mlen) & 0xf. The comment in the
+			// source flags this as a deviation from "block-aligned" padding; we MUST replicate
+			// it exactly for interop. Arithmetic is mod 256 (byte-width), and "& 0xf" keeps it
+			// in [0,15].
+			poly.update(PAD0, 0, (0x10 - BLOCKBYTES + mlen) & 0xf);
+
+			// --- Two 8-byte length fields --------------------------------------------------
+			byte[] slen = new byte[8];
+			store64LE(slen, 0, ad.length & 0xFFFFFFFFL);
+			poly.update(slen, 0, 8);
+			store64LE(slen, 0, (BLOCKBYTES + mlen) & 0xFFFFFFFFL);
+			poly.update(slen, 0, 8);
+
+			// --- Finalize Poly1305 tag, place it after the ciphertext ---------------------
+			byte[] mac = new byte[POLY1305_BYTES];
+			poly.doFinal(mac, 0);
+			System.arraycopy(mac, 0, c, cOff + mlen, POLY1305_BYTES);
+
+			// --- Update the inonce (XOR with low 8 bytes of mac), bump counter ------------
+			for (int i = 0; i < INONCEBYTES; i++)
+				nonce[Xchacha20poly1305State.inonceOffset() + i] ^= mac[i];
+
+			increment(nonce, Xchacha20poly1305State.counterOffset(), COUNTERBYTES);
+
+			// --- Re-key if requested, or if the counter wrapped to zero -------------------
+			if ((tag & SECRET_STREAM_TAG_REKEY) != 0 || isZero(nonce, Xchacha20poly1305State.counterOffset(), COUNTERBYTES))
+				rekey();
+
+			return c;
+		}
+
+		// =====================================================================================
+		//  crypto_secretstream_xchacha20poly1305_pull
+		// =====================================================================================
+
+		/**
+		 * Decrypt and authenticate one message chunk.
+		 *
+		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_pull}.
+		 *
+		 * @param c     ciphertext, length {@code >= ABYTES}
+		 * @param ad    additional data (must match what was passed to {@link #push})
+		 * @return a {@link PullResult} carrying the plaintext message and the recovered tag
+		 * @throws IllegalArgumentException if ciphertext length is less than {@link #SECRET_STREAM_ABYTES}
+		 * @throws IllegalStateException if the Poly1305 tag verification fails
+		 */
+		public PullResult pull(byte[] c, byte @Nullable [] ad) {
+			if (ad == null) ad = EMPTY;
+			if (c.length < SECRET_STREAM_ABYTES)
+				throw new IllegalArgumentException("ciphertext too short");
+
+			int mlen = c.length - SECRET_STREAM_ABYTES;
+			byte[] m = new byte[mlen];
+
+			// --- Poly1305 key = ChaCha20 block 0 ------------------------------------------
+			byte[] block = new byte[BLOCKBYTES];
+			chacha20IetfXor(block, block, BLOCKBYTES, nonce, 0L, k);
+
+			Poly1305 poly = new Poly1305();
+			poly.init(new KeyParameter(block, 0, POLY1305_KEYBYTES));
+			Arrays.fill(block, (byte) 0);
+
+			poly.update(ad, 0, ad.length);
+			poly.update(PAD0, 0, (0x10 - ad.length) & 0xf);
+
+			// --- Recover the tag from the encrypted 64-byte tag block ---------------------
+			// block = zeros; block[0] = in[0]; XOR with ChaCha20 block 1; tag = block[0].
+			// Then restore block[0] = in[0] (the ciphertext tag byte) before authenticating.
+			block[0] = c[0];
+			chacha20IetfXor(block, block, BLOCKBYTES, nonce, 1L, k);
+			byte tag = block[0];
+			block[0] = c[0];
+			poly.update(block, 0, BLOCKBYTES);
+
+			// --- Authenticate the ciphertext (in[1..1+mlen]) ------------------------------
+			int cOff = 1;
+			poly.update(c, cOff, mlen);
+			poly.update(PAD0, 0, (0x10 - BLOCKBYTES + mlen) & 0xf);
+
+			byte[] slen = new byte[8];
+			store64LE(slen, 0, ad.length & 0xFFFFFFFFL);
+			poly.update(slen, 0, 8);
+			store64LE(slen, 0, (BLOCKBYTES + mlen) & 0xFFFFFFFFL);
+			poly.update(slen, 0, 8);
+
+			byte[] mac = new byte[POLY1305_BYTES];
+			poly.doFinal(mac, 0);
+
+			// --- Constant-time compare against the stored mac (in[cOff+mlen .. +16)) ------
+			byte[] storedMac = Arrays.copyOfRange(c, cOff + mlen, cOff + mlen + POLY1305_BYTES);
+			boolean match = constantTimeEquals(mac, storedMac);
+			Arrays.fill(storedMac, (byte) 0);
+
+			if (!match) {
+				Arrays.fill(mac, (byte) 0);
+				throw new IllegalStateException("Poly1305 tag mismatch");
+			}
+
+			// --- Only after MAC verification: decrypt the ciphertext ----------------------
+			chacha20IetfXor(m, 0, c, cOff, mlen, nonce, 2L, k);
+
+			// --- Update inonce + counter + (maybe) rekey ----------------------------------
+			for (int i = 0; i < INONCEBYTES; i++) {
+				nonce[Xchacha20poly1305State.inonceOffset() + i] ^= mac[i];
+			}
+			Arrays.fill(mac, (byte) 0);
+
+			increment(nonce, Xchacha20poly1305State.counterOffset(), COUNTERBYTES);
+			if ((tag & SECRET_STREAM_TAG_REKEY) != 0 || isZero(nonce, Xchacha20poly1305State.counterOffset(), COUNTERBYTES))
+				rekey();
+
+			return new PullResult(m, tag);
+		}
+
+		// =====================================================================================
+		//  crypto_secretstream_xchacha20poly1305_rekey
+		// =====================================================================================
+
+		/**
+		 * Manually force a re-key of the stream state.
+		 *
+		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_rekey}. Derives a new
+		 * stream key and a new inonce from the current ones via one IETF ChaCha20 invocation,
+		 * then resets the counter to 1.
+		 */
+		public void rekey() {
+			// Build plaintext = current_k(32) || current_inonce(8); XOR with ChaCha20 keystream
+			// over (state->nonce, state->k); split the result back out.
+			byte[] buf = new byte[SECRET_STREAM_KEY_BYTES + INONCEBYTES];
+			System.arraycopy(k, 0, buf, 0, SECRET_STREAM_KEY_BYTES);
+			System.arraycopy(nonce, Xchacha20poly1305State.inonceOffset(), buf, SECRET_STREAM_KEY_BYTES, INONCEBYTES);
+
+			// crypto_stream_chacha20_ietf_xor(buf, buf, sizeof buf, state->nonce, state->k)
+			chacha20IetfXor(buf, buf, buf.length, nonce, 0L, k);
+
+			System.arraycopy(buf, 0, k, 0, SECRET_STREAM_KEY_BYTES);
+			System.arraycopy(buf, SECRET_STREAM_KEY_BYTES, nonce, Xchacha20poly1305State.inonceOffset(), INONCEBYTES);
+			counterReset();
+			Arrays.fill(buf, (byte) 0);
+		}
+
+		/**
+		 * Result of {@link #pull}, carrying the decrypted message and the recovered tag.
+		 */
+		public static final class PullResult {
+			/**
+			 * The decrypted plain message.
+			 */
+			public final byte[] message;
+			/**
+			 * Recovered tag byte (one of the {@code SECRET_STREAM_TAG_*} constants).
+			 */
+			public final byte tag;
+
+			/**
+			 * Constructs a {@code PullResult} holding the decrypted message and tag.
+			 *
+			 * @param message the decrypted message byte array
+			 * @param tag     the tag byte recovered from the block
+			 */
+			public PullResult(byte[] message, byte tag) {
+				this.message = message;
+				this.tag = tag;
+			}
+		}
+
+		/**
+		 * IETF ChaCha20 used as a keystream/XOR cipher with an explicit starting block counter.
+		 *
+		 * <p>This is the exact equivalent of libsodium's
+		 * {@code crypto_stream_chacha20_ietf_xor_ic(m, c, mlen, nonce, ic, key)}: the 12-byte
+		 * {@code nonce} is interpreted as counter(4) || iv(8), and ChaCha20 starts at block
+		 * {@code ic}.
+		 *
+		 * <p>BC's {@link ChaCha7539Engine} expects a 12-byte IV (counter=0 prefix + 8-byte nonce
+		 * in word 14/15 layout). libsodium's layout splits the 12 bytes the same way: word 12 is
+		 * the counter (advanced by {@code ic}), words 13-15 carry iv. BC's {@code seekTo(bytePos)}
+		 * lets us jump straight to block {@code ic} by passing {@code ic * 64} — verified against
+		 * RFC 8439 and sequential reads.
+		 *
+		 * @param out          output byte array for XOR result
+		 * @param outOff       starting offset in {@code out}
+		 * @param in           input byte array
+		 * @param inOff        starting offset in {@code in}
+		 * @param len          number of bytes to process
+		 * @param nonce        12-byte IETF nonce (counter || inonce)
+		 * @param blockCounter initial block counter
+		 * @param key          32-byte ChaCha20 key
+		 */
+		private static void chacha20IetfXor(byte[] out, int outOff,
+		                                    byte[] in, int inOff, int len,
+		                                    byte[] nonce, long blockCounter, byte[] key) {
+			ChaCha7539Engine eng = new ChaCha7539Engine();
+			eng.init(true, new ParametersWithIV(new KeyParameter(key), nonce));
+			eng.seekTo(blockCounter * (long) BLOCKBYTES);
+			eng.processBytes(in, inOff, len, out, outOff);
+		}
+
+		/**
+		 * In-place overload for convenience (e.g. the 64-byte tag block).
+		 *
+		 * @param buf          buffer used for both input and output
+		 * @param in           input byte array
+		 * @param len          number of bytes to process
+		 * @param nonce        12-byte IETF nonce
+		 * @param blockCounter initial block counter
+		 * @param key          32-byte key
+		 */
+		private static void chacha20IetfXor(byte[] buf, byte[] in, int len,
+		                                    byte[] nonce, long blockCounter, byte[] key) {
+			chacha20IetfXor(buf, 0, in, 0, len, nonce, blockCounter, key);
+		}
+	}
+
+	/**
+	 * HChaCha20: derive a 32-byte subkey from a 32-byte key and 16-byte input.
+	 *
+	 * <p>Equivalent to libsodium's {@code crypto_core_hchacha20}. Runs the 20-round ChaCha
+	 * permutation on the standard initial state and returns words 0-3 and 12-15 (no final
+	 * addition, unlike full ChaCha20 keystream blocks).
+	 *
+	 * <p>Verified against the test vector in draft-irtf-cfrg-xchacha §2.2.1. We implement
+	 * this directly rather than reusing BC's {@code ChaChaEngine.chachaCore}, because that
+	 * helper performs the final state addition (it targets keystream generation) and so does
+	 * not yield the correct HChaCha20 output.
+	 *
+	 * @param out   32-byte output buffer for derived subkey
+	 * @param in    input buffer containing 16-byte input at {@code inOff}
+	 * @param inOff starting offset in {@code in}
+	 * @param key   32-byte key
+	 */
+	@SuppressWarnings("SameParameterValue")
+	private static void hChaCha20(byte[] out, byte[] in, int inOff, byte[] key) {
+		int[] s = new int[16];
+		s[0] = 0x61707865;
+		s[1] = 0x3320646e;
+		s[2] = 0x79622d32;
+		s[3] = 0x6b206574;
+		s[4] = load32LE(key, 0);
+		s[5] = load32LE(key, 4);
+		s[6] = load32LE(key, 8);
+		s[7] = load32LE(key, 12);
+		s[8] = load32LE(key, 16);
+		s[9] = load32LE(key, 20);
+		s[10] = load32LE(key, 24);
+		s[11] = load32LE(key, 28);
+		s[12] = load32LE(in, inOff);
+		s[13] = load32LE(in, inOff + 4);
+		s[14] = load32LE(in, inOff + 8);
+		s[15] = load32LE(in, inOff + 12);
+
+		for (int i = 0; i < 10; i++) {                 // 10 double-rounds = 20 rounds
+			quarterRound(s, 0, 4, 8, 12);              // columns
+			quarterRound(s, 1, 5, 9, 13);
+			quarterRound(s, 2, 6, 10, 14);
+			quarterRound(s, 3, 7, 11, 15);
+			quarterRound(s, 0, 5, 10, 15);             // diagonals
+			quarterRound(s, 1, 6, 11, 12);
+			quarterRound(s, 2, 7, 8, 13);
+			quarterRound(s, 3, 4, 9, 14);
+		}
+		// HChaCha20 returns the first row (words 0..3) and the last row (words 12..15).
+		store32LE(out, 0, s[0]);
+		store32LE(out, 4, s[1]);
+		store32LE(out, 8, s[2]);
+		store32LE(out, 12, s[3]);
+		store32LE(out, 16, s[12]);
+		store32LE(out, 20, s[13]);
+		store32LE(out, 24, s[14]);
+		store32LE(out, 28, s[15]);
+
+		Arrays.fill(s, 0);
+	}
+
+	/**
+	 * The ChaCha quarter-round function.
+	 *
+	 * @param s 16-element state array
+	 * @param a index of word A
+	 * @param b index of word B
+	 * @param c index of word C
+	 * @param d index of word D
+	 */
+	private static void quarterRound(int[] s, int a, int b, int c, int d) {
+		s[a] += s[b];
+		s[d] = Integer.rotateLeft(s[d] ^ s[a], 16);
+		s[c] += s[d];
+		s[b] = Integer.rotateLeft(s[b] ^ s[c], 12);
+		s[a] += s[b];
+		s[d] = Integer.rotateLeft(s[d] ^ s[a], 8);
+		s[c] += s[d];
+		s[b] = Integer.rotateLeft(s[b] ^ s[c], 7);
+	}
+
+	/**
+	 * Decodes a 32-bit little-endian integer from a byte array.
+	 *
+	 * @param b   byte array
+	 * @param off offset in byte array
+	 * @return decoded int value
+	 */
+	private static int load32LE(byte[] b, int off) {
+		return (b[off] & 0xff)
+				| ((b[off + 1] & 0xff) << 8)
+				| ((b[off + 2] & 0xff) << 16)
+				| ((b[off + 3] & 0xff) << 24);
+	}
+
+	// ---- Little-endian helpers ------------------------------------------------------------
+
+	/**
+	 * Encodes a 32-bit integer as little-endian into a byte array.
+	 *
+	 * @param b   byte array
+	 * @param off offset in byte array
+	 * @param v   int value to encode
+	 */
+	private static void store32LE(byte[] b, int off, int v) {
+		b[off] = (byte) v;
+		b[off + 1] = (byte) (v >>> 8);
+		b[off + 2] = (byte) (v >>> 16);
+		b[off + 3] = (byte) (v >>> 24);
+	}
+
+	/**
+	 * Encodes a 64-bit integer as little-endian into a byte array.
+	 *
+	 * @param b   byte array
+	 * @param off offset in byte array
+	 * @param v   long value to encode
+	 */
+	@SuppressWarnings("SameParameterValue")
+	private static void store64LE(byte[] b, int off, long v) {
+		b[off] = (byte) v;
+		b[off + 1] = (byte) (v >>> 8);
+		b[off + 2] = (byte) (v >>> 16);
+		b[off + 3] = (byte) (v >>> 24);
+		b[off + 4] = (byte) (v >>> 32);
+		b[off + 5] = (byte) (v >>> 40);
+		b[off + 6] = (byte) (v >>> 48);
+		b[off + 7] = (byte) (v >>> 56);
+	}
+
+	/**
+	 * Little-endian increment of {@code len} bytes starting at {@code off} (libsodium's sodium_increment).
+	 *
+	 * @param b   byte array
+	 * @param off starting offset
+	 * @param len number of bytes to increment
+	 */
+	@SuppressWarnings("SameParameterValue")
+	private static void increment(byte[] b, int off, int len) {
+		for (int i = 0; i < len; i++)
+			if (++b[off + i] != 0) break;   // carry only while byte wraps to 0
+	}
+
+	/**
+	 * Checks whether {@code len} bytes starting at {@code off} in byte array {@code b} are all zero.
+	 *
+	 * @param b   byte array
+	 * @param off starting offset
+	 * @param len number of bytes to check
+	 * @return {@code true} if all bytes are zero; {@code false} otherwise
+	 */
+	@SuppressWarnings("SameParameterValue")
+	private static boolean isZero(byte[] b, int off, int len) {
+		for (int i = 0; i < len; i++)
+			if (b[off + i] != 0) return false;
+
+		return true;
+	}
+
+	/**
+	 * Compares two byte arrays in constant time to prevent timing side-channel attacks.
+	 *
+	 * @param a first byte array
+	 * @param b second byte array
+	 * @return {@code true} if byte arrays are equal; {@code false} otherwise
+	 */
+	private static boolean constantTimeEquals(byte[] a, byte[] b) {
+		if (a.length != b.length) return false;
+		int d = 0;
+		for (int i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+		return d == 0;
+	}
+
+	// ---- certificate utiles -------------------------------------------
 
 	@Override
 	public PemKeyCertificate certificateFromSignatureKey(Signature.PrivateKey secretKey,

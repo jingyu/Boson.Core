@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.crypto;
 
+import javax.security.auth.Destroyable;
+
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -97,6 +99,22 @@ public interface CryptoProvider {
 	int PWHASH_ALG_ARGON2I13 = 1;
 	/** Argon2id (version 1.3) algorithm id, matching {@code crypto_pwhash_ALG_ARGON2ID13}. */
 	int PWHASH_ALG_ARGON2ID13 = 2;
+
+	/** Required key size in bytes for secret stream encryption and decryption. */
+	int SECRET_STREAM_KEY_BYTES = 32;
+	/** Authentication tag overhead in bytes added to each encrypted message block. */
+	int SECRET_STREAM_ABYTES = 17;
+	/** Length in bytes of a secret stream header. */
+	int SECRET_STREAM_HEADER_BYTES = 24;
+
+	/** Tag indicating an ordinary message block in a secret stream. */
+	byte SECRET_STREAM_TAG_MESSAGE = 0x00;
+	/** Tag indicating an explicit message boundary in a secret stream without rekeying. */
+	byte SECRET_STREAM_TAG_PUSH = 0x01;
+	/** Tag indicating that the key should be renewed in a secret stream. */
+	byte SECRET_STREAM_TAG_REKEY = 0x02;
+	/** Tag indicating the final message block of a secret stream. */
+	byte SECRET_STREAM_TAG_FINAL = SECRET_STREAM_TAG_PUSH | SECRET_STREAM_TAG_REKEY;
 
 	/**
 	 * A short, human-readable identifier for this provider (for example {@code "bc"} or
@@ -359,6 +377,70 @@ public interface CryptoProvider {
 	 * @return true if the hash should be regenerated.
 	 */
 	boolean pwHashNeedsRehash(String hash, long opsLimit, long memLimit);
+
+	// ---- SecretStream ------------------------------------------------
+
+	/**
+	 * Represents the cryptographic state for secret stream encryption or decryption operations
+	 * (libsodium {@code crypto_secretstream_xchacha20poly1305_state}).
+	 */
+	interface SecretStreamState extends Destroyable {
+		/**
+		 * Returns the header generated during encryption stream initialization.
+		 *
+		 * @return the stream header bytes (length {@link #SECRET_STREAM_HEADER_BYTES}).
+		 */
+		byte[] header();
+
+		/**
+		 * Checks whether the secret stream operation is complete (i.e. final block processed).
+		 *
+		 * @return {@code true} if the stream is complete; {@code false} otherwise.
+		 */
+		boolean isComplete();
+
+		/**
+		 * Encrypts a message block with optional additional authenticated data (libsodium {@code crypto_secretstream_xchacha20poly1305_push}).
+		 *
+		 * @param message    the plaintext message bytes to encrypt.
+		 * @param additional optional additional authenticated data, or {@code null}.
+		 * @param finalBlock {@code true} if this is the last block of the stream; {@code false} otherwise.
+		 * @return the encrypted ciphertext block including authentication tag.
+		 */
+		byte[] push(byte @Nullable [] message, byte @Nullable [] additional, boolean finalBlock);
+
+		/**
+		 * Decrypts and authenticates a ciphertext block with optional additional authenticated data (libsodium {@code crypto_secretstream_xchacha20poly1305_pull}).
+		 *
+		 * @param ciphertext the ciphertext block bytes to decrypt (including authentication tag).
+		 * @param additional optional additional authenticated data, or {@code null}.
+		 * @return the decrypted plaintext message bytes.
+		 */
+		byte[] pull(byte[] ciphertext, byte @Nullable [] additional);
+
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		void destroy();
+	}
+
+	/**
+	 * Initializes a secret stream encryption state with a secret key (libsodium {@code crypto_secretstream_xchacha20poly1305_init_push}).
+	 *
+	 * @param key the {@value #SECRET_STREAM_KEY_BYTES}-byte secret key.
+	 * @return a new {@link SecretStreamState} configured for encryption.
+	 */
+	SecretStreamState secretStreamInitPush(byte[] key);
+
+	/**
+	 * Initializes a secret stream decryption state with a header and secret key (libsodium {@code crypto_secretstream_xchacha20poly1305_init_pull}).
+	 *
+	 * @param header the {@value #SECRET_STREAM_HEADER_BYTES}-byte header received from the sender.
+	 * @param key    the {@value #SECRET_STREAM_KEY_BYTES}-byte secret key.
+	 * @return a new {@link SecretStreamState} configured for decryption.
+	 */
+	SecretStreamState secretStreamInitPull(byte[] header, byte[] key);
 
 	// ---- PEM certification -------------------------------------------
 
