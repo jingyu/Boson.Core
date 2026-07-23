@@ -202,7 +202,6 @@ public interface SecretStream extends AutoCloseable {
 		 * @throws NullPointerException if {@code ciphertext} is {@code null}
 		 * @throws IllegalArgumentException if {@code ciphertext} length is less than {@link SecretStream#ABYTES}
 		 * @throws IllegalStateException if the stream has been closed or is already completed
-		 * @throws CryptoException if decryption or authentication fails
 		 */
 		public byte[] pull(byte[] ciphertext, byte @Nullable [] additional) {
 			Objects.requireNonNull(ciphertext, "ciphertext cannot be null");
@@ -226,7 +225,6 @@ public interface SecretStream extends AutoCloseable {
 		 * @throws NullPointerException if {@code ciphertext} is {@code null}
 		 * @throws IllegalArgumentException if {@code ciphertext} length is less than {@link SecretStream#ABYTES}
 		 * @throws IllegalStateException if the stream has been closed or is already completed
-		 * @throws CryptoException if decryption or authentication fails
 		 */
 		public byte[] pull(byte[] ciphertext) {
 			return pull(ciphertext, null);

@@ -68,6 +68,22 @@ public record PowChallenge(
 
 	private static final int FIELD_COUNT = 9;
 
+	/**
+	 * Constructs a new instance of the PowChallenge class.
+	 * <p>
+	 * Validates required parameters and ensures the nonce array has the exact
+	 * length specified by NONCE_BYTES.
+	 *
+	 * @param version the protocol version
+	 * @param algorithm the proof-of-work algorithm identifier
+	 * @param n the Equihash parameter N
+	 * @param k the Equihash parameter K
+	 * @param effort the difficulty level or effort required
+	 * @param nonce the unique challenge nonce
+	 * @param issuedAt the time the challenge was issued in epoch seconds
+	 * @param expiresAt the time the challenge expires in epoch seconds
+	 * @param keyId the identifier of the signing key
+	 */
 	public PowChallenge {
 		Objects.requireNonNull(algorithm, "algorithm");
 		Objects.requireNonNull(nonce, "nonce");
