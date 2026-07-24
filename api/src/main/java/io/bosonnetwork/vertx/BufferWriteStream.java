@@ -22,6 +22,8 @@
 
 package io.bosonnetwork.vertx;
 
+import java.util.Objects;
+
 import io.vertx.core.Future;
 import io.vertx.core.buffer.Buffer;
 
@@ -45,6 +47,19 @@ public class BufferWriteStream extends AbstractMemoryWriteStream {
 	public BufferWriteStream() {
 		super();
 		this.accumulator = Buffer.buffer();
+	}
+
+	/**
+	 * Creates a new instance of {@code BufferWriteStream} with the specified initial buffer as the
+	 * data accumulator. The stream is bound to the current Vert.x context.
+	 *
+	 * @param buffer the initial {@link Buffer} to be used as the accumulator. It must not be {@code null}.
+	 * @throws NullPointerException if the provided {@code buffer} is {@code null}.
+	 * @throws IllegalStateException if there is no current Vert.x context.
+	 */
+	public BufferWriteStream(Buffer buffer) {
+		super();
+		this.accumulator = Objects.requireNonNull(buffer, "buffer");
 	}
 
 	@Override
