@@ -136,15 +136,14 @@ public class ByteArrayWriteStreamTest {
 	}
 
 	@Test
-	void endAfterEndFails(Vertx vertx, VertxTestContext tc) {
+	void endIsIdempotent(Vertx vertx, VertxTestContext tc) {
+		// A repeated end() also completes (writes after end still fail; see writeAfterEndFails).
 		vertx.runOnContext(v -> {
 			ByteArrayWriteStream ws = new ByteArrayWriteStream();
+			ws.exceptionHandler(tc::failNow);
 			ws.end()
 					.compose(x -> ws.end())
-					.onComplete(tc.failing(err -> tc.verify(() -> {
-						assertInstanceOf(IllegalStateException.class, err);
-						tc.completeNow();
-					})));
+					.onComplete(tc.succeeding(x -> tc.completeNow()));
 		});
 	}
 

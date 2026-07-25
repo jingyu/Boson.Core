@@ -128,19 +128,15 @@ public abstract class AbstractMemoryWriteStream implements WriteStream<Buffer> {
 	/**
 	 * {@inheritDoc}
 	 * <p>
-	 * Marks the stream as ended so that any subsequent {@link #write(Buffer)} or {@code end} fails. The
-	 * returned future fails with an {@link IllegalStateException} if the stream was already ended.
+	 * Marks the stream as ended so that any subsequent {@link #write(Buffer)} fails. {@code end()} is
+	 * idempotent: calling it more than once has no additional effect and every returned future completes.
 	 */
 	@Override
 	public Future<Void> end() {
 		Promise<Void> promise = Promise.promise();
 		context.runOnContext(v -> {
-			if (ended) {
-				promise.tryFail(new IllegalStateException("Stream is already ended"));
-			} else {
-				ended = true;
-				promise.tryComplete();
-			}
+			ended = true;
+			promise.tryComplete();
 		});
 		return promise.future();
 	}

@@ -38,7 +38,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 
@@ -53,13 +55,17 @@ import io.vertx.junit5.VertxTestContext;
  */
 @ExtendWith(VertxExtension.class)
 public class AsyncOutputStreamTest {
-	// A ByteArrayOutputStream that records whether it was closed.
+	// A ByteArrayOutputStream that counts how many times it was closed.
 	private static class TrackingOutputStream extends ByteArrayOutputStream {
-		final AtomicBoolean closed = new AtomicBoolean();
+		final AtomicInteger closeCount = new AtomicInteger();
 
 		@Override
 		public void close() {
-			closed.set(true);
+			closeCount.incrementAndGet();
+		}
+
+		boolean isClosed() {
+			return closeCount.get() > 0;
 		}
 	}
 
@@ -88,7 +94,7 @@ public class AsyncOutputStreamTest {
 					.compose(x -> stream.end())
 					.onComplete(tc.succeeding(x -> tc.verify(() -> {
 						assertEquals("Hello, Ion Store!", out.toString(StandardCharsets.UTF_8));
-						assertTrue(out.closed.get(), "output should be closed on end");
+						assertTrue(out.isClosed(), "output should be closed on end");
 						tc.completeNow();
 					})));
 		});
@@ -105,7 +111,7 @@ public class AsyncOutputStreamTest {
 					.compose(x -> stream.end())
 					.onComplete(tc.succeeding(x -> tc.verify(() -> {
 						assertEquals("data", out.toString(StandardCharsets.UTF_8));
-						assertFalse(out.closed.get(), "output should not be closed when closeOutput=false");
+						assertFalse(out.isClosed(), "output should not be closed when closeOutput=false");
 						tc.completeNow();
 					})));
 		});
@@ -139,7 +145,7 @@ public class AsyncOutputStreamTest {
 			AsyncOutputStream sink = new AsyncOutputStream(out, true);
 			in.pipeTo(sink).onComplete(tc.succeeding(x -> tc.verify(() -> {
 				assertArrayEquals(data, out.toByteArray());
-				assertTrue(out.closed.get(), "output should be closed once the pipe completes");
+				assertTrue(out.isClosed(), "output should be closed once the pipe completes");
 				tc.completeNow();
 			})));
 		});
@@ -159,15 +165,39 @@ public class AsyncOutputStreamTest {
 	}
 
 	@Test
-	void endAfterEndFails(Vertx vertx, VertxTestContext tc) {
+	void endIsIdempotentAfterCompletion(Vertx vertx, VertxTestContext tc) {
+		// A second end(), issued after the first has completed, must also succeed (not fail).
+		TrackingOutputStream out = new TrackingOutputStream();
 		vertx.runOnContext(v -> {
-			AsyncOutputStream stream = new AsyncOutputStream(new ByteArrayOutputStream(), false);
-			stream.end()
+			AsyncOutputStream stream = new AsyncOutputStream(out, true);
+			stream.exceptionHandler(tc::failNow);
+			stream.write(Buffer.buffer("data"))
 					.compose(x -> stream.end())
-					.onComplete(tc.failing(err -> tc.verify(() -> {
-						assertInstanceOf(IllegalStateException.class, err);
+					.compose(x -> stream.end())
+					.onComplete(tc.succeeding(x -> tc.verify(() -> {
+						assertEquals("data", out.toString(StandardCharsets.UTF_8));
+						assertEquals(1, out.closeCount.get(), "output closed exactly once");
 						tc.completeNow();
 					})));
+		});
+	}
+
+	@Test
+	void concurrentEndCallsCloseExactlyOnce(Vertx vertx, VertxTestContext tc) {
+		// Two end() calls issued before either resolves must both complete, and the terminal flush/close
+		// must still run exactly once.
+		TrackingOutputStream out = new TrackingOutputStream();
+		vertx.runOnContext(v -> {
+			AsyncOutputStream stream = new AsyncOutputStream(out, true);
+			stream.exceptionHandler(tc::failNow);
+			stream.write(Buffer.buffer("data")).onComplete(tc.succeeding(x -> {
+				Future<Void> first = stream.end();
+				Future<Void> second = stream.end();
+				Future.all(first, second).onComplete(tc.succeeding(y -> tc.verify(() -> {
+					assertEquals(1, out.closeCount.get(), "output closed exactly once");
+					tc.completeNow();
+				})));
+			}));
 		});
 	}
 

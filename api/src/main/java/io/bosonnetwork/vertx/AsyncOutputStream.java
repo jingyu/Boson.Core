@@ -86,19 +86,34 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	private boolean ended;           // end() has been requested; no further writes are accepted
 	private boolean finishing;       // the terminal flush/close has been dispatched (fires exactly once)
 	private boolean closed;          // terminal state reached: flushed/closed or failed
-	private @Nullable Promise<Void> endPromise;
+	private @Nullable Throwable failure;    // the cause when the terminal state is a failure, else null
+	private @Nullable Promise<Void> endPromise; // completed by the first end(); mirrored by any repeat end()
 
 	private record PendingWrite(Buffer buffer, Promise<Void> promise) {}
 
 	/**
 	 * Creates a stream over {@code output} that flushes and closes the wrapped {@link OutputStream} on
-	 * {@link #end()}.
+	 * {@link #end()}, bound to the {@linkplain Vertx#currentContext() current Vert.x context}.
 	 *
 	 * @param output the blocking output stream to adapt
 	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
 	public AsyncOutputStream(OutputStream output) {
-		this(output, true);
+		this(null, output, true);
+	}
+
+	/**
+	 * Creates a stream over {@code output} that flushes and closes the wrapped {@link OutputStream} on
+	 * {@link #end()}. The stream binds to the {@linkplain Vertx#currentContext() current Vert.x context} if
+	 * there is one, otherwise to a context obtained from {@code vertx}.
+	 *
+	 * @param vertx  the Vert.x instance used to obtain a context when called off a Vert.x context; may be
+	 *               {@code null} to require a current context
+	 * @param output the blocking output stream to adapt
+	 * @throws IllegalStateException if there is no current Vert.x context and {@code vertx} is {@code null}
+	 */
+	public AsyncOutputStream(@Nullable Vertx vertx, OutputStream output) {
+		this(vertx, output, true);
 	}
 
 	/**
@@ -111,9 +126,28 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
 	public AsyncOutputStream(OutputStream output, boolean closeOutput) {
+		this(null, output, closeOutput);
+	}
+
+	/**
+	 * Creates a stream over {@code output}. The stream binds to the {@linkplain Vertx#currentContext()
+	 * current Vert.x context} if there is one, otherwise to a context obtained from {@code vertx}.
+	 *
+	 * @param vertx       the Vert.x instance used to obtain a context when called off a Vert.x context; may
+	 *                    be {@code null} to require a current context
+	 * @param output      the blocking output stream to adapt
+	 * @param closeOutput whether to close {@code output} when the stream ends or fails (it is always
+	 *                    flushed on {@link #end()})
+	 * @throws IllegalStateException if there is no current Vert.x context and {@code vertx} is {@code null}
+	 */
+	public AsyncOutputStream(@Nullable Vertx vertx, OutputStream output, boolean closeOutput) {
 		Context current = Vertx.currentContext();
-		if (current == null)
-			throw new IllegalStateException("Must be created on a Vert.x context");
+		if (current == null) {
+			if (vertx == null)
+				throw new IllegalStateException("Must be created on a Vert.x context or passed a Vert.x instance");
+
+			current = vertx.getOrCreateContext();
+		}
 
 		this.context = current;
 		this.output = Objects.requireNonNull(output, "output");
@@ -162,15 +196,32 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 	 * <p>
 	 * Marks the stream as ended so that no further {@link #write(Buffer)} is accepted, drains any queued
 	 * writes, then flushes and (when owned) closes the underlying stream. The returned future completes
-	 * once that terminal flush/close has finished, or fails if it - or any outstanding write - fails, or
-	 * if the stream was already ended.
+	 * once that terminal flush/close has finished, or fails if it - or any outstanding write - fails.
+	 * <p>
+	 * {@code end()} is idempotent: calling it more than once has no additional effect, and every returned
+	 * future resolves with the same terminal outcome (success, or the failure that terminated the stream).
 	 */
 	@Override
 	public Future<Void> end() {
 		Promise<Void> promise = Promise.promise();
 		context.runOnContext(v -> {
-			if (ended || closed) {
-				promise.tryFail(new IllegalStateException("Stream is already ended"));
+			if (endPromise != null) {
+				// A previous end() already drives (or has driven) termination; mirror its outcome.
+				endPromise.future().onComplete(ar -> {
+					if (ar.succeeded())
+						promise.tryComplete();
+					else
+						promise.tryFail(ar.cause());
+				});
+				return;
+			}
+
+			if (closed) {
+				// The stream already terminated without an end() call (e.g. a write failed); mirror it.
+				if (failure != null)
+					promise.tryFail(failure);
+				else
+					promise.tryComplete();
 				return;
 			}
 
@@ -304,6 +355,7 @@ public class AsyncOutputStream implements WriteStream<Buffer> {
 		if (closed)
 			return;
 		closed = true;
+		failure = cause;
 		pendingBytes = 0;
 
 		if (closeOutput) {

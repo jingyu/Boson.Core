@@ -87,13 +87,29 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 
 	/**
 	 * Creates a stream over {@code input} using the default read buffer size (32 KiB) that closes the
-	 * wrapped {@link InputStream} when the stream terminates.
+	 * wrapped {@link InputStream} when the stream terminates,
+	 * bound to the {@linkplain Vertx#currentContext() current Vert.x context}.
 	 *
 	 * @param input the blocking input stream to adapt
 	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
 	public AsyncInputStream(InputStream input) {
-		this(input, DEFAULT_READ_BUFFER_SIZE, true);
+		this(null, input, DEFAULT_READ_BUFFER_SIZE, true);
+	}
+
+	/**
+	 * Creates a stream over {@code input} using the default read buffer size (32 KiB) that closes the
+	 * wrapped {@link InputStream} when the stream terminates. The stream binds to the
+	 * {@linkplain Vertx#currentContext() current Vert.x context} if there is one, otherwise to a context
+	 * obtained from {@code vertx}.
+	 *
+	 * @param vertx the Vert.x instance used to obtain a context when called off a Vert.x context; may be
+	 *              {@code null} to require a current context
+	 * @param input the blocking input stream to adapt
+	 * @throws IllegalStateException if there is no current Vert.x context and {@code vertx} is {@code null}
+	 */
+	public AsyncInputStream(@Nullable Vertx vertx, InputStream input) {
+		this(vertx, input, DEFAULT_READ_BUFFER_SIZE, true);
 	}
 
 	/**
@@ -107,9 +123,29 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
 	public AsyncInputStream(InputStream input, int readBufferSize, boolean closeInput) {
+		this(null, input, readBufferSize, closeInput);
+	}
+
+	/**
+	 * Creates a stream over {@code input}. The stream binds to the {@linkplain Vertx#currentContext()
+	 * current Vert.x context} if there is one, otherwise to a context obtained from {@code vertx}.
+	 *
+	 * @param vertx          the Vert.x instance used to obtain a context when called off a Vert.x context;
+	 *                       may be {@code null} to require a current context
+	 * @param input          the blocking input stream to adapt
+	 * @param readBufferSize the maximum number of bytes to read per chunk; values {@code <= 0} select the
+	 *                       default of 32 KiB
+	 * @param closeInput     whether to close {@code input} when the stream terminates (ends or fails)
+	 * @throws IllegalStateException if there is no current Vert.x context and {@code vertx} is {@code null}
+	 */
+	public AsyncInputStream(@Nullable Vertx vertx, InputStream input, int readBufferSize, boolean closeInput) {
 		Context current = Vertx.currentContext();
-		if (current == null)
-			throw new IllegalStateException("Must be created on a Vert.x context");
+		if (current == null) {
+			if (vertx == null)
+				throw new IllegalStateException("Must be created on a Vert.x context or passed a Vert.x instance");
+
+			current = vertx.getOrCreateContext();
+		}
 
 		this.context = current;
 		this.input = Objects.requireNonNull(input, "input");
