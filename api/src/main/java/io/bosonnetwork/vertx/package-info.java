@@ -30,8 +30,18 @@
  *       compatible wrapper around a Vert.x {@code Future}, bridging the reactive and
  *       {@code CompletionStage} programming models;</li>
  *   <li>{@link io.bosonnetwork.vertx.BufferInputStream} / {@link io.bosonnetwork.vertx.BufferOutputStream}
- *       â zero-copy {@code InputStream}/{@code OutputStream} views over a Vert.x {@code Buffer}
+ *       - zero-copy {@code InputStream}/{@code OutputStream} views over a Vert.x {@code Buffer}
  *       (e.g. for Jackson);</li>
+ *   <li>{@link io.bosonnetwork.vertx.AsyncInputStream} / {@link io.bosonnetwork.vertx.AsyncOutputStream}
+ *       - {@code ReadStream}/{@code WriteStream} adapters over a blocking {@code InputStream}/
+ *       {@code OutputStream} that read and write on short {@code executeBlocking} tasks, honouring
+ *       Vert.x back-pressure without holding a worker thread while idle;</li>
+ *   <li>{@link io.bosonnetwork.vertx.AbstractMemoryReadStream} / {@link io.bosonnetwork.vertx.AbstractMemoryWriteStream}
+ *       - context-confined base classes for in-memory {@code ReadStream}/{@code WriteStream}
+ *       implementations, with the concrete {@link io.bosonnetwork.vertx.ByteArrayReadStream} /
+ *       {@link io.bosonnetwork.vertx.BufferReadStream} sources and
+ *       {@link io.bosonnetwork.vertx.ByteArrayWriteStream} / {@link io.bosonnetwork.vertx.BufferWriteStream}
+ *       sinks;</li>
  *   <li>{@link io.bosonnetwork.vertx.ObservableReadStream} - a {@code ReadStream} wrapper that
  *       observes each element (and treats an observer error as the authoritative failure signal);</li>
  *   <li>{@link io.bosonnetwork.vertx.VertxCaffeine} - an {@link java.util.concurrent.Executor} and

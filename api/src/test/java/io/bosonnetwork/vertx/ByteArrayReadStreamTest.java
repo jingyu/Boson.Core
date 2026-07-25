@@ -175,9 +175,9 @@ public class ByteArrayReadStreamTest {
 				chunks.incrementAndGet();
 				acc.appendBuffer(b);
 			});
-			s.fetch(256);
+			s.fetch(1); // amount is an element count: request exactly one chunk
 			vertx.setTimer(200, t -> tc.verify(() -> {
-				assertEquals(1, chunks.get(), "fetch must deliver exactly one chunk");
+				assertEquals(1, chunks.get(), "fetch(1) must deliver exactly one chunk");
 				assertEquals(256, acc.length());
 				s.resume();
 			}));
@@ -186,24 +186,25 @@ public class ByteArrayReadStreamTest {
 
 	@Test
 	void fetchWithUnboundedAmountIsSafe(Vertx vertx, VertxTestContext tc) {
-		// Long.MAX_VALUE is the conventional "unbounded" value; it must not overflow to a negative length.
-		byte[] data = randomBytes(1024);
+		// Long.MAX_VALUE is the conventional "unbounded" value: it must not overflow, and (as the flowing
+		// sentinel) it drains the whole source.
+		byte[] data = randomBytes(1024); // 4 chunks at 256
 		vertx.runOnContext(v -> {
 			AtomicInteger chunks = new AtomicInteger();
 			Buffer acc = Buffer.buffer();
 			ByteArrayReadStream s = new ByteArrayReadStream(data, 0, data.length, 256);
 			s.exceptionHandler(tc::failNow);
+			s.endHandler(x -> tc.verify(() -> {
+				assertEquals(4, chunks.get(), "unbounded fetch drains every chunk");
+				assertArrayEquals(data, acc.getBytes());
+				tc.completeNow();
+			}));
 			s.pause();
 			s.handler(b -> {
 				chunks.incrementAndGet();
 				acc.appendBuffer(b);
 			});
 			s.fetch(Long.MAX_VALUE);
-			vertx.setTimer(200, t -> tc.verify(() -> {
-				assertEquals(1, chunks.get(), "one chunk delivered");
-				assertEquals(256, acc.length(), "chunk clamped to the read buffer size");
-				tc.completeNow();
-			}));
 		});
 	}
 
@@ -310,7 +311,7 @@ public class ByteArrayReadStreamTest {
 		byte[] data = randomBytes(200);
 		vertx.runOnContext(v -> {
 			Buffer acc = Buffer.buffer();
-			// one fetch drains the whole body; the next fetch must observe end
+			// the body is a single chunk (4096 >= 200); one fetch delivers it and then observes end
 			ByteArrayReadStream s = new ByteArrayReadStream(data, 0, data.length, 4096);
 			s.exceptionHandler(tc::failNow);
 			s.endHandler(x -> tc.verify(() -> {
@@ -319,8 +320,7 @@ public class ByteArrayReadStreamTest {
 			}));
 			s.pause();
 			s.handler(acc::appendBuffer);
-			s.fetch(4096); // delivers the single chunk
-			vertx.setTimer(150, t -> s.fetch(1)); // now drained -> end
+			s.fetch(2); // delivers the single chunk, then reads again and hits end
 		});
 	}
 

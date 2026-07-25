@@ -22,84 +22,100 @@
 
 package io.bosonnetwork.vertx;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
 
 import io.vertx.core.Context;
+import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.streams.ReadStream;
-
 import org.jspecify.annotations.Nullable;
 
 /**
- * A Vert.x {@link ReadStream} that adapts a blocking {@link InputStream}.
+ * A Vert.x {@link ReadStream} that adapts a blocking {@link InputStream}, reading it chunk by chunk
+ * without holding a worker thread for the stream's lifetime.
  * <p>
- * Each chunk is read in a short {@link Context#executeBlocking(java.util.concurrent.Callable, boolean)
- * executeBlocking} task and the next read is scheduled only when there is outstanding demand, so -
- * unlike a naive adapter that loops on a worker thread for the stream's lifetime - no worker thread is
- * held while the stream is idle or paused. Back-pressure is honored per chunk: {@link #pause()},
- * {@link #resume()} and {@link #fetch(long)} control how many further chunks are read and delivered.
+ * The stream captures the Vert.x {@link Context} that is current when it is constructed and produces all
+ * data, and invokes all handlers, on that context. Each chunk is read in a short
+ * {@link Context#executeBlocking(java.util.concurrent.Callable, boolean) executeBlocking} task and the
+ * next read is scheduled only while there is outstanding demand, so - unlike a naive adapter that loops
+ * on a worker thread - no worker thread is held while the stream is idle or paused.
+ * <p>
+ * Back-pressure follows the standard Vert.x contract:
+ * <ul>
+ *   <li>{@link #pause()} stops further reads;</li>
+ *   <li>{@link #resume()} restarts continuous (flowing) delivery;</li>
+ *   <li>{@link #fetch(long)} requests a bounded number of further chunks while paused.</li>
+ * </ul>
+ * Standard {@link #pipe()}/{@code pipeTo} support is inherited from {@link ReadStream}.
  *
  * <h2>Threading</h2>
- * The stream binds to a Vert.x {@link Context} the first time a data handler is set, and from then on
- * all reads complete, and all handlers are invoked, on that context. As with the built-in Vert.x
- * streams, its methods are expected to be called from that same context.
+ * Instances must be created on a Vert.x context; constructing one off a context throws
+ * {@link IllegalStateException}. As with the built-in Vert.x streams, the stream's methods are expected
+ * to be called from that same context.
  *
  * <h2>Resource ownership</h2>
- * The wrapped {@link InputStream} is closed when the stream ends, fails, or {@link #close()} is
- * called - but only if {@code closeInput} was set ({@code true} for the two-argument constructor).
+ * When {@code closeInput} is set (the default for the single-argument constructor), the wrapped
+ * {@link InputStream} is closed once the stream reaches a terminal state - either normal end of input or
+ * a failure. When {@code closeInput} is {@code false} the caller retains ownership and the input is never
+ * closed.
  */
 public class AsyncInputStream implements ReadStream<Buffer> {
-	private static final int DEFAULT_CHUNK_SIZE = 8192;
+	private static final int DEFAULT_READ_BUFFER_SIZE = 32 * 1024;
 
-	private final Vertx vertx;
+	private final Context context;
 	private final InputStream input;
-	private final int chunkSize;
+	private final int readBufferSize;
 	private final boolean closeInput;
-
-	// All mutable state below is confined to {@link #context} once bound.
-	private @Nullable Context context;
 
 	private @Nullable Handler<Buffer> dataHandler;
 	private @Nullable Handler<Void> endHandler;
 	private @Nullable Handler<Throwable> exceptionHandler;
 
-	// Outstanding number of chunks to deliver; Long.MAX_VALUE means "flowing" (unbounded).
-	private long demand = Long.MAX_VALUE;
-	private boolean readInProgress;
-	private boolean closed;
-	private boolean inputClosed;
+	// Outstanding number of chunks to deliver: Long.MAX_VALUE means "flowing" (unbounded), 0 means
+	// paused, a finite value is the number of further chunks a fetch(long) has requested. Written by
+	// pause()/resume() (hence volatile) and adjusted on the context thread while reading.
+	private volatile long demand;
+	// Whether a blocking read is in flight; guards against overlapping reads on the same input.
+	private boolean readingInProgress;
+	// Whether the stream has reached a terminal state (end of input or failure) and the input, if
+	// owned, has been closed. Once set, no further reads or events occur.
+	private boolean ended;
 
 	/**
-	 * Creates a new {@code AsyncInputStream} with the default chunk size (8192 bytes) that closes the
-	 * wrapped {@link InputStream} when finished.
+	 * Creates a stream over {@code input} using the default read buffer size (32 KiB) that closes the
+	 * wrapped {@link InputStream} when the stream terminates.
 	 *
-	 * @param vertx the Vert.x instance
-	 * @param input the input stream to read from
+	 * @param input the blocking input stream to adapt
+	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
-	public AsyncInputStream(Vertx vertx, InputStream input) {
-		this(vertx, input, DEFAULT_CHUNK_SIZE, true);
+	public AsyncInputStream(InputStream input) {
+		this(input, DEFAULT_READ_BUFFER_SIZE, true);
 	}
 
 	/**
-	 * Creates a new {@code AsyncInputStream}.
+	 * Creates a stream over {@code input}, bound to the {@linkplain Vertx#currentContext() current Vert.x
+	 * context}.
 	 *
-	 * @param vertx      the Vert.x instance
-	 * @param input      the input stream to read from
-	 * @param chunkSize  the size of the buffer used for each read (must be {@code > 0})
-	 * @param closeInput whether to close the input stream when the stream ends, fails or is closed
+	 * @param input          the blocking input stream to adapt
+	 * @param readBufferSize the maximum number of bytes to read per chunk; values {@code <= 0} select the
+	 *                       default of 32 KiB
+	 * @param closeInput     whether to close {@code input} when the stream terminates (ends or fails)
+	 * @throws IllegalStateException if there is no current Vert.x context
 	 */
-	public AsyncInputStream(Vertx vertx, InputStream input, int chunkSize, boolean closeInput) {
-		this.vertx = Objects.requireNonNull(vertx, "vertx");
-		this.input = Objects.requireNonNull(input, "input");
-		if (chunkSize <= 0)
-			throw new IllegalArgumentException("chunkSize must be > 0");
+	public AsyncInputStream(InputStream input, int readBufferSize, boolean closeInput) {
+		Context current = Vertx.currentContext();
+		if (current == null)
+			throw new IllegalStateException("Must be created on a Vert.x context");
 
-		this.chunkSize = chunkSize;
+		this.context = current;
+		this.input = Objects.requireNonNull(input, "input");
+		this.readBufferSize = readBufferSize > 0 ? readBufferSize : DEFAULT_READ_BUFFER_SIZE;
 		this.closeInput = closeInput;
+		this.demand = Long.MAX_VALUE; // start in flowing mode
 	}
 
 	@Override
@@ -111,11 +127,9 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	@Override
 	public AsyncInputStream handler(@Nullable Handler<Buffer> handler) {
 		this.dataHandler = handler;
-		if (handler != null && !closed) {
-			if (context == null)
-				context = vertx.getOrCreateContext();
-			doRead();
-		}
+		if (handler != null)
+			doRead(); // Kick off the producer. If the stream already ended this is a no-op.
+
 		return this;
 	}
 
@@ -127,26 +141,41 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 
 	@Override
 	public AsyncInputStream resume() {
-		return fetch(Long.MAX_VALUE);
+		demand = Long.MAX_VALUE;
+		doRead();
+		return this;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Adds {@code amount} to the outstanding demand and resumes reading until that many further chunks
+	 * have been delivered (or the input is drained), each chunk carrying up to the configured read buffer
+	 * size. If the stream is already flowing the call has no effect. Reports {@link IllegalArgumentException}
+	 * to the exception handler if {@code amount <= 0}.
+	 */
 	@Override
 	public AsyncInputStream fetch(long amount) {
-		if (amount < 0)
-			throw new IllegalArgumentException("amount must be >= 0");
-		if (closed)
-			return this;
+		context.runOnContext(v -> {
+			if (ended)
+				return;
 
-		// saturating add
-		demand += amount;
-		if (demand < 0)
-			demand = Long.MAX_VALUE;
+			if (amount <= 0) {
+				// A bad argument is a caller error, not a terminal stream failure: report it but leave
+				// the stream healthy.
+				notifyException(new IllegalArgumentException("fetch amount must be > 0"));
+				return;
+			}
 
-		if (dataHandler != null) {
-			if (context == null)
-				context = vertx.getOrCreateContext();
+			if (demand != Long.MAX_VALUE) {
+				demand += amount;
+				if (demand < 0) // overflow: treat as unbounded
+					demand = Long.MAX_VALUE;
+			}
+
 			doRead();
-		}
+		});
+
 		return this;
 	}
 
@@ -157,103 +186,148 @@ public class AsyncInputStream implements ReadStream<Buffer> {
 	}
 
 	/**
-	 * Closes the stream, stopping any further reads and (if configured) closing the wrapped
-	 * {@link InputStream}. Idempotent. No more data, end or exception events are delivered afterwards.
+	 * Reads up to {@code amount} bytes from the input on a worker thread.
+	 *
+	 * @param amount the size of the read buffer
+	 * @return a future completed with the bytes read, or with {@code null} at end of input, or failed if
+	 *         the underlying read throws
 	 */
-	public void close() {
-		Context ctx = context;
-		if (ctx != null && Vertx.currentContext() != ctx)
-			ctx.runOnContext(v -> doClose());
-		else
-			doClose();
-	}
-
-	private void doClose() {
-		if (closed)
-			return;
-		closed = true;
-		dataHandler = null;
-		// If a blocking read is in flight, defer closing the input to its completion to avoid closing
-		// the stream concurrently with a read on the worker thread.
-		if (!readInProgress)
-			closeInputQuietly();
-	}
-
-	private void doRead() {
-		if (closed || readInProgress || demand == 0L || dataHandler == null)
-			return;
-
-		readInProgress = true;
-		byte[] buf = new byte[chunkSize];
-		Context ctx = Objects.requireNonNull(context, "context");
-		ctx.executeBlocking(() -> input.read(buf), false).onComplete(ar -> {
-			readInProgress = false;
-
-			if (closed) {
-				closeInputQuietly();
-				return;
-			}
-			if (ar.failed()) {
-				handleException(ar.cause());
-				return;
-			}
-
-			int len = ar.result();
-			if (len < 0) {
-				handleEnd();
-				return;
-			}
-			if (len > 0) {
-				if (demand != Long.MAX_VALUE)
-					demand--;
-				Handler<Buffer> handler = dataHandler;
-				if (handler != null) {
-					try {
-						handler.handle(Buffer.buffer(len).appendBytes(buf, 0, len));
-					} catch (Throwable t) {
-						handleException(t);
+	private Future<@Nullable Buffer> blockRead(int amount) {
+		byte[] buf = new byte[amount];
+		Promise<@Nullable Buffer> promise = Promise.promise();
+		context.executeBlocking(() -> input.read(buf), false)
+				.onComplete(ar -> {
+					if (ar.failed()) {
+						promise.fail(ar.cause());
 						return;
 					}
-				}
-			}
 
-			if (!closed && demand > 0L)
-				ctx.runOnContext(v -> doRead());
+					int len = ar.result();
+					if (len < 0)
+						promise.complete(); // end of input
+					else
+						promise.complete(Buffer.buffer(len).appendBytes(buf, 0, len));
+				});
+		return promise.future();
+	}
+
+	/**
+	 * Producer pump: read and emit the next chunk (or signal end) on the context thread. Self-reschedules
+	 * while there is outstanding demand, and stops when the stream is paused ({@code demand == 0}), ended,
+	 * or a read is already in flight. Re-armed by {@link #resume()} and {@link #fetch(long)}.
+	 */
+	private void doRead() {
+		context.runOnContext(v -> {
+			if (ended || demand == 0L || readingInProgress)
+				return;
+
+			Handler<Buffer> h = this.dataHandler;
+			if (h == null)
+				return;
+
+			readingInProgress = true;
+			try {
+				blockRead(readBufferSize).onComplete(ar -> {
+					readingInProgress = false;
+
+					if (ar.failed()) {
+						fail(ar.cause());
+						return;
+					}
+
+					Buffer buf = ar.result();
+					if (buf == null) { // end of input
+						terminate();
+						notifyEndHandler();
+						return;
+					}
+
+					if (demand != Long.MAX_VALUE)
+						demand--;
+
+					if (deliver(buf)) // continue only if delivery succeeded and the stream is still live
+						doRead();
+				});
+			} catch (Throwable t) {
+				readingInProgress = false;
+				fail(t);
+			}
 		});
 	}
 
-	private void handleEnd() {
-		if (closed)
-			return;
-		closed = true;
-		dataHandler = null;
-		closeInputQuietly();
-		Handler<Void> handler = endHandler;
-		if (handler != null)
-			//noinspection ConstantConditions
-			handler.handle(null);
+	/**
+	 * Delivers a chunk to the data handler. If the handler throws, the stream is terminated and the
+	 * failure surfaced to the exception handler.
+	 *
+	 * @param data the chunk to deliver
+	 * @return {@code true} if delivery succeeded and reading may continue, {@code false} if there is no
+	 *         handler or the handler failed (in which case the stream has been terminated)
+	 */
+	private boolean deliver(Buffer data) {
+		Handler<Buffer> h = dataHandler;
+		if (h == null)
+			return false;
+
+		try {
+			h.handle(data);
+			return true;
+		} catch (Throwable t) {
+			// A failure from the downstream data handler is treated as terminal.
+			fail(t);
+			return false;
+		}
 	}
 
-	private void handleException(Throwable cause) {
-		if (closed)
+	/**
+	 * Moves the stream to its terminal state and, when {@code closeInput} is set, closes the wrapped input
+	 * on a best-effort basis. Idempotent.
+	 */
+	private void terminate() {
+		if (ended)
 			return;
-		closed = true;
-		dataHandler = null;
-		closeInputQuietly();
-		Handler<Throwable> handler = exceptionHandler;
-		if (handler != null)
-			handler.handle(cause);
-	}
+		ended = true;
 
-	private void closeInputQuietly() {
-		if (inputClosed)
-			return;
-		inputClosed = true;
 		if (closeInput) {
 			try {
 				input.close();
-			} catch (IOException ignore) {
+			} catch (Throwable ignored) {
 				// best-effort close
+			}
+		}
+	}
+
+	/**
+	 * Terminal failure: tear the stream down (closing the input when owned) and report the cause to the
+	 * exception handler. Idempotent; a no-op once the stream has ended.
+	 */
+	private void fail(Throwable cause) {
+		if (ended)
+			return;
+		terminate();
+		notifyException(cause);
+	}
+
+	private void notifyEndHandler() {
+		Handler<Void> h = endHandler;
+		if (h != null) {
+			try {
+				h.handle(null);
+			} catch (Throwable ignored) {
+				// Swallow: an exception from the end handler must not propagate.
+			}
+		}
+	}
+
+	/**
+	 * Deliver a failure to the registered exception handler. Always invoked on the captured context thread.
+	 */
+	private void notifyException(Throwable t) {
+		Handler<Throwable> h = exceptionHandler;
+		if (h != null) {
+			try {
+				h.handle(t);
+			} catch (Throwable ignored) {
+				// Swallow: an exception from the exception handler must not propagate.
 			}
 		}
 	}

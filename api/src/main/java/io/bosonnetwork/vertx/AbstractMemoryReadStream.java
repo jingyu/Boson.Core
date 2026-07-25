@@ -43,8 +43,7 @@ import org.jspecify.annotations.Nullable;
  * <ul>
  *   <li>{@link #pause()} stops the producer;</li>
  *   <li>{@link #resume()} restarts continuous delivery;</li>
- *   <li>{@link #fetch(long)} delivers a single further chunk of up to {@code min(amount, readBufferSize)}
- *       bytes while paused (the amount is a byte budget, not an element count).</li>
+ *   <li>{@link #fetch(long)} requests a bounded number of further chunks while paused.</li>
  * </ul>
  * Standard {@link #pipe()}/{@code pipeTo} support is inherited from {@link ReadStream}.
  * <p>
@@ -61,8 +60,11 @@ public abstract class AbstractMemoryReadStream implements ReadStream<Buffer> {
 	private @Nullable Handler<Void> endHandler;
 	private @Nullable Handler<Throwable> exceptionHandler;
 
-	private volatile boolean pause;
-	/** Whether the end of the stream has been reached and the end handler notified. */
+	// Outstanding number of chunks to deliver: Long.MAX_VALUE means "flowing" (unbounded), 0 means
+	// paused, a finite value is the number of further chunks a fetch(long) has requested. Written by
+	// pause()/resume() (hence volatile) and adjusted on the context thread while reading.
+	private volatile long demand = Long.MAX_VALUE;
+	/** Whether the stream has reached a terminal state (end of source or failure). */
 	private boolean ended;
 
 	/**
@@ -98,13 +100,13 @@ public abstract class AbstractMemoryReadStream implements ReadStream<Buffer> {
 
 	@Override
 	public ReadStream<Buffer> pause() {
-		pause = true;
+		demand = 0L;
 		return this;
 	}
 
 	@Override
 	public ReadStream<Buffer> resume() {
-		pause = false;
+		demand = Long.MAX_VALUE;
 		doRead();
 		return this;
 	}
@@ -112,10 +114,9 @@ public abstract class AbstractMemoryReadStream implements ReadStream<Buffer> {
 	/**
 	 * {@inheritDoc}
 	 * <p>
-	 * Delivers at most one further chunk, of up to {@code min(amount, readBufferSize)} bytes, or fires the
-	 * {@link #endHandler(Handler) end handler} if the source is already drained. The {@code amount} is
-	 * treated as a byte budget rather than an element count and is clamped to the read buffer size, so the
-	 * conventional unbounded request {@link Long#MAX_VALUE} is safe. Reports {@link IllegalArgumentException}
+	 * Adds {@code amount} to the outstanding demand and resumes reading until that many further chunks
+	 * have been delivered (or the source is drained), each chunk carrying up to the configured read buffer
+	 * size. If the stream is already flowing the call has no effect. Reports {@link IllegalArgumentException}
 	 * to the exception handler if {@code amount <= 0}.
 	 */
 	@Override
@@ -125,28 +126,19 @@ public abstract class AbstractMemoryReadStream implements ReadStream<Buffer> {
 				return;
 
 			if (amount <= 0) {
+				// A bad argument is a caller error, not a terminal stream failure: report it but leave
+				// the stream healthy.
 				notifyException(new IllegalArgumentException("fetch amount must be > 0"));
 				return;
 			}
 
-			Handler<Buffer> h = this.dataHandler;
-			if (h != null) {
-				try {
-					// Clamp to the read buffer size: this bounds each delivered chunk and, crucially,
-					// avoids the (int) overflow when amount is Long.MAX_VALUE (the conventional
-					// "unbounded" value), which would otherwise wrap to a negative length.
-					int n = (int) Math.min(amount, readBufferSize);
-					Buffer buf = readInternal(n);
-					if (buf != null) {
-						notifyDataHandler(buf);
-					} else {
-						ended = true;
-						notifyEndHandler();
-					}
-				} catch (Throwable t) {
-					notifyException(t);
-				}
+			if (demand != Long.MAX_VALUE) {
+				demand += amount;
+				if (demand < 0) // overflow: treat as unbounded
+					demand = Long.MAX_VALUE;
 			}
+
+			doRead();
 		});
 
 		return this;
@@ -169,43 +161,78 @@ public abstract class AbstractMemoryReadStream implements ReadStream<Buffer> {
 
 	/**
 	 * Producer pump: emit the next chunk (or signal end) on the context thread. Paced by
-	 * {@code runOnContext} so each chunk is delivered on its own tick, and self-rescheduling until the
-	 * source is drained. Stops when {@link #pause()} is set and is re-armed by {@link #resume()} when
-	 * demand returns.
+	 * {@code runOnContext} so each chunk is delivered on its own tick, and self-rescheduling while there
+	 * is outstanding demand. Stops when the stream is paused ({@code demand == 0}) or ended, and is
+	 * re-armed by {@link #resume()} and {@link #fetch(long)} when demand returns.
 	 */
 	private void doRead() {
 		context.runOnContext(v -> {
-			if (ended || pause)
+			if (ended || demand == 0L)
 				return;
 
 			Handler<Buffer> h = this.dataHandler;
-			if (h != null) {
-				try {
-					Buffer buf = readInternal(readBufferSize);
-					if (buf != null) {
-						notifyDataHandler(buf);
-						doRead();
-					} else {
-						ended = true;
-						notifyEndHandler();
-					}
-				} catch (Throwable t) {
-					notifyException(t);
-				}
+			if (h == null)
+				return;
+
+			Buffer buf;
+			try {
+				buf = readInternal(readBufferSize);
+			} catch (Throwable t) {
+				fail(t);
+				return;
 			}
+
+			if (buf == null) { // source drained
+				terminate();
+				notifyEndHandler();
+				return;
+			}
+
+			if (demand != Long.MAX_VALUE)
+				demand--;
+
+			if (deliver(buf)) // continue only if delivery succeeded and the stream is still live
+				doRead();
 		});
 	}
 
-	private void notifyDataHandler(Buffer data) {
+	/**
+	 * Delivers a chunk to the data handler. If the handler throws, the stream is terminated and the
+	 * failure surfaced to the exception handler.
+	 *
+	 * @param data the chunk to deliver
+	 * @return {@code true} if delivery succeeded and reading may continue, {@code false} if there is no
+	 *         handler or the handler failed (in which case the stream has been terminated)
+	 */
+	private boolean deliver(Buffer data) {
 		Handler<Buffer> h = dataHandler;
-		if (h != null) {
-			try {
-				h.handle(data);
-			} catch (Throwable t) {
-				// A failure from the downstream data handler is surfaced through the exception handler.
-				notifyException(t);
-			}
+		if (h == null)
+			return false;
+
+		try {
+			h.handle(data);
+			return true;
+		} catch (Throwable t) {
+			// A failure from the downstream data handler is treated as terminal.
+			fail(t);
+			return false;
 		}
+	}
+
+	/** Moves the stream to its terminal state. Idempotent. */
+	private void terminate() {
+		ended = true;
+	}
+
+	/**
+	 * Terminal failure: end the stream and report the cause to the exception handler. Idempotent; a no-op
+	 * once the stream has ended.
+	 */
+	private void fail(Throwable cause) {
+		if (ended)
+			return;
+		terminate();
+		notifyException(cause);
 	}
 
 	private void notifyEndHandler() {

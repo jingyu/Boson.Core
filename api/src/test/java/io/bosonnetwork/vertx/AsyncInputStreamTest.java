@@ -50,7 +50,7 @@ public class AsyncInputStreamTest {
 
 		// chunkSize smaller than the payload to force multiple chunks
 		vertx.runOnContext(v -> {
-			AsyncInputStream stream = new AsyncInputStream(vertx, in, 256, true);
+			AsyncInputStream stream = new AsyncInputStream(in, 256, true);
 			stream.exceptionHandler(tc::failNow);
 			stream.endHandler(x -> tc.verify(() -> {
 				assertArrayEquals(data, acc.getBytes());
@@ -67,7 +67,7 @@ public class AsyncInputStreamTest {
 		TrackingInputStream in = new TrackingInputStream(data);
 
 		vertx.runOnContext(v -> {
-			AsyncInputStream stream = new AsyncInputStream(vertx, in, 256, false);
+			AsyncInputStream stream = new AsyncInputStream(in, 256, false);
 			stream.exceptionHandler(tc::failNow);
 			stream.endHandler(x -> tc.verify(() -> {
 				assertFalse(in.closed.get(), "input should not be closed when closeInput=false");
@@ -85,7 +85,7 @@ public class AsyncInputStreamTest {
 		Buffer acc = Buffer.buffer();
 
 		vertx.runOnContext(v -> {
-			AsyncInputStream stream = new AsyncInputStream(vertx, in, 256, true);
+			AsyncInputStream stream = new AsyncInputStream(in, 256, true);
 			stream.exceptionHandler(tc::failNow);
 			stream.endHandler(x -> tc.verify(() -> {
 				assertArrayEquals(data, acc.getBytes());
@@ -103,7 +103,7 @@ public class AsyncInputStreamTest {
 			vertx.setTimer(300, t -> tc.verify(() -> {
 				assertEquals(1, chunks.get(), "fetch(1) must deliver exactly one chunk");
 				assertFalse(in.closed.get(), "stream must not have ended yet");
-				stream.resume(); // drain the remaining chunks and trigger end
+				vertx.runOnContext(vv -> stream.resume()); // drain the remaining chunks and trigger end
 			}));
 		});
 	}

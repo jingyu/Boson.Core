@@ -105,9 +105,11 @@ public abstract class AbstractMemoryWriteStream implements WriteStream<Buffer> {
 			}
 
 			if (data == null) {
+				// Notify before resolving the write future, so a caller awaiting it already observes the
+				// exception-handler side effect.
 				Throwable err = new NullPointerException("data is null");
-				promise.tryFail(err);
 				notifyException(err);
+				promise.tryFail(err);
 				return;
 			}
 
@@ -115,8 +117,8 @@ public abstract class AbstractMemoryWriteStream implements WriteStream<Buffer> {
 				writeInternal(data);
 				promise.tryComplete();
 			} catch (Throwable t) {
-				promise.tryFail(t);
 				notifyException(t);
+				promise.tryFail(t);
 			}
 		});
 
