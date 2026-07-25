@@ -16,6 +16,27 @@ public class EquihashTests {
 	private static final int N = 48;
 	private static final int K = 3;
 
+	private record Puzzle(byte[] input, List<int[]> solutions) {}
+
+	/**
+	 * Returns an input that {@link Equihash#solve} found at least one solution for.
+	 * <p>
+	 * The solution count for a random input is Poisson-distributed with a mean of 2 at these
+	 * parameters, so a single input yields nothing about 15% of the time - {@code solve} documents
+	 * that it may return zero solutions. Real callers walk a nonce until one turns up (see
+	 * {@code ProofOfWork.solve}); doing the same here keeps the tests off a single random draw.
+	 */
+	private static Puzzle solvablePuzzle() {
+		for (int attempt = 0; attempt < 32; attempt++) {
+			byte[] input = Random.randomBytesSecure(104);
+			List<int[]> solutions = Equihash.solve(input, N, K);
+			if (!solutions.isEmpty())
+				return new Puzzle(input, solutions);
+		}
+
+		throw new AssertionError("no solvable input found in 32 attempts");
+	}
+
 	@Test
 	void collisionBitsAndParams() {
 		assertEquals(12, Equihash.collisionBits(N, K));
@@ -27,23 +48,20 @@ public class EquihashTests {
 
 	@Test
 	void solveProducesVerifiableSolutions() {
-		byte[] input = Random.randomBytesSecure(104);
-		List<int[]> solutions = Equihash.solve(input, N, K);
-		assertFalse(solutions.isEmpty(), "expected at least one solution for the input");
+		Puzzle puzzle = solvablePuzzle();
 
-		for (int[] sol : solutions) {
+		for (int[] sol : puzzle.solutions()) {
 			assertEquals(Equihash.solutionLength(K), sol.length);
-			assertTrue(Equihash.verify(input, N, K, sol), "solver output must verify");
+			assertTrue(Equihash.verify(puzzle.input(), N, K, sol), "solver output must verify");
 		}
 	}
 
 	@Test
 	void tamperedSolutionFailsVerification() {
-		byte[] input = Random.randomBytesSecure(104);
-		List<int[]> solutions = Equihash.solve(input, N, K);
-		assertFalse(solutions.isEmpty());
+		Puzzle puzzle = solvablePuzzle();
+		byte[] input = puzzle.input();
 
-		int[] sol = solutions.get(0).clone();
+		int[] sol = puzzle.solutions().get(0).clone();
 		// Flip one index to a different valid-range value: breaks the collision/ordering.
 		sol[0] = (sol[0] ^ 1);
 		assertFalse(Equihash.verify(input, N, K, sol));
@@ -54,20 +72,18 @@ public class EquihashTests {
 		assertFalse(Equihash.verify(input, N, K, tooShort));
 
 		// Duplicated index.
-		int[] dup = solutions.get(0).clone();
+		int[] dup = puzzle.solutions().get(0).clone();
 		dup[dup.length - 1] = dup[0];
 		assertFalse(Equihash.verify(input, N, K, dup));
 	}
 
 	@Test
 	void solutionBoundToInput() {
-		byte[] input = Random.randomBytesSecure(104);
-		List<int[]> solutions = Equihash.solve(input, N, K);
-		assertFalse(solutions.isEmpty());
+		Puzzle puzzle = solvablePuzzle();
 
-		byte[] otherInput = input.clone();
+		byte[] otherInput = puzzle.input().clone();
 		otherInput[0] ^= 0x01;
-		assertFalse(Equihash.verify(otherInput, N, K, solutions.get(0)),
+		assertFalse(Equihash.verify(otherInput, N, K, puzzle.solutions().get(0)),
 				"a solution must not verify against a different input");
 	}
 
