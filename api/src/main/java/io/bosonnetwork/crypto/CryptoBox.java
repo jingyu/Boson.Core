@@ -42,6 +42,11 @@ public interface CryptoBox extends AutoCloseable, Destroyable {
 	int MAC_BYTES = CryptoProvider.BOX_MAC_BYTES;
 
 	/**
+	 * The number of bytes used to represent the precomputed shared key.
+	 */
+	int KEY_BYTES = CryptoProvider.BOX_SHARED_KEY_BYTES;
+
+	/**
 	 * The crypto box public key object.
 	 */
 	interface PublicKey extends Destroyable {
@@ -428,6 +433,22 @@ public interface CryptoBox extends AutoCloseable, Destroyable {
 			throw new CryptoException("Sealed-box decryption failed: invalid ciphertext or authentication failure");
 
 		return plain;
+	}
+
+	/**
+	 * Provides the raw bytes of the precomputed shared key held by this box, as produced by
+	 * libsodium {@code crypto_box_beforenm}.
+	 * <p>
+	 * The returned array is a fresh copy: mutating it does not affect this box. It is the raw
+	 * shared secret of the sender/receiver pair, so treat it as key material - wipe it once done,
+	 * and prefer deriving purpose-specific sub-keys from it (see {@link KeyDerivation}) over using
+	 * it directly for anything other than this box's own {@link #encrypt} / {@link #decrypt}.
+	 *
+	 * @return a copy of the {@value #KEY_BYTES}-byte shared key.
+	 * @throws IllegalStateException if this box has been destroyed.
+	 */
+	default byte[] keyBytes() {
+		return provider().boxKeyBytes(this);
 	}
 
 	/**

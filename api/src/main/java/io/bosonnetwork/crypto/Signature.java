@@ -23,9 +23,6 @@
 
 package io.bosonnetwork.crypto;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 import javax.security.auth.Destroyable;
 
@@ -162,7 +159,7 @@ public interface Signature {
 		 * @return a newly derived {@code PrivateKey} created using the specified subkey ID and context.
 		 */
 		default PrivateKey derive(long subKeyId, String context) {
-			return derive(subKeyId, deriveContextBytes(context));
+			return derive(subKeyId, KeyDerivation.contextBytes(context));
 		}
 
 		/**
@@ -344,37 +341,6 @@ public interface Signature {
 	 * The number of bytes used to represent a signature.
 	 */
 	public static final int BYTES = CryptoProvider.SIGN_BYTES;
-
-	/**
-	 * Derives the fixed-length (8-byte) key-derivation context from a context string.
-	 * <p>
-	 * The string is hashed with SHA-256 and the 32-byte digest is folded down to the 8 bytes
-	 * required by the {@code crypto_kdf} context.
-	 * <p>
-	 * <strong>Note:</strong> the 8-byte context is a lossy reduction (the fixed context
-	 * size), so distinct context strings can still collide and, for the same sub-key id, derive the
-	 * same key. Use distinct sub-key ids when strong domain separation is required.
-	 *
-	 * @param context the context string; must not be null or empty
-	 * @return the 8-byte derivation context
-	 */
-	private static byte[] deriveContextBytes(String context) {
-		Objects.requireNonNull(context, "context");
-		if (context.isEmpty())
-			throw new IllegalArgumentException("context must not be empty");
-
-		final int len = CryptoProvider.KDF_CONTEXT_BYTES; // 8 bytes
-		byte[] contextBytes = new byte[len];
-		try {
-			MessageDigest sha = MessageDigest.getInstance("SHA-256");
-			byte[] hashBytes = sha.digest(context.getBytes(StandardCharsets.UTF_8));
-			for (int i = 0; i < hashBytes.length; i++)
-				contextBytes[i % len] += hashBytes[i];
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		}
-		return contextBytes;
-	}
 
 	/**
 	 * Signs a message with a given key.

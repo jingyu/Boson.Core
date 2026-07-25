@@ -24,6 +24,7 @@ package io.bosonnetwork.crypto;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -49,8 +50,8 @@ import java.util.Date;
 import java.util.Objects;
 import java.util.TimeZone;
 
+import jnr.ffi.Pointer;
 import org.apache.tuweni.crypto.sodium.Box;
-import org.apache.tuweni.crypto.sodium.KeyDerivation;
 import org.apache.tuweni.crypto.sodium.PasswordHash;
 import org.apache.tuweni.crypto.sodium.SecretDecryptionStream;
 import org.apache.tuweni.crypto.sodium.SecretEncryptionStream;
@@ -217,7 +218,9 @@ public class SodiumCryptoProvider implements CryptoProvider {
 
 	@Override
 	public byte[] kdfDeriveFromKey(byte[] masterKey, long subKeyId, byte[] context, int subKeyLength) {
-		return KeyDerivation.MasterKey.fromBytes(masterKey).deriveKeyArray(subKeyLength, subKeyId, context);
+		// Fully qualified: io.bosonnetwork.crypto.KeyDerivation lives in this package.
+		return org.apache.tuweni.crypto.sodium.KeyDerivation.MasterKey.fromBytes(masterKey)
+				.deriveKeyArray(subKeyLength, subKeyId, context);
 	}
 
 	private static class SodiumBoxPublicKey implements CryptoBox.PublicKey {
@@ -411,6 +414,23 @@ public class SodiumCryptoProvider implements CryptoProvider {
 			return b.box;
 		else
 			throw new IllegalStateException("Not a SodiumCryptoBox: " + box.getClass().getName());
+	}
+
+	@Override
+	public byte[] boxKeyBytes(CryptoBox box) {
+		// Apache Tuweni's Box class does not expose the precomputed shared key bytes.
+		// We use reflection to access the private native 'ctx' pointer and read the 32-byte key directly.
+		Box sodiumBox = boxOf(box);
+		try {
+			Field ctxField = Box.class.getDeclaredField("ctx");
+			ctxField.setAccessible(true);
+			Pointer ctx = (Pointer) ctxField.get(sodiumBox);
+			byte[] bytes = new byte[BOX_SHARED_KEY_BYTES];
+			ctx.get(0, bytes, 0, bytes.length);
+			return bytes;
+		} catch (Exception e) {
+			throw new IllegalStateException("Failed to get CryptoBox key bytes", e);
+		}
 	}
 
 	@Override

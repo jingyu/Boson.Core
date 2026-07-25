@@ -347,6 +347,11 @@ public class CryptoCompatibilityTest {
 				CryptoBox bcDec = BC.boxBeforeNm(bcPkA, bcSkB);
 				CryptoBox lsDec = LS.boxBeforeNm(lsPkA, lsSkB)) {
 
+			assertArrayEquals(BC.boxKeyBytes(bcEnc), BC.boxKeyBytes(bcDec), "BC enc and dec agree on key bytes");
+			assertArrayEquals(LS.boxKeyBytes(lsEnc), LS.boxKeyBytes(lsDec), "LS enc and dec agree on key bytes");
+			assertArrayEquals(BC.boxKeyBytes(bcEnc), LS.boxKeyBytes(lsEnc), "BC and LS agree on enc key bytes");
+			assertArrayEquals(BC.boxKeyBytes(bcDec), LS.boxKeyBytes(lsDec), "BC and LS agree on dec key bytes");
+
 			for (int size : SIZES) {
 				byte[] msg = rb(size);
 				byte[] bcBox = BC.boxEncrypt(msg, nonce, bcEnc);

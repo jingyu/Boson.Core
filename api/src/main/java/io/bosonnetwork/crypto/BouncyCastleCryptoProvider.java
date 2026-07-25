@@ -530,6 +530,11 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 	}
 
 	@Override
+	public byte[] boxKeyBytes(CryptoBox box) {
+		return sharedKeyOf(box).clone();
+	}
+
+	@Override
 	public byte[] boxEncrypt(byte[] message, CryptoBox.Nonce nonce, CryptoBox box) {
 		return secretboxSeal(message, nonceOf(nonce), sharedKeyOf(box));
 	}

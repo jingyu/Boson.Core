@@ -80,6 +80,12 @@ public interface CryptoProvider {
 	int SIGN_BYTES = 64;
 	/** Length in bytes of the {@code crypto_kdf} derivation context. */
 	int KDF_CONTEXT_BYTES = 8;
+	/** Length in bytes of the {@code crypto_kdf} master key. */
+	int KDF_MASTER_KEY_BYTES = 32;
+	/** Minimum length in bytes of a {@code crypto_kdf} derived sub-key. */
+	int KDF_SUBKEY_MIN_BYTES = 16;
+	/** Maximum length in bytes of a {@code crypto_kdf} derived sub-key. */
+	int KDF_SUBKEY_MAX_BYTES = 64;
 	/** Length in bytes of a Curve25519 (crypto_box) seed. */
 	int BOX_SEED_BYTES = 32;
 	/** Length in bytes of a Curve25519 (crypto_box) public key. */
@@ -183,10 +189,11 @@ public interface CryptoProvider {
 	/**
 	 * Derives a sub-key from a master key using libsodium's {@code crypto_kdf} construction.
 	 *
-	 * @param masterKey     the 32-byte master key.
-	 * @param subKeyId      the sub-key identifier.
+	 * @param masterKey     the {@value #KDF_MASTER_KEY_BYTES}-byte master key.
+	 * @param subKeyId      the sub-key identifier; interpreted as an unsigned 64-bit value.
 	 * @param context       the {@value #KDF_CONTEXT_BYTES}-byte context.
-	 * @param subKeyLength  the length of the derived sub-key.
+	 * @param subKeyLength  the length of the derived sub-key; from {@value #KDF_SUBKEY_MIN_BYTES}
+	 *                      to {@value #KDF_SUBKEY_MAX_BYTES} bytes.
 	 * @return the derived sub-key.
 	 */
 	byte[] kdfDeriveFromKey(byte[] masterKey, long subKeyId, byte[] context, int subKeyLength);
@@ -262,6 +269,19 @@ public interface CryptoProvider {
 	 * @return the precomputed crypto box.
 	 */
 	CryptoBox boxBeforeNm(CryptoBox.PublicKey publicKey, CryptoBox.PrivateKey secretKey);
+
+	/**
+	 * Provides the raw bytes of the precomputed shared key held by the given box, as produced by
+	 * libsodium {@code crypto_box_beforenm}.
+	 * <p>
+	 * The returned array is a fresh copy: mutating it does not affect the box. It is raw key
+	 * material, so callers should wipe it once they are done with it.
+	 *
+	 * @param box the precomputed box to read the shared key from.
+	 * @return a copy of the {@value #BOX_SHARED_KEY_BYTES}-byte shared key.
+	 * @throws IllegalStateException if the box has been destroyed.
+	 */
+	byte[] boxKeyBytes(CryptoBox box);
 
 	/**
 	 * Encrypts a message with a precomputed shared key (libsodium {@code crypto_box_easy_afternm}).

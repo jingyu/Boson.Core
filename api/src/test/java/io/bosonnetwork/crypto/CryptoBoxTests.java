@@ -199,6 +199,43 @@ public class CryptoBoxTests {
 	}
 
 	@Test
+	public void checkPrecomputedKeyBytes() throws CryptoException {
+		var alice = CryptoBox.KeyPair.random();
+		var bob = CryptoBox.KeyPair.random();
+
+		byte[] aliceKey;
+		try (CryptoBox precomputed = CryptoBox.fromKeys(bob.publicKey(), alice.privateKey())) {
+			aliceKey = precomputed.keyBytes();
+			assertEquals(CryptoBox.KEY_BYTES, aliceKey.length);
+
+			// The returned array is a copy: mutating it does not affect the box.
+			var tampered = precomputed.keyBytes();
+			tampered[0] ^= 0x01;
+			assertArrayEquals(aliceKey, precomputed.keyBytes());
+
+			// ... and the box still encrypts with the original key.
+			var message = "This is a test message".getBytes();
+			var encrypted = precomputed.encrypt(message, nonce);
+			assertArrayEquals(message, precomputed.decrypt(encrypted, nonce));
+		}
+
+		// Both peers of the pair precompute the same shared key.
+		try (CryptoBox precomputed = CryptoBox.fromKeys(alice.publicKey(), bob.privateKey())) {
+			assertArrayEquals(aliceKey, precomputed.keyBytes());
+		}
+
+		// An unrelated pair does not.
+		var other = CryptoBox.KeyPair.random();
+		try (CryptoBox precomputed = CryptoBox.fromKeys(bob.publicKey(), other.privateKey())) {
+			assertFalse(Arrays.equals(aliceKey, precomputed.keyBytes()));
+		}
+
+		var closed = CryptoBox.fromKeys(bob.publicKey(), alice.privateKey());
+		closed.close();
+		assertThrows(IllegalStateException.class, closed::keyBytes);
+	}
+
+	@Test
 	public void checkBoxKeysFromSignatureKeys() throws CryptoException {
 		var keyPair = Signature.KeyPair.random();
 		var boxPk = CryptoBox.PublicKey.fromSignatureKey(keyPair.publicKey());
