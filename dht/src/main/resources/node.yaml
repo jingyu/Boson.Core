@@ -91,13 +91,13 @@ database:
 # These nodes are contacted during startup to discover other peers.
 # Format: [ NodeID (Base58), IPAddress, Port ] or
 #         [ NodeID (Base58), IPv4Address, Port4, IPv6Address, Port6 ]
-bootstraps:
-  - - 2dLbPsaySh9EGWwpgreYiLEPG3NDhaojj7DBBfSsRr6k
-    - 203.0.113.5
-    - 39001
-  - - 7jFV8w7eivjGEpaDu4V38EZ16CDhn4JutEdtGBWC67rF
-    - 198.51.100.8
-    - 39001
+# bootstraps:
+#   - - 2dLbPsaySh9EGWwpgreYiLEPG3NDhaojj7DBBfSsRr6k
+#     - 203.0.113.5
+#     - 39001
+#   - - 7jFV8w7eivjGEpaDu4V38EZ16CDhn4JutEdtGBWC67rF
+#     - 198.51.100.8
+#     - 39001
 
 # Security: Throttles high-frequency requests from single peers to mitigate DoS.
 # Default: true
