@@ -201,6 +201,38 @@
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <executions>
+                    <!--
+                        copy-dependencies below only adds, it never prunes, and the
+                        bootstrap deb packages are built straight from this directory.
+                        Platform builds share this target directory, so without an
+                        explicit reset bootstrap/lib accumulates the union of every
+                        platform's native dependencies. Reset it so it always holds
+                        exactly the current platform's runtime dependencies.
+                        excludeDefaultDirectories keeps this from wiping the whole
+                        target directory.
+                    -->
+                    <execution>
+                        <id>reset-bootstrap-lib</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <configuration>
+                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                            <filesets>
+                                <fileset>
+                                    <directory>${project.build.directory}/bootstrap/lib</directory>
+                                </fileset>
+                            </filesets>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
