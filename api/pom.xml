@@ -141,6 +141,19 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Backs the shared RateLimiter. Optional on the same terms as vertx-web and caffeine:
+             only the server-side services pull it in, never the Android client path. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-caffeine</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
