@@ -41,6 +41,7 @@ import io.github.bucket4j.caffeine.Bucket4jCaffeine;
 import io.github.bucket4j.caffeine.CaffeineProxyManager;
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
+import io.github.bucket4j.local.LocalBucketBuilder;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
@@ -131,6 +132,8 @@ public class RateLimiter implements AutoCloseable {
 		/**
 		 * Canonical constructor.
 		 *
+		 * @param name     the scope name, used to key bucket state and to label log output
+		 * @param defaults the policy applied to callers whose plan does not override it
 		 * @throws NullPointerException if either argument is null
 		 */
 		public Scope {
@@ -164,7 +167,7 @@ public class RateLimiter implements AutoCloseable {
 		}
 	}
 
-	private final int servicePerSecond;
+	private final RateLimitPolicy serviceRateLimitPolicy;
 	private final int ipv6PrefixBits;
 
 	private final ProxyManager<UserKey> userBuckets;
@@ -182,7 +185,7 @@ public class RateLimiter implements AutoCloseable {
 	}
 
 	private RateLimiter(Builder builder) {
-		this.servicePerSecond = builder.servicePerSecond;
+		this.serviceRateLimitPolicy = builder.serviceRateLimitPolicy;
 		this.ipv6PrefixBits = builder.ipv6PrefixBits;
 
 		this.configCache = new LinkedHashMap<>(16, 0.75f, true) {
@@ -194,13 +197,26 @@ public class RateLimiter implements AutoCloseable {
 
 		this.userBuckets = newProxyManager(builder.maxTrackedClients, builder.clock);
 		this.addressBuckets = newProxyManager(builder.maxTrackedClients, builder.clock);
-		this.serviceBucket = servicePerSecond > 0 ?
-				Bucket.builder()
-						.addLimit(limit -> limit.capacity(servicePerSecond)
-								.refillGreedy(servicePerSecond, Duration.ofSeconds(1)))
-						.withCustomTimePrecision(builder.clock)
-						.build() :
-				null;
+		this.serviceBucket = serviceRateLimitPolicy.isLimited() ? bucketOf(serviceRateLimitPolicy, builder.clock) : null;
+	}
+
+	private Bucket bucketOf(RateLimitPolicy policy, TimeMeter clock) {
+		LocalBucketBuilder lbb = Bucket.builder();
+
+		if (policy.perSecond() > 0)
+			lbb.addLimit(limit -> limit.capacity(policy.perSecond())
+						.refillGreedy(policy.perSecond(), Duration.ofSeconds(1)));
+		if (policy.perMinute() > 0)
+			lbb.addLimit(limit -> limit.capacity(policy.perMinute())
+					.refillGreedy(policy.perMinute(), Duration.ofMinutes(1)));
+		if (policy.perHour() > 0)
+			lbb.addLimit(limit -> limit.capacity(policy.perHour())
+					.refillGreedy(policy.perHour(), Duration.ofHours(1)));
+		if (policy.perDay() > 0)
+			lbb.addLimit(limit -> limit.capacity(policy.perDay())
+					.refillGreedy(policy.perDay(), Duration.ofDays(1)));
+
+		return lbb.withCustomTimePrecision(clock).build();
 	}
 
 	/**
@@ -214,7 +230,7 @@ public class RateLimiter implements AutoCloseable {
 
 	/** Builder for {@link RateLimiter}. */
 	public static class Builder {
-		private int servicePerSecond;
+		private RateLimitPolicy serviceRateLimitPolicy = RateLimitPolicy.UNLIMITED;
 		private int maxTrackedClients = DEFAULT_MAX_TRACKED_CLIENTS;
 		private int ipv6PrefixBits = DEFAULT_IPV6_PREFIX_BITS;
 		private TimeMeter clock = TimeMeter.SYSTEM_MILLISECONDS;
@@ -233,7 +249,21 @@ public class RateLimiter implements AutoCloseable {
 			if (perSecond < 0)
 				throw new IllegalArgumentException("servicePerSecond must be non-negative");
 
-			this.servicePerSecond = perSecond;
+			serviceRateLimitPolicy = RateLimitPolicy.perSecond(perSecond);
+			return this;
+		}
+
+		/**
+		 * Sets the node-wide ceiling across all callers as a whole policy, rather than as a single
+		 * per-second window.
+		 *
+		 * @param serviceRateLimitPolicy the policy; {@link RateLimitPolicy#UNLIMITED} disables the
+		 *                               service-wide ceiling
+		 * @return this builder
+		 * @throws NullPointerException if the policy is null
+		 */
+		public Builder serviceRateLimitPolicy(RateLimitPolicy serviceRateLimitPolicy) {
+			this.serviceRateLimitPolicy = Objects.requireNonNull(serviceRateLimitPolicy, "serviceRateLimitPolicy");
 			return this;
 		}
 
@@ -340,6 +370,9 @@ public class RateLimiter implements AutoCloseable {
 
 	private static BucketConfiguration buildBucketConfiguration(RateLimitPolicy policy) {
 		ConfigurationBuilder builder = BucketConfiguration.builder();
+		if (policy.perSecond() > 0)
+			builder.addLimit(limit -> limit.capacity(policy.perSecond())
+					.refillGreedy(policy.perSecond(), Duration.ofSeconds(1)));
 		if (policy.perMinute() > 0)
 			builder.addLimit(limit -> limit.capacity(policy.perMinute())
 					.refillGreedy(policy.perMinute(), Duration.ofMinutes(1)));
@@ -370,8 +403,8 @@ public class RateLimiter implements AutoCloseable {
 	 *
 	 * @return requests per second, or {@code 0} when disabled
 	 */
-	public int servicePerSecond() {
-		return servicePerSecond;
+	public RateLimitPolicy serviceRateLimitPolicy() {
+		return serviceRateLimitPolicy;
 	}
 
 	/**

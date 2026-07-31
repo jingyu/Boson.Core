@@ -22,7 +22,8 @@
 
 package io.bosonnetwork.web;
 
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
@@ -30,33 +31,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The three rate limit windows a caller is subject to, enforced together.
+ * The four rate limit windows a caller is subject to, enforced together.
  * <p>
- * A window of {@code 0} disables that window; a policy with all three at zero is
+ * A window of {@code 0} disables that window; a policy with all four at zero is
  * {@linkplain #isLimited() unlimited}. The windows are deliberately charged together rather than
  * being alternatives: {@code perDay} sets the sustained rate, {@code perHour} the medium-term rate,
- * and {@code perMinute} is purely a burst allowance, so raising the burst does not increase what a
- * caller may consume over a day.
+ * and {@code perSecond}/{@code perMinute} are burst allowances, so raising a burst does not increase
+ * what a caller may consume over a day.
  *
  * <h2>Where the numbers come from</h2>
- * A policy is read from configuration with {@link #fromConfig}, and may then be overridden per
- * caller by the authorization details their plan grants, with {@link #override}.
+ * This is a plain value type for the {@link RateLimiter} API and knows nothing about configuration
+ * files. Reading a policy out of a configuration document, and writing one back, belong to the
+ * service configuration layer; a configured policy is taken as a whole value rather than assembled
+ * window by window from a file and a set of defaults, so that what an operator writes is exactly
+ * what is enforced.
  * <p>
- * The two sources reject bad input differently, on purpose. A bad value in a configuration file is
- * an operator typo and stops the node from starting, because the operator is present to fix it and
- * silently ignoring it would disable a limit they believe they configured. A bad value in plan data
- * arrives from a database at request time with nobody watching, so it falls back to the configured
- * value and is logged - never read as "unlimited", so that a typo in plan data cannot raise a limit.
+ * {@link #override} is the deliberate exception, and works the other way round: it merges the
+ * {@code rateLimit} block carried in a caller's authorization details into this policy window by
+ * window, leaving windows the plan does not name at their configured value. That asymmetry is
+ * intentional - deployment configuration and per-caller plan data are different sources with
+ * different failure modes. A bad value in a configuration file is an operator typo, and the operator
+ * is present to fix it, so parsing rejects it. Plan data arrives from a database at request time
+ * with nobody watching, so a bad value falls back to the configured window and is logged - never
+ * read as "unlimited", so that a typo in plan data cannot raise a limit.
  *
+ * @param perSecond the per-second window, or {@code 0} to disable it
  * @param perMinute the per-minute window, or {@code 0} to disable it
  * @param perHour   the per-hour window, or {@code 0} to disable it
  * @param perDay    the per-day window, or {@code 0} to disable it
  */
-public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
+public record RateLimitPolicy(int perSecond, int perMinute, int perHour, int perDay) {
 	/** A policy that enforces nothing. */
-	public static final RateLimitPolicy UNLIMITED = new RateLimitPolicy(0, 0, 0);
+	public static final RateLimitPolicy UNLIMITED = new RateLimitPolicy(0, 0, 0, 0);
 
-	/** The configuration key holding a policy, wherever one appears. */
+	/** The key holding a policy, wherever one appears - in configuration or in plan data. */
 	public static final String CONFIG_KEY = "rateLimit";
 
 	private static final Logger log = LoggerFactory.getLogger(RateLimitPolicy.class);
@@ -64,12 +72,42 @@ public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
 	/**
 	 * Canonical constructor.
 	 *
+	 * @param perSecond the per-second window, or {@code 0} to disable it
+	 * @param perMinute the per-minute window, or {@code 0} to disable it
+	 * @param perHour   the per-hour window, or {@code 0} to disable it
+	 * @param perDay    the per-day window, or {@code 0} to disable it
 	 * @throws IllegalArgumentException if any window is negative
 	 */
 	public RateLimitPolicy {
-		if (perMinute < 0 || perHour < 0 || perDay < 0)
+		if (perSecond < 0 || perMinute < 0 || perHour < 0 || perDay < 0)
 			throw new IllegalArgumentException("Rate limit windows must be non-negative: " +
-					perMinute + "/" + perHour + "/" + perDay);
+					perSecond + "/" + perMinute + "/" + perHour + "/" + perDay);
+	}
+
+	/**
+	 * Creates a policy, returning the shared {@link #UNLIMITED} instance when no window is set.
+	 *
+	 * @param perSecond the per-second window, or {@code 0} to disable it
+	 * @param perMinute the per-minute window, or {@code 0} to disable it
+	 * @param perHour   the per-hour window, or {@code 0} to disable it
+	 * @param perDay    the per-day window, or {@code 0} to disable it
+	 * @return the policy
+	 * @throws IllegalArgumentException if any window is negative
+	 */
+	public static RateLimitPolicy of(int perSecond, int perMinute, int perHour, int perDay) {
+		if (perSecond != 0 || perMinute != 0 || perHour != 0 || perDay != 0)
+			return new RateLimitPolicy(perSecond, perMinute, perHour, perDay);
+		else
+			return UNLIMITED;
+	}
+
+	/**
+	 * Creates a policy with only a per-second window, as used by the per-service scope.
+	 * @param perSecond the per-second window, or {@code 0} to disable the limit
+	 * @return the policy
+	 */
+	public static RateLimitPolicy perSecond(int perSecond) {
+		return new RateLimitPolicy(perSecond, 0, 0, 0);
 	}
 
 	/**
@@ -79,7 +117,47 @@ public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
 	 * @return the policy
 	 */
 	public static RateLimitPolicy perMinute(int perMinute) {
-		return new RateLimitPolicy(perMinute, 0, 0);
+		return new RateLimitPolicy(0, perMinute, 0, 0);
+	}
+
+	/**
+	 * Returns a copy of this policy with the per-second window replaced.
+	 *
+	 * @param perSecond the per-second window, or {@code 0} to disable it
+	 * @return the resulting policy
+	 */
+	public RateLimitPolicy withPerSecond(int perSecond) {
+		return RateLimitPolicy.of(perSecond, perMinute, perHour, perDay);
+	}
+
+	/**
+	 * Returns a copy of this policy with the per-minute window replaced.
+	 *
+	 * @param perMinute the per-minute window, or {@code 0} to disable it
+	 * @return the resulting policy
+	 */
+	public RateLimitPolicy withPerMinute(int perMinute) {
+		return RateLimitPolicy.of(perSecond, perMinute, perHour, perDay);
+	}
+
+	/**
+	 * Returns a copy of this policy with the per-hour window replaced.
+	 *
+	 * @param perHour the per-hour window, or {@code 0} to disable it
+	 * @return the resulting policy
+	 */
+	public RateLimitPolicy withPerHour(int perHour) {
+		return RateLimitPolicy.of(perSecond, perMinute, perHour, perDay);
+	}
+
+	/**
+	 * Returns a copy of this policy with the per-day window replaced.
+	 *
+	 * @param perDay the per-day window, or {@code 0} to disable it
+	 * @return the resulting policy
+	 */
+	public RateLimitPolicy withPerDay(int perDay) {
+		return RateLimitPolicy.of(perSecond, perMinute, perHour, perDay);
 	}
 
 	/**
@@ -88,80 +166,18 @@ public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
 	 * @return {@code true} if at least one window is set
 	 */
 	public boolean isLimited() {
-		return perMinute > 0 || perHour > 0 || perDay > 0;
-	}
-
-	/**
-	 * Reads the {@code rateLimit} block nested inside {@code scope}.
-	 * <p>
-	 * An absent or empty block selects {@code defaults} wholesale; a present block overrides only the
-	 * windows it names, so a file may set {@code perMinute} alone without silently disabling the
-	 * other two.
-	 *
-	 * @param scope    the configuration object containing a {@code rateLimit} block, may be {@code null}
-	 * @param defaults the policy to fall back to, window by window
-	 * @return the resulting policy
-	 * @throws IllegalArgumentException if a window is present but not a non-negative number
-	 */
-	public static RateLimitPolicy fromConfig(@Nullable Map<String, Object> scope, RateLimitPolicy defaults) {
-		if (scope == null)
-			return defaults;
-
-		Object value = scope.get(CONFIG_KEY);
-		if (!(value instanceof Map))
-			return defaults;
-
-		@SuppressWarnings("unchecked")
-		Map<String, Object> rateLimit = (Map<String, Object>) value;
-		if (rateLimit.isEmpty())
-			return defaults;
-
-		return new RateLimitPolicy(
-				window(rateLimit, "perMinute", defaults.perMinute()),
-				window(rateLimit, "perHour", defaults.perHour()),
-				window(rateLimit, "perDay", defaults.perDay()));
-	}
-
-	/**
-	 * Reads one window from a configuration file, rejecting anything unusable.
-	 * <p>
-	 * Deliberately stricter than {@link #limit}, which reads the same shape from a caller's plan.
-	 * The two sources fail differently on purpose: a bad window in a configuration file is an
-	 * operator typo, and the operator is present to fix it, so the node refuses to start and says
-	 * which key is wrong. Falling back to the default there would silently disable a limit the
-	 * operator believes they configured. Plan data, by contrast, arrives from a database at request
-	 * time with nobody watching, so a bad value must not take the node down - it falls back and
-	 * logs.
-	 */
-	private static int window(Map<String, Object> rateLimit, String key, int defaultValue) {
-		Object value = rateLimit.get(key);
-		if (value == null)
-			return defaultValue;
-
-		int window;
-		if (value instanceof Number n) {
-			window = n.intValue();
-		} else {
-			try {
-				window = Integer.parseInt(String.valueOf(value).trim());
-			} catch (NumberFormatException e) {
-				throw new IllegalArgumentException("Invalid " + CONFIG_KEY + "." + key + ": not a number: " + value);
-			}
-		}
-
-		if (window < 0)
-			throw new IllegalArgumentException("Invalid " + CONFIG_KEY + "." + key + ": must be non-negative");
-
-		return window;
+		return perSecond > 0 || perMinute > 0 || perHour > 0 || perDay > 0;
 	}
 
 	/**
 	 * Applies the {@code rateLimit} overrides carried in a caller's authorization details.
 	 * <p>
-	 * This is how a subscription plan raises a caller above the service default. Anything unusable -
-	 * a missing block, the wrong type, a negative number, an unparseable string - leaves the
-	 * corresponding window at this policy's value and is logged, because the alternative (treating it
-	 * as absent-means-unlimited) would turn a typo in plan data into an unmetered caller.
+	 * This is how a subscription plan raises a caller above the service default. Unlike a configured
+	 * policy, which is taken as a whole value, plan data is merged window by window: a window the
+	 * plan does not name keeps this policy's value. Anything unusable - a missing block, the wrong
+	 * type, a negative number, an unparseable string - leaves the corresponding window at this
+	 * policy's value and is logged, because the alternative (treating it as absent-means-unlimited)
+	 * would turn a typo in plan data into an unmetered caller.
 	 *
 	 * @param features the authorization details, may be {@code null}
 	 * @return the effective policy; {@code this} when there is nothing to override
@@ -184,6 +200,7 @@ public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
 
 		Map<String, Object> rateLimit = (Map<String, Object>) value;
 		return new RateLimitPolicy(
+				limit(rateLimit, "perSecond", perSecond),
 				limit(rateLimit, "perMinute", perMinute),
 				limit(rateLimit, "perHour", perHour),
 				limit(rateLimit, "perDay", perDay));
@@ -218,30 +235,20 @@ public record RateLimitPolicy(int perMinute, int perHour, int perDay) {
 		return limit;
 	}
 
-	/**
-	 * Serializes this policy as a {@code rateLimit} block, omitting disabled windows.
-	 *
-	 * @return the map representation, empty when nothing is enforced
-	 */
-	public Map<String, Object> toMap() {
-		Map<String, Object> map = new LinkedHashMap<>();
-		if (perMinute > 0)
-			map.put("perMinute", perMinute);
-		if (perHour > 0)
-			map.put("perHour", perHour);
-		if (perDay > 0)
-			map.put("perDay", perDay);
-
-		return map;
-	}
-
 	@Override
 	public String toString() {
 		if (!isLimited())
 			return "unlimited";
 
-		return (perMinute > 0 ? perMinute : "-") + "/min, " +
-				(perHour > 0 ? perHour : "-") + "/hour, " +
-				(perDay > 0 ? perDay : "-") + "/day";
+		List<String> limits = new ArrayList<>();
+		if (perSecond > 0)
+			limits.add(perSecond + "/sec");
+		if (perMinute > 0)
+			limits.add(perMinute + "/min");
+		if (perHour > 0)
+			limits.add(perHour + "/hour");
+		if (perDay > 0)
+			limits.add(perDay + "/day");
+		return String.join(", ", limits);
 	}
 }

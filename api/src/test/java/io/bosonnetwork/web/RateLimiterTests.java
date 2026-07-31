@@ -70,7 +70,7 @@ class RateLimiterTests {
 	}
 
 	private static RateLimiter.Scope scope(int perMinute, int perHour, int perDay) {
-		return new RateLimiter.Scope("user", new RateLimitPolicy(perMinute, perHour, perDay));
+		return new RateLimiter.Scope("user", new RateLimitPolicy(0, perMinute, perHour, perDay));
 	}
 
 	private static RateLimiter.Scope addressScope(int perMinute) {
@@ -585,6 +585,6 @@ class RateLimiterTests {
 		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
 				() -> RateLimiter.builder().ipv6PrefixBits(129));
 		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-				() -> new RateLimitPolicy(-1, 0, 0));
+				() -> new RateLimitPolicy(-1,0, 0, 0));
 	}
 }
