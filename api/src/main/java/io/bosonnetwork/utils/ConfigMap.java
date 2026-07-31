@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,7 +48,8 @@ import io.bosonnetwork.Id;
  * </p>
  */
 public class ConfigMap implements Map<String, Object> {
-	private final Map<String, Object> map;
+	/** The wrapped map, which every operation delegates to. */
+	protected final Map<String, Object> map;
 
 	/**
 	 * Constructs a new ConfigMap wrapping the provided map.
@@ -58,6 +60,14 @@ public class ConfigMap implements Map<String, Object> {
 	public ConfigMap(Map<String, Object> map) {
 		Objects.requireNonNull(map);
 		this.map = map;
+	}
+
+	/**
+	 * Constructs an empty ConfigMap, for building a configuration document up entry by entry.
+	 * Insertion order is preserved, so a serialized document comes out in the order it was written.
+	 */
+	public ConfigMap() {
+		this.map = new LinkedHashMap<>();
 	}
 
 	/**
@@ -192,6 +202,40 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
+	 * Retrieves a non-negative int value for the specified key.
+	 *
+	 * @param key the configuration key, must not be null
+	 * @return the value associated with the key
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the key is missing, the value is not an integer, or it is
+	 *                                  negative
+	 */
+	public int getNonNegativeInteger(String key) {
+		int value = getInteger(key);
+		if (value < 0)
+			throw new IllegalArgumentException("Invalid " + key + ": must be non-negative");
+
+		return value;
+	}
+
+	/**
+	 * Retrieves a non-negative int value for the specified key, with a default.
+	 *
+	 * @param key the configuration key, must not be null
+	 * @param def the value to return if the key is absent; must itself be non-negative
+	 * @return the value associated with the key, or {@code def} if the key is absent
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the value or {@code def} is negative, or the value is not
+	 *                                  an integer
+	 */
+	public int getNonNegativeInteger(String key, int def) {
+		Objects.requireNonNull(key);
+		if (def < 0)
+			throw new IllegalArgumentException("Default value must be non-negative");
+		return map.containsKey(key) ? getNonNegativeInteger(key) : def;
+	}
+
+	/**
 	 * Retrieves a long value for the specified key.
 	 * <p>
 	 * Supports conversion from Number (using longValue()), Boolean (true=1L, false=0L), and String (parsed as Long).
@@ -235,6 +279,41 @@ public class ConfigMap implements Map<String, Object> {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getLong(key) : def;
 	}
+
+	/**
+	 * Retrieves a non-negative long value for the specified key.
+	 *
+	 * @param key the configuration key, must not be null
+	 * @return the value associated with the key
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the key is missing, the value is not a long, or it is
+	 *                                  negative
+	 */
+	public long getNonNegativeLong(String key) {
+		long value = getLong(key);
+		if (value < 0)
+			throw new IllegalArgumentException("Invalid " + key + ": must be non-negative");
+
+		return value;
+	}
+
+	/**
+	 * Retrieves a non-negative long value for the specified key, with a default.
+	 *
+	 * @param key the configuration key, must not be null
+	 * @param def the value to return if the key is absent; must itself be non-negative
+	 * @return the value associated with the key, or {@code def} if the key is absent
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the value or {@code def} is negative, or the value is not
+	 *                                  a long
+	 */
+	public long getNonNegativeLong(String key, long def) {
+		Objects.requireNonNull(key);
+		if (def < 0)
+			throw new IllegalArgumentException("Default value must be non-negative");
+		return map.containsKey(key) ? getNonNegativeLong(key) : def;
+	}
+
 
 	/**
 	 * Retrieves a boolean value for the specified key.
@@ -421,7 +500,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * @param key the configuration key, key must not be null
 	 * @return the parsed {@code Duration} object
 	 * @throws NullPointerException if the key is null
-	 * @throws IllegalArgumentException if the key is missing or the value cannot be parsed as a duration
+	 * @throws IllegalArgumentException if the key is missing or the value cannot be parsed as a duration or is negative
 	 */
 	public Duration getDuration(String key) {
 		Objects.requireNonNull(key);
@@ -429,8 +508,12 @@ public class ConfigMap implements Map<String, Object> {
 		if (val == null) {
 			throw new IllegalArgumentException("Missing value - " + key);
 		} else if (val instanceof Integer i) {
+			if (i < 0)
+				throw new IllegalArgumentException("Invalid duration value - " + key + ": " + i + " (negative)");
 			return Duration.ofMillis(i);
 		} else if (val instanceof Long l) {
+			if (l < 0)
+				throw new IllegalArgumentException("Invalid duration value - " + key + ": " + l + " (negative)");
 			return Duration.ofMillis(l);
 		} else if (val instanceof String s) {
 			int idx = s.length() - 1;
@@ -449,6 +532,9 @@ public class ConfigMap implements Map<String, Object> {
 
 			try {
 				long number = Long.parseLong(s, 0, idx, 10);
+				if (number < 0)
+					throw new IllegalArgumentException("Invalid duration value - " + key + ": " + s + " (negative)");
+
 				long unitMillis = unit.getDuration().toMillis();
 				try {
 					return Duration.ofMillis(Math.multiplyExact(number, unitMillis));
@@ -475,6 +561,22 @@ public class ConfigMap implements Map<String, Object> {
 	public @Nullable Duration getDuration(String key, @Nullable Duration def) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getDuration(key) : def;
+	}
+
+	/**
+	 * Retrieves a {@code Duration} for the specified key, with a default expressed as an amount and
+	 * a unit rather than as a {@code Duration}.
+	 *
+	 * @param key     the configuration key, must not be null
+	 * @param def     the amount to fall back to if the key is absent
+	 * @param defUnit the unit {@code def} is expressed in
+	 * @return the parsed duration, or {@code def} in {@code defUnit} if the key is absent
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the value cannot be parsed as a duration or is negative
+	 */
+	public Duration getDuration(String key, int def, TemporalUnit defUnit) {
+		Objects.requireNonNull(key);
+		return map.containsKey(key) ? getDuration(key) : Duration.of(def, defUnit);
 	}
 
 	/**
@@ -674,10 +776,26 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * {@inheritDoc}
+	 * Associates a value with the specified key, or removes the key when the value is {@code null}.
+	 * <p>
+	 * <strong>Note:</strong> this deliberately departs from {@link Map#put(Object, Object)}, which
+	 * would store the null. A configuration document has no meaningful "present but null" state -
+	 * an empty YAML entry parses to null and means the setting was not given - so a null value is
+	 * treated as the absence of the setting rather than as a value in its own right. The return
+	 * value still follows the {@code Map} contract: the previous value, or {@code null} if there
+	 * was none.
+	 *
+	 * @param key   the configuration key, must not be null
+	 * @param value the value to associate, or {@code null} to remove the key
+	 * @return the previous value associated with the key, or {@code null} if there was none
+	 * @throws NullPointerException if the key is null
 	 */
 	@Override
-	public @Nullable Object put(String key, Object value) {
+	public @Nullable Object put(String key, @Nullable Object value) {
+		Objects.requireNonNull(key);
+		if (value == null)
+			return map.remove(key);
+
 		return map.put(key, value);
 	}
 
@@ -690,11 +808,19 @@ public class ConfigMap implements Map<String, Object> {
 	}
 
 	/**
-	 * {@inheritDoc}
+	 * Copies all entries from the given map.
+	 * <p>
+	 * Each entry is routed through {@link #put(String, Object)} rather than copied straight into the
+	 * backing map, so that subclasses which give particular value types a richer meaning - see
+	 * {@code ServiceConfigMap} - apply it here too, and so that null values are removed rather than
+	 * stored.
+	 *
+	 * @param m the entries to copy
 	 */
 	@Override
 	public void putAll(Map<? extends String, ?> m) {
-		map.putAll(m);
+		for (Map.Entry<? extends String, ?> entry : m.entrySet())
+			put(entry.getKey(), entry.getValue());
 	}
 
 	/**
@@ -727,5 +853,40 @@ public class ConfigMap implements Map<String, Object> {
 	@Override
 	public Set<Entry<String, Object>> entrySet() {
 		return map.entrySet();
+	}
+
+	/**
+	 * Compares this map with another map for equality, as defined by {@link Map#equals(Object)}.
+	 * <p>
+	 * Implemented so that equality with a plain {@code Map} is symmetric. Without it a
+	 * {@code ConfigMap} would inherit identity equality, and {@code someMap.equals(configMap)} would
+	 * answer {@code true} while {@code configMap.equals(someMap)} answered {@code false} - which
+	 * bites hardest in round-trip assertions over a serialized configuration.
+	 *
+	 * @param o the object to compare with
+	 * @return {@code true} if the given object is a map with the same entries
+	 */
+	@Override
+	public boolean equals(@Nullable Object o) {
+		if (this == o)
+			return true;
+
+		return o instanceof Map<?, ?> other && map.equals(other);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public int hashCode() {
+		return map.hashCode();
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public String toString() {
+		return map.toString();
 	}
 }
