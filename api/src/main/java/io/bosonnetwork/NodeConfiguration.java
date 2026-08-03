@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,7 @@ import io.bosonnetwork.database.SqlSafety;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.Base58;
 import io.bosonnetwork.utils.ConfigMap;
+import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.utils.Hex;
 
 /**
@@ -60,7 +62,9 @@ import io.bosonnetwork.utils.Hex;
  * configuration values affect the lifecycle and runtime behavior of the DHT node.
  * </p>
  */
-public class NodeConfiguration {
+public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature.KeyPair keyPair,
+								Path dataDir, NodeDatabaseOptions database,
+								KademliaOptions kademlia, Set<NodeInfo> bootstraps, SecurityOptions security) {
 	/**
 	 * The default port for the DHT node, chosen from the IANA unassigned range (38866-39062).
 	 * See: <a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml">
@@ -69,127 +73,253 @@ public class NodeConfiguration {
 	 */
 	public static final int DEFAULT_DHT_PORT = 39001;
 
-	/**
-	 * Vert.x instance used for the node's asynchronous operations.
-	 */
-	private final Vertx vertx;
+	public static final int DEFAULT_ALPHA = 3;
+	public static final int DEFAULT_K = 16;
+	public static final int DEFAULT_REPLACEMENTS = 8;
+	public static final int DEFAULT_CONCURRENT_QUERIES = 32;
+
+	public static final boolean DEFAULT_SPAM_THROTTLING = true;
+	public static final boolean DEFAULT_SUSPICIOUS_NODE_DETECTOR = true;
+	public static final boolean DEFAULT_DEVELOPER_MODE = false;
+
+	private static final String DEFAULT_DATABASE_URI = "jdbc:sqlite:node.db";
 
 	/**
-	 * The IPv4 address for the DHT node.
-	 * DHT support for IPv4 is disabled if both {@code host4} and
-	 * {@code networkInterface4} are null or empty.
+	 * The endpoints the DHT node binds to.
+	 * <p>
+	 * A node speaks UDP on both address families at once, so unlike a service's listener - see
+	 * {@code io.bosonnetwork.service.config.ListenOptions}, a different type despite the similar
+	 * name - this carries an IPv4 and an IPv6 endpoint and has no TLS setting. Within each family
+	 * the host and the network interface are alternatives: naming both is an error, because the
+	 * node cannot tell which one the operator meant.
+	 * <p>
+	 * These settings sit at the top level of the configuration document rather than in a named
+	 * block, and the document is read into a builder that also carries command line arguments, so
+	 * the reading half lives in {@link Builder#fromMap(Map)} rather than here.
+	 *
+	 * @param host4             the IPv4 host to bind to, or {@code null} to disable IPv4
+	 * @param networkInterface4 the interface whose IPv4 address to bind to, or {@code null}
+	 * @param host6             the IPv6 host to bind to, or {@code null} to disable IPv6
+	 * @param networkInterface6 the interface whose IPv6 address to bind to, or {@code null}
+	 * @param port              the UDP port to listen on, in the range {@code [1, 65535]}; both
+	 *                          families use the same port
 	 */
-	private final @Nullable String host4;
+	public record NodeListenOptions(@Nullable String host4, @Nullable String networkInterface4,
+									@Nullable String host6, @Nullable String networkInterface6,
+									int port) {
+		/**
+		 * Canonical constructor, and the only place these settings are validated.
+		 *
+		 * @param host4             the IPv4 host, or {@code null}
+		 * @param networkInterface4 the IPv4 interface, or {@code null}
+		 * @param host6             the IPv6 host, or {@code null}
+		 * @param networkInterface6 the IPv6 interface, or {@code null}
+		 * @param port              the UDP port, in the range {@code [1, 65535]}
+		 * @throws IllegalArgumentException if both a host and an interface are named for the same
+		 *                                  address family, if neither family is configured, or if
+		 *                                  the port is out of range
+		 */
+		public NodeListenOptions {
+			// An absent setting reaches this constructor as null from a programmatic caller and as
+			// an empty string from a document that names the key without a value. Normalize here so
+			// that the two spellings are one value from this point on: consumers test for null, and
+			// an empty string reaching a bind call would silently mean the wildcard address.
+			host4 = emptyToNull(host4);
+			networkInterface4 = emptyToNull(networkInterface4);
+			host6 = emptyToNull(host6);
+			networkInterface6 = emptyToNull(networkInterface6);
+
+			if (host4 != null && networkInterface4 != null)
+				throw new IllegalArgumentException("Both IPv4 host and network interface are specified for the node; only one is allowed");
+			if (host6 != null && networkInterface6 != null)
+				throw new IllegalArgumentException("Both IPv6 host and network interface are specified for the node; only one is allowed");
+
+			if (host4 == null && networkInterface4 == null && host6 == null && networkInterface6 == null)
+				throw new IllegalArgumentException("either IPv4 or IPv6 host or network interface must be provided");
+
+			if (port < 1 || port > 65535)
+				throw new IllegalArgumentException("Invalid port: " + port);
+		}
+
+		Map<String, Object> toMap() {
+			Map<String, Object> map = new LinkedHashMap<>();
+			if (host4 != null)
+				map.put("host4", host4);
+			if (networkInterface4 != null)
+				map.put("interface4", networkInterface4);
+			if (host6 != null)
+				map.put("host6", host6);
+			if (networkInterface6 != null)
+				map.put("interface6", networkInterface6);
+			map.put("port", port);
+			return map;
+		}
+	}
 
 	/**
-	 * The network interface used by the DHT node for IPv4 communications.
-	 * DHT support for IPv4 is disabled if both {@code host4} and
-	 * {@code networkInterface4} are null or empty.
+	 * How the DHT node reaches its persistence database.
+	 * <p>
+	 * This mirrors {@code io.bosonnetwork.service.config.DatabaseOptions} - same keys, same
+	 * meanings - but is a separate type so that {@code io.bosonnetwork} does not depend on the
+	 * service configuration package. The two are expected to stay in step: a change to the schema
+	 * rules or the pool size semantics of one belongs in the other as well.
+	 *
+	 * @param uri      the connection URI
+	 * @param poolSize the connection pool size, or {@code 0} to use the driver default
+	 * @param schema   the schema name, or {@code null} for the default schema; ignored by drivers that
+	 *                 have no notion of a schema
 	 */
-	private final @Nullable String networkInterface4;
+	public record NodeDatabaseOptions(String uri, int poolSize, @Nullable String schema) {
+		/**
+		 * Canonical constructor.
+		 *
+		 * @param uri      the connection URI
+		 * @param poolSize the connection pool size, or {@code 0} for the driver default
+		 * @param schema   the schema name, or {@code null} for the default schema
+		 * @throws NullPointerException     if {@code uri} is null
+		 * @throws IllegalArgumentException if {@code uri} is empty or unsupported, if {@code poolSize}
+		 *                                  is negative, or if {@code schema} is not a safe identifier
+		 */
+		public NodeDatabaseOptions {
+			Objects.requireNonNull(uri, "uri");
+			if (uri.isEmpty())
+				throw new IllegalArgumentException("uri is empty");
+			// Checked here rather than only on the reading path, so that a programmatic caller
+			// cannot build a configuration whose driver the node does not actually have.
+			checkDatabaseUri(uri);
+			if (poolSize < 0)
+				throw new IllegalArgumentException("Invalid poolSize: " + poolSize);
+			schema = SqlSafety.validateSchema(schema);
+		}
+
+		static NodeDatabaseOptions fromMap(@Nullable ConfigMap cm) {
+			if (cm == null || cm.isEmpty())
+				return new NodeDatabaseOptions(DEFAULT_DATABASE_URI, 0, null);
+
+			return new NodeDatabaseOptions(
+					Objects.requireNonNullElse(cm.getString("uri", DEFAULT_DATABASE_URI), DEFAULT_DATABASE_URI),
+					cm.getNonNegativeInteger("poolSize", 0),
+					cm.getString("schema", null));
+		}
+
+		Map<String, Object> toMap() {
+			Map<String, Object> map = new LinkedHashMap<>();
+			map.put("uri", uri);
+			if (poolSize != 0)
+				map.put("poolSize", poolSize);
+			if (schema != null)
+				map.put("schema", schema);
+			return map;
+		}
+	}
 
 	/**
-	 * The IPv6 address for the DHT node.
-	 * DHT support for IPv6 is disabled if both {@code host6} and
-	 * {@code networkInterface6} are null or empty.
+	 * The Kademlia routing and lookup parameters.
+	 *
+	 * @param alpha             the Kademlia concurrency parameter: how many nodes a lookup queries in parallel
+	 * @param k                 the Kademlia bucket size
+	 * @param replacements      how many replacement entries each bucket keeps
+	 * @param concurrentQueries the ceiling on DHT queries in flight; requests beyond it are queued
 	 */
-	private final @Nullable String host6;
+	public record KademliaOptions(int alpha, int k, int replacements, int concurrentQueries) {
+		/**
+		 * Canonical constructor, and the only place these parameters are validated.
+		 *
+		 * @param alpha             the concurrency parameter, at least 1
+		 * @param k                 the bucket size, at least 1
+		 * @param replacements      the replacement count, at least 1
+		 * @param concurrentQueries the in-flight query ceiling, at least 1
+		 * @throws IllegalArgumentException if any parameter is less than 1
+		 */
+		public KademliaOptions {
+			if (alpha < 1)
+				throw new IllegalArgumentException("Invalid alpha: " + alpha);
+			if (k < 1)
+				throw new IllegalArgumentException("Invalid k: " + k);
+			if (replacements < 1)
+				throw new IllegalArgumentException("Invalid replacements: " + replacements);
+			if (concurrentQueries < 1)
+				throw new IllegalArgumentException("Invalid concurrentQueries: " + concurrentQueries);
+		}
+
+		static KademliaOptions fromMap(@Nullable ConfigMap cm) {
+			if (cm == null || cm.isEmpty())
+				return new KademliaOptions(DEFAULT_ALPHA, DEFAULT_K, DEFAULT_REPLACEMENTS, DEFAULT_CONCURRENT_QUERIES);
+
+			// Read straight through to the canonical constructor: a value the operator wrote down is
+			// reported as an error rather than quietly replaced by the default, which would leave a
+			// node running parameters nobody asked for.
+			return new KademliaOptions(cm.getInteger("alpha", DEFAULT_ALPHA),
+					cm.getInteger("k", DEFAULT_K),
+					cm.getInteger("replacements", DEFAULT_REPLACEMENTS),
+					cm.getInteger("concurrentQueries", DEFAULT_CONCURRENT_QUERIES));
+		}
+
+		Map<String, Object> toMap() {
+			Map<String, Object> map = new LinkedHashMap<>();
+			map.put("alpha", alpha);
+			map.put("k", k);
+			map.put("replacements", replacements);
+			map.put("concurrentQueries", concurrentQueries);
+			return map;
+		}
+	}
 
 	/**
-	 * The network interface used by the DHT node for IPv6 communications.
-	 * DHT support for IPv6 is disabled if both {@code host6} and
-	 * {@code networkInterface6} are null or empty.
+	 * The node's protective behaviors.
+	 *
+	 * @param spamThrottling         whether high-frequency requests from a single peer are throttled
+	 * @param suspiciousNodeDetector whether peers behaving abnormally are identified and isolated
+	 * @param developerMode          whether the node may participate over local/private addresses
 	 */
-	private final @Nullable String networkInterface6;
+	public record SecurityOptions(boolean spamThrottling, boolean suspiciousNodeDetector, boolean developerMode) {
+		static SecurityOptions fromMap(@Nullable ConfigMap cm) {
+			if (cm == null || cm.isEmpty())
+				return new SecurityOptions(DEFAULT_SPAM_THROTTLING, DEFAULT_SUSPICIOUS_NODE_DETECTOR, DEFAULT_DEVELOPER_MODE);
+
+			return new SecurityOptions(
+					cm.getBoolean("spamThrottling", DEFAULT_SPAM_THROTTLING),
+					cm.getBoolean("suspiciousNodeDetector", DEFAULT_SUSPICIOUS_NODE_DETECTOR),
+					cm.getBoolean("developerMode", DEFAULT_DEVELOPER_MODE)
+			);
+		}
+
+		Map<String, Object> toMap() {
+			Map<String, Object> map = new LinkedHashMap<>();
+			map.put("spamThrottling", spamThrottling);
+			map.put("suspiciousNodeDetector", suspiciousNodeDetector);
+			map.put("developerMode", developerMode);
+			return map;
+		}
+	}
 
 	/**
-	 * The port number for the DHT node.
+	 * Canonical constructor.
+	 *
+	 * @param vertx      the Vert.x instance the node runs on
+	 * @param listen     the endpoints to bind to
+	 * @param keyPair    the node's identity key pair
+	 * @param dataDir    the directory for persistent data
+	 * @param database   how to reach the persistence database
+	 * @param kademlia   the Kademlia routing and lookup parameters
+	 * @param bootstraps the entry points into the DHT network
+	 * @param security   the node's protective behaviors
+	 * @throws NullPointerException if any argument is null
 	 */
-	private final int port;
+	public NodeConfiguration {
+		Objects.requireNonNull(vertx, "vertx");
+		Objects.requireNonNull(listen, "listen");
+		Objects.requireNonNull(keyPair, "keyPair");
+		Objects.requireNonNull(dataDir, "dataDir");
+		Objects.requireNonNull(database, "database");
+		Objects.requireNonNull(kademlia, "kademlia");
+		Objects.requireNonNull(bootstraps, "bootstraps");
+		Objects.requireNonNull(security, "security");
+		bootstraps = Set.copyOf(bootstraps);
+	}
 
-	/**
-	 * The node's private key, encoded in Base58.
-	 */
-	private final Signature.PrivateKey privateKey;
-
-	/**
-	 * Path to the directory for persistent DHT data storage. disables persistence if null.
-	 */
-	private final @Nullable Path dataDir;
-
-	/**
-	 * Database storage URI for the node.
-	 */
-	private final String databaseUri;
-
-	/**
-	 * Database connection pool size.
-	 */
-	private final int databasePoolSize;
-
-	/**
-	 * Database schema name. Available for PostgreSQL only
-	 */
-	private final @Nullable String databaseSchemaName;
-
-	/**
-	 * Set of bootstrap nodes for joining the DHT network.
-	 */
-	private final Set<NodeInfo> bootstraps;
-
-	/**
-	 * Whether spam throttling is enabled for this node.
-	 */
-	private final boolean enableSpamThrottling;
-
-	/**
-	 * Whether suspicious node detection is enabled for this node.
-	 */
-	private final boolean enableSuspiciousNodeDetector;
-
-	/**
-	 * Whether developer mode is enabled for this node.
-	 */
-	private final boolean enableDeveloperMode;
-
-	/**
-	 * Whether metrics is enabled for this node.
-	 */
-	private final boolean enableMetrics;
-
-	private NodeConfiguration(Builder builder) {
-		Objects.requireNonNull(builder.vertx, "Vert.x instance must be provided");
-
-		if (builder.host4 != null && !builder.host4.isEmpty() && builder.networkInterface4 != null && !builder.networkInterface4.isEmpty())
-			throw new IllegalArgumentException("Both IPv4 host and network interface are specified for the node; only one is allowed");
-		if (builder.host6 != null && !builder.host6.isEmpty() && builder.networkInterface6 != null && !builder.networkInterface6.isEmpty())
-			throw new IllegalArgumentException("Both IPv6 host and network interface are specified for the node; only one is allowed");
-
-		if ((builder.host4 == null || builder.host4.isEmpty()) &&
-				(builder.networkInterface4 == null || builder.networkInterface4.isEmpty()) &&
-				(builder.host6 == null || builder.host6.isEmpty()) &&
-				(builder.networkInterface6 == null || builder.networkInterface6.isEmpty()))
-			throw new IllegalArgumentException("No network configuration found; either IPv4 or IPv6 host or network interface must be provided");
-
-		Objects.requireNonNull(builder.privateKey, "The node's private key must be provided");
-		Objects.requireNonNull(builder.databaseUri, "The database URI must be provided");
-
-		this.vertx = builder.vertx;
-		this.host4 = builder.host4;
-		this.networkInterface4 = builder.networkInterface4;
-		this.host6 = builder.host6;
-		this.networkInterface6 = builder.networkInterface6;
-		this.port = builder.port;
-		this.privateKey = builder.privateKey;
-		this.dataDir = builder.dataDir;
-		this.databaseUri = builder.databaseUri;
-		this.databasePoolSize = builder.databasePoolSize;
-		this.databaseSchemaName = builder.databaseSchemaName;
-		this.bootstraps = Set.copyOf(builder.bootstraps);
-		enableSpamThrottling = builder.enableSpamThrottling;
-		enableSuspiciousNodeDetector = builder.enableSuspiciousNodeDetector;
-		enableDeveloperMode = builder.enableDeveloperMode;
-		enableMetrics = builder.enableMetrics;
+	private static @Nullable String emptyToNull(@Nullable String s) {
+		return s == null || s.isEmpty() ? null : s;
 	}
 
 	/**
@@ -204,11 +334,18 @@ public class NodeConfiguration {
 	/**
 	 * Creates a NodeConfiguration from a Map representation.
 	 * This static factory method deserializes a configuration from a Map structure.
+	 * <p>
+	 * The map must be a complete configuration, since there is no builder to carry anything it
+	 * leaves out; in particular it must name a {@code privateKey} and at least one address family.
+	 * A Vert.x instance is taken from the calling context - use {@link #builder()} with
+	 * {@link Builder#vertx(Vertx)} when there is none.
 	 *
 	 * @param map the map containing configuration data, the map must not be null or empty
 	 * @return a new {@link NodeConfiguration} instance
 	 * @throws NullPointerException     if the map is null
 	 * @throws IllegalArgumentException if the map is empty, required fields are missing, or values are invalid
+	 * @throws IllegalStateException    if the map does not form a valid configuration, or if there is
+	 *                                  no Vert.x instance in the calling context
 	 */
 	public static NodeConfiguration fromMap(Map<String, Object> map) {
 		Objects.requireNonNull(map, "Configuration map must not be null");
@@ -216,185 +353,6 @@ public class NodeConfiguration {
 			throw new IllegalArgumentException("Configuration map is empty");
 
 		return builder().fromMap(map).build();
-	}
-
-	/**
-	 * Provides the Vert.x instance to be used by the DHT node.
-	 *
-	 * @return the {@link Vertx} instance to use.
-	 */
-	public Vertx vertx() {
-		return vertx;
-	}
-
-	/**
-	 * Specifies the IPv4 address to which the DHT node should bind.
-	 * <p>
-	 * Returning {@code null} disables IPv4 binding.
-	 * </p>
-	 *
-	 * @return the IPv4 address as a string, or {@code null} if IPv4 is disabled.
-	 */
-	public @Nullable String host4() {
-		return host4;
-	}
-
-	/**
-	 * Retrieves the IPv4 network interface to which the DHT node should bind.
-	 *
-	 * @return the name of the IPv4 network interface as a string, or {@code null} if no specific interface is configured.
-	 */
-	public @Nullable String networkInterface4() {
-		return networkInterface4;
-	}
-
-	/**
-	 * Specifies the IPv6 address to which the DHT node should bind.
-	 * <p>
-	 * Returning {@code null} disables IPv6 binding.
-	 * </p>
-	 *
-	 * @return the IPv6 address as a string, or {@code null} if IPv6 is disabled.
-	 */
-	public @Nullable String host6() {
-		return host6;
-	}
-
-	/**
-	 * Retrieves the IPv6 network interface to which the DHT node should bind.
-	 *
-	 * @return the name of the IPv6 network interface as a string, or {@code null} if no specific interface is configured.
-	 */
-	public @Nullable String networkInterface6() {
-		return networkInterface6;
-	}
-
-	/**
-	 * Returns the port number on which the DHT node will listen.
-	 * <p>
-	 * The default port is {@code 39001}. Valid port numbers should be within the unassigned range
-	 * as per <a href="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml">IANA</a>
-	 * (38866-39062, unassigned).
-	 * </p>
-	 *
-	 * @return the port number for the DHT node.
-	 */
-	public int port() {
-		return port;
-	}
-
-	/**
-	 * Provides the private key used by the DHT node for cryptographic operations.
-	 *
-	 * @return the private key
-	 */
-	public Signature.PrivateKey privateKey() {
-		return privateKey;
-	}
-
-	/**
-	 * Returns a {@link Path} to a writable directory for persisting node information and routing tables.
-	 * <p>
-	 * When specified, the node will periodically save its state and persist data during shutdown.
-	 * Returning {@code null} disables data persistence.
-	 * </p>
-	 *
-	 * @return the storage directory path, or {@code null} to disable persistence.
-	 */
-	public @Nullable Path dataDir() {
-		return dataDir;
-	}
-
-	/**
-	 * Provides the URL for database storage used by the DHT node.
-	 *
-	 * @return the database URL as a string; defaults to {@code "jdbc:sqlite:node.db"}.
-	 */
-	public String databaseUri() {
-		return databaseUri;
-	}
-
-	/**
-	 * Provides the configured size of the database connection pool.
-	 * <p>
-	 * This value determines the maximum number of database connections that can be
-	 * simultaneously maintained by the application for performing database operations.
-	 *
-	 * @return the size of the database connection pool, or {@code 0} if no specific pool size is defined.
-	 */
-	public int databasePoolSize() {
-		return databasePoolSize;
-	}
-
-	/**
-	 * Returns the database schema name.
-	 * This typically corresponds to a namespace, such as the PostgreSQL search path.
-	 *
-	 * @return the name of the database schema as a string, or {@code null} if no schema is specified.
-	 */
-	public @Nullable String databaseSchemaName() {
-		return databaseSchemaName;
-	}
-
-	/**
-	 * Returns a collection of bootstrap nodes that the DHT node will use to join the network.
-	 * <p>
-	 * These nodes are contacted during startup to discover other peers in the DHT.
-	 * </p>
-	 *
-	 * @return a collection of {@link NodeInfo} instances representing bootstrap nodes,
-	 * or an empty collection if none are specified.
-	 */
-	public Set<NodeInfo> bootstrapNodes() {
-		return bootstraps;
-	}
-
-	/**
-	 * Indicates whether metrics collection is enabled for the DHT node.
-	 * <p>
-	 * Enabling metrics allows the node to gather and expose operational statistics such as
-	 * request rates, error counts, latency, and resource usage, which can aid in monitoring
-	 * and debugging.
-	 * </p>
-	 *
-	 * @return {@code true} if metrics collection is enabled; {@code false} otherwise.
-	 */
-	public boolean enableMetrics() {
-		return enableMetrics;
-	}
-
-	/**
-	 * Indicates whether spam throttling is enabled to mitigate excessive or malicious traffic.
-	 *
-	 * @return {@code true} if spam throttling is enabled; {@code false} otherwise.
-	 */
-	public boolean enableSpamThrottling() {
-		return enableSpamThrottling;
-	}
-
-	/**
-	 * Indicates whether suspicious node detection is enabled.
-	 * <p>
-	 * This feature helps identify and potentially isolate nodes exhibiting abnormal or malicious behavior.
-	 * </p>
-	 *
-	 * @return {@code true} if suspicious node detection is enabled; {@code false} otherwise.
-	 */
-	public boolean enableSuspiciousNodeDetector() {
-		return enableSuspiciousNodeDetector;
-	}
-
-	/**
-	 * Indicates whether developer mode is enabled.
-	 * <p>
-	 * Developer mode may enable additional logging, debugging features, or relaxed constraints
-	 * useful during development and testing.
-	 * </p>
-	 *
-	 * @return {@code true} if developer mode is enabled; {@code false} otherwise.
-	 */
-	public boolean enableDeveloperMode() {
-		return enableDeveloperMode;
 	}
 
 	/**
@@ -408,56 +366,92 @@ public class NodeConfiguration {
 	 * @return a Map containing the configuration data
 	 */
 	public Map<String, Object> toMap() {
-		Map<String, Object> map = new LinkedHashMap<>();
+		// A ConfigMap rather than a plain map, because its put() drops null values instead of
+		// storing them: the optional settings below are simply absent when unset, which is what a
+		// reader - and a YAML document - expects.
+		ConfigMap map = new ConfigMap();
+		map.putAll(listen.toMap());
+		map.put("privateKey", Base58.encode(keyPair.privateKey().bytes()));
+		// Written as a string, not as a Path. The map is meant to survive a round trip through YAML,
+		// and a serializer given a Path writes it as a file: URI which reads back as a relative
+		// directory literally named "file:".
+		map.put("dataDir", dataDir.toString());
+		map.put("database", database.toMap());
+		map.put("kademlia", kademlia.toMap());
+		map.put("bootstraps", bootstrapsToList(bootstraps));
+		map.put("security", security.toMap());
+		return map;
+	}
 
-		if (host4 != null)
-			map.put("host4", host4);
-		if (networkInterface4 != null)
-			map.put("interface4", networkInterface4);
-
-		if (host6 != null)
-			map.put("host6", host6);
-		if (networkInterface6 != null)
-			map.put("interface6", networkInterface6);
-
-		map.put("port", port);
-		map.put("privateKey", Base58.encode(privateKey.bytes()));
-
-		if (dataDir != null)
-			map.put("dataDir", dataDir);
-
-		Map<String, Object> db = new LinkedHashMap<>();
-		db.put("uri", databaseUri);
-		if (databasePoolSize > 0)
-			db.put("poolSize", databasePoolSize);
-		if (databaseSchemaName != null)
-			db.put("schema", databaseSchemaName);
-		map.put("database", db);
-
+	private static @Nullable List<List<Object>> bootstrapsToList(Collection<NodeInfo> bootstraps) {
 		if (!bootstraps.isEmpty()) {
 			List<List<Object>> lst = new ArrayList<>();
 			bootstraps.forEach(n -> {
 				List<Object> ni = new ArrayList<>();
 				ni.add(n.getId().toString());
-				if (n.hasAddress4()) {
-					ni.add(n.getHost4());
+				String host4 = n.getHost4();
+				if (host4 != null) {
+					ni.add(host4);
 					ni.add(n.getPort4());
 				}
-				if (n.hasAddress6()) {
-					ni.add(n.getHost6());
+				String host6 = n.getHost6();
+				if (host6 != null) {
+					ni.add(host6);
 					ni.add(n.getPort6());
 				}
 				lst.add(ni);
 			});
-			map.put("bootstraps", lst);
+			return lst;
 		}
 
-		map.put("enableSpamThrottling", enableSpamThrottling);
-		map.put("enableSuspiciousNodeDetector", enableSuspiciousNodeDetector);
-		map.put("enableDeveloperMode", enableDeveloperMode);
-		map.put("enableMetrics", enableMetrics);
+		return null;
+	}
 
-		return map;
+	private static Set<NodeInfo> bootstrapsFromList(@Nullable List<List<Object>> lst) {
+		if (lst == null || lst.isEmpty())
+			return Collections.emptySet();
+
+		Set<NodeInfo> set = new HashSet<>();
+		lst.forEach(b -> {
+			int size = b.size();
+			if (size != 3 && size != 5)
+				throw new IllegalArgumentException("Invalid bootstrap node entry size: " + size + ". Expected 3 or 5 fields.");
+
+			try {
+				Id id = Id.of((String) b.get(0));
+
+				// Resolve each (host, port) pair and route it to its address family, so the
+				// declared order is irrelevant and a single address may be IPv4 or IPv6.
+				InetSocketAddress addr4 = null;
+				InetSocketAddress addr6 = null;
+				for (int i = 1; i + 1 < size; i += 2) {
+					InetSocketAddress sa = new InetSocketAddress((String) b.get(i), (int) b.get(i + 1));
+					if (sa.getAddress() instanceof java.net.Inet4Address) {
+						if (addr4 != null)
+							throw new IllegalArgumentException("Duplicate IPv4 address found in bootstrap node: " + sa.getAddress());
+						addr4 = sa;
+					} else {
+						if (addr6 != null)
+							throw new IllegalArgumentException("Duplicate IPv6 address found in bootstrap node: " + sa.getAddress());
+						addr6 = sa;
+					}
+				}
+
+				set.add(NodeInfo.of(id, addr4, addr6));
+			} catch (Exception e) {
+				throw new IllegalArgumentException("Invalid bootstrap node entry: " + b + ", " + e.getMessage(), e);
+			}
+		});
+
+		return set;
+	}
+
+	// One rule, one message: the builder and the options record both refuse a URI here, so a caller
+	// cannot be told two different things about the same unsupported driver.
+	private static void checkDatabaseUri(String uri) {
+		if (!uri.startsWith("postgresql://") && !uri.startsWith("jdbc:sqlite:"))
+			throw new IllegalArgumentException("Unsupported database URI: " + uri +
+					". Only PostgreSQL and SQLite are supported.");
 	}
 
 	/**
@@ -468,10 +462,6 @@ public class NodeConfiguration {
 	 * and feature toggles.
 	 */
 	public static class Builder {
-		/**
-		 * Set of bootstrap nodes for joining the DHT network.
-		 */
-		private final Set<NodeInfo> bootstraps;
 		/**
 		 * Vert.x instance used for the node's asynchronous operations.
 		 * May be null if not set.
@@ -506,17 +496,18 @@ public class NodeConfiguration {
 		 */
 		private int port = DEFAULT_DHT_PORT;
 		/**
-		 * The node's private key, encoded in Base58.
+		 * The node's key pair.
 		 */
-		private Signature.@Nullable PrivateKey privateKey;
+		private Signature.@Nullable KeyPair keyPair;
 		/**
-		 * Path to the directory for persistent DHT data storage. disables persistence if null.
+		 * Path to the directory for persistent DHT data storage. Defaults to {@link #defaultDataDir()};
+		 * a node always needs one, since the routing table caches and the database file live under it.
 		 */
-		private @Nullable Path dataDir = null;
+		private Path dataDir = defaultDataDir();
 		/**
 		 * Database storage URI for the node.
 		 */
-		private String databaseUri;
+		private String databaseUri = DEFAULT_DATABASE_URI;
 		/**
 		 * Database connection pool size.
 		 */
@@ -525,33 +516,49 @@ public class NodeConfiguration {
 		 * Database schema name. Available for PostgreSQL only
 		 */
 		private @Nullable String databaseSchemaName = null;
+
+		private int alpha = DEFAULT_ALPHA;
+
+		private int k = DEFAULT_K;
+
+		private int replacements = DEFAULT_REPLACEMENTS;
+
+		private int concurrentQueries = DEFAULT_CONCURRENT_QUERIES;
+
+		/**
+		 * Set of bootstrap nodes for joining the DHT network.
+		 */
+		private final Set<NodeInfo> bootstraps = new HashSet<>();
+
 		/**
 		 * Whether spam throttling is enabled for this node.
 		 */
-		private boolean enableSpamThrottling = true;
+		private boolean spamThrottling = true;
 
 		/**
 		 * Whether suspicious node detection is enabled for this node.
 		 */
-		private boolean enableSuspiciousNodeDetector = true;
+		private boolean suspiciousNodeDetector = true;
 
 		/**
 		 * Whether developer mode is enabled for this node.
 		 */
-		private boolean enableDeveloperMode = false;
-
-		/**
-		 * Whether metrics is enabled for this node.
-		 */
-		private boolean enableMetrics = false;
+		private boolean developerMode = false;
 
 		/**
 		 * Constructs a new Builder with default settings.
 		 */
 		protected Builder() {
 			vertx = Vertx.currentContext() != null ? Vertx.currentContext().owner() : null;
-			bootstraps = new HashSet<>();
-			databaseUri = "jdbc:sqlite:node.db";
+		}
+
+		/**
+		 * The directory a node uses when neither the caller nor the configuration document names one.
+		 *
+		 * @return the per-user default data directory
+		 */
+		public static Path defaultDataDir() {
+			return FileUtils.getUserDataDir().resolve("boson/node");
 		}
 
 		/**
@@ -752,8 +759,8 @@ public class NodeConfiguration {
 		 *
 		 * @return this Builder for chaining
 		 */
-		public Builder generatePrivateKey() {
-			this.privateKey = Signature.KeyPair.random().privateKey();
+		public Builder generateKeyPair() {
+			this.keyPair = Signature.KeyPair.random();
 			return this;
 		}
 
@@ -766,7 +773,7 @@ public class NodeConfiguration {
 		 */
 		public Builder privateKey(byte[] privateKey) {
 			Objects.requireNonNull(privateKey, "Private key must not be null");
-			this.privateKey = Signature.PrivateKey.fromBytes(privateKey);
+			this.keyPair = Signature.KeyPair.fromPrivateKey(privateKey);
 			return this;
 		}
 
@@ -783,7 +790,7 @@ public class NodeConfiguration {
 			byte[] key = privateKey.startsWith("0x") ?
 					Hex.decode(privateKey, 2, privateKey.length() - 2) :
 					Base58.decode(privateKey);
-			this.privateKey = Signature.PrivateKey.fromBytes(key);
+			this.keyPair = Signature.KeyPair.fromPrivateKey(key);
 			return this;
 		}
 
@@ -792,40 +799,56 @@ public class NodeConfiguration {
 		 *
 		 * @return true if a private key exists, false otherwise.
 		 */
-		public boolean hasPrivateKey() {
-			return privateKey != null;
+		public boolean hasKeyPair() {
+			return keyPair != null;
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a string path.
 		 *
-		 * @param dir the string path (maybe null to disable persistence)
+		 * @param dir the string path (must not be null)
 		 * @return this Builder for chaining
+		 * @throws NullPointerException if dir is null
 		 */
-		public Builder dataDir(@Nullable String dir) {
-			return dataDir(dir != null ? Paths.get(dir) : null);
+		public Builder dataDir(String dir) {
+			Objects.requireNonNull(dir, "Data directory must not be null");
+			return dataDir(Paths.get(dir));
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a File object.
 		 *
-		 * @param path the File pointing to the storage directory (maybe null to disable persistence)
+		 * @param path the File pointing to the storage directory (must not be null)
 		 * @return this Builder for chaining
+		 * @throws NullPointerException if path is null
 		 */
-		public Builder dataDir(@Nullable File path) {
-			dataDir(path != null ? path.toPath() : null);
+		public Builder dataDir(File path) {
+			Objects.requireNonNull(path, "Data directory must not be null");
+			dataDir(path.toPath());
 			return this;
 		}
 
 		/**
 		 * Set the storage path for DHT persistent data using a Path.
 		 *
-		 * @param path the Path to the storage directory (maybe null to disable persistence)
+		 * @param path the Path to the storage directory (must not be null)
 		 * @return this Builder for chaining
+		 * @throws NullPointerException if path is null
 		 */
-		public Builder dataDir(@Nullable Path path) {
-			this.dataDir = path;
+		public Builder dataDir(Path path) {
+			Objects.requireNonNull(path, "Data directory must not be null");
+			this.dataDir = FileUtils.normalizePath(path);
 			return this;
+		}
+
+		/**
+		 * Returns the data directory this builder would use, so that a caller can report the effective
+		 * location without building the configuration first.
+		 *
+		 * @return the data directory, never null
+		 */
+		public Path dataDir() {
+			return dataDir;
 		}
 
 		/**
@@ -853,8 +876,7 @@ public class NodeConfiguration {
 		 */
 		public Builder databaseUri(String uri) {
 			Objects.requireNonNull(uri, "Database URI must not be null");
-			if (!uri.startsWith("postgresql://") && !uri.startsWith("jdbc:sqlite:"))
-				throw new IllegalArgumentException("Unsupported database URI: " + uri + ". Only PostgreSQL and SQLite are supported.");
+			checkDatabaseUri(uri);
 			this.databaseUri = uri;
 			return this;
 		}
@@ -889,6 +911,62 @@ public class NodeConfiguration {
 		 */
 		public Builder databaseSchemaName(@Nullable String schema) {
 			this.databaseSchemaName = SqlSafety.validateSchema(schema);
+			return this;
+		}
+
+		/**
+		 * Sets the Kademlia concurrency parameter: how many nodes a lookup queries in parallel.
+		 *
+		 * @param alpha the concurrency parameter, at least 1
+		 * @return this Builder for chaining
+		 * @throws IllegalArgumentException if alpha is less than 1
+		 */
+		public Builder alpha(int alpha) {
+			if (alpha < 1)
+				throw new IllegalArgumentException("Invalid alpha: " + alpha);
+			this.alpha = alpha;
+			return this;
+		}
+
+		/**
+		 * Sets the Kademlia bucket size.
+		 *
+		 * @param k the bucket size, at least 1
+		 * @return this Builder for chaining
+		 * @throws IllegalArgumentException if k is less than 1
+		 */
+		public Builder k(int k) {
+			if (k < 1)
+				throw new IllegalArgumentException("Invalid k: " + k);
+			this.k = k;
+			return this;
+		}
+
+		/**
+		 * Sets how many replacement entries each routing table bucket keeps.
+		 *
+		 * @param replacements the replacement count, at least 1
+		 * @return this Builder for chaining
+		 * @throws IllegalArgumentException if replacements is less than 1
+		 */
+		public Builder replacements(int replacements) {
+			if (replacements < 1)
+				throw new IllegalArgumentException("Invalid replacements: " + replacements);
+			this.replacements = replacements;
+			return this;
+		}
+
+		/**
+		 * Sets the ceiling on DHT queries in flight; requests beyond it are queued.
+		 *
+		 * @param concurrentQueries the in-flight query ceiling, at least 1
+		 * @return this Builder for chaining
+		 * @throws IllegalArgumentException if concurrentQueries is less than 1
+		 */
+		public Builder concurrentQueries(int concurrentQueries) {
+			if (concurrentQueries < 1)
+				throw new IllegalArgumentException("Invalid concurrentQueries: " + concurrentQueries);
+			this.concurrentQueries = concurrentQueries;
 			return this;
 		}
 
@@ -1036,13 +1114,28 @@ public class NodeConfiguration {
 		}
 
 		/**
+		 * Replaces the bootstrap nodes, discarding any added so far. Use
+		 * {@link #addBootstrap(Collection)} to add to them instead.
+		 *
+		 * @param bootstraps the collection of NodeInfo bootstrap nodes (must not be null)
+		 * @return this Builder for chaining
+		 * @throws NullPointerException if the bootstraps parameter is null
+		 */
+		public Builder bootstraps(Collection<NodeInfo> bootstraps) {
+			Objects.requireNonNull(bootstraps, "Bootstrap nodes collection must not be null");
+			this.bootstraps.clear();
+			this.bootstraps.addAll(bootstraps);
+			return this;
+		}
+
+		/**
 		 * Sets whether spam throttling is enabled for the node.
 		 *
 		 * @param enable true to enable spam throttling, false to disable
 		 * @return this Builder for chaining
 		 */
-		public Builder setSpamThrottling(boolean enable) {
-			this.enableSpamThrottling = enable;
+		public Builder spamThrottling(boolean enable) {
+			this.spamThrottling = enable;
 			return this;
 		}
 
@@ -1052,8 +1145,8 @@ public class NodeConfiguration {
 		 * @param enable true to enable suspicious node detection, false to disable
 		 * @return this Builder for chaining
 		 */
-		public Builder setSuspiciousNodeDetector(boolean enable) {
-			this.enableSuspiciousNodeDetector = enable;
+		public Builder suspiciousNodeDetector(boolean enable) {
+			this.suspiciousNodeDetector = enable;
 			return this;
 		}
 
@@ -1063,30 +1156,44 @@ public class NodeConfiguration {
 		 * @param enable true to enable developer mode, false to disable
 		 * @return this Builder for chaining
 		 */
-		public Builder setDeveloperMode(boolean enable) {
-			this.enableDeveloperMode = enable;
+		public Builder developerMode(boolean enable) {
+			this.developerMode = enable;
 			return this;
 		}
 
 		/**
-		 * Enables metrics for the node.
+		 * Applies the settings in the given map on top of this builder.
+		 * <p>
+		 * The map is an OVERLAY, not a replacement: a setting the document does not name is left as
+		 * whatever the caller already put on this builder, and a setting it does name wins. Both the
+		 * DHT launcher and the shell layer command line arguments and a configuration file onto one
+		 * builder, so a document that is silent about the port must not reset a port given on the
+		 * command line - and a document that omits {@code privateKey} must still let the caller
+		 * generate one afterwards.
+		 * <p>
+		 * The granularity is the setting a reader would think of as one choice:
+		 * <ul>
+		 *   <li>Each address family is one unit. A document that names {@code host4} or
+		 *       {@code interface4} replaces both of this builder's IPv4 settings, so that a file's
+		 *       {@code interface4} and a command line address do not combine into the "both
+		 *       specified" error. IPv6 likewise.</li>
+		 *   <li>Each named block - {@code database}, {@code kademlia}, {@code security} - is read
+		 *       whole. Naming the block replaces every setting in it, and the keys the block leaves
+		 *       out fall back to their own defaults rather than to this builder's values. A block
+		 *       the document does not name at all is left alone.</li>
+		 *   <li>{@code bootstraps} replaces the whole set, for the same reason.</li>
+		 * </ul>
+		 * Values are applied through this builder's setters, so a document is validated exactly as a
+		 * programmatic caller would be.
+		 * <p>
+		 * The flat top-level settings are read here rather than in {@link NodeListenOptions} because
+		 * the overlay is presence-based and spans keys: which of the four address settings to clear
+		 * depends on which keys the document WROTE, not on their values, so it cannot live behind a
+		 * record's value-only view of the document.
 		 *
-		 * @param enable true to enable metrics, false to disable
+		 * @param map the configuration data; if null or empty the builder is returned unchanged
 		 * @return this Builder for chaining
-		 */
-		public Builder setMetrics(boolean enable) {
-			this.enableMetrics = enable;
-			return this;
-		}
-
-		/**
-		 * Populates the builder with values from the specified map. The map is expected to contain
-		 * configurations relating to network, database, and other settings.
-		 *
-		 * @param map A nullable map containing configuration data. If the map is null or empty, the
-		 *            method returns the current builder instance without making changes.
-		 * @return The builder instance with the configurations applied from the map, enabling method chaining.
-		 * @throws IllegalArgumentException If any bootstrap node configuration is invalid or missing required fields.
+		 * @throws IllegalArgumentException if any value in the map is not valid for its setting
 		 */
 		public Builder fromMap(@Nullable Map<String, Object> map) {
 			if (map == null || map.isEmpty())
@@ -1094,79 +1201,72 @@ public class NodeConfiguration {
 
 			ConfigMap m = new ConfigMap(map);
 
-			String host4 = m.getString("host4", null);
-			if (host4 != null && !host4.isEmpty())
-				host4(host4);
+			if (m.containsKey("host4") || m.containsKey("interface4")) {
+				this.host4 = null;
+				this.networkInterface4 = null;
 
-			String interface4 = m.getString("interface4", null);
-			if (interface4 != null && !interface4.isEmpty())
-				networkInterface4(interface4);
+				String host = m.getString("host4", null);
+				if (host != null && !host.isEmpty())
+					host4(host);
 
-			String host6 = m.getString("host6", null);
-			if (host6 != null && !host6.isEmpty())
-				host6(host6);
+				String nif = m.getString("interface4", null);
+				if (nif != null && !nif.isEmpty())
+					networkInterface4(nif);
+			}
 
-			String interface6 = m.getString("interface6", null);
-			if (interface6 != null && !interface6.isEmpty())
-				networkInterface6(interface6);
+			if (m.containsKey("host6") || m.containsKey("interface6")) {
+				this.host6 = null;
+				this.networkInterface6 = null;
 
-			port(m.getPort("port", DEFAULT_DHT_PORT));
+				String host = m.getString("host6", null);
+				if (host != null && !host.isEmpty())
+					host6(host);
+
+				String nif = m.getString("interface6", null);
+				if (nif != null && !nif.isEmpty())
+					networkInterface6(nif);
+			}
+
+			if (m.containsKey("port"))
+				port(m.getPort("port"));
+
 			String sk = m.getString("privateKey", null);
-			if (sk != null && !sk.isEmpty())
-				privateKey(sk);
-
-			Path dataDir = m.getPath("dataDir", null);
-			if (dataDir != null)
-				dataDir(dataDir);
-
-			ConfigMap db = m.getObject("database");
-			if (db != null && !db.isEmpty()) {
-				String databaseUri = db.getString("uri", null);
-				if (databaseUri != null && !databaseUri.isEmpty())
-					databaseUri(databaseUri);
-
-				databasePoolSize(db.getInteger("poolSize", 0));
-				databaseSchemaName(db.getString("schema", null));
+			if (sk != null && !sk.isEmpty()) {
+				try {
+					privateKey(sk);
+				} catch (Exception e) {
+					throw new IllegalArgumentException("Invalid private key", e);
+				}
 			}
 
-			List<List<Object>> lst = m.getList("bootstraps");
-			if (lst != null && !lst.isEmpty()) {
-				lst.forEach(b -> {
-					int size = b.size();
-					if (size != 3 && size != 5)
-						throw new IllegalArgumentException("Invalid bootstrap node entry size: " + size + ". Expected 3 or 5 fields.");
+			if (m.containsKey("dataDir"))
+				dataDir(m.getPath("dataDir"));
 
-					try {
-						Id id = Id.of((String) b.get(0));
-
-						// Resolve each (host, port) pair and route it to its address family, so the
-						// declared order is irrelevant and a single address may be IPv4 or IPv6.
-						InetSocketAddress addr4 = null;
-						InetSocketAddress addr6 = null;
-						for (int i = 1; i + 1 < size; i += 2) {
-							InetSocketAddress sa = new InetSocketAddress((String) b.get(i), (int) b.get(i + 1));
-							if (sa.getAddress() instanceof java.net.Inet4Address) {
-								if (addr4 != null)
-									throw new IllegalArgumentException("Duplicate IPv4 address found in bootstrap node: " + sa.getAddress());
-								addr4 = sa;
-							} else {
-								if (addr6 != null)
-									throw new IllegalArgumentException("Duplicate IPv6 address found in bootstrap node: " + sa.getAddress());
-								addr6 = sa;
-							}
-						}
-
-						addBootstrap(NodeInfo.of(id, addr4, addr6));
-					} catch (Exception e) {
-						throw new IllegalArgumentException("Invalid bootstrap node entry: " + b + ", " + e.getMessage(), e);
-					}
-				});
+			if (m.containsKey("database")) {
+				NodeDatabaseOptions database = NodeDatabaseOptions.fromMap(m.getObject("database"));
+				databaseUri(database.uri());
+				databasePoolSize(database.poolSize());
+				databaseSchemaName(database.schema());
 			}
 
-			setSpamThrottling(m.getBoolean("enableSpamThrottling", enableSpamThrottling));
-			setSuspiciousNodeDetector(m.getBoolean("enableSuspiciousNodeDetector", enableSuspiciousNodeDetector));
-			setDeveloperMode(m.getBoolean("enableDeveloperMode", enableDeveloperMode));
-			setMetrics(m.getBoolean("enableMetrics", enableMetrics));
+			if (m.containsKey("kademlia")) {
+				KademliaOptions kademlia = KademliaOptions.fromMap(m.getObject("kademlia"));
+				alpha(kademlia.alpha());
+				k(kademlia.k());
+				replacements(kademlia.replacements());
+				concurrentQueries(kademlia.concurrentQueries());
+			}
+
+			if (m.containsKey("security")) {
+				SecurityOptions security = SecurityOptions.fromMap(m.getObject("security"));
+				spamThrottling(security.spamThrottling());
+				suspiciousNodeDetector(security.suspiciousNodeDetector());
+				developerMode(security.developerMode());
+			}
+
+			if (m.containsKey("bootstraps"))
+				bootstraps(bootstrapsFromList(m.getList("bootstraps")));
+
 			return this;
 		}
 
@@ -1178,8 +1278,26 @@ public class NodeConfiguration {
 		 *                               (for example, no Vert.x instance, no IPv4/IPv6 address, or no private key)
 		 */
 		public NodeConfiguration build() {
+			if (keyPair == null)
+				throw new IllegalStateException("The node's key pair must be provided.");
+
+			if (vertx == null)
+				vertx = Vertx.currentContext() != null ? Vertx.currentContext().owner() : null;
+
+			// Deliberately not falling back to Vertx.vertx(): that would hand back a configuration
+			// owning an event loop group nobody asked for and nobody closes.
+			if (vertx == null)
+				throw new IllegalStateException("Vert.x instance must be provided.");
+
 			try {
-				return new NodeConfiguration(this);
+				return new NodeConfiguration(vertx,
+						new NodeListenOptions(host4, networkInterface4, host6, networkInterface6, port),
+						keyPair,
+						dataDir,
+						new NodeDatabaseOptions(databaseUri, databasePoolSize, databaseSchemaName),
+						new KademliaOptions(alpha, k, replacements, concurrentQueries),
+						bootstraps,
+						new SecurityOptions(spamThrottling, suspiciousNodeDetector, developerMode));
 			} catch (NullPointerException | IllegalArgumentException e) {
 				throw new IllegalStateException("Invalid NodeConfiguration: " + e.getMessage(), e);
 			}

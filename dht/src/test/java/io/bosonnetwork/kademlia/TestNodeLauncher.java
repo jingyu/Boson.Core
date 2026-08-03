@@ -32,7 +32,9 @@ public class TestNodeLauncher {
 			// fix the dataDir
 			map.put("dataDir", dataPath.toAbsolutePath().toString());
 
-			return NodeConfiguration.fromMap(map);
+			// Through the builder rather than NodeConfiguration.fromMap: the static factory takes its
+			// Vert.x instance from the calling context, and this runs on the main thread.
+			return NodeConfiguration.builder().vertx(vertx).fromMap(map).build();
 		} catch (Exception e) {
 			System.err.println("Failed to load configuration file: " + e.getMessage());
 			throw e;
@@ -78,7 +80,7 @@ public class TestNodeLauncher {
 			System.out.println("Starting the Boson Kademlia node ...");
 			node.start().thenRun(() -> {
 				System.out.printf("Started the Boson Kademlia node %s at %s:%d\n",
-						node.getId(), config.host4(), config.port());
+						node.getId(), config.listen().host4(), config.listen().port());
 			}).join();
 		} catch (Exception e) {
 			e.printStackTrace(System.err);

@@ -47,6 +47,10 @@ public class Launcher {
 	private static NodeConfiguration buildConfigFromArgs(String[] args) throws IllegalArgumentException {
 		NodeConfiguration.Builder builder = NodeConfiguration.builder();
 
+		// The configuration file is loaded before any other argument, whatever position it appears
+		// in, so that the command line always overrides the file rather than the other way round.
+		loadConfigFile(builder, args);
+
 		int i = 0;
 		while (i < args.length) {
 			switch (args[i]) {
@@ -54,13 +58,7 @@ public class Launcher {
 					if (i + 1 >= args.length)
 						throw new IllegalArgumentException("Missing file path for config option");
 
-					String configFile = args[++i];
-					try {
-						Map<String, Object> map = Json.yamlMapper().readValue(new File(configFile), Json.mapType());
-						builder.fromMap(map);
-					} catch (Exception e) {
-						throw new IllegalArgumentException("Failed to load configuration file: " + configFile, e);
-					}
+					i++; // already loaded above
 				}
 				case "--host4", "-4" -> {
 					if (i + 1 >= args.length)
@@ -127,7 +125,7 @@ public class Launcher {
 						throw new IllegalArgumentException("Failed to parse bootstrap node " + bootstrapValue, e);
 					}
 				}
-				case "--developerMode" -> builder.setDeveloperMode(true);
+				case "--developerMode" -> builder.developerMode(true);
 				case "--help", "-h" -> {
 					printUsage();
 					System.exit(0);
@@ -145,6 +143,26 @@ public class Launcher {
 		builder.vertx(vertx);
 
 		return builder.build();
+	}
+
+	private static void loadConfigFile(NodeConfiguration.Builder builder, String[] args) {
+		for (int i = 0; i < args.length; i++) {
+			if (!args[i].equals("--config") && !args[i].equals("-c"))
+				continue;
+
+			if (i + 1 >= args.length)
+				throw new IllegalArgumentException("Missing file path for config option");
+
+			String configFile = args[i + 1];
+			try {
+				Map<String, Object> map = Json.yamlMapper().readValue(new File(configFile), Json.mapType());
+				builder.fromMap(map);
+			} catch (Exception e) {
+				throw new IllegalArgumentException("Failed to load configuration file: " + configFile, e);
+			}
+
+			return;
+		}
 	}
 
 	private static void printUsage() {
@@ -197,8 +215,6 @@ public class Launcher {
 
 		int rc = 0;
 		Path dataDir = config.dataDir();
-		if (dataDir == null)
-			dataDir = Path.of(".");
 		Path lockFile = dataDir.resolve("lock");
 		// noinspection unused
 		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
@@ -209,8 +225,11 @@ public class Launcher {
 
 				System.out.println("Node is running.");
 				System.out.println("  ID: " + node.getId());
-				System.out.println("  IPv4: " + (config.host4() != null ? config.host4() + ":" + config.port() : "N/A"));
-				System.out.println("  IPv6: " + (config.host6() != null ? config.host6() + ":" + config.port() : "N/A"));
+				int port = config.listen().port();
+				String host4 = config.listen().host4();
+				String host6 = config.listen().host6();
+				System.out.println("  IPv4: " + (host4 != null ? host4 + ":" + port : "N/A"));
+				System.out.println("  IPv6: " + (host6 != null ? host6 + ":" + port : "N/A"));
 				System.out.println("  Data directory: " + dataDir.toAbsolutePath());
 
 				synchronized(shutdown) {

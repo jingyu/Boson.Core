@@ -93,10 +93,10 @@ public class DHT extends BosonVerticle {
 	private final Blacklist blacklist;
 	private final TokenManager tokenManager;
 
-	private final boolean enableSuspiciousNodeTracking;
 	private final boolean enableSpamThrottling;
-	private final DHTMetrics metrics;
+	private final boolean enableSuspiciousNodeTracking;
 	private final boolean enableDeveloperMode;
+	private final DHTMetrics metrics;
 
 	private KadContext kadContext;
 	private RpcServer rpcServer;
@@ -129,9 +129,8 @@ public class DHT extends BosonVerticle {
 	private record ClosestNodes(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {}
 
 	public DHT(Identity identity, Network network, String host, int port, Collection<NodeInfo> bootstrapNodes,
-			   DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
-			   boolean enableSuspiciousNodeDetector, boolean enableSpamThrottling, DHTMetrics metrics,
-			   boolean enableDeveloperMode) {
+	           DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
+	           boolean enableSpamThrottling, boolean enableSuspiciousNodeTracking, boolean enableDeveloperMode, DHTMetrics metrics) {
 		this.identity = identity;
 		this.network = network;
 		this.host = host;
@@ -141,10 +140,10 @@ public class DHT extends BosonVerticle {
 		this.tokenManager = tokenManager;
 		this.blacklist = blacklist;
 
-		this.enableSuspiciousNodeTracking = enableSuspiciousNodeDetector;
 		this.enableSpamThrottling = enableSpamThrottling;
-		this.metrics = metrics;
+		this.enableSuspiciousNodeTracking = enableSuspiciousNodeTracking;
 		this.enableDeveloperMode = enableDeveloperMode;
+		this.metrics = metrics;
 
 		this.routingTable = new RoutingTable(identity.getId());
 
@@ -160,7 +159,7 @@ public class DHT extends BosonVerticle {
 		this.bootstrapIds = List.of();
 
 		// Initialize suspicious node tracker
-		this.suspiciousNodeDetector = enableSuspiciousNodeDetector ?
+		this.suspiciousNodeDetector = enableSuspiciousNodeTracking ?
 				SuspiciousNodeDetector.create() : SuspiciousNodeDetector.disabled();
 
 		if (bootstrapNodes != null && !bootstrapNodes.isEmpty())

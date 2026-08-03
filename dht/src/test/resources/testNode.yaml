@@ -5,7 +5,7 @@ privateKey: 253vmGfhqrrGrzqzxu9NBPGgZFA1iHqyeEJMMZem7ebBn8nApYgFX8diYpLFdb34vdPM
 dataDir: .
 database:
   uri: jdbc:sqlite:node.db
-enableSpamThrottling: true
-enableSuspiciousNodeDetector: true
-enableDeveloperMode: true
-enableMetrics: false
+security:
+  spamThrottling: true
+  suspiciousNodeDetector: true
+  developerMode: true
