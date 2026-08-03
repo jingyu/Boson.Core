@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -101,7 +100,7 @@ public class DHT extends BosonVerticle {
 	private KadContext kadContext;
 	private RpcServer rpcServer;
 
-	private DHT sibling;
+	private @Nullable DHT sibling;
 
 	private volatile boolean running;
 	private ConnectionStatus status;
@@ -193,12 +192,15 @@ public class DHT extends BosonVerticle {
 		return routingTable;
 	}
 
-	public void setSibling(DHT dht) {
-		Objects.requireNonNull(dht);
+	public void setSibling(@Nullable DHT dht) {
 		if (dht == this)
 			throw new IllegalArgumentException("Can not set self as sibling");
 
 		this.sibling = dht;
+	}
+
+	public @Nullable DHT getSibling() {
+		return sibling;
 	}
 
 	public void setConnectionStatusListener(DHTConnectionStatusListener listener) {

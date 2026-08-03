@@ -87,7 +87,7 @@ class TaskManagerTests {
 
 	@BeforeEach
 	void setUp(Vertx vertx, VertxTestContext context) {
-		this.kadContext = new KadContext(vertx, vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4,null);
+		this.kadContext = new KadContext(vertx, vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4, null);
 		this.manager = new TaskManager(kadContext);
 		context.completeNow();
 	}
