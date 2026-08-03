@@ -310,7 +310,17 @@ public class ServiceConfigMap extends ConfigMap {
 				cm.getNonNegativeInteger("perDay", 0));
 	}
 
-	private static Map<String, Object> rateLimitPolicyToMap(RateLimitPolicy policy) {
+	/**
+	 * Serializes a {@link RateLimitPolicy} as a {@code rateLimit} block, omitting disabled windows.
+	 * <p>
+	 * Public so that a service which nests policies more deeply than {@link #put(String, Object)}
+	 * reaches - the Director scopes them per API group - can write them in the same shape everyone
+	 * else reads. An empty result means nothing is enforced.
+	 *
+	 * @param policy the policy to serialize
+	 * @return a new, ordered map of the windows that are set
+	 */
+	public static Map<String, Object> rateLimitPolicyToMap(RateLimitPolicy policy) {
 		Map<String, Object> map = new LinkedHashMap<>();
 		if (policy.perSecond() > 0)
 			map.put("perSecond", policy.perSecond());
