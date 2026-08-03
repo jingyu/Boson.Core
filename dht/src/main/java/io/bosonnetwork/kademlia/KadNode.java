@@ -39,7 +39,6 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
 import io.bosonnetwork.crypto.CryptoException;
-import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
 import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
@@ -103,51 +102,48 @@ public class KadNode extends BosonVerticle implements Node {
 			throw new IllegalArgumentException("Invalid configuration", e);
 		}
 
-		try {
-			Signature.KeyPair keyPair = Signature.KeyPair.fromPrivateKey(config.privateKey());
-			this.identity = new CachedCryptoIdentity(keyPair, null);
-		} catch (Exception e) {
-			log.error("Invalid configuration: private key is invalid");
-			throw new IllegalArgumentException("Invalid configuration: private key is invalid", e);
-		}
-
+		this.identity = new CachedCryptoIdentity(config.keyPair(), null);
 		this.config = config;
 
 		try {
-			if (config.host4() != null) {
-				this.host4 = config.host4();
-			} else if (config.networkInterface4() != null) {
-				NetworkInterface nif = AddressUtils.getNetworkInterface(config.networkInterface4());
+			String h4 = config.listen().host4();
+			String if4 = config.listen().networkInterface4();
+			if (h4 != null) {
+				this.host4 = h4;
+			} else if (if4 != null) {
+				NetworkInterface nif = AddressUtils.getNetworkInterface(if4);
 				if (nif == null)
-					throw new IllegalArgumentException("Invalid network interface: " + config.networkInterface4());
+					throw new IllegalArgumentException("Invalid network interface: " + if4);
 
 				this.host4 = nif.inetAddresses()
 						.filter(a -> a instanceof Inet4Address)
 						.filter(AddressUtils::isAnyUnicast)
 						.findFirst()
 						.map(InetAddress::getHostAddress)
-						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv4 address found on " + config.networkInterface4()));
+						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv4 address found on " + if4));
 
-				log.debug("Network interface {} configured for IPv4, resolved to address: {}", config.networkInterface4(), this.host4);
+				log.debug("Network interface {} configured for IPv4, resolved to address: {}", if4, this.host4);
 			} else {
 				this.host4 = null;
 			}
 
-			if (config.host6() != null) {
-				this.host6 = config.host6();
-			} else if (config.networkInterface6() != null) {
-				NetworkInterface nif = AddressUtils.getNetworkInterface(config.networkInterface6());
+			String h6 = config.listen().host6();
+			String if6 = config.listen().networkInterface6();
+			if (h6 != null) {
+				this.host6 = h6;
+			} else if (if6 != null) {
+				NetworkInterface nif = AddressUtils.getNetworkInterface(if6);
 				if (nif == null)
-					throw new IllegalArgumentException("Invalid network interface: " + config.networkInterface6());
+					throw new IllegalArgumentException("Invalid network interface: " + if6);
 
 				this.host6 = nif.inetAddresses()
 						.filter(a -> a instanceof Inet6Address)
 						.filter(AddressUtils::isAnyUnicast)
 						.findFirst()
 						.map(InetAddress::getHostAddress)
-						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv6 address found on " + config.networkInterface6()));
+						.orElseThrow(() -> new IllegalArgumentException("No applicable IPv6 address found on " + if6));
 
-				log.debug("Network interface {} configured for IPv6, resolved to address: {}", config.networkInterface6(), this.host6);
+				log.debug("Network interface {} configured for IPv6, resolved to address: {}", if6, this.host6);
 			} else {
 				this.host6 = null;
 			}
@@ -159,7 +155,7 @@ public class KadNode extends BosonVerticle implements Node {
 			throw new IllegalArgumentException("Invalid configuration", e);
 		}
 
-		this.port = config.port();
+		this.port = config.listen().port();
 
 		this.defaultLookupOption = LookupOption.CONSERVATIVE;
 		this.connectionStatusListener = new ListenerProxy();
@@ -168,39 +164,35 @@ public class KadNode extends BosonVerticle implements Node {
 		this.timers = new ArrayList<>(4);
 	}
 
+	// Only what NodeConfiguration itself cannot guarantee. The listen endpoint, the key pair, the
+	// port range and the database URI are all validated by the configuration's own constructors, so
+	// re-checking them here would be dead code that drifts out of step with the real rule.
 	private void checkConfig(NodeConfiguration config) {
-		Objects.requireNonNull(config.vertx(), "Vertx can not be null");
-		Objects.requireNonNull(config.privateKey(), "Private key can not be null");
-		if (config.host4() == null && config.host6() == null &&
-				config.networkInterface4() == null && config.networkInterface6() == null)
-			throw new IllegalArgumentException("At least one host/address/interface must be specified");
-
-		if (config.port() < 0 || config.port() > 65535)
-			throw new IllegalArgumentException("Invalid port number: " + config.port());
-
-		if (config.bootstrapNodes().isEmpty())
+		if (config.bootstraps().isEmpty())
 			log.warn("No bootstrap nodes are configured");
 
+		// The configuration guarantees a directory but not that it can be used: the routing table
+		// caches and the SQLite database file both land under it, so create it now rather than
+		// failing halfway through deploy().
 		Path dir = config.dataDir();
-		if (dir != null) {
-			if (Files.exists(dir)) {
-				if (!Files.isDirectory(dir)) {
-					log.error("Data path {} is not a directory", dir);
-					throw new IllegalArgumentException("Data path " + dir + " is not a directory");
-				}
-			} else {
-				try {
-					Files.createDirectories(dir);
-				} catch (IOException e) {
-					log.error("Data path {} can not be created", dir);
-					throw new IllegalArgumentException("Data path " + dir + " can not be created", e);
-				}
+		if (Files.exists(dir)) {
+			if (!Files.isDirectory(dir)) {
+				log.error("Data path {} is not a directory", dir);
+				throw new IllegalArgumentException("Data path " + dir + " is not a directory");
+			}
+		} else {
+			try {
+				Files.createDirectories(dir);
+			} catch (IOException e) {
+				log.error("Data path {} can not be created", dir);
+				throw new IllegalArgumentException("Data path " + dir + " can not be created", e);
 			}
 		}
 
-		Objects.requireNonNull(config.databaseUri(), "Database URI can not be null");
-		if (!DataStorage.supports(config.databaseUri()))
-			throw new IllegalArgumentException("unsupported storage URL: " + config.databaseUri());
+		// NodeConfiguration accepts the URI schemes the project supports; this node also has to have
+		// the driver on its own class path.
+		if (!DataStorage.supports(config.database().uri()))
+			throw new IllegalArgumentException("unsupported storage URL: " + config.database().uri());
 	}
 
 	@Override
@@ -365,14 +357,14 @@ public class KadNode extends BosonVerticle implements Node {
 	protected Future<Void> deploy() {
 		tokenManager = new TokenManager();
 
-		String storageURI = config.databaseUri();
+		String storageURI = config.database().uri();
 		// fix the sqlite database file location
 		if (storageURI.startsWith("jdbc:sqlite:")) {
 			Path dbFile = Path.of(storageURI.substring("jdbc:sqlite:".length()));
 			if (!dbFile.isAbsolute())
 				storageURI = "jdbc:sqlite:" + config.dataDir().resolve(dbFile).toAbsolutePath();
 		}
-		storage = DataStorage.create(storageURI, config.databasePoolSize(), config.databaseSchemaName());
+		storage = DataStorage.create(storageURI, config.database().poolSize(), config.database().schema());
 
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
@@ -381,10 +373,10 @@ public class KadNode extends BosonVerticle implements Node {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
 			connectionStatusListener.setContext(vertxContext);
 			if (host4 != null) {
-				dht4 = new DHT(identity, Network.IPv4, host4, port, config.bootstrapNodes(),
+				dht4 = new DHT(identity, Network.IPv4, host4, port, config.bootstraps(),
 						storage, config.dataDir().resolve("dht4.cache"),
-						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
-						config.enableSpamThrottling(), null, config.enableDeveloperMode());
+						tokenManager, blacklist, config.security().spamThrottling(),
+						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);
 
 				dht4.setConnectionStatusListener(connectionStatusListener);
 
@@ -397,10 +389,10 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 
 			if (host6 != null) {
-				dht6 = new DHT(identity, Network.IPv6, host6, port, config.bootstrapNodes(),
+				dht6 = new DHT(identity, Network.IPv6, host6, port, config.bootstraps(),
 						storage, config.dataDir().resolve("dht6.cache"),
-						tokenManager, blacklist, config.enableSuspiciousNodeDetector(),
-						config.enableSpamThrottling(), null, config.enableDeveloperMode());
+						tokenManager, blacklist, config.security().spamThrottling(),
+						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);
 
 				dht6.setConnectionStatusListener(connectionStatusListener);
 

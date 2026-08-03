@@ -60,7 +60,8 @@ privateKey: NODE_PRIVATE_KEY
 
 # Root directory for persistent data.
 # Stores routing tables, caches, and database files.
-# If omitted, defaults to the current working directory.
+# If omitted, defaults to 'boson/node' under the per-user data directory
+# (~/.local/share on Unix-like systems, %LOCALAPPDATA% on Windows).
 #
 # Recommended locations for user deployments:
 #   - Unix-like: ~/.local/share/boson/node
@@ -87,6 +88,26 @@ database:
   # Database schema name (PostgreSQL only).
   # schema: kademlia
 
+# Kademlia parameters.
+#
+# NOT YET APPLIED: the configuration is parsed and validated, but the DHT implementation still uses
+# its built-in values. Kept commented out so that this file cannot advertise settings a running node
+# would ignore. Uncomment once the implementation reads them.
+#
+# The values below are sized for a super node; they are deliberately larger than the defaults, which
+# are shown after each one.
+# kademlia:
+#   # Standard Kademlia parameter: concurrency parameter. Default: 3
+#   alpha: 4
+#   # Standard Kademlia parameter: bucket size. Default: 16
+#   k: 32
+#   # Additional parameter for k. The number of replacements. Default: 8
+#   replacements: 16
+#   # Maximum number of concurrent DHT queries.
+#   # If the lookup requests are too many, the system will queue new requests.
+#   # Default: 32
+#   concurrentQueries: 256
+
 # Initial entry points to the DHT network.
 # These nodes are contacted during startup to discover other peers.
 # Format: [ NodeID (Base58), IPAddress, Port ] or
@@ -99,19 +120,16 @@ database:
 #     - 198.51.100.8
 #     - 39001
 
-# Security: Throttles high-frequency requests from single peers to mitigate DoS.
-# Default: true
-enableSpamThrottling: true
+security:
+  # Security: Throttles high-frequency requests from single peers to mitigate DoS.
+  # Default: true
+  spamThrottling: true
 
-# Security: Identifies and isolates peers exhibiting malicious or abnormal behaviors.
-# Default: true
-enableSuspiciousNodeDetector: true
+  # Security: Identifies and isolates peers exhibiting malicious or abnormal behaviors.
+  # Default: true
+  suspiciousNodeDetector: true
 
-# Monitoring: Enables a Prometheus-compatible metrics endpoint (typically on port 8080).
-# Default: false
-enableMetrics: false
-
-# Development: Allows participation in the DHT using local/private IPs (RFC1918).
-# WARNING: Setting this to 'true' in a public or production deployment may lead to routing issues.
-# Default: false
-enableDeveloperMode: false
+  # Development: Allows participation in the DHT using local/private IPs (RFC1918).
+  # WARNING: Setting this to 'true' in a public or production deployment may lead to routing issues.
+  # Default: false
+  developerMode: false

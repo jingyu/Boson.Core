@@ -28,7 +28,7 @@ public class TestNodeWithHostOrInterface {
 				.host4(address)
 				.port(39101)
 				.dataDir(testDir)
-				.generatePrivateKey()
+				.generateKeyPair()
 				.build();
 
 		KadNode node = new KadNode(config);
@@ -55,7 +55,7 @@ public class TestNodeWithHostOrInterface {
 				.networkInterface4(nif.getName())
 				.port(39101)
 				.dataDir(testDir)
-				.generatePrivateKey()
+				.generateKeyPair()
 				.build();
 
 		KadNode node = new KadNode(config);

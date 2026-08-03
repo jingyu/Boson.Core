@@ -37,6 +37,8 @@ import org.jline.console.SystemRegistry;
 import org.jline.console.impl.Builtins;
 import org.jline.console.impl.SystemRegistryImpl;
 import org.jline.reader.EndOfFileException;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.MaskingCallback;
@@ -80,8 +82,6 @@ import io.bosonnetwork.utils.ApplicationLock;
 			GenerateKeyPairCommand.class
 		})
 public class Main implements Callable<Integer> {
-	private static final String DEFAULT_DATA_DIR = "data";
-
 	@Option(names = {"-4", "--address4"}, description = "IPv4 address to listen.")
 	private String addr4 = null;
 
@@ -91,7 +91,7 @@ public class Main implements Callable<Integer> {
 	@Option(names = {"-p", "--port"}, description = "The port to listen.")
 	private int port = 0;
 
-	@Option(names = {"-d", "--dataDir"}, description = "The directory to store the node data, default: ./data.")
+	@Option(names = {"-d", "--dataDir"}, description = "The directory to store the node data, default: the per-user Boson data directory.")
 	private String dataDir = null;
 
 	@Option(names = {"-s", "--storageURL"}, description = "The storage URL, default: jdbc:sqlite:node.db.")
@@ -262,13 +262,16 @@ public class Main implements Callable<Integer> {
 		if (port != 0)
 			builder.port(port);
 
-		builder.dataDir(dataDir != null ? dataDir : DEFAULT_DATA_DIR);
+		// Only when the user actually named one: setting it unconditionally would overwrite a dataDir
+		// the configuration file names, and NodeConfiguration supplies its own default otherwise.
+		if (dataDir != null)
+			builder.dataDir(dataDir);
 
 		if (storageURL != null)
 			builder.databaseUri(storageURL);
 
-		if (!builder.hasPrivateKey())
-			builder.generatePrivateKey();
+		if (!builder.hasKeyPair())
+			builder.generateKeyPair();
 
 		if (bootstrap != null) {
 			try {
@@ -281,7 +284,14 @@ public class Main implements Callable<Integer> {
 		}
 
 		if (developerMode)
-			builder.setDeveloperMode(true);
+			builder.developerMode(true);
+
+		// The shell owns its Vert.x instance. A configuration must never conjure one of its own: it
+		// would hand back an event loop group that nothing is left holding in order to close it.
+		builder.vertx(Vertx.vertx(new VertxOptions()
+				.setEventLoopPoolSize(4)
+				.setWorkerPoolSize(4)
+				.setPreferNativeTransport(true)));
 
 		config = builder.build();
 
@@ -331,7 +341,7 @@ public class Main implements Callable<Integer> {
 	}
 
 	private void setLogOutput() {
-		Path logDir = config.dataDir() != null ? config.dataDir() : Path.of("").toAbsolutePath();
+		Path logDir = config.dataDir();
 		// with trailing slash
 		System.setProperty("BOSON_LOG_DIR", logDir.toString() + File.separator);
 	}
@@ -376,7 +386,14 @@ public class Main implements Callable<Integer> {
 	}
 
 	public static void main(String[] args) {
-		int exitCode = new CommandLine(new Main()).execute(args);
+		Main app = new Main();
+		int exitCode = new CommandLine(app).execute(args);
+		app.closeVertx();
 		System.exit(exitCode);
+	}
+
+	private void closeVertx() {
+		if (config != null)
+			config.vertx().close().toCompletionStage().toCompletableFuture().join();
 	}
 }
