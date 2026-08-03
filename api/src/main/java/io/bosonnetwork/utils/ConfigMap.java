@@ -426,8 +426,12 @@ public class ConfigMap implements Map<String, Object> {
 		if (val == null) {
 			throw new IllegalArgumentException("Missing value - " + key);
 		} else if (val instanceof Integer i) {
+			if (i < 0)
+				throw new IllegalArgumentException("Invalid size value - " + key + ": " + i + " (negative)");
 			return i;
 		} else if (val instanceof Long l) {
+			if (l < 0)
+				throw new IllegalArgumentException("Invalid size value - " + key + ": " + l + " (negative)");
 			return l;
 		} else if (val instanceof String s) {
 			int idx = s.length() - 1;
@@ -435,7 +439,10 @@ public class ConfigMap implements Map<String, Object> {
 			if (specifier >= '0' && specifier <= '9') {
 				// no unit specified, assume a plain number
 				try {
-					return Long.parseLong(s);
+					long l = Long.parseLong(s);
+					if (l < 0)
+						throw new IllegalArgumentException("Invalid size value - " + key + ": " + s + " (negative)");
+					return l;
 				} catch (NumberFormatException e) {
 					throw new IllegalArgumentException("Invalid size value - " + key + ": " + s, e);
 				}
@@ -451,6 +458,8 @@ public class ConfigMap implements Map<String, Object> {
 
 				try {
 					long size = Long.parseLong(s, 0, idx, 10);
+					if (size < 0)
+						throw new IllegalArgumentException("Invalid size value - " + key + ": " + s + " (negative)");
 					try {
 						return Math.multiplyExact(size, (long) weight);
 					} catch (ArithmeticException e) {
@@ -475,6 +484,8 @@ public class ConfigMap implements Map<String, Object> {
 	 */
 	public long getSize(String key, long def) {
 		Objects.requireNonNull(key);
+		if (def < 0)
+			throw new IllegalArgumentException("Default value must be non-negative");
 		return map.containsKey(key) ? getSize(key) : def;
 	}
 
@@ -574,7 +585,7 @@ public class ConfigMap implements Map<String, Object> {
 	 * @throws NullPointerException     if the key is null
 	 * @throws IllegalArgumentException if the value cannot be parsed as a duration or is negative
 	 */
-	public Duration getDuration(String key, int def, TemporalUnit defUnit) {
+	public Duration getDuration(String key, long def, TemporalUnit defUnit) {
 		Objects.requireNonNull(key);
 		return map.containsKey(key) ? getDuration(key) : Duration.of(def, defUnit);
 	}
