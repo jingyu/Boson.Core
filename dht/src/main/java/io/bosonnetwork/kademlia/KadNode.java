@@ -379,13 +379,6 @@ public class KadNode extends BosonVerticle implements Node {
 						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);
 
 				dht4.setConnectionStatusListener(connectionStatusListener);
-
-				Future<Void> future = vertx.deployVerticle(dht4).andThen(ar -> {
-					if (ar.failed())
-						dht4 = null;
-				}).mapEmpty();
-
-				futures.add(future);
 			}
 
 			if (host6 != null) {
@@ -395,10 +388,34 @@ public class KadNode extends BosonVerticle implements Node {
 						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);
 
 				dht6.setConnectionStatusListener(connectionStatusListener);
+			}
 
+			if (dht4 != null && dht6 != null) {
+				// the sibling should be wired before the DHT deploys
+				dht4.setSibling(dht6);
+				dht6.setSibling(dht4);
+			}
+
+			if (dht4 != null) {
+				Future<Void> future = vertx.deployVerticle(dht4).andThen(ar -> {
+					if (ar.failed()) {
+						dht4 = null;
+						// unwire the surviving sibling, it must not serve a DHT that failed to deploy
+						if (dht6 != null)
+							dht6.setSibling(null);
+					}
+				}).mapEmpty();
+				futures.add(future);
+			}
+
+			if (dht6 != null) {
 				Future<Void> future = vertx.deployVerticle(dht6).andThen(ar -> {
-					if (ar.failed())
+					if (ar.failed()) {
 						dht6 = null;
+						// unwire the surviving sibling, it must not serve a DHT that failed to deploy
+						if (dht4 != null)
+							dht4.setSibling(null);
+					}
 				}).mapEmpty();
 				futures.add(future);
 			}
@@ -406,11 +423,6 @@ public class KadNode extends BosonVerticle implements Node {
 			return Future.all(futures);
 		}).andThen(ar -> {
 			if (ar.succeeded()) {
-				if (dht4 != null && dht6 != null) {
-					dht4.setSibling(dht6);
-					dht6.setSibling(dht4);
-				}
-
 				long timer = vertx.setPeriodic(30_000, STORAGE_EXPIRE_INTERVAL, unused -> storage.purge());
 				timers.add(timer);
 

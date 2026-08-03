@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -19,9 +20,9 @@ public class KadContext implements Timer, Executor {
 	private final Network network;
 	private final DHT dht;
 	private final boolean developerMode;
-	private DHT sibling;
 
-	public KadContext(Vertx vertx, Context vertxContext, Identity identity, Network network, DHT dht, boolean developerMode) {
+	public KadContext(Vertx vertx, Context vertxContext, Identity identity, Network network,
+					  DHT dht, boolean developerMode) {
 		this.vertx = vertx;
 		this.vertxContext = vertxContext;
 		this.identity = identity;
@@ -63,15 +64,12 @@ public class KadContext implements Timer, Executor {
 	}
 
 	public boolean hasSibling() {
-		return sibling != null;
+		return getSibling() != null;
 	}
 
-	public DHT getSibling() {
-		return sibling;
-	}
-
-	protected void setSibling(DHT dht) {
-		this.sibling = dht;
+	public @Nullable DHT getSibling() {
+		// always read through the owning DHT, the sibling can be wired and unwired during deployment
+		return dht != null ? dht.getSibling() : null;
 	}
 
 	public boolean isDeveloperMode() {
