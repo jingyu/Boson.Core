@@ -78,7 +78,6 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 		final boolean binaryFormat = DataFormat.isBinary(p);
 
 		Id publicKey = null;
-		byte[] nonce = null;
 		int sequenceNumber = 0;
 		Id nodeId = null;
 		byte[] nodeSig = null;
@@ -95,10 +94,6 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 					if (token != JsonToken.VALUE_NULL)
 						publicKey = binaryFormat || token != JsonToken.VALUE_STRING ?
 								Id.of(p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL)) : Id.of(p.getText());
-					break;
-				case "n":
-					if (token != JsonToken.VALUE_NULL)
-						nonce = p.getBinaryValue(Base64Variants.MODIFIED_FOR_URL);
 					break;
 				case "seq":
 					if (token != JsonToken.VALUE_NULL)
@@ -142,9 +137,8 @@ public class PeerInfoDeserializer extends StdDeserializer<PeerInfo> {
 		}
 
 		Objects.requireNonNull(publicKey, "missing peer id");
-		Objects.requireNonNull(nonce, "missing nonce");
 		Objects.requireNonNull(signature, "missing signature");
 		Objects.requireNonNull(endpoint, "missing endpoint");
-		return PeerInfo.of(publicKey, null, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		return PeerInfo.of(publicKey, null, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 }

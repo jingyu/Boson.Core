@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -20,10 +21,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import io.bosonnetwork.crypto.CryptoIdentity;
+import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.json.JsonContext;
+import io.bosonnetwork.utils.Bytes;
 import io.bosonnetwork.utils.Hex;
 
 public class PeerInfoTests {
@@ -38,7 +41,6 @@ public class PeerInfoTests {
 		assertTrue(peer.hasPrivateKey());
 		assertNotNull(peer.getPrivateKey());
 		assertNotNull(peer.getId());
-		assertNotNull(peer.getNonce());
 		assertEquals(0, peer.getSequenceNumber());
 		assertFalse(peer.isAuthenticated());
 		assertNull(peer.getNodeId());
@@ -57,8 +59,6 @@ public class PeerInfoTests {
 		assertNotNull(peer1.getPrivateKey());
 		assertNotNull(peer1.getId());
 		assertEquals(peer.getId(), peer1.getId());
-		assertNotNull(peer1.getNonce());
-		assertNotEquals(peer.getNonce(), peer1.getNonce());
 		assertEquals(1, peer1.getSequenceNumber());
 		assertFalse(peer1.isAuthenticated());
 		assertNull(peer1.getNodeId());
@@ -77,8 +77,6 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getPrivateKey());
 		assertNotNull(peer2.getId());
 		assertEquals(peer.getId(), peer2.getId());
-		assertNotNull(peer2.getNonce());
-		assertNotEquals(peer1.getNonce(), peer2.getNonce());
 		assertEquals(2, peer2.getSequenceNumber());
 		assertFalse(peer2.isAuthenticated());
 		assertNull(peer2.getNodeId());
@@ -96,14 +94,13 @@ public class PeerInfoTests {
 		assertFalse(peer3.isAuthenticated());
 		assertFalse(peer3.hasExtra());
 		assertEquals(3, peer3.getSequenceNumber());
-		assertNotEquals(peer2.getNonce(), peer3.getNonce());
 
 		PeerInfo peer4 = peer3.withoutPrivateKey();
 		assertFalse(peer4.hasPrivateKey());
 		assertEquals(peer3, peer4);
 		assertThrows(IllegalStateException.class, () -> peer4.update().endpoint("tcp://hostname:2345").build());
 
-		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
+		peer.getSignature()[0] = (byte) (peer.getSignature()[0] + 1);
 		assertTrue(peer.isValid());
 	}
 
@@ -125,7 +122,6 @@ public class PeerInfoTests {
 		assertTrue(peer.hasPrivateKey());
 		assertNotNull(peer.getPrivateKey());
 		assertNotNull(peer.getId());
-		assertNotNull(peer.getNonce());
 		assertEquals(0, peer.getSequenceNumber());
 		assertFalse(peer.isAuthenticated());
 		assertNull(peer.getNodeId());
@@ -148,8 +144,6 @@ public class PeerInfoTests {
 		assertNotNull(peer1.getPrivateKey());
 		assertNotNull(peer1.getId());
 		assertEquals(peer.getId(), peer1.getId());
-		assertNotNull(peer1.getNonce());
-		assertNotEquals(peer.getNonce(), peer1.getNonce());
 		assertEquals(1, peer1.getSequenceNumber());
 		assertFalse(peer1.isAuthenticated());
 		assertNull(peer1.getNodeId());
@@ -170,8 +164,6 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getPrivateKey());
 		assertNotNull(peer2.getId());
 		assertEquals(peer.getId(), peer2.getId());
-		assertNotNull(peer2.getNonce());
-		assertNotEquals(peer1.getNonce(), peer2.getNonce());
 		assertEquals(2, peer2.getSequenceNumber());
 		assertFalse(peer2.isAuthenticated());
 		assertNull(peer2.getNodeId());
@@ -215,7 +207,6 @@ public class PeerInfoTests {
 		assertTrue(peer.hasPrivateKey());
 		assertNotNull(peer.getPrivateKey());
 		assertNotNull(peer.getId());
-		assertNotNull(peer.getNonce());
 		assertEquals(0, peer.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -234,8 +225,6 @@ public class PeerInfoTests {
 		assertNotNull(peer1.getPrivateKey());
 		assertNotNull(peer1.getId());
 		assertEquals(peer.getId(), peer1.getId());
-		assertNotNull(peer1.getNonce());
-		assertNotEquals(peer.getNonce(), peer1.getNonce());
 		assertEquals(1, peer1.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -254,8 +243,6 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getPrivateKey());
 		assertNotNull(peer2.getId());
 		assertEquals(peer.getId(), peer2.getId());
-		assertNotNull(peer2.getNonce());
-		assertNotEquals(peer1.getNonce(), peer2.getNonce());
 		assertEquals(2, peer2.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -269,7 +256,6 @@ public class PeerInfoTests {
 		PeerInfo peer3 = peer2.update().node(node).endpoint(endpoint2).build();
 		assertNotSame(peer2, peer3);
 		assertEquals(node.getId(), peer3.getNodeId());
-		assertNotEquals(peer2.getNonce(), peer3.getNonce());
 		assertEquals(endpoint2, peer3.getEndpoint());
 		assertTrue(peer3.isAuthenticated());
 		assertEquals(3, peer3.getSequenceNumber());
@@ -282,7 +268,7 @@ public class PeerInfoTests {
 		assertThrows(IllegalArgumentException.class, () -> peer3.update().node(new CryptoIdentity()).endpoint(endpoint2).build());
 		assertThrows(IllegalArgumentException.class, () -> peer3.update().identity(new CryptoIdentity()).node(node).endpoint(endpoint2).build());
 
-		peer.getNonce()[0] = (byte) (peer.getNonce()[0] + 1);
+		peer.getSignature()[0] = (byte) (peer.getSignature()[0] + 1);
 		assertTrue(peer.isValid());
 	}
 
@@ -308,7 +294,6 @@ public class PeerInfoTests {
 		assertTrue(peer.hasPrivateKey());
 		assertNotNull(peer.getPrivateKey());
 		assertNotNull(peer.getId());
-		assertNotNull(peer.getNonce());
 		assertEquals(0, peer.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -331,8 +316,6 @@ public class PeerInfoTests {
 		assertNotNull(peer1.getPrivateKey());
 		assertNotNull(peer1.getId());
 		assertEquals(peer.getId(), peer1.getId());
-		assertNotNull(peer1.getNonce());
-		assertNotEquals(peer.getNonce(), peer1.getNonce());
 		assertEquals(1, peer1.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -353,8 +336,6 @@ public class PeerInfoTests {
 		assertNotNull(peer2.getPrivateKey());
 		assertNotNull(peer2.getId());
 		assertEquals(peer.getId(), peer2.getId());
-		assertNotNull(peer2.getNonce());
-		assertNotEquals(peer1.getNonce(), peer2.getNonce());
 		assertEquals(2, peer2.getSequenceNumber());
 		assertTrue(peer.isAuthenticated());
 		assertEquals(node.getId(), peer.getNodeId());
@@ -370,7 +351,6 @@ public class PeerInfoTests {
 		assertNotSame(peer2, peer3);
 		assertEquals(node.getId(), peer3.getNodeId());
 		assertEquals(-57, peer3.getFingerprint());
-		assertNotEquals(peer2.getNonce(), peer3.getNonce());
 		assertEquals(endpoint2, peer3.getEndpoint());
 		assertArrayEquals(extraData2, peer3.getExtraData());
 		assertTrue(peer3.hasPrivateKey());
@@ -393,17 +373,58 @@ public class PeerInfoTests {
 	@Test
 	void testInvalidPeerInfo() {
 		Id peerId = Id.random();
-		byte[] nonce = Random.randomBytes(PeerInfo.NONCE_BYTES);
 		byte[] sig = Random.randomBytes(Signature.BYTES);
 
 		// Invalid sequence number
-		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, nonce, -1, null, null, sig, 0, "uri", null));
+		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, -1, null, null, sig, 0, "uri", null));
 
 		// NodeId without NodeSig
-		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, nonce, 0, Id.random(), null, sig, 1, "uri", null));
+		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, 0, Id.random(), null, sig, 1, "uri", null));
 
 		// NodeSig without NodeId
-		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, nonce, 0, null, sig, sig, 2, "uri", null));
+		assertThrows(IllegalArgumentException.class, () -> PeerInfo.of(peerId, 0, null, sig, sig, 2, "uri", null));
+	}
+
+	/**
+	 * The node signature must cover the fingerprint and the sequence number.
+	 * <p>
+	 * If it covered only (peerId, nodeId) it would be a constant, and so a permanent bearer
+	 * credential: whoever held the peer private key could staple one node signature onto every
+	 * later version of the peer, forever, without the node ever taking part again.
+	 */
+	@Test
+	void testNodeSignatureBindsFingerprintAndSequenceNumber() {
+		Identity node = new CryptoIdentity();
+		PeerInfo peer = PeerInfo.builder().node(node).endpoint("tcp://203.0.113.126:5678").build();
+
+		assertTrue(peer.isAuthenticated());
+		assertTrue(peer.isValid());
+
+		// Recomputed here so the binding cannot be dropped from the digest without failing a test.
+		byte[] digest = Hash.sha256(peer.getId().bytesUnsafe(), node.getId().bytesUnsafe(),
+				Bytes.fromLong(peer.getFingerprint()), Bytes.fromInteger(peer.getSequenceNumber()));
+		assertTrue(Signature.verify(digest, peer.getNodeSignature(), node.getId().toSignatureKey()));
+
+		// A new version of the same peer instance: same fingerprint, higher sequence number.
+		PeerInfo updated = peer.update().node(node).endpoint("tcp://203.0.113.126:5679").build();
+		assertTrue(updated.isValid());
+		assertEquals(peer.getFingerprint(), updated.getFingerprint());
+		assertEquals(peer.getSequenceNumber() + 1, updated.getSequenceNumber());
+		assertFalse(Arrays.equals(peer.getNodeSignature(), updated.getNodeSignature()));
+
+		// Replaying the previous version's node signature at the new sequence number is rejected.
+		PeerInfo replayed = PeerInfo.of(updated.getId(), updated.getSequenceNumber(), node.getId(),
+				peer.getNodeSignature(), updated.getSignature(), updated.getFingerprint(),
+				updated.getEndpoint(), updated.getExtraData());
+		assertFalse(replayed.isValid());
+
+		// Two instances of one peer, same node and sequence number, differing only by fingerprint.
+		Identity owner = new CryptoIdentity();
+		PeerInfo first = PeerInfo.builder().identity(owner).node(node)
+				.fingerprint(1).endpoint("tcp://203.0.113.126:5678").build();
+		PeerInfo second = PeerInfo.builder().identity(owner).node(node)
+				.fingerprint(2).endpoint("tcp://203.0.113.126:5678").build();
+		assertFalse(Arrays.equals(first.getNodeSignature(), second.getNodeSignature()));
 	}
 
 	@Test
@@ -414,7 +435,7 @@ public class PeerInfoTests {
 
 		assertEquals(p1, p2);
 		assertEquals(p1.hashCode(), p2.hashCode());
-		assertNotEquals(p1, p3); // different keys and nonce
+		assertNotEquals(p1, p3); // different keys
 	}
 
 	@ParameterizedTest

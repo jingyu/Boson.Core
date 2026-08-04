@@ -86,17 +86,11 @@ public class PeerInfoSerializer extends StdSerializer<PeerInfo> {
 			}
 		}
 
-		// nonce
-		byte[] binary = value.getNonce();
-		if (binary != null) {
-			gen.writeFieldName("n");
-			gen.writeBinary(Base64Variants.MODIFIED_FOR_URL, binary, 0, binary.length);
-		}
-
 		// sequence number
 		if (value.getSequenceNumber() > 0)
 			gen.writeNumberField("seq", value.getSequenceNumber());
 
+		byte[] binary;
 		if (value.getNodeId() != null) {
 			if (binaryFormat) {
 				gen.writeFieldName("o");

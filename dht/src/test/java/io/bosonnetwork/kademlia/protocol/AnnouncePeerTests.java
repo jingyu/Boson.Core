@@ -50,24 +50,24 @@ public class AnnouncePeerTests extends MessageTests {
 						.sequenceNumber(6)
 						.fingerprint(1000)
 						.endpoint("tcp://203.0.113.10:3456")
-						.build(), 208),
+						.build(), 180),
 				Arguments.of("simple+extra", PeerInfo.builder()
 						.sequenceNumber(7)
 						.endpoint("tcp://203.0.113.10:3456")
 						.extra(Map.of("foo", "bar", "buz", true))
-						.build(), 233),
+						.build(), 205),
 				Arguments.of("authenticated", PeerInfo.builder()
 						.node(new CryptoIdentity())
 						.sequenceNumber(8)
 						.endpoint("tcp://203.0.113.10:3456")
-						.build(), 319),
+						.build(), 291),
 				Arguments.of("authenticated+extra", PeerInfo.builder()
 						.node(new CryptoIdentity())
 						.fingerprint(-1234)
 						.sequenceNumber(9)
 						.endpoint("tcp://203.0.113.10:3456")
 						.extra(Map.of("foo", "bar", "buz", true))
-						.build(), 332)
+						.build(), 304)
 		);
 	}
 

@@ -56,7 +56,7 @@ public class StoreValueTests extends MessageTests {
 
 		return Stream.of(
 			Arguments.of("immutable", immutable, 62),
-			Arguments.of("signed", signedValue, 202),
+			Arguments.of("signed", signedValue, 174),
 			Arguments.of("encrypted", encryptedValue, 260)
 		);
 	}

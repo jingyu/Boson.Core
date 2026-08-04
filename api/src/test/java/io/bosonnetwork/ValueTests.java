@@ -63,7 +63,8 @@ public class ValueTests {
 		assertNotNull(value.getPublicKey());
 		assertEquals(value.getPublicKey(), value.getId());
 		assertNull(value.getRecipient());
-		assertNotNull(value.getNonce());
+		// Signed values carry no nonce: it is the CryptoBox nonce, only encrypted values need one.
+		assertNull(value.getNonce());
 		assertEquals(0, value.getSequenceNumber());
 		assertNotNull(value.getSignature());
 		assertArrayEquals(data, value.getData());
@@ -79,8 +80,7 @@ public class ValueTests {
 		assertFalse(value1.isEncrypted());
 		assertEquals(value.getPublicKey(), value1.getPublicKey());
 		assertNull(value1.getRecipient());
-		assertNotNull(value1.getNonce());
-		assertFalse(Arrays.equals(value.getNonce(), value1.getNonce()));
+		assertNull(value1.getNonce());
 		assertEquals(1, value1.getSequenceNumber());
 		assertNotNull(value1.getSignature());
 		assertArrayEquals(data1, value1.getData());
@@ -96,8 +96,7 @@ public class ValueTests {
 		assertFalse(value2.isEncrypted());
 		assertEquals(value.getPublicKey(), value2.getPublicKey());
 		assertNull(value2.getRecipient());
-		assertNotNull(value.getNonce());
-		assertFalse(Arrays.equals(value1.getNonce(), value2.getNonce()));
+		assertNull(value2.getNonce());
 		assertEquals(2, value2.getSequenceNumber());
 		assertNotNull(value2.getSignature());
 		assertArrayEquals(data2, value2.getData());
@@ -106,7 +105,7 @@ public class ValueTests {
 		Value value3 = value2.update().data(data2).build();
 		assertNotSame(value2, value3);
 		assertArrayEquals(data2, value3.getData());
-		assertFalse(Arrays.equals(value2.getNonce(), value3.getNonce()));
+		assertNull(value3.getNonce());
 		assertEquals(3, value3.getSequenceNumber());
 
 		Value value4 = value3.withoutPrivateKey();
@@ -172,7 +171,7 @@ public class ValueTests {
 		assertTrue(value2.isEncrypted());
 		assertEquals(value.getPublicKey(), value2.getPublicKey());
 		assertEquals(recipient, value1.getRecipient());
-		assertNotNull(value.getNonce());
+		assertNotNull(value2.getNonce());
 		assertFalse(Arrays.equals(value1.getNonce(), value2.getNonce()));
 		assertEquals(2, value2.getSequenceNumber());
 		assertNotNull(value2.getSignature());
@@ -208,17 +207,24 @@ public class ValueTests {
 
 		byte[] data = "data".getBytes();
 		Id pk = Id.random();
+		Id rec = Id.random();
 		byte[] nonce = Random.randomBytes(Value.NONCE_BYTES);
 		byte[] sig = Random.randomBytes(Signature.BYTES);
 
 		// Invalid sequence number
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null,null, nonce, -1, sig, data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, null, -1, sig, data));
 
 		// Invalid nonce length
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, new byte[10], 0, sig, data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, rec, new byte[10], 0, sig, data));
+
+		// A nonce without a recipient: the nonce belongs to the encryption, not to the signature
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, nonce, 0, sig, data));
+
+		// A recipient without a nonce: the value could never be decrypted
+		assertThrows(NullPointerException.class, () -> Value.of(pk, null, rec, null, 0, sig, data));
 
 		// Invalid signature length
-		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, nonce, 0, new byte[10], data));
+		assertThrows(IllegalArgumentException.class, () -> Value.of(pk, null, null, null, 0, new byte[10], data));
 	}
 
 	@Test

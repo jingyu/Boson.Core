@@ -51,7 +51,6 @@ The `Id` is a 256-bit identifier used to uniquely identify nodes, values, peers,
 | Field | Key | Type | Description |
 | :--- | :--- | :--- | :--- |
 | Peer ID | `id` | `Id` | Public key of the service peer. |
-| Nonce | `n` | `Binary` | 24-byte nonce for signing. |
 | Sequence | `seq` | `Integer` | Incremental version number. |
 | Origin Node | `o` | `Id` | (Optional) Node ID providing the peer. |
 | Node Sig | `os` | `Binary` | (Optional) Signature from the origin node. |
@@ -62,7 +61,7 @@ The `Id` is a 256-bit identifier used to uniquely identify nodes, values, peers,
 
 #### Format Details
 
-| Format | Binary Fields (`n`, `sig`, `os`, `ex`) | Id Fields (`id`, `o`) |
+| Format | Binary Fields (`sig`, `os`, `ex`) | Id Fields (`id`, `o`) |
 | :--- | :--- | :--- |
 | **JSON** | Base64 (URL-safe, no padding) | Base58 String |
 | **CBOR** | Raw Byte String | 32-byte Binary |
@@ -81,7 +80,7 @@ The `Id` is a 256-bit identifier used to uniquely identify nodes, values, peers,
 | :--- | :--- | :--- | :--- |
 | Public Key | `k` | `Id` | (Mutable/Encrypted) Owner's public key. |
 | Recipient | `rec` | `Id` | (Optional) Recipient's public key for encrypted values. |
-| Nonce | `n` | `Binary` | 24-byte nonce for signing. |
+| Nonce | `n` | `Binary` | (Encrypted only) 24-byte CryptoBox nonce. Present exactly when `rec` is. |
 | Sequence | `seq` | `Integer` | (Mutable/Encrypted) Incremental version number. |
 | Signature | `sig` | `Binary` | (Mutable/Encrypted) Signature of the data. |
 | Data | `v` | `Binary` | The actual value data (encrypted if `rec` is present). |

@@ -76,10 +76,10 @@ public interface SqlDialect {
 	default String upsertPeer() {
 		return """
 				INSERT INTO peers (
-					id, fingerprint, private_key, nonce, sequence_number, node_id, node_signature,
+					id, fingerprint, private_key, sequence_number, node_id, node_signature,
 					signature, endpoint, extra, persistent, created, updated
 				) VALUES (
-					#{id}, #{fingerprint}, #{privateKey}, #{nonce}, #{sequenceNumber}, #{nodeId}, #{nodeSignature},
+					#{id}, #{fingerprint}, #{privateKey}, #{sequenceNumber}, #{nodeId}, #{nodeSignature},
 					#{signature}, #{endpoint}, #{extra}, #{persistent}, #{created}, #{updated}
 				) ON CONFLICT(id, fingerprint) DO UPDATE SET
 					-- Content is replaced only when the incoming peer is newer (higher sequence number);
@@ -89,7 +89,6 @@ public interface SqlDialect {
 						THEN excluded.private_key
 						ELSE peers.private_key
 					END,
-					nonce = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.nonce ELSE peers.nonce END,
 					node_id = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.node_id ELSE peers.node_id END,
 					node_signature = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.node_signature ELSE peers.node_signature END,
 					signature = CASE WHEN peers.sequence_number < excluded.sequence_number THEN excluded.signature ELSE peers.signature END,

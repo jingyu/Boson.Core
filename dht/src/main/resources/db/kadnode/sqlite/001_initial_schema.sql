@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS peers (
     id BLOB NOT NULL,
     fingerprint INTEGER NOT NULL default 0,
     private_key BLOB DEFAULT NULL,
-    nonce BLOB NOT NULL,
     sequence_number INTEGER NOT NULL DEFAULT 0,
     node_id BLOB DEFAULT NULL,
     node_signature BLOB DEFAULT NULL,
