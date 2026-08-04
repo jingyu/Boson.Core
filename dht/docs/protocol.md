@@ -75,14 +75,17 @@ Encoded as a **map/object**. The peer ID (`id`) may be omitted by the serializer
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | Peer ID | `Id` | Conditional | Public key of the service peer. Omitted when the receiver already knows it. |
-| `n` | Nonce | `Binary` | Yes | 24-byte random nonce. |
 | `seq` | Sequence | `Number` | No | Version number. Omitted when zero. |
 | `o` | Node ID | `Id` | No | ID of the DHT node hosting the peer (authenticated peers only). |
-| `os` | Node Signature | `Binary` | No | Node's Ed25519 signature over the peer record. Required if `o` is present. |
+| `os` | Node Signature | `Binary` | No | Node's Ed25519 signature over `SHA-256(id, o, f, seq)`. Required if `o` is present. |
 | `sig` | Peer Signature | `Binary` | Yes | Owner's Ed25519 signature over the peer record. |
 | `f` | Fingerprint | `Number` | No | Unique `long` fingerprint for this peer instance. Omitted when zero. |
 | `e` | Endpoint | `String` | Yes | Service endpoint URI (e.g., `https://...`). |
 | `ex` | Extra Data | `Binary` | No | Opaque extension bytes. |
+
+> The node signature `os` covers the fingerprint `f` and the sequence number `seq`, so it attests one specific version of one specific peer instance and must be reissued by the node on every update. Signing only `(id, o)` would make it a constant, and so a permanent bearer credential: whoever held the peer private key could staple one node signature onto every later version, forever, without the node taking part again.
+>
+> Neither signature uses an application-supplied nonce. Ed25519 derives its per-signature randomness internally, so a nonce would add nothing.
 
 ### Value
 Values can be **immutable**, **mutable**, or **encrypted** (mutable + recipient).
@@ -90,8 +93,10 @@ Values can be **immutable**, **mutable**, or **encrypted** (mutable + recipient)
 | Type | Required fields | Description |
 | :--- | :--- | :--- |
 | Immutable | `v` only | ID = SHA-256(`v`). Content is fixed. |
-| Mutable | `k`, `n`, `seq`, `sig`, `v` | ID = `k`. Owner updates by incrementing `seq`. |
+| Mutable | `k`, `seq`, `sig`, `v` | ID = `k`. Owner updates by incrementing `seq`. |
 | Encrypted | `k`, `rec`, `n`, `seq`, `sig`, `v` | Mutable value whose payload is encrypted for the recipient `rec`. |
+
+> The nonce `n` is the CryptoBox nonce and exists only for encrypted values - it is present exactly when `rec` is. Signed values carry none: Ed25519 derives its per-signature randomness internally, so an application-supplied nonce would add nothing. The nonce is covered by `sig`, since an unauthenticated nonce would let an attacker garble the recipient's decryption.
 
 Value fields as they appear on the wire:
 
@@ -99,7 +104,7 @@ Value fields as they appear on the wire:
 | :--- | :--- | :--- | :--- |
 | `k` | Public Key | `Id` | Owner's public key (mutable/encrypted only). |
 | `rec` | Recipient | `Id` | Recipient's public key (encrypted only). |
-| `n` | Nonce | `Binary` | 24-byte nonce (mutable/encrypted only). |
+| `n` | Nonce | `Binary` | 24-byte CryptoBox nonce (encrypted only). |
 | `seq` | Sequence | `Number` | Version number (mutable/encrypted only). |
 | `sig` | Signature | `Binary` | Owner's Ed25519 signature (mutable/encrypted only). |
 | `v` | Data | `Binary` | The value payload (all types). |
@@ -175,7 +180,7 @@ When the value is **found**, the response contains value fields. When the value 
 | `n6` | Nodes (IPv6) | `Array<NodeInfo>` | Value not found | Closest IPv6 nodes. |
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
-| `n` | Nonce | `Binary` | Mutable/encrypted | 24-byte nonce. |
+| `n` | Nonce | `Binary` | Encrypted | 24-byte CryptoBox nonce. |
 | `seq` | Sequence | `Number` | Mutable/encrypted | Version number. Omitted when zero. |
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Value found | The value payload. |
@@ -196,7 +201,7 @@ Publishes a value to a node. Requires a write token from a prior `FIND_VALUE` or
 | `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
-| `n` | Nonce | `Binary` | Mutable/encrypted | 24-byte nonce. |
+| `n` | Nonce | `Binary` | Encrypted | 24-byte CryptoBox nonce. |
 | `seq` | Sequence | `Number` | Mutable/encrypted | New version number. Omitted when zero. |
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Yes | The value payload. |
@@ -237,10 +242,9 @@ Registers a service endpoint with a node. Requires a write token from a prior `F
 | `tok` | Token | `Number` | Yes | Write token from a prior lookup. |
 | `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Peer ID | `Id` | Yes | Public key of the service peer (the peer owner's key). |
-| `n` | Nonce | `Binary` | Yes | 24-byte nonce. |
 | `seq` | Sequence | `Number` | No | Current sequence number. Omitted when zero. |
 | `o` | Node ID | `Id` | No | ID of the DHT node hosting the peer (authenticated mode only). |
-| `os` | Node Signature | `Binary` | No | The hosting node's Ed25519 signature over the peer record. Required if `o` is present. |
+| `os` | Node Signature | `Binary` | No | The hosting node's Ed25519 signature over `SHA-256(k, o, f, seq)`. Required if `o` is present. |
 | `sig` | Peer Signature | `Binary` | Yes | Peer owner's Ed25519 signature over the peer record. |
 | `f` | Fingerprint | `Number` | Yes | Unique `long` fingerprint distinguishing peer instances with the same `k`. |
 | `e` | Endpoint | `String` | Yes | Service URI (e.g., `https://example.com:8080`). |

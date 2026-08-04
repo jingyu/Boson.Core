@@ -54,7 +54,7 @@ import io.bosonnetwork.utils.Hex;
  * the sequence number distinguishes different versions.
  */
 public class Value {
-	/** The number of bytes in the nonce. */
+	/** The number of bytes in the CryptoBox nonce carried by encrypted values. */
 	public static final int NONCE_BYTES = 24;
 
 	/** The public key for mutable values. */
@@ -63,7 +63,13 @@ public class Value {
 	private final byte @Nullable [] privateKey;
 	/** The recipient's public key for encrypted values. */
 	private final @Nullable Id recipient;
-	/** The nonce for mutable or encrypted values. */
+	/**
+	 * The CryptoBox nonce, present only for encrypted values.
+	 * <p>
+	 * Signed values do not carry a nonce: Ed25519 derives its per-signature randomness internally,
+	 * so an application-supplied nonce would add nothing. The recipient decides whether a nonce is
+	 * present - it is non-null exactly when {@link #isEncrypted()} is true.
+	 */
 	private final byte @Nullable [] nonce;
 	/** The sequence number for mutable values. */
 	private final int sequenceNumber;
@@ -120,7 +126,7 @@ public class Value {
 	 * @param publicKey      The public key for mutable values (optional).
 	 * @param privateKey     The private key (optional).
 	 * @param recipient      The recipient's public key for encrypted values (optional).
-	 * @param nonce          The nonce.
+	 * @param nonce          The nonce, required for encrypted values and must be null otherwise.
 	 * @param sequenceNumber The sequence number.
 	 * @param signature      The signature.
 	 * @param data           The data.
@@ -134,9 +140,14 @@ public class Value {
 			if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
 				throw new IllegalArgumentException("Invalid private key: incorrect length");
 
-			Objects.requireNonNull(nonce, "nonce");
-			if (nonce.length != NONCE_BYTES)
-				throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
+			// The nonce is the CryptoBox nonce, so the recipient decides whether it is present.
+			if (recipient != null) {
+				Objects.requireNonNull(nonce, "nonce");
+				if (nonce.length != NONCE_BYTES)
+					throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
+			} else if (nonce != null) {
+				throw new IllegalArgumentException("Invalid nonce: must be null when recipient is null");
+			}
 
 			if (sequenceNumber < 0)
 				throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
@@ -173,18 +184,16 @@ public class Value {
 	 * Creates a new mutable Value instance from existing information.
 	 *
 	 * @param publicKey      The public key.
-	 * @param nonce          The nonce.
 	 * @param sequenceNumber The sequence number.
 	 * @param signature      The signature.
 	 * @param data           The data.
 	 * @return The new Value instance.
 	 */
-	public static Value of(Id publicKey, byte[] nonce, int sequenceNumber, byte[] signature, byte[] data) {
+	public static Value of(Id publicKey, int sequenceNumber, byte[] signature, byte[] data) {
 		Objects.requireNonNull(publicKey, "publicKey");
-		Objects.requireNonNull(nonce, "nonce");
 		Objects.requireNonNull(signature, "signature");
 		Objects.requireNonNull(data, "data");
-		return of(publicKey, null, null, nonce, sequenceNumber, signature, data);
+		return of(publicKey, null, null, null, sequenceNumber, signature, data);
 	}
 
 	/**
@@ -219,7 +228,7 @@ public class Value {
 	 * @param privateKey     The private key associated with the value. Optional.
 	 * @param sequenceNumber The sequence number for the value. Must be non-negative.
 	 * @param data           The data to be included in the value. Cannot be null or empty.
-	 * @return A new signed {@code Value} instance containing the specified data, nonce, sequence number, and signature.
+	 * @return A new signed {@code Value} instance containing the specified data, sequence number, and signature.
 	 * @throws IllegalArgumentException if the sequence number is negative, or the data is null/empty.
 	 */
 	private static Value createSigned(Identity identity, byte @Nullable[] privateKey, int sequenceNumber, byte[] data) {
@@ -231,14 +240,11 @@ public class Value {
 		if (data.length == 0)
 			throw new IllegalArgumentException("Invalid data: must not be empty");
 
-		byte[] nonce = new byte[NONCE_BYTES];
-		Random.secureRandom().nextBytes(nonce);
-
 		Id publicKey = identity.getId();
-		byte[] digest = computeDigest(publicKey, null, nonce, sequenceNumber, data);
+		byte[] digest = computeDigest(publicKey, null, null, sequenceNumber, data);
 		byte[] signature = identity.sign(digest);
 
-		return new Value(publicKey, privateKey, null, nonce, sequenceNumber, signature, data);
+		return new Value(publicKey, privateKey, null, null, sequenceNumber, signature, data);
 	}
 
 	/**
@@ -265,6 +271,8 @@ public class Value {
 		if (data.length == 0)
 			throw new IllegalArgumentException("Invalid data: must not be empty");
 
+		// A fresh nonce per build, including on update: reusing a nonce across two plaintexts under
+		// the same sender/recipient shared secret would destroy the confidentiality of both.
 		byte[] nonce = new byte[NONCE_BYTES];
 		Random.secureRandom().nextBytes(nonce);
 
@@ -358,7 +366,7 @@ public class Value {
 	/**
 	 * Gets the associated nonce of the value.
 	 *
-	 * @return the nonce of the value, or null for immutable values.
+	 * @return the CryptoBox nonce, or null unless the value is encrypted.
 	 */
 	public byte @Nullable [] getNonce() {
 		return nonce != null ? nonce.clone() : null;
@@ -517,9 +525,12 @@ public class Value {
 		MessageDigest sha = Hash.sha256();
 		if (publicKey != null) {
 			sha.update(publicKey.bytesUnsafe());
-			if (recipient != null)
+			// The nonce only exists for encrypted values, but it must be signed where it does:
+			// an unauthenticated nonce would let an attacker garble the recipient's decryption.
+			if (recipient != null) {
 				sha.update(recipient.bytesUnsafe());
-			sha.update(Objects.requireNonNull(nonce, "nonce must not be null"));
+				sha.update(Objects.requireNonNull(nonce, "nonce must not be null"));
+			}
 			sha.update(Bytes.fromInteger(sequenceNumber));
 		}
 		sha.update(data);
@@ -542,8 +553,13 @@ public class Value {
 			if (signature == null || signature.length != Signature.BYTES)
 				return false;
 
-			if (nonce == null || nonce.length != NONCE_BYTES)
+			// The nonce is the CryptoBox nonce, so the recipient decides whether it is present.
+			if (recipient != null) {
+				if (nonce == null || nonce.length != NONCE_BYTES)
+					return false;
+			} else if (nonce != null) {
 				return false;
+			}
 
 			if (sequenceNumber < 0)
 				return false;

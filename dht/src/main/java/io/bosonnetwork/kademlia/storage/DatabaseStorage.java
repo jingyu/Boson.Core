@@ -480,7 +480,6 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		map.put("id", peerInfo.getId().bytesUnsafe());
 		map.put("fingerprint", peerInfo.getFingerprint());
 		map.put("privateKey", peerInfo.getPrivateKey());
-		map.put("nonce", peerInfo.getNonce());
 		map.put("sequenceNumber", peerInfo.getSequenceNumber());
 		if (peerInfo.isAuthenticated()) {
 			map.put("nodeId", peerInfo.getNodeId().bytesUnsafe());
@@ -503,7 +502,6 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		Id id = getId(row, "id");
 		long fingerprint = row.getLong("fingerprint");
 		byte[] privateKey = getBytes(row, "private_key");
-		byte[] nonce = getBytes(row, "nonce");
 		int sequenceNumber = row.getInteger("sequence_number");
 		Id nodeId = getId(row, "node_id");
 		byte[] nodeSignature = getBytes(row, "node_signature");
@@ -511,7 +509,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 		String endpoint = row.getString("endpoint");
 		byte[] extra = getBytes(row, "extra");
 
-		return PeerInfo.of(id, privateKey, nonce, sequenceNumber, nodeId, nodeSignature, signature, fingerprint, endpoint, extra);
+		return PeerInfo.of(id, privateKey, sequenceNumber, nodeId, nodeSignature, signature, fingerprint, endpoint, extra);
 	}
 
 	private static Id getId(Row row, String column) {

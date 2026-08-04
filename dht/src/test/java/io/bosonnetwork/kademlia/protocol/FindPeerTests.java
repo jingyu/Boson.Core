@@ -125,12 +125,12 @@ public class FindPeerTests extends MessageTests {
 
 		return Stream.of(
 				Arguments.of("v4", nodes4, null, null, 380),
-				Arguments.of("v4+peers", nodes4, null, peers, 1332),
+				Arguments.of("v4+peers", nodes4, null, peers, 1192),
 				Arguments.of("v6", null, nodes6, null, 476),
-				Arguments.of("v6+peers", null, nodes6, peers, 1428),
+				Arguments.of("v6+peers", null, nodes6, peers, 1288),
 				Arguments.of("v4+v6", nodes4, nodes6, null, 832),
-				Arguments.of("v4+v6+peers", nodes4, nodes6, peers, 1784),
-				Arguments.of("peers", null, null, peers, 976)
+				Arguments.of("v4+v6+peers", nodes4, nodes6, peers, 1644),
+				Arguments.of("peers", null, null, peers, 836)
 		);
 	}
 

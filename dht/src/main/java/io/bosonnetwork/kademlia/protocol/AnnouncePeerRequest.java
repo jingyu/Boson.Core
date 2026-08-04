@@ -43,7 +43,6 @@ public class AnnouncePeerRequest implements Request {
 			@JsonProperty(value = "tok", required = true) int token,
 			@JsonProperty(value = "cas") Integer expectedSequenceNumber,
 			@JsonProperty(value = "k", required = true) Id peerId,
-			@JsonProperty(value = "n", required = true) byte[] nonce,
 			@JsonProperty(value = "seq") int sequenceNumber,
 			@JsonProperty(value = "o") Id nodeId,
 			@JsonProperty(value = "os") byte[] nodeSig,
@@ -53,7 +52,7 @@ public class AnnouncePeerRequest implements Request {
 			@JsonProperty(value = "ex") byte[] extraData) {
 		this.token = token;
 		this.expectedSequenceNumber = expectedSequenceNumber != null ? expectedSequenceNumber : -1;
-		this.peer = PeerInfo.of(peerId, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		this.peer = PeerInfo.of(peerId, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 
 	public AnnouncePeerRequest(PeerInfo peer, int token, int expectedSequenceNumber) {
@@ -84,11 +83,6 @@ public class AnnouncePeerRequest implements Request {
 	@JsonProperty("k")
 	protected Id getPeerId() {
 		return peer.getId();
-	}
-
-	@JsonProperty("n")
-	protected byte[] getNonce() {
-		return peer.getNonce();
 	}
 
 	@JsonProperty("seq")

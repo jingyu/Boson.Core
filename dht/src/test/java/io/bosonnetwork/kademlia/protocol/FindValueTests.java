@@ -145,18 +145,18 @@ public class FindValueTests extends MessageTests {
 		return Stream.of(
 				Arguments.of("v4", nodes4, null, null, 380),
 				Arguments.of("v4+immutable", nodes4, null, immutable, 409),
-				Arguments.of("v4+signed", nodes4, null, signedValue, 539),
+				Arguments.of("v4+signed", nodes4, null, signedValue, 511),
 				Arguments.of("v4+encrypted", nodes4, null, encryptedValue, 597),
 				Arguments.of("v6", null, nodes6, null, 476),
 				Arguments.of("v6+immutable", null, nodes6, immutable, 505),
-				Arguments.of("v6+signed", null, nodes6, signedValue, 635),
+				Arguments.of("v6+signed", null, nodes6, signedValue, 607),
 				Arguments.of("v6+encrypted", null, nodes6, encryptedValue, 693),
 				Arguments.of("v4+v6", nodes4, nodes6, null, 832),
 				Arguments.of("v4+v6+immutable", nodes4, nodes6, immutable, 861),
-				Arguments.of("v4+v6+signed", nodes4, nodes6, signedValue, 991),
+				Arguments.of("v4+v6+signed", nodes4, nodes6, signedValue, 963),
 				Arguments.of("v4+v6+encrypted", nodes4, nodes6, encryptedValue, 1049),
 				Arguments.of("immutable", null, null, immutable, 53),
-				Arguments.of("signed", null, null, signedValue, 183),
+				Arguments.of("signed", null, null, signedValue, 155),
 				Arguments.of("encrypted", null, null, encryptedValue, 241));
 	}
 

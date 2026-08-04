@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS peers (
     id BYTEA NOT NULL,
     fingerprint BIGINT NOT NULL default 0,
     private_key BYTEA DEFAULT NULL,
-    nonce BYTEA NOT NULL,
     sequence_number INTEGER NOT NULL DEFAULT 0,
     node_id BYTEA DEFAULT NULL,
     node_signature BYTEA DEFAULT NULL,

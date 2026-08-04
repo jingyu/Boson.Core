@@ -63,12 +63,15 @@ import io.bosonnetwork.utils.Hex;
  * </ul>
  *
  * <p>These two signatures serve different purposes and do not overlap.
+ *
+ * <p>The node signature covers the fingerprint and the sequence number, which makes it an
+ * attestation of one specific version of one specific peer instance. Without them it would be a
+ * constant function of the (peerId, nodeId) pair, and so a permanent bearer credential: whoever
+ * held the peer private key could staple a single node signature onto any later PeerInfo - new
+ * endpoint, new extra data, higher sequence number - without the node ever taking part again.
  */
 
 public class PeerInfo {
-	/** The number of bytes in the nonce. */
-	public static final int NONCE_BYTES = 24;
-
 	/** Attribute key to omit the peer ID in the peer info used in JsonContext. */
 	public static final Object ATTRIBUTE_OMIT_PEER_ID = new Object();
 	/** Attribute key of the peer ID used in JsonContext. */
@@ -78,8 +81,6 @@ public class PeerInfo {
 	private final Id publicKey;
 	/** The private key to sign the peer info. Optional. */
 	private final byte @Nullable [] privateKey;
-	/** The nonce. */
-	private final byte[] nonce;
 	/** The sequence number. */
 	private final int sequenceNumber;
 	/** Optional: The node that provides the peer. */
@@ -101,12 +102,11 @@ public class PeerInfo {
 
 	private transient @Nullable Map<String, Object> extra;
 
-	private PeerInfo(Id peerId, byte @Nullable [] privateKey, byte[] nonce, int sequenceNumber,
+	private PeerInfo(Id peerId, byte @Nullable [] privateKey, int sequenceNumber,
 					 @Nullable Id nodeId, byte @Nullable [] nodeSig,
 					 byte[] signature, long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		this.publicKey = Objects.requireNonNull(peerId);
 		this.privateKey = privateKey == null ? null : privateKey.clone();
-		this.nonce = Objects.requireNonNull(nonce).clone();
 		this.sequenceNumber = sequenceNumber;
 		this.nodeId = nodeId;
 		if (nodeId != null)
@@ -122,7 +122,6 @@ public class PeerInfo {
 	 * Creates a new PeerInfo instance from the existing peer information.
 	 *
 	 * @param peerId         The peer ID.
-	 * @param nonce          The nonce.
 	 * @param sequenceNumber The sequence number.
 	 * @param nodeId         The node ID (optional).
 	 * @param nodeSig        The node signature (optional).
@@ -132,9 +131,9 @@ public class PeerInfo {
 	 * @param extraData      The extra data.
 	 * @return The new PeerInfo instance.
 	 */
-	public static PeerInfo of(Id peerId, byte[] nonce, int sequenceNumber, Id nodeId, byte[] nodeSig,
+	public static PeerInfo of(Id peerId, int sequenceNumber, Id nodeId, byte[] nodeSig,
 							  byte[] signature, long fingerprint, String endpoint, byte[] extraData) {
-		return of(peerId, null, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		return of(peerId, null, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 
 	/**
@@ -142,7 +141,6 @@ public class PeerInfo {
 	 *
 	 * @param peerId         The peer ID.
 	 * @param privateKey     The private key (optional).
-	 * @param nonce          The nonce.
 	 * @param sequenceNumber The sequence number.
 	 * @param nodeId         The node ID (optional).
 	 * @param nodeSig        The node signature (optional).
@@ -152,19 +150,15 @@ public class PeerInfo {
 	 * @param extraData      The extra data.
 	 * @return The new PeerInfo instance.
 	 */
-	public static PeerInfo of(Id peerId, byte @Nullable [] privateKey, byte[] nonce, int sequenceNumber, @Nullable Id nodeId,
+	public static PeerInfo of(Id peerId, byte @Nullable [] privateKey, int sequenceNumber, @Nullable Id nodeId,
 							  byte @Nullable [] nodeSig, byte[] signature, long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		Objects.requireNonNull(peerId, "peerId");
-		Objects.requireNonNull(nonce, "nonce");
 		Objects.requireNonNull(signature, "signature");
 		Objects.requireNonNull(endpoint, "endpoint");
 
 		// noinspection DuplicatedCode
 		if (privateKey != null && privateKey.length != Signature.PrivateKey.BYTES)
 			throw new IllegalArgumentException("Invalid private key: incorrect length");
-
-		if (nonce.length != NONCE_BYTES)
-			throw new IllegalArgumentException("Invalid nonce: must be exactly NONCE_BYTES (24 bytes)");
 
 		if (sequenceNumber < 0)
 			throw new IllegalArgumentException("Invalid sequence number: must be non-negative");
@@ -185,7 +179,7 @@ public class PeerInfo {
 
 		endpoint = Normalizer.normalize(endpoint, Normalizer.Form.NFC);
 
-		return new PeerInfo(peerId, privateKey, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		return new PeerInfo(peerId, privateKey, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 
 	/**
@@ -211,25 +205,21 @@ public class PeerInfo {
 	 */
 	private static PeerInfo create(Identity peer, byte @Nullable [] privateKey, @Nullable Identity node,
 	                               int sequenceNumber, long fingerprint, String endpoint, byte @Nullable [] extraData) {
-		byte[] nonce = new byte[NONCE_BYTES];
-		Random.secureRandom().nextBytes(nonce);
-
 		Id publicKey = peer.getId();
 		Id nodeId;
 		byte[] nodeSig;
 		if (node != null) {
 			nodeId = node.getId();
-			byte[] digest = Hash.sha256(publicKey.bytesUnsafe(), nodeId.bytesUnsafe(), nonce);
-			nodeSig = node.sign(digest);
+			nodeSig = node.sign(computeNodeDigest(publicKey, nodeId, fingerprint, sequenceNumber));
 		} else {
 			nodeId = null;
 			nodeSig = null;
 		}
 
-		byte[] digest = computeDigest(publicKey, nonce, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
+		byte[] digest = computeDigest(publicKey, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
 		byte[] sig = peer.sign(digest);
 
-		return new PeerInfo(publicKey, privateKey, nonce, sequenceNumber,
+		return new PeerInfo(publicKey, privateKey, sequenceNumber,
 				nodeId, nodeSig, sig, fingerprint, endpoint, extraData);
 	}
 
@@ -258,15 +248,6 @@ public class PeerInfo {
 	 */
 	public byte @Nullable [] getPrivateKey() {
 		return privateKey == null ? null : privateKey.clone();
-	}
-
-	/**
-	 * Gets the nonce.
-	 *
-	 * @return the nonce
-	 */
-	public byte[] getNonce() {
-		return nonce.clone();
 	}
 
 	/**
@@ -383,15 +364,28 @@ public class PeerInfo {
 	}
 
 	/**
+	 * Computes the digest the hosting node signs to attest a peer.
+	 * <p>
+	 * The fingerprint and the sequence number are what bind the attestation to one version of one
+	 * peer instance; see the class documentation for why omitting them would turn the node
+	 * signature into a permanent bearer credential.
+	 *
+	 * @return the digest
+	 */
+	private static byte[] computeNodeDigest(Id publicKey, Id nodeId, long fingerprint, int sequenceNumber) {
+		return Hash.sha256(publicKey.bytesUnsafe(), nodeId.bytesUnsafe(),
+				Bytes.fromLong(fingerprint), Bytes.fromInteger(sequenceNumber));
+	}
+
+	/**
 	 * Computes the digest for signing the peer info.
 	 *
 	 * @return the digest
 	 */
-	private static byte[] computeDigest(Id publicKey, byte[] nonce, int sequenceNumber, @Nullable Id nodeId, byte @Nullable [] nodeSig,
+	private static byte[] computeDigest(Id publicKey, int sequenceNumber, @Nullable Id nodeId, byte @Nullable [] nodeSig,
 										long fingerprint, String endpoint, byte @Nullable [] extraData) {
 		MessageDigest sha = Hash.sha256();
 		sha.update(publicKey.bytesUnsafe());
-		sha.update(nonce);
 		sha.update(Bytes.fromInteger(sequenceNumber));
 		if (nodeId != null) {
 			sha.update(nodeId.bytesUnsafe());
@@ -424,9 +418,6 @@ public class PeerInfo {
 		if (signature.length != Signature.BYTES)
 			return false;
 
-		if (nonce.length != NONCE_BYTES)
-			return false;
-
 		if (sequenceNumber < 0)
 			return false;
 
@@ -435,7 +426,7 @@ public class PeerInfo {
 				return false;
 
 			Signature.PublicKey nodePk = nodeId.toSignatureKey();
-			byte[] digest = Hash.sha256(publicKey.bytesUnsafe(), nodeId.bytesUnsafe(), nonce);
+			byte[] digest = computeNodeDigest(publicKey, nodeId, fingerprint, sequenceNumber);
 			if (!Signature.verify(digest, nodeSig, nodePk))
 				return false;
 		} else {
@@ -443,7 +434,7 @@ public class PeerInfo {
 				return false;
 		}
 
-		byte[] digest = computeDigest(publicKey, nonce, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
+		byte[] digest = computeDigest(publicKey, sequenceNumber, nodeId, nodeSig, fingerprint, endpoint, extraData);
 		Signature.PublicKey peerPk = publicKey.toSignatureKey();
 		return Signature.verify(digest, signature, peerPk);
 	}
@@ -459,7 +450,7 @@ public class PeerInfo {
 		if (privateKey == null)
 			return this;
 
-		return new PeerInfo(publicKey, null, nonce, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
+		return new PeerInfo(publicKey, null, sequenceNumber, nodeId, nodeSig, signature, fingerprint, endpoint, extraData);
 	}
 
 	/**
@@ -479,7 +470,7 @@ public class PeerInfo {
 	 */
 	@Override
 	public int hashCode() {
-		return 0x6030A + Objects.hash(publicKey, Arrays.hashCode(nonce), sequenceNumber, nodeId,
+		return 0x6030A + Objects.hash(publicKey, sequenceNumber, nodeId,
 				Arrays.hashCode(nodeSig), Arrays.hashCode(signature), fingerprint, endpoint, Arrays.hashCode(extraData));
 	}
 
@@ -496,7 +487,6 @@ public class PeerInfo {
 
 		if (o instanceof PeerInfo that) {
 			return Objects.equals(this.publicKey, that.publicKey) &&
-					Arrays.equals(this.nonce, that.nonce) &&
 					this.sequenceNumber == that.sequenceNumber &&
 					Objects.equals(this.nodeId, that.nodeId) &&
 					Arrays.equals(this.nodeSig, that.nodeSig) &&
