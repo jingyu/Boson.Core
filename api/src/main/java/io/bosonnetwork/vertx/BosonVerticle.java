@@ -122,7 +122,14 @@ public abstract class BosonVerticle implements Deployable {
 	 * </p>
 	 * <p>
 	 * This wraps a Vert.x internal API, which has moved between major versions, so it is isolated
-	 * here rather than used at call sites. {@code FutureContextTest} pins both behaviors.
+	 * here rather than used at call sites. {@code FutureContextTest} pins both behaviors. Vert.x's
+	 * own public {@code Future.fromCompletionStage(CompletionStage, Context)} performs this same
+	 * cast internally, so it is the sanctioned mechanism rather than a workaround.
+	 * </p>
+	 * <p>
+	 * Note that hopping to the target context before completing a plain promise is not equivalent:
+	 * that only controls where the completion happens, so a handler registered after the promise
+	 * has already completed still runs inline on the registering thread.
 	 * </p>
 	 *
 	 * @param <T> the promise result type
