@@ -366,6 +366,9 @@ public class RpcServer implements Measured {
 			throw new IllegalStateException("Server is already running");
 
 		socket = context.getVertx().createDatagramSocket(new DatagramSocketOptions()
+				// Defaults to IPv4-only; without this an IPv6 host fails to bind with
+				// UnsupportedAddressTypeException.
+				.setIpV6(context.getNetwork() == Network.IPv6)
 				.setSendBufferSize(SOCKET_SEND_BUFFER_SIZE)
 				.setReceiveBufferSize(SOCKET_RECEIVE_BUFFER_SIZE)
 				.setTrafficClass(0x10));
