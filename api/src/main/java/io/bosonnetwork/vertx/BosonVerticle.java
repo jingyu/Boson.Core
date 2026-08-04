@@ -29,7 +29,9 @@ import io.vertx.core.Context;
 import io.vertx.core.Deployable;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
+import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
 import org.jspecify.annotations.Nullable;
 
@@ -107,6 +109,28 @@ public abstract class BosonVerticle implements Deployable {
 	protected final @Nullable JsonObject vertxConfig() {
 		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		return vertxContext.config();
+	}
+
+	/**
+	 * Creates a {@link Promise} bound to this verticle's context.
+	 * <p>
+	 * Unlike {@link Promise#promise()}, which carries no context, the returned promise dispatches
+	 * its completion handlers on this verticle's context no matter which thread completes it. Use
+	 * this whenever a promise may be completed from another verticle's context, so the continuation
+	 * runs back on this verticle - a plain {@code Promise.promise()} would instead run it inline on
+	 * the completing thread, silently leaking work onto a foreign event loop.
+	 * </p>
+	 * <p>
+	 * This wraps a Vert.x internal API, which has moved between major versions, so it is isolated
+	 * here rather than used at call sites. {@code FutureContextTest} pins both behaviors.
+	 * </p>
+	 *
+	 * @param <T> the promise result type
+	 * @return a promise bound to this verticle's context
+	 */
+	protected final <T> Promise<T> promise() {
+		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
+		return ((ContextInternal) vertxContext).promise();
 	}
 
 	/**

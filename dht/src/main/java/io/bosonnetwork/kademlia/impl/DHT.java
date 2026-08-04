@@ -16,6 +16,7 @@ import java.util.Map;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
+import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.jspecify.annotations.Nullable;
@@ -100,7 +101,9 @@ public class DHT extends BosonVerticle {
 	private KadContext kadContext;
 	private RpcServer rpcServer;
 
-	private @Nullable DHT sibling;
+	// Read from the sibling's context in populateClosestNodes, written from the KadNode context
+	// during deployment; volatile so the wiring and unwiring are visible to both event loops.
+	private volatile @Nullable DHT sibling;
 
 	private volatile boolean running;
 	private ConnectionStatus status;
@@ -125,7 +128,8 @@ public class DHT extends BosonVerticle {
 
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
 
-	private record ClosestNodes(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {}
+	// Package-private: DHTSiblingTests drives populateClosestNodes directly.
+	record ClosestNodes(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {}
 
 	public DHT(Identity identity, Network network, String host, int port, Collection<NodeInfo> bootstrapNodes,
 	           DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
@@ -201,6 +205,22 @@ public class DHT extends BosonVerticle {
 
 	public @Nullable DHT getSibling() {
 		return sibling;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Redeclared in this package so that DHTSiblingTests can invoke it: a protected member inherited
+	 * from a superclass in another package is not accessible to other classes in the subclass's own
+	 * package. This override looks redundant, but removing it breaks the test compile - note that it
+	 * does not break this class, whose own calls are subclass-body accesses.
+	 * </p>
+	 *
+	 * @param action the handler to run.
+	 */
+	@Override
+	protected void runOnContext(Handler<Void> action) {
+		super.runOnContext(action);
 	}
 
 	public void setConnectionStatusListener(DHTConnectionStatusListener listener) {
@@ -695,44 +715,62 @@ public class DHT extends BosonVerticle {
 		rpcServer.sendMessage(response);
 	}
 
+	/**
+	 * Sends a response message.
+	 * <p>
+	 * The DHT can be undeployed while a response is still being assembled, which clears
+	 * {@code rpcServer}; drop the response in that case rather than failing on the event loop.
+	 * </p>
+	 *
+	 * @param response the response to send.
+	 * @return a future that completes when the response is sent, or fails if it was dropped.
+	 */
+	private Future<Void> sendResponse(Message response) {
+		if (!running || rpcServer == null) {
+			log.debug("DHT {}:{} stopped while assembling a response, dropping it", network, identity.getId());
+			return Future.failedFuture(new IllegalStateException("DHT is not running"));
+		}
+
+		return rpcServer.sendMessage(response);
+	}
+
 	private void onFindNode(Message request) {
 		FindNodeRequest body = request.getBody();
 		Id target = body.getTarget();
 		int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
 		int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-		ClosestNodes closest = populateClosestNodes(target, want4, want6);
 
-		int token = body.doesWantToken() ?
-				tokenManager.generateToken(request.getId(), request.getRemoteAddress(), target) : 0;
+		populateClosestNodes(target, want4, want6).onSuccess(closest -> {
+			int token = body.doesWantToken() ?
+					tokenManager.generateToken(request.getId(), request.getRemoteAddress(), target) : 0;
 
-		Message response = Message.findNodeResponse(request.getTxid(), closest.nodes4, closest.nodes6, token)
-				.setRemote(request.getId(), request.getRemoteAddress());
-		rpcServer.sendMessage(response);
+			Message response = Message.findNodeResponse(request.getTxid(), closest.nodes4, closest.nodes6, token)
+					.setRemote(request.getId(), request.getRemoteAddress());
+			sendResponse(response);
+		}).onFailure(cause ->
+				log.error("Failed to populate the closest nodes for FIND NODE request from {}",
+						request.getRemoteAddress(), cause)
+		);
 	}
 
 	private void onFindValue(Message request) {
 		FindValueRequest body = request.getBody();
 		Id target = body.getTarget();
 		int expectedSequenceNumber = body.getExpectedSequenceNumber();
-		storage.getValue(target).map(value -> {
-			Message response;
-
+		storage.getValue(target).compose(value -> {
 			if (value != null && (!value.isMutable() || expectedSequenceNumber < 0 ||
-					value.getSequenceNumber() >= expectedSequenceNumber)) {
-				response = Message.findValueResponse(request.getTxid(), value);
-			} else {
-				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-				ClosestNodes closest = populateClosestNodes(target, want4, want6);
-				response = Message.findValueResponse(request.getTxid(), closest.nodes4, closest.nodes6);
-			}
+					value.getSequenceNumber() >= expectedSequenceNumber))
+				return Future.succeededFuture(Message.findValueResponse(request.getTxid(), value));
 
-			return response;
+			int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+			int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
+			return populateClosestNodes(target, want4, want6).map(closest ->
+					Message.findValueResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {
 			Message response = ar.succeeded() ? ar.result() :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
-			return rpcServer.sendMessage(response);
+			return sendResponse(response);
 		});
 	}
 
@@ -769,24 +807,19 @@ public class DHT extends BosonVerticle {
 		Id target = body.getTarget();
 		int expectedSequenceNumber = body.getExpectedSequenceNumber();
 		int expectedCount = body.getExpectedCount() > 0 ? body.getExpectedCount() : 16;
-		storage.getPeers(target, expectedSequenceNumber, expectedCount).map(peers -> {
-			Message response;
+		storage.getPeers(target, expectedSequenceNumber, expectedCount).compose(peers -> {
+			if (!peers.isEmpty())
+				return Future.succeededFuture(Message.findPeerResponse(request.getTxid(), peers));
 
-			if (!peers.isEmpty()) {
-				response = Message.findPeerResponse(request.getTxid(), peers);
-			} else {
-				int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-				int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
-				ClosestNodes closest = populateClosestNodes(target, want4, want6);
-				response = Message.findPeerResponse(request.getTxid(), closest.nodes4, closest.nodes6);
-			}
-
-			return response;
+			int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
+			int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
+			return populateClosestNodes(target, want4, want6).map(closest ->
+					Message.findPeerResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {
 			Message response = ar.succeeded() ? ar.result() :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
-			return rpcServer.sendMessage(response);
+			return sendResponse(response);
 		});
 	}
 
@@ -972,39 +1005,85 @@ public class DHT extends BosonVerticle {
 		}
 	}
 
-	private ClosestNodes populateClosestNodes(Id target, int v4, int v6) {
-		List<NodeInfo> nodes4 = List.of();
-		List<NodeInfo> nodes6 = List.of();
+	/**
+	 * Collects the closest nodes to the target from this DHT's own routing table.
+	 * <p>
+	 * The routing table and its entries are single-threaded state owned by this verticle, so this
+	 * must only be called on this DHT's context - see {@link #populateClosestNodes}, which hops to
+	 * the sibling's context before calling it there.
+	 * </p>
+	 *
+	 * @param target the lookup target.
+	 * @param want   the number of nodes to collect.
+	 * @return the closest nodes, including this node itself when the table cannot fill the request.
+	 */
+	private List<NodeInfo> collectClosestNodes(Id target, int want) {
+		List<NodeInfo> nodes = routingTable.getClosestNodes(target, want)
+				.includeReplacements(routingTable.getNumberOfEntries() < want)
+				.fill()
+				.nodes();
 
-		if (v4 > 0) {
-			DHT dht4 = network == Network.IPv4 ? this : sibling;
-			if (dht4 != null) {
-				RoutingTable table = dht4.routingTable;
-				nodes4 = table.getClosestNodes(target, v4)
-						.includeReplacements(table.getNumberOfEntries() < v4)
-						.fill()
-						.nodes();
-				// Add self to the list if needed
-				if (nodes4.size() < v4)
-					nodes4.add(dht4.nodeInfo);
+		// Add self to the list if needed
+		if (nodes.size() < want)
+			nodes.add(nodeInfo);
+
+		return nodes;
+	}
+
+	/**
+	 * Collects the closest nodes to the target for both address families.
+	 * <p>
+	 * The local family is collected inline on this DHT's context. The sibling family, if wanted and
+	 * a sibling is wired, is collected on the sibling's own context: its routing table is
+	 * single-threaded state that must not be walked from here. The result is normalized to plain
+	 * {@link NodeInfo} so no mutable {@code KBucketEntry} crosses event loops.
+	 * </p>
+	 * <p>
+	 * When there is no sibling, or only the local family is wanted, this completes synchronously -
+	 * {@link Future#succeededFuture} carries no context, so its handlers run inline and no context
+	 * switch is paid on the common single-stack path.
+	 * </p>
+	 *
+	 * @param target the lookup target.
+	 * @param v4     the number of IPv4 nodes wanted, or 0.
+	 * @param v6     the number of IPv6 nodes wanted, or 0.
+	 * @return a future, completing on this DHT's context, with the closest nodes of both families.
+	 */
+	Future<ClosestNodes> populateClosestNodes(Id target, int v4, int v6) {
+		final boolean localIsV4 = network == Network.IPv4;
+		final int localWant = localIsV4 ? v4 : v6;
+		final int siblingWant = localIsV4 ? v6 : v4;
+
+		final List<NodeInfo> localNodes = localWant > 0 ? collectClosestNodes(target, localWant) : List.of();
+
+		final DHT sibling = this.sibling;
+		// The sibling is wired before either DHT deploys, so it may not be running yet. isRunning()
+		// is volatile and is set after prepare(), so reading it true also publishes its vertxContext.
+		if (siblingWant <= 0 || sibling == null || !sibling.isRunning())
+			return Future.succeededFuture(closestNodes(localIsV4, localNodes, List.of()));
+
+		// The sibling owns its routing table, so collect there and hand back immutable NodeInfo.
+		// The promise is bound to our context, so the continuation resumes on this event loop.
+		Promise<List<NodeInfo>> promise = promise();
+		sibling.runOnContext(v -> {
+			try {
+				// The sibling may have been undeployed while this task was queued.
+				promise.complete(sibling.isRunning() ?
+						sibling.collectClosestNodes(target, siblingWant).stream()
+								.map(n -> NodeInfo.of(n.getId(), n.getAddress4(), n.getAddress6()))
+								.toList() :
+						List.of());
+			} catch (Throwable t) {
+				// Never leave the promise pending: the caller would never answer the request.
+				promise.fail(t);
 			}
-		}
+		});
 
-		if (v6 > 0) {
-			DHT dht6 = network == Network.IPv6 ? this : sibling;
-			if (dht6 != null) {
-				RoutingTable table = dht6.routingTable;
-				nodes6 = table.getClosestNodes(target, v6)
-						.includeReplacements(table.getNumberOfEntries() < v6)
-						.fill()
-						.nodes();
-				// Add self to the list if needed
-				if (nodes6.size() < v6)
-					nodes6.add(dht6.nodeInfo);
-			}
-		}
+		return promise.future().map(siblingNodes -> closestNodes(localIsV4, localNodes, siblingNodes));
+	}
 
-		return new ClosestNodes(nodes4, nodes6);
+	private static ClosestNodes closestNodes(boolean localIsV4, List<NodeInfo> local, List<NodeInfo> sibling) {
+		return localIsV4 ? new ClosestNodes(local, sibling) : new ClosestNodes(sibling, local);
 	}
 
 	public Future<@Nullable NodeInfo> findNode(Id id, LookupOption option) {
