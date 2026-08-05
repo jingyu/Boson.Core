@@ -14,11 +14,8 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.vertx.core.Context;
 import io.vertx.core.Future;
-import io.vertx.core.Handler;
 import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,22 +62,6 @@ import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.vertx.BosonVerticle;
 
 public class DHT extends BosonVerticle {
-	public static final int DHT_UPDATE_INTERVAL = 30 * 1000;                        // 30 seconds
-	public static final int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;                 // 4 minutes
-	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000;                  // 30 minutes
-	public static final int ROUTING_TABLE_PERSIST_INITIAL_DELAY = 2 * 60 * 1000;    // 2 minutes
-	public static final int ROUTING_TABLE_PERSIST_INTERVAL = 10 * 60 * 1000;        // 10 minutes
-	public static final int ROUTING_TABLE_MAINTENANCE_INTERVAL = 4 * 60 * 1000;     // 4 minutes
-	public static final int RANDOM_LOOKUP_INTERVAL = 10 * 60 * 1000;                // 10 minutes
-	public static final int RANDOM_PING_INTERVAL = 10 * 1000;                       // 10 seconds
-
-	public static final int SUSPICIOUS_NODES_PURGE_INITIAL_DELAY = 60 * 1000;       // 60 seconds
-	// Bans/observations expire lazily on read, so this only governs memory reclamation, not accuracy.
-	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 60 * 1000;            // 60 seconds
-
-	public static final int BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
-	public static final int USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES = 8;
-
 	private final Identity identity;
 
 	private final Network network;
@@ -88,6 +69,13 @@ public class DHT extends BosonVerticle {
 	private final int port;
 
 	private final NodeInfo nodeInfo;
+
+	// Kademlia parameters, received as plain values from KadNode: nothing below KadNode knows about
+	// NodeConfiguration.KademliaOptions.
+	private final int k;
+	private final int alpha;
+	private final int replacements;
+	private final int concurrentTasks;
 
 	private final DataStorage storage;
 	private final Blacklist blacklist;
@@ -98,7 +86,7 @@ public class DHT extends BosonVerticle {
 	private final boolean enableDeveloperMode;
 	private final DHTMetrics metrics;
 
-	private KadContext kadContext;
+	private final KadContext kadContext;
 	private RpcServer rpcServer;
 
 	// Read from the sibling's context in populateClosestNodes, written from the KadNode context
@@ -131,9 +119,43 @@ public class DHT extends BosonVerticle {
 	// Package-private: DHTSiblingTests drives populateClosestNodes directly.
 	record ClosestNodes(List<? extends NodeInfo> nodes4, List<? extends NodeInfo> nodes6) {}
 
+	/**
+	 * Creates a DHT for one address family.
+	 * <p>
+	 * The Kademlia parameters arrive as plain values rather than as a configuration object: only
+	 * {@code KadNode} reads {@code NodeConfiguration.KademliaOptions}, and it hands the individual
+	 * values down from there.
+	 * </p>
+	 *
+	 * <p>
+	 * This constructor is the single point where all four Kademlia parameters arrive, so it is where
+	 * they are validated. A non-positive value would not fail loudly downstream: {@code alpha < 1}
+	 * makes {@code Task.canDoRequest()} permanently false, so a task never issues an RPC and - since
+	 * iteration is driven only by call state changes - never completes; {@code concurrentTasks < 1}
+	 * makes {@code TaskManager.isReady()} permanently false, so every task queues forever. Both are
+	 * silent hangs, which is why they are rejected here rather than left to the caller.
+	 * </p>
+	 *
+	 * @param alpha             the lookup concurrency parameter, at least 1.
+	 * @param k                 the Kademlia bucket size, at least 1.
+	 * @param replacements      the per-bucket replacement cache size, at least 1.
+	 * @param concurrentTasks   the ceiling on concurrently running tasks, at least 1; further tasks are queued.
+	 * @throws IllegalArgumentException if any Kademlia parameter is less than 1.
+	 */
 	public DHT(Identity identity, Network network, String host, int port, Collection<NodeInfo> bootstrapNodes,
-	           DataStorage storage, Path persistFile, TokenManager tokenManager, Blacklist blacklist,
-	           boolean enableSpamThrottling, boolean enableSuspiciousNodeTracking, boolean enableDeveloperMode, DHTMetrics metrics) {
+	           int alpha, int k, int replacements, int concurrentTasks,
+	           DataStorage storage, Path persistFile, TokenManager tokenManager,
+	           Blacklist blacklist, boolean enableSpamThrottling, boolean enableSuspiciousNodeTracking,
+	           boolean enableDeveloperMode, DHTMetrics metrics) {
+		if (alpha < 1)
+			throw new IllegalArgumentException("Invalid alpha: " + alpha);
+		if (k < 1)
+			throw new IllegalArgumentException("Invalid k: " + k);
+		if (replacements < 1)
+			throw new IllegalArgumentException("Invalid replacements: " + replacements);
+		if (concurrentTasks < 1)
+			throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks);
+
 		this.identity = identity;
 		this.network = network;
 		this.host = host;
@@ -148,7 +170,12 @@ public class DHT extends BosonVerticle {
 		this.enableDeveloperMode = enableDeveloperMode;
 		this.metrics = metrics;
 
-		this.routingTable = new RoutingTable(identity.getId());
+		this.alpha = alpha;
+		this.k = k;
+		this.replacements = replacements;
+		this.concurrentTasks = concurrentTasks;
+
+		this.routingTable = new RoutingTable(identity.getId(), k, replacements);
 
 		this.status = ConnectionStatus.Disconnected;
 		this.running = false;
@@ -168,8 +195,30 @@ public class DHT extends BosonVerticle {
 		if (bootstrapNodes != null && !bootstrapNodes.isEmpty())
 			addBootstrapNodes(bootstrapNodes);
 
+		this.kadContext = new KadContext(this);
+
 		// TODO: improve
 		this.nodeInfo = NodeInfo.of(identity.getId(), host, port);
+	}
+
+	public final int getAlpha() {
+		return alpha;
+	}
+
+	public final int getK() {
+		return k;
+	}
+
+	public final int getReplacements() {
+		return replacements;
+	}
+
+	public final int getConcurrentTasks() {
+		return concurrentTasks;
+	}
+
+	public final boolean isDeveloperMode() {
+		return enableDeveloperMode;
 	}
 
 	public boolean isRunning() {
@@ -178,6 +227,10 @@ public class DHT extends BosonVerticle {
 
 	public Network getNetwork() {
 		return network;
+	}
+
+	Identity getIdentity() {
+		return identity;
 	}
 
 	public List<NodeInfo> getBootstrapNodes() {
@@ -207,30 +260,8 @@ public class DHT extends BosonVerticle {
 		return sibling;
 	}
 
-	/**
-	 * {@inheritDoc}
-	 * <p>
-	 * Redeclared in this package so that DHTSiblingTests can invoke it: a protected member inherited
-	 * from a superclass in another package is not accessible to other classes in the subclass's own
-	 * package. This override looks redundant, but removing it breaks the test compile - note that it
-	 * does not break this class, whose own calls are subclass-body accesses.
-	 * </p>
-	 *
-	 * @param action the handler to run.
-	 */
-	@Override
-	protected void runOnContext(Handler<Void> action) {
-		super.runOnContext(action);
-	}
-
 	public void setConnectionStatusListener(DHTConnectionStatusListener listener) {
 		this.connectionStatusListener = listener;
-	}
-
-	@Override
-	protected void prepare(Vertx vertx, Context context) {
-		super.prepare(vertx, context);
-		this.kadContext = new KadContext(vertx, context, identity, network, this, enableDeveloperMode);
 	}
 
 	@Override
@@ -349,24 +380,24 @@ public class DHT extends BosonVerticle {
 	}
 
 	private void setupPeriodicTasks() {
-		long timer = kadContext.setPeriodic(DHT_UPDATE_INTERVAL, DHT_UPDATE_INTERVAL, this::update);
+		long timer = kadContext.setPeriodic(KadConstants.DHT_UPDATE_INTERVAL, KadConstants.DHT_UPDATE_INTERVAL, this::update);
 		timers.add(timer);
 
 		// deep lookup to make ourselves known to random parts of the keyspace
-		timer = kadContext.setPeriodic(RANDOM_LOOKUP_INTERVAL, RANDOM_LOOKUP_INTERVAL, this::randomLookup);
+		timer = kadContext.setPeriodic(KadConstants.RANDOM_LOOKUP_INTERVAL, KadConstants.RANDOM_LOOKUP_INTERVAL, this::randomLookup);
 		timers.add(timer);
 
 		// Do random node ping to check socket liveness
-		timer = kadContext.setPeriodic(RANDOM_PING_INTERVAL, RANDOM_PING_INTERVAL, this::randomPing);
+		timer = kadContext.setPeriodic(KadConstants.RANDOM_PING_INTERVAL, KadConstants.RANDOM_PING_INTERVAL, this::randomPing);
 		timers.add(timer);
 
 		if (enableSuspiciousNodeTracking) {
-			timer = kadContext.setPeriodic(SUSPICIOUS_NODES_PURGE_INITIAL_DELAY, SUSPICIOUS_NODES_PURGE_INTERVAL, unused -> suspiciousNodeDetector.purge());
+			timer = kadContext.setPeriodic(KadConstants.SUSPICIOUS_NODES_PURGE_INITIAL_DELAY, KadConstants.SUSPICIOUS_NODES_PURGE_INTERVAL, unused -> suspiciousNodeDetector.purge());
 			timers.add(timer);
 		}
 
 		if (persistFile != null) {
-			timer = kadContext.setPeriodic(ROUTING_TABLE_PERSIST_INITIAL_DELAY, ROUTING_TABLE_PERSIST_INTERVAL, this::persistRoutingTable);
+			timer = kadContext.setPeriodic(KadConstants.ROUTING_TABLE_PERSIST_INITIAL_DELAY, KadConstants.ROUTING_TABLE_PERSIST_INTERVAL, this::persistRoutingTable);
 			timers.add(timer);
 		}
 	}
@@ -385,15 +416,15 @@ public class DHT extends BosonVerticle {
 		routingTableMaintenance();
 
 		int entries = routingTable.getNumberOfEntries();
-		if (entries < BOOTSTRAP_IF_LESS_THAN_X_ENTRIES || System.currentTimeMillis() - lastBootstrap > SELF_LOOKUP_INTERVAL)
+		if (entries < KadConstants.BOOTSTRAP_IF_LESS_THAN_X_ENTRIES || System.currentTimeMillis() - lastBootstrap > KadConstants.SELF_LOOKUP_INTERVAL)
 			// Regularly search for our id to update the routing table
-			doBootstrap(entries < USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES ? bootstrapNodes : Collections.emptyList());
+			doBootstrap(entries < KadConstants.USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES ? bootstrapNodes : Collections.emptyList());
 
 	}
 
 	private void routingTableMaintenance() {
 		long now = System.currentTimeMillis();
-		if (now - lastMaintenance < ROUTING_TABLE_MAINTENANCE_INTERVAL)
+		if (now - lastMaintenance < KadConstants.ROUTING_TABLE_MAINTENANCE_INTERVAL)
 			return;
 
 		log.info("Routing table maintenance ...");
@@ -488,7 +519,7 @@ public class DHT extends BosonVerticle {
 		if (bootstrapping)
 			return Future.failedFuture(new IllegalStateException("DHT is bootstrapping"));
 
-		if (System.currentTimeMillis() - lastBootstrap < BOOTSTRAP_MIN_INTERVAL)
+		if (System.currentTimeMillis() - lastBootstrap < KadConstants.BOOTSTRAP_MIN_INTERVAL)
 			return Future.succeededFuture();
 
 		if (bootstrapNodes.isEmpty() && routingTable.getNumberOfEntries() == 0) {
@@ -597,7 +628,7 @@ public class DHT extends BosonVerticle {
 		List<Future<Void>> futures = new ArrayList<>(routingTable.size());
 
 		routingTable.forEachBucket(bucket -> {
-			if (bucket.isFull() && routingTable.getNumberOfEntries() >= BOOTSTRAP_IF_LESS_THAN_X_ENTRIES)
+			if (bucket.isFull() && routingTable.getNumberOfEntries() >= KadConstants.BOOTSTRAP_IF_LESS_THAN_X_ENTRIES)
 				return;
 
 			Promise<Void> promise = Promise.promise();
@@ -737,8 +768,8 @@ public class DHT extends BosonVerticle {
 	private void onFindNode(Message request) {
 		FindNodeRequest body = request.getBody();
 		Id target = body.getTarget();
-		int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-		int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
+		int want4 = body.doesWant4() ? k : 0;
+		int want6 = body.doesWant6() ? k : 0;
 
 		populateClosestNodes(target, want4, want6).onSuccess(closest -> {
 			int token = body.doesWantToken() ?
@@ -762,8 +793,8 @@ public class DHT extends BosonVerticle {
 					value.getSequenceNumber() >= expectedSequenceNumber))
 				return Future.succeededFuture(Message.findValueResponse(request.getTxid(), value));
 
-			int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-			int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
+			int want4 = body.doesWant4() ? k : 0;
+			int want6 = body.doesWant6() ? k : 0;
 			return populateClosestNodes(target, want4, want6).map(closest ->
 					Message.findValueResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {
@@ -811,8 +842,8 @@ public class DHT extends BosonVerticle {
 			if (!peers.isEmpty())
 				return Future.succeededFuture(Message.findPeerResponse(request.getTxid(), peers));
 
-			int want4 = body.doesWant4() ? KBucket.MAX_ENTRIES : 0;
-			int want6 = body.doesWant6() ? KBucket.MAX_ENTRIES : 0;
+			int want4 = body.doesWant4() ? k : 0;
+			int want6 = body.doesWant6() ? k : 0;
 			return populateClosestNodes(target, want4, want6).map(closest ->
 					Message.findPeerResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {

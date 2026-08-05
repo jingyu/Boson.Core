@@ -40,14 +40,8 @@ import io.bosonnetwork.kademlia.impl.KadContext;
  * use; not thread-safe.
  */
 public class TaskManager {
-	/** Maximum number of active tasks. */
-	static final int MAX_ACTIVE_TASKS = 32;
-	/** Maximum concurrent RPC requests for normal tasks. */
-	static final int MAX_CONCURRENT_TASK_REQUESTS = 16;
-	/** Maximum concurrent RPC requests for low-priority tasks. */
-	static final int MAX_CONCURRENT_TASK_REQUESTS_LOW_PRIORITY = 4;
-
 	private final KadContext context;
+	private final int maxActiveTasks;
 	private final Deque<Task<?>> queuedTasks;
 	private final Set<Task<?>> runningTasks;
 	private boolean canceling;
@@ -55,15 +49,25 @@ public class TaskManager {
 	private static final Logger log = LoggerFactory.getLogger(TaskManager.class);
 
 	/**
-	 * Constructs a new TaskManager with the given context and default limits.
+	 * Constructs a new TaskManager with the given context and active-task ceiling.
+	 * <p>
+	 * Note that alpha - how many RPCs a single task keeps in flight - is not a parameter here: a
+	 * {@link Task} holds no reference to its manager, so it reads alpha from the shared
+	 * {@link KadContext} instead. Keeping it in one place avoids the two copies disagreeing.
+	 * </p>
 	 *
-	 * @param context the Kademlia context
+	 * @param context        the Kademlia context.
 	 */
 	public TaskManager(KadContext context) {
 		this.context = context;
+		this.maxActiveTasks = context.getConcurrentTasks();
 
 		queuedTasks = new LinkedList<>();
 		runningTasks = new HashSet<>();
+	}
+
+	public int getMaxActiveTasks() {
+		return maxActiveTasks;
 	}
 
 	/**
@@ -190,7 +194,7 @@ public class TaskManager {
 	 * @return true if ready, false otherwise
 	 */
 	public boolean isReady() {
-		return !canceling && (runningTasks.size() < MAX_ACTIVE_TASKS);
+		return !canceling && (runningTasks.size() < maxActiveTasks);
 	}
 
 	/**

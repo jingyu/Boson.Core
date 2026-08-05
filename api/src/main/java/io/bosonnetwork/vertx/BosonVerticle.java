@@ -84,7 +84,7 @@ public abstract class BosonVerticle implements Deployable {
 	 *
 	 * @return the Vert.x context
 	 */
-	protected final @Nullable Context vertxContext() {
+	public final @Nullable Context vertxContext() {
 		return vertxContext;
 	}
 

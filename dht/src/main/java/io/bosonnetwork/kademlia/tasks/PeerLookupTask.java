@@ -35,7 +35,6 @@ import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.protocol.FindPeerResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
-import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.routing.KClosestNodes;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
@@ -78,7 +77,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 	protected void prepare() {
 		// delay the filling of the candidate list until we actually start the task
 		KClosestNodes kns = getContext().getDHT().getRoutingTable()
-				.getClosestNodes(getTarget(), KBucket.MAX_ENTRIES * 3)
+				.getClosestNodes(getTarget(), getContext().getK() * 3)
 				.filter(KBucketEntry::eligibleForLocalLookup)
 				.fill();
 		log.debug("{}#{} initialized {} candidates for target {}", getName(), getId(), kns.entries().size(), getTarget());

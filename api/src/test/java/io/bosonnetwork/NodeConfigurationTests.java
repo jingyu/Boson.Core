@@ -106,7 +106,7 @@ class NodeConfigurationTests {
 				.alpha(5)
 				.k(32)
 				.replacements(16)
-				.concurrentQueries(256)
+				.concurrentTasks(256)
 				.addBootstrap(Id.random(), "203.0.113.5", 1234, "2001:db8::1", 5678)
 				.spamThrottling(false)
 				.suspiciousNodeDetector(false)
@@ -357,7 +357,7 @@ class NodeConfigurationTests {
 		NodeConfiguration config = baseBuilder().build();
 		assertEquals(new NodeConfiguration.KademliaOptions(NodeConfiguration.DEFAULT_ALPHA,
 				NodeConfiguration.DEFAULT_K, NodeConfiguration.DEFAULT_REPLACEMENTS,
-				NodeConfiguration.DEFAULT_CONCURRENT_QUERIES), config.kademlia());
+				NodeConfiguration.DEFAULT_CONCURRENT_TASKS), config.kademlia());
 	}
 
 	@Test
@@ -366,7 +366,7 @@ class NodeConfigurationTests {
 				.alpha(5)
 				.k(32)
 				.replacements(8)
-				.concurrentQueries(256)
+				.concurrentTasks(256)
 				.build();
 
 		NodeConfiguration restored = NodeConfiguration.builder()
@@ -399,7 +399,7 @@ class NodeConfigurationTests {
 		assertThrows(IllegalArgumentException.class, () -> builder.alpha(0));
 		assertThrows(IllegalArgumentException.class, () -> builder.k(-1));
 		assertThrows(IllegalArgumentException.class, () -> builder.replacements(0));
-		assertThrows(IllegalArgumentException.class, () -> builder.concurrentQueries(0));
+		assertThrows(IllegalArgumentException.class, () -> builder.concurrentTasks(0));
 
 		assertThrows(IllegalArgumentException.class,
 				() -> builder.fromMap(Map.of("kademlia", Map.of("alpha", 0))));

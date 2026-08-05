@@ -17,10 +17,10 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.Random;
-import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.utils.AddressUtils;
 
 class ClosestSetTests {
+	private static final int TEST_K = 32;
 	private static final Faker faker = new Faker();
 
 	private Id target;
@@ -29,7 +29,7 @@ class ClosestSetTests {
 	@BeforeEach
 	void setUp() {
 		target = Id.random();
-		closestSet = new ClosestSet(target, KBucket.MAX_ENTRIES);
+		closestSet = new ClosestSet(target, TEST_K);
 	}
 
 	private InetSocketAddress randomAddress() {
@@ -48,46 +48,47 @@ class ClosestSetTests {
 	@Test
 	void testInsertion() {
 		List<CandidateNode> nodes = new ArrayList<>();
-		for (int i = 0; i < KBucket.MAX_ENTRIES + 3; i++) {
+		for (int i = 0; i < TEST_K + 3; i++) {
 			CandidateNode node = new CandidateNode(NodeInfo.of(Id.random(), randomAddress()));
 			closestSet.add(node);
 			nodes.add(node);
-			int expected = i < KBucket.MAX_ENTRIES ? i + 1 : KBucket.MAX_ENTRIES;
+			int expected = i < TEST_K ? i + 1 : TEST_K;
 			assertEquals(expected, closestSet.size());
 		}
 
 		nodes.sort((n1, n2) -> target.threeWayCompare(n1.getId(), n2.getId()));
-		assertEquals(nodes.subList(0, KBucket.MAX_ENTRIES), closestSet.stream().toList());
+		assertEquals(nodes.subList(0, TEST_K), closestSet.stream().toList());
 	}
 
 	@Test
 	void testEligibility() {
 		assertFalse(closestSet.isEligible());
-		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
-			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(8 - i), randomAddress()));
+		// Distances 1..K - the set fills with exactly its capacity.
+		for (int i = 0; i < TEST_K; i++) {
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(i + 1), randomAddress()));
 			closestSet.add(node);
 		}
 		assertFalse(closestSet.isEligible());
 
-		for (int i = 0; i < KBucket.MAX_ENTRIES + 1; i++) {
-			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 + i), randomAddress()));
+		// Distances K+1..2K+1 - all strictly farther, so none of them displaces the tail.
+		for (int i = 0; i < TEST_K + 1; i++) {
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(TEST_K + 1 + i), randomAddress()));
 			closestSet.add(node);
 		}
-		System.out.println(closestSet.getInsertAttemptsSinceTailModification());
 		assertTrue(closestSet.isEligible());
 	}
 
 	@Test
 	void testHeadStability() {
-		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
-			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 - i), randomAddress()));
+		for (int i = 0; i < TEST_K; i++) {
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(TEST_K - i), randomAddress()));
 			closestSet.add(node);
 		}
 
 		assertFalse(closestSet.isHeadStable());
 
-		for (int i = 0; i < KBucket.MAX_ENTRIES + 1; i++) {
-			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(16 + i), randomAddress()));
+		for (int i = 0; i < TEST_K + 1; i++) {
+			CandidateNode node = new CandidateNode(NodeInfo.of(target.getIdByDistance(TEST_K + 1 + i), randomAddress()));
 			closestSet.add(node);
 		}
 

@@ -65,7 +65,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	public PingRefreshTask(KadContext context) {
 		super(context);
 		// Initialize with capacity for typical Kademlia bucket size(main entries and replacement entries)
-		this.todo = new ArrayDeque<>(KBucket.MAX_ENTRIES * 2);
+		this.todo = new ArrayDeque<>(getContext().getK() * 2);
 	}
 
 	/**
