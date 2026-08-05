@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,11 +21,13 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
+import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.utils.Variable;
 
 public class TaskTests {
+	private static final Vertx vertx = Vertx.vertx();
 	private KadContext context;
 	private TestTask task;
 
@@ -66,7 +69,7 @@ public class TaskTests {
 
 	@BeforeEach
 	void setUp() {
-		context = new KadContext(null, null, new CryptoIdentity(), Network.IPv4, null);
+		context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
 		task = new TestTask(context);
 	}
 
@@ -159,7 +162,7 @@ public class TaskTests {
 		assertTrue(task.canDoRequest());
 
 		List<RpcCall> calls = new ArrayList<>();
-		for (int i = 0; i < TaskManager.MAX_CONCURRENT_TASK_REQUESTS; i++) {
+		for (int i = 0; i < context.getAlpha(); i++) {
 			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
 			task.sendCall(node, message, calls::add);
@@ -179,7 +182,7 @@ public class TaskTests {
 		assertTrue(task.canDoRequest());
 
 		List<RpcCall> calls = new ArrayList<>();
-		for (int i = 0; i < TaskManager.MAX_CONCURRENT_TASK_REQUESTS_LOW_PRIORITY; i++) {
+		for (int i = 0; i < context.getLowPriorityAlpha(); i++) {
 			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
 			task.sendCall(node, message, calls::add);

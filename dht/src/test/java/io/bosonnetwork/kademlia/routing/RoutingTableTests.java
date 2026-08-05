@@ -31,6 +31,8 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.json.Json;
 
 class RoutingTableTests {
+	private static final int TEST_MAX_ENTRIES = 16;
+	private static final int TEST_MAX_REPLACEMENT_ENTRIES = 16;
 	static final Faker faker = new Faker();
 	RoutingTable routingTable;
 	Id localId;
@@ -69,7 +71,7 @@ class RoutingTableTests {
 	@BeforeEach
 	void setup() {
 		localId = genId(0x01);
-		routingTable = new RoutingTable(localId);
+		routingTable = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
 	}
 
 	@Test
@@ -85,12 +87,12 @@ class RoutingTableTests {
 	void testBucketOf() {
 		// Insert entries to fill first two bucket unfulled
 		Prefix p = new Prefix(Id.zero(), 1);
-		for (int i = 0; i < KBucket.MAX_ENTRIES - 2; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES - 2; i++) {
 			StubEntry entry = new StubEntry(p.createRandomId());
 			routingTable.put(entry);
 		}
 		p = new Prefix(Id.ofBit(0), 1);
-		for (int i = 0; i < KBucket.MAX_ENTRIES - 2; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES - 2; i++) {
 			StubEntry entry = new StubEntry(p.createRandomId());
 			routingTable.put(entry);
 		}
@@ -161,7 +163,7 @@ class RoutingTableTests {
 	void testMaintenanceAndMerge() {
 		// Insert many entries to fill first two bucket
 		List<StubEntry> entries = new ArrayList<>();
-		for (int i = 0; i < KBucket.MAX_ENTRIES * 2; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES * 2; i++) {
 			StubEntry entry = new StubEntry(Id.random());
 			routingTable.put(entry);
 			entries.add(entry);
@@ -170,7 +172,7 @@ class RoutingTableTests {
 		// now at least the first two(maybe more) buckets are filled(not all full filled)
 		assertTrue(routingTable.size() >= 2);
 
-		// now remove entries from buckets make total number of entries less than KBucket.MAX_ENTRIES
+		// now remove entries from buckets make total number of entries less than KBucket.DEFAULT_MAX_ENTRIES
 		routingTable.forEachBucket(bucket -> {
 			List<Id> toRemove = bucket.stream().skip(2).map(KBucketEntry::getId).toList();
 			for (Id id : toRemove) {
@@ -192,7 +194,7 @@ class RoutingTableTests {
 	void testNeedsSplitAndSplit() {
 		// Insert enough entries to fill first bucket
 		List<StubEntry> entries = new ArrayList<>();
-		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES; i++) {
 			StubEntry entry = new StubEntry(Id.random());
 			routingTable.put(entry);
 			entries.add(entry);
@@ -245,7 +247,7 @@ class RoutingTableTests {
 	@Test
 	void testRecursiveSplit() {
 		List<StubEntry> entries = new ArrayList<>();
-		int totalEntries = KBucket.MAX_ENTRIES * 4; // enough to cause multiple splits
+		int totalEntries = TEST_MAX_ENTRIES * 4; // enough to cause multiple splits
 		for (int i = 0; i < totalEntries; i++) {
 			StubEntry entry = new StubEntry(Id.random());
 			routingTable.put(entry);
@@ -266,7 +268,7 @@ class RoutingTableTests {
 		// Create two sibling buckets with combined effective size exactly MAX_ENTRIES
 		// First fill one bucket with MAX_ENTRIES entries
 		Prefix low = new Prefix(Id.min(), 1);
-		for (int i = 0; i < KBucket.MAX_ENTRIES; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES; i++) {
 			StubEntry entry = new StubEntry(low.createRandomId());
 			routingTable.put(entry);
 		}
@@ -279,7 +281,7 @@ class RoutingTableTests {
 
 		// Confirm combined size is MAX_ENTRIES
 		int combinedSize = routingTable.getBucket(0).size() + routingTable.getBucket(1).size();
-		assertEquals(KBucket.MAX_ENTRIES + 1, combinedSize);
+		assertEquals(TEST_MAX_ENTRIES + 1, combinedSize);
 
 		assertTrue(routingTable.getBucket(0).isFull());
 		assertEquals(1, routingTable.getBucket(1).size());
@@ -333,7 +335,7 @@ class RoutingTableTests {
 
 		List<KBucketEntry> entries = new ArrayList<>(5);
 		// Add 5 nodes to one bucket
-		for (int i = 0; i < KBucket.MAX_ENTRIES - 1; i++) {
+		for (int i = 0; i < TEST_MAX_ENTRIES - 1; i++) {
 			StubEntry entry = new StubEntry(Id.random());
 			routingTable.put(entry);
 			entries.add(entry);
@@ -501,7 +503,7 @@ class RoutingTableTests {
 		Path tempFile = Files.createTempFile("routingTable", ".cbor");
 		routingTable.save(tempFile);
 
-		RoutingTable loaded = new RoutingTable(localId);
+		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
 		loaded.load(tempFile);
 		System.out.printf(">>>>>>>> The loaded routing table[entries: %d, replacements: %d]\n", loaded.getNumberOfEntries(), loaded.getNumberOfReplacements());
 		assertEquals(routingTable.size(), loaded.size());
@@ -522,7 +524,7 @@ class RoutingTableTests {
 		Path tempFile = Files.createTempFile("malformedRoutingTable", ".cbor");
 		Files.write(tempFile, Json.cborMapper().writeValueAsBytes(bad));
 
-		RoutingTable loaded = new RoutingTable(localId);
+		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
 		loaded.load(tempFile); // must not throw
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
@@ -538,7 +540,7 @@ class RoutingTableTests {
 		Path tempFile = Files.createTempFile("garbageRoutingTable", ".cbor");
 		Files.write(tempFile, garbage);
 
-		RoutingTable loaded = new RoutingTable(localId);
+		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
 		loaded.load(tempFile); // must not throw
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
@@ -551,7 +553,7 @@ class RoutingTableTests {
 		Path tempFile = Files.createTempFile("emptyRoutingTable", ".cbor");
 		routingTable.save(tempFile);
 
-		RoutingTable loaded = new RoutingTable(localId);
+		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
 		loaded.load(tempFile);
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
@@ -566,7 +568,7 @@ class RoutingTableTests {
 
 		List<StubEntry> entries = new ArrayList<>();
 
-		for (int i = 0; i < 256 * KBucket.MAX_ENTRIES; i++) {
+		for (int i = 0; i < 256 * TEST_MAX_ENTRIES; i++) {
 			StubEntry entry = new StubEntry(Id.random());
 			routingTable.put(entry);
 			entries.add(entry);

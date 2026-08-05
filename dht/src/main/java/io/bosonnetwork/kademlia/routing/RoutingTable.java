@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,18 +61,50 @@ import io.bosonnetwork.json.Json;
  */
 public class RoutingTable {
 	private final Id localId;
+	private final int k;
+	private final int replacements;
 	private final List<KBucket> buckets;
 
 	protected static final Logger log = LoggerFactory.getLogger(RoutingTable.class);
 
-	public RoutingTable(Id localId) {
+	/**
+	 * Creates a routing table whose buckets use the given capacities.
+	 *
+	 * @param localId      the local node id.
+	 * @param k            the Kademlia bucket size, at least 1.
+	 * @param replacements the per-bucket replacement cache size, at least 1.
+	 */
+	public RoutingTable(Id localId, int k, int replacements) {
 		this.localId = localId;
+		this.k = k;
+		this.replacements = replacements;
 		this.buckets = new ArrayList<>();
-		buckets.add(new KBucket(Prefix.all(), x -> true));
+		buckets.add(newBucket(Prefix.all(), x -> true));
+	}
+
+	/**
+	 * Creates a bucket carrying this table's configured capacities. All buckets in a table share them,
+	 * so every construction site must go through here rather than calling the KBucket constructor.
+	 *
+	 * @param prefix the prefix the bucket covers.
+	 * @param isHome predicate deciding whether the prefix is the local node's home bucket.
+	 * @return the new bucket.
+	 */
+	private KBucket newBucket(Prefix prefix, Predicate<Prefix> isHome) {
+		return new KBucket(prefix, k, replacements, isHome);
 	}
 
 	public int size() {
 		return buckets.size();
+	}
+
+	/**
+	 * Returns the Kademlia bucket size (k) this table was created with.
+	 *
+	 * @return the bucket size.
+	 */
+	public int getK() {
+		return k;
 	}
 
 	private boolean isHomeBucket(Prefix p) {
@@ -341,8 +374,8 @@ public class RoutingTable {
 	 * @param bucket the bucket to split
 	 */
 	private void split(KBucket bucket) {
-		KBucket a = new KBucket(bucket.prefix().splitBranch(false), this::isHomeBucket);
-		KBucket b = new KBucket(bucket.prefix().splitBranch(true), this::isHomeBucket);
+		KBucket a = newBucket(bucket.prefix().splitBranch(false), this::isHomeBucket);
+		KBucket b = newBucket(bucket.prefix().splitBranch(true), this::isHomeBucket);
 
 		// Distribute entries into the appropriate new buckets
 		for (KBucketEntry entry : bucket.entries()) {
@@ -387,9 +420,9 @@ public class RoutingTable {
 				int effectiveSize2 = (int) (b2.stream().filter(e -> !e.removableWithoutReplacement()).count()
 						+ b2.replacementStream().filter(KBucketEntry::eligibleForNodesList).count());
 
-				if (effectiveSize1 + effectiveSize2 <= KBucket.MAX_ENTRIES) {
+				if (effectiveSize1 + effectiveSize2 <= k) {
 					log.debug("Merging buckets {} and {}...", b1.prefix(), b2.prefix());
-					KBucket newBucket = new KBucket(b1.prefix().getParent(), this::isHomeBucket);
+					KBucket newBucket = newBucket(b1.prefix().getParent(), this::isHomeBucket);
 
 					// Move all entries and replacements into the new bucket
 					b1.stream().forEach(newBucket::put);

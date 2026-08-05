@@ -369,11 +369,20 @@ public class KadNode extends BosonVerticle implements Node {
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
 
+		// KademliaOptions is unwrapped here and nowhere else: everything below this point receives the
+		// individual values, so no DHT-internal component depends on the configuration type.
+		final NodeConfiguration.KademliaOptions kademlia = config.kademlia();
+		final int alpha = kademlia.alpha();
+		final int k = kademlia.k();
+		final int replacements = kademlia.replacements();
+		final int concurrentTasks = kademlia.concurrentTasks();
+
 		return storage.initialize(vertx, MAX_VALUE_AGE, MAX_PEER_AGE).compose(unused -> {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
 			connectionStatusListener.setContext(vertxContext);
 			if (host4 != null) {
 				dht4 = new DHT(identity, Network.IPv4, host4, port, config.bootstraps(),
+						alpha, k, replacements, concurrentTasks,
 						storage, config.dataDir().resolve("dht4.cache"),
 						tokenManager, blacklist, config.security().spamThrottling(),
 						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);
@@ -383,6 +392,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 			if (host6 != null) {
 				dht6 = new DHT(identity, Network.IPv6, host6, port, config.bootstraps(),
+						alpha, k, replacements, concurrentTasks,
 						storage, config.dataDir().resolve("dht6.cache"),
 						tokenManager, blacklist, config.security().spamThrottling(),
 						config.security().suspiciousNodeDetector(), config.security().developerMode(), null);

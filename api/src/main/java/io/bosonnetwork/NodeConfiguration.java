@@ -76,7 +76,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 	public static final int DEFAULT_ALPHA = 3;
 	public static final int DEFAULT_K = 16;
 	public static final int DEFAULT_REPLACEMENTS = 8;
-	public static final int DEFAULT_CONCURRENT_QUERIES = 32;
+	public static final int DEFAULT_CONCURRENT_TASKS = 32;
 
 	public static final boolean DEFAULT_SPAM_THROTTLING = true;
 	public static final boolean DEFAULT_SUSPICIOUS_NODE_DETECTOR = true;
@@ -219,16 +219,16 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 	 * @param alpha             the Kademlia concurrency parameter: how many nodes a lookup queries in parallel
 	 * @param k                 the Kademlia bucket size
 	 * @param replacements      how many replacement entries each bucket keeps
-	 * @param concurrentQueries the ceiling on DHT queries in flight; requests beyond it are queued
+	 * @param concurrentTasks the ceiling on concurrently running DHT tasks; further tasks are queued
 	 */
-	public record KademliaOptions(int alpha, int k, int replacements, int concurrentQueries) {
+	public record KademliaOptions(int alpha, int k, int replacements, int concurrentTasks) {
 		/**
 		 * Canonical constructor, and the only place these parameters are validated.
 		 *
 		 * @param alpha             the concurrency parameter, at least 1
 		 * @param k                 the bucket size, at least 1
 		 * @param replacements      the replacement count, at least 1
-		 * @param concurrentQueries the in-flight query ceiling, at least 1
+		 * @param concurrentTasks the concurrent task ceiling, at least 1
 		 * @throws IllegalArgumentException if any parameter is less than 1
 		 */
 		public KademliaOptions {
@@ -238,13 +238,13 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 				throw new IllegalArgumentException("Invalid k: " + k);
 			if (replacements < 1)
 				throw new IllegalArgumentException("Invalid replacements: " + replacements);
-			if (concurrentQueries < 1)
-				throw new IllegalArgumentException("Invalid concurrentQueries: " + concurrentQueries);
+			if (concurrentTasks < 1)
+				throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks);
 		}
 
 		static KademliaOptions fromMap(@Nullable ConfigMap cm) {
 			if (cm == null || cm.isEmpty())
-				return new KademliaOptions(DEFAULT_ALPHA, DEFAULT_K, DEFAULT_REPLACEMENTS, DEFAULT_CONCURRENT_QUERIES);
+				return new KademliaOptions(DEFAULT_ALPHA, DEFAULT_K, DEFAULT_REPLACEMENTS, DEFAULT_CONCURRENT_TASKS);
 
 			// Read straight through to the canonical constructor: a value the operator wrote down is
 			// reported as an error rather than quietly replaced by the default, which would leave a
@@ -252,7 +252,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 			return new KademliaOptions(cm.getInteger("alpha", DEFAULT_ALPHA),
 					cm.getInteger("k", DEFAULT_K),
 					cm.getInteger("replacements", DEFAULT_REPLACEMENTS),
-					cm.getInteger("concurrentQueries", DEFAULT_CONCURRENT_QUERIES));
+					cm.getInteger("concurrentTasks", DEFAULT_CONCURRENT_TASKS));
 		}
 
 		Map<String, Object> toMap() {
@@ -260,7 +260,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 			map.put("alpha", alpha);
 			map.put("k", k);
 			map.put("replacements", replacements);
-			map.put("concurrentQueries", concurrentQueries);
+			map.put("concurrentTasks", concurrentTasks);
 			return map;
 		}
 	}
@@ -523,7 +523,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 
 		private int replacements = DEFAULT_REPLACEMENTS;
 
-		private int concurrentQueries = DEFAULT_CONCURRENT_QUERIES;
+		private int concurrentTasks = DEFAULT_CONCURRENT_TASKS;
 
 		/**
 		 * Set of bootstrap nodes for joining the DHT network.
@@ -959,14 +959,14 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 		/**
 		 * Sets the ceiling on DHT queries in flight; requests beyond it are queued.
 		 *
-		 * @param concurrentQueries the in-flight query ceiling, at least 1
+		 * @param concurrentTasks the concurrent task ceiling, at least 1
 		 * @return this Builder for chaining
-		 * @throws IllegalArgumentException if concurrentQueries is less than 1
+		 * @throws IllegalArgumentException if concurrentTasks is less than 1
 		 */
-		public Builder concurrentQueries(int concurrentQueries) {
-			if (concurrentQueries < 1)
-				throw new IllegalArgumentException("Invalid concurrentQueries: " + concurrentQueries);
-			this.concurrentQueries = concurrentQueries;
+		public Builder concurrentTasks(int concurrentTasks) {
+			if (concurrentTasks < 1)
+				throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks);
+			this.concurrentTasks = concurrentTasks;
 			return this;
 		}
 
@@ -1254,7 +1254,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 				alpha(kademlia.alpha());
 				k(kademlia.k());
 				replacements(kademlia.replacements());
-				concurrentQueries(kademlia.concurrentQueries());
+				concurrentTasks(kademlia.concurrentTasks());
 			}
 
 			if (m.containsKey("security")) {
@@ -1295,7 +1295,7 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 						keyPair,
 						dataDir,
 						new NodeDatabaseOptions(databaseUri, databasePoolSize, databaseSchemaName),
-						new KademliaOptions(alpha, k, replacements, concurrentQueries),
+						new KademliaOptions(alpha, k, replacements, concurrentTasks),
 						bootstraps,
 						new SecurityOptions(spamThrottling, suspiciousNodeDetector, developerMode));
 			} catch (NullPointerException | IllegalArgumentException e) {

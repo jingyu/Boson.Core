@@ -103,10 +103,10 @@ database:
 #   k: 32
 #   # Additional parameter for k. The number of replacements. Default: 8
 #   replacements: 16
-#   # Maximum number of concurrent DHT queries.
-#   # If the lookup requests are too many, the system will queue new requests.
+#   # Maximum number of concurrently running DHT tasks.
+#   # If too many tasks are started at once, the system will queue the rest.
 #   # Default: 32
-#   concurrentQueries: 256
+#   concurrentTasks: 256
 
 # Initial entry points to the DHT network.
 # These nodes are contacted during startup to discover other peers.

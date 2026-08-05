@@ -57,7 +57,7 @@ public class KClosestNodes {
 		this.routingTable = routingTable;
 		this.target = target;
 		this.capacity = capacity;
-		this.entries = new ArrayList<>(capacity + KBucket.MAX_ENTRIES);
+		this.entries = new ArrayList<>(capacity + routingTable.getK());
 		this.filter = e -> e.eligibleForNodesList() && !e.getId().equals(routingTable.getLocalId());
 		this.includeReplacements = false;
 	}

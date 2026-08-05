@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -71,6 +72,12 @@ import io.bosonnetwork.kademlia.storage.DataStorage;
  */
 @ExtendWith(VertxExtension.class)
 public class DHTSiblingTests {
+	// Kademlia parameters, as KadNode would pass them down from NodeConfiguration.KademliaOptions.
+	private static final int K = 16;
+	private static final int REPLACEMENTS = 16;
+	private static final int ALPHA = 4;
+	private static final int CONCURRENT_TASKS = 16;
+
 	private static final int PORT4 = 39001;
 	private static final int PORT6 = 39002;
 
@@ -88,12 +95,14 @@ public class DHTSiblingTests {
 		storage = DataStorage.create("jdbc:sqlite:" + testDir.resolve("storage.db"), 4, null);
 
 		storage.initialize(vertx, TimeUnit.HOURS.toMillis(1), TimeUnit.HOURS.toMillis(1)).compose(unused -> {
-			dht4 = new DHT(identity, Network.IPv4, "127.0.0.1", PORT4, List.of(), storage,
-					testDir.resolve("dht4.cache"), tokenManager, Blacklist.empty(),
-					false, false, true, null);
-			dht6 = new DHT(identity, Network.IPv6, "::1", PORT6, List.of(), storage,
-					testDir.resolve("dht6.cache"), tokenManager, Blacklist.empty(),
-					false, false, true, null);
+			dht4 = new DHT(identity, Network.IPv4, "127.0.0.1", PORT4, List.of(),
+					ALPHA, K, REPLACEMENTS, CONCURRENT_TASKS,
+					storage, testDir.resolve("dht4.cache"), tokenManager,
+					Blacklist.empty(), false, false, true, null);
+			dht6 = new DHT(identity, Network.IPv6, "::1", PORT6, List.of(),
+					ALPHA, K, REPLACEMENTS, CONCURRENT_TASKS,
+					storage, testDir.resolve("dht6.cache"), tokenManager,
+					Blacklist.empty(), false, false, true, null);
 
 			// Wire before deploying, exactly as KadNode does.
 			dht4.setSibling(dht6);
@@ -138,7 +147,7 @@ public class DHTSiblingTests {
 	 */
 	private static Future<Void> fillRoutingTable(DHT dht, int count, boolean ipv6) {
 		Promise<Void> promise = Promise.promise();
-		dht.runOnContext(v -> {
+		dht.vertxContext().runOnContext(v -> {
 			for (int i = 0; i < count; i++) {
 				InetSocketAddress addr = ipv6 ?
 						new InetSocketAddress("::1", 10000 + i) :
@@ -158,8 +167,42 @@ public class DHTSiblingTests {
 	 */
 	private static <T> Future<T> onContext(DHT dht, java.util.function.Supplier<Future<T>> action) {
 		Promise<T> promise = Promise.promise();
-		dht.runOnContext(v -> action.get().onComplete(promise));
+		dht.vertxContext().runOnContext(v -> action.get().onComplete(promise));
 		return promise.future();
+	}
+
+	/**
+	 * The DHT constructor is the single point where all four Kademlia parameters arrive, so it is
+	 * where they must be validated.
+	 * <p>
+	 * None of these values fails loudly downstream: alpha below 1 makes {@code Task.canDoRequest()}
+	 * permanently false so a task never issues an RPC and never completes, and concurrentTasks below
+	 * 1 makes {@code TaskManager.isReady()} permanently false so every task queues forever. Both are
+	 * silent hangs, which is exactly the kind of defect a constructor check should turn into a crash.
+	 */
+	@Test
+	void testRejectsInvalidKademliaParameters() {
+		CryptoIdentity identity = new CryptoIdentity();
+		TokenManager tokenManager = new TokenManager();
+
+		// alpha, k, replacements, concurrentTasks - each rejected independently at 0.
+		assertThrows(IllegalArgumentException.class, () -> newDht(identity, tokenManager, 0, K, REPLACEMENTS, CONCURRENT_TASKS));
+		assertThrows(IllegalArgumentException.class, () -> newDht(identity, tokenManager, ALPHA, 0, REPLACEMENTS, CONCURRENT_TASKS));
+		assertThrows(IllegalArgumentException.class, () -> newDht(identity, tokenManager, ALPHA, K, 0, CONCURRENT_TASKS));
+		assertThrows(IllegalArgumentException.class, () -> newDht(identity, tokenManager, ALPHA, K, REPLACEMENTS, 0));
+
+		assertThrows(IllegalArgumentException.class, () -> newDht(identity, tokenManager, -1, K, REPLACEMENTS, CONCURRENT_TASKS));
+
+		// The all-valid combination must still construct, so the test cannot pass by rejecting everything.
+		assertNotNull(newDht(identity, tokenManager, ALPHA, K, REPLACEMENTS, CONCURRENT_TASKS));
+	}
+
+	private DHT newDht(CryptoIdentity identity, TokenManager tokenManager,
+					   int alpha, int k, int replacements, int concurrentTasks) {
+		return new DHT(identity, Network.IPv4, "127.0.0.1", PORT4, List.of(),
+				alpha, k, replacements, concurrentTasks,
+				storage, testDir.resolve("params.cache"), tokenManager,
+				Blacklist.empty(), false, false, true, null);
 	}
 
 	@Test
@@ -226,19 +269,19 @@ public class DHTSiblingTests {
 						.flatMap(b -> b.entries().stream().findFirst())
 						.ifPresent(e -> dht6.getRoutingTable().remove(e.getId()));
 
-				dht6.runOnContext(v -> run());
+				dht6.vertxContext().runOnContext(v -> run());
 			}
 		};
 
 		fillRoutingTable(dht6, 32, true)
 				.compose(unused -> {
-					dht6.runOnContext(v -> churn.run());
+					dht6.vertxContext().runOnContext(v -> churn.run());
 					return fillRoutingTable(dht4, 16, false);
 				})
 				.compose(unused -> {
 					// Serialize the lookups on dht4's context, mirroring real request handling.
 					Promise<Void> done = Promise.promise();
-					dht4.runOnContext(v -> lookupLoop(rounds, completed, done));
+					dht4.vertxContext().runOnContext(v -> lookupLoop(rounds, completed, done));
 					return done.future();
 				})
 				.onComplete(ar -> {
@@ -287,7 +330,7 @@ public class DHTSiblingTests {
 		Id target = Id.random();
 
 		fillRoutingTable(dht6, 16, true).onSuccess(unused ->
-				dht4.runOnContext(v -> {
+				dht4.vertxContext().runOnContext(v -> {
 					Context callerContext = Vertx.currentContext();
 					dht4.populateClosestNodes(target, 8, 8).onComplete(ar -> testContext.verify(() -> {
 						assertTrue(ar.succeeded());

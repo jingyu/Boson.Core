@@ -462,8 +462,8 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 * @return true if requests can be sent, false otherwise
 	 */
 	protected boolean canDoRequest() {
-		return isRunning() && (inFlight.size() < (lowPriority ? TaskManager.MAX_CONCURRENT_TASK_REQUESTS_LOW_PRIORITY
-				: TaskManager.MAX_CONCURRENT_TASK_REQUESTS));
+		int limit = lowPriority ? getContext().getLowPriorityAlpha() : getContext().getAlpha();
+		return isRunning() && (inFlight.size() < limit);
 	}
 
 	// Internal listener for RPC call state changes, updating the task's state and triggering iteration.

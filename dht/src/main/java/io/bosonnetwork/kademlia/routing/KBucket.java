@@ -39,30 +39,18 @@ import org.slf4j.Logger;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 
 /**
  * Represents a k-bucket in a Kademlia routing table.
  * <p>
- * A KBucket is a list of {@link KBucketEntry} objects, maintaining up to {@link #MAX_ENTRIES} entries.
+ * A KBucket is a list of {@link KBucketEntry} objects, maintaining up to the configured bucket size (k).
  * This implementation prefers nodes with older creation times for stability.
  * </p>
  * <b>CAUTION:</b> This is a non-thread-safe k-bucket implementation, designed for use
  * inside a Vert.x verticle or other single-threaded environment.
  */
 public class KBucket implements Comparable<KBucket> {
-	/**
-	 * The maximum number of entries in a k-bucket (K).
-	 */
-	public static final int MAX_ENTRIES = 8;
-	/**
-	 * The minimum interval (in milliseconds) between required bucket refreshes.
-	 */
-	public static final int REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes in milliseconds
-	/**
-	 * The minimum interval (in milliseconds) between pings to replacement entries.
-	 */
-	public static final int REPLACEMENT_PING_MIN_INTERVAL = 30 * 1000; // 30 seconds in milliseconds
-
 	/**
 	 * The prefix this bucket covers in the routing table.
 	 */
@@ -74,9 +62,19 @@ public class KBucket implements Comparable<KBucket> {
 	private final boolean homeBucket;
 
 	/**
-	 * The main list of entries in this bucket (up to MAX_ENTRIES).
+	 * The Kademlia bucket size (k): the maximum number of main entries this bucket holds.
 	 */
-	// Sorting after every update is inexpensive (MAX_ENTRIES = 8).
+	private final int maxEntries;
+
+	/**
+	 * The maximum number of replacement entries this bucket holds.
+	 */
+	private final int maxReplacements;
+
+	/**
+	 * The main list of entries in this bucket (up to {@link #maxEntries}).
+	 */
+	// Sorting after every update is inexpensive at realistic bucket sizes.
 	// Keeps entries strictly age-ordered for iteration.
 	private final List<KBucketEntry> entries;
 
@@ -91,13 +89,28 @@ public class KBucket implements Comparable<KBucket> {
 	 */
 	private long lastRefresh;
 
-	protected KBucket(Prefix prefix, Predicate<Prefix> isHome) {
+	/**
+	 * Creates a bucket with the given capacities.
+	 *
+	 * @param prefix          the prefix this bucket covers.
+	 * @param maxEntries      the Kademlia bucket size (k), at least 1.
+	 * @param maxReplacements the replacement cache size, at least 1.
+	 * @param isHome          predicate deciding whether the prefix is the local node's home bucket.
+	 */
+	protected KBucket(Prefix prefix, int maxEntries, int maxReplacements, Predicate<Prefix> isHome) {
+		if (maxEntries < 1)
+			throw new IllegalArgumentException("Invalid maxEntries: " + maxEntries);
+		if (maxReplacements < 1)
+			throw new IllegalArgumentException("Invalid maxReplacements: " + maxReplacements);
+
 		this.prefix = prefix;
 		this.homeBucket = isHome.test(prefix);
+		this.maxEntries = maxEntries;
+		this.maxReplacements = maxReplacements;
 
 		// using ArrayList here since reading/iterating is far more common than writing.
-		entries = new ArrayList<>(MAX_ENTRIES);
-		replacements = new ArrayList<>(MAX_ENTRIES);
+		entries = new ArrayList<>(maxEntries);
+		replacements = new ArrayList<>(maxReplacements);
 	}
 
 	private static Logger log() {
@@ -159,12 +172,12 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	/**
-	 * Checks if this bucket is full (i.e., contains MAX_ENTRIES entries).
+	 * Checks if this bucket is full (i.e., contains maxEntries entries).
 	 *
 	 * @return true if the bucket is full; false otherwise.
 	 */
 	public boolean isFull() {
-		return entries.size() >= MAX_ENTRIES;
+		return entries.size() >= maxEntries;
 	}
 
 	/**
@@ -306,7 +319,7 @@ public class KBucket implements Comparable<KBucket> {
 	 */
 	public boolean needsToBeRefreshed() {
 		long now = System.currentTimeMillis();
-		return now - lastRefresh > REFRESH_INTERVAL && anyMatch(KBucketEntry::needsPing);
+		return now - lastRefresh > KadConstants.BUCKET_REFRESH_INTERVAL && anyMatch(KBucketEntry::needsPing);
 	}
 
 	/**
@@ -316,8 +329,8 @@ public class KBucket implements Comparable<KBucket> {
 	 */
 	public boolean needsReplacementPing() {
 		long now = System.currentTimeMillis();
-		return now - lastRefresh > REPLACEMENT_PING_MIN_INTERVAL &&
-				(anyMatch(KBucketEntry::needsReplacement) || entries.size() < MAX_ENTRIES) &&
+		return now - lastRefresh > KadConstants.BUCKET_REPLACEMENT_PING_MIN_INTERVAL &&
+				(anyMatch(KBucketEntry::needsReplacement) || entries.size() < maxEntries) &&
 				anyMatchInReplacements(KBucketEntry::isNeverContacted);
 	}
 
@@ -354,7 +367,7 @@ public class KBucket implements Comparable<KBucket> {
 
 		// not found, add the new entry, and remove from replacements if exists avoid duplicated entries
 		if (entry.isReachable()) {
-			if (entries.size() < MAX_ENTRIES) {
+			if (entries.size() < maxEntries) {
 				putAsMainEntry(entry);
 				return;
 			}
@@ -446,7 +459,7 @@ public class KBucket implements Comparable<KBucket> {
 			KBucketEntry entry = replacements.get(i);
 			if (entry.getId().equals(id)) {
 				// Note: stale replacements under capacity are left until periodic cleanup.
-				if (force || (replacements.size() >= MAX_ENTRIES && entry.oldAndStale())) {
+				if (force || (replacements.size() >= maxReplacements && entry.oldAndStale())) {
 					replacements.remove(i);
 					return entry;
 				}
@@ -509,7 +522,7 @@ public class KBucket implements Comparable<KBucket> {
 		}
 
 		replacements.add(entry);
-		if (replacements.size() > MAX_ENTRIES) {
+		if (replacements.size() > maxReplacements) {
 			replacements.sort(KBucketEntry::replacementOrder);
 			replacements.remove(replacements.size() - 1);
 		}
@@ -528,7 +541,7 @@ public class KBucket implements Comparable<KBucket> {
 
 		// If not full, promote a verified replacement directly
 		// Promotes one per call for controlled updates.
-		if (entries.size() < MAX_ENTRIES) {
+		if (entries.size() < maxEntries) {
 			KBucketEntry replacement = pollVerifiedReplacement();
 			if (replacement != null) {
 				entries.add(replacement);
@@ -613,7 +626,7 @@ public class KBucket implements Comparable<KBucket> {
 				entry.onResponded(rtt);
 
 				// if the main entries list is not full, promote the verified replacement to the main entries list.
-				if (entries.size() < MAX_ENTRIES) {
+				if (entries.size() < maxEntries) {
 					replacements.remove(i);
 					entries.add(entry);
 					entries.sort(KBucketEntry::ageOrder);
@@ -653,7 +666,7 @@ public class KBucket implements Comparable<KBucket> {
 			if (entry.getId().equals(id)) {
 				entry.onTimeout();
 				// Cull stale replacements only if the replacement list is full
-				if (replacements.size() >= MAX_ENTRIES && entry.oldAndStale()) {
+				if (replacements.size() >= maxReplacements && entry.oldAndStale()) {
 					replacements.remove(i);
 					return true;
 				}

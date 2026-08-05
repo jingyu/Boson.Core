@@ -60,6 +60,7 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
+import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
 import io.bosonnetwork.kademlia.protocol.FindValueRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
@@ -129,7 +130,7 @@ public class RPCServerTests {
 		protected void prepare(Vertx vertx, Context context) {
 			super.prepare(vertx, context);
 
-			kadContext = new KadContext(vertx, context, identity, getNetwork(), null);
+			kadContext = new TestKadContext(context, identity, Network.IPv4).setDeveloperMode(false);
 			rpcServer = new RpcServer(kadContext, host, port, Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
 			rpcServer.setMessageHandler(this::onMessage);
 			rpcServer.setCallTimeoutHandler(this::callTimeout);

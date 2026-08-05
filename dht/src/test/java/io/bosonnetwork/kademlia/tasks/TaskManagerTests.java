@@ -1,11 +1,15 @@
 package io.bosonnetwork.kademlia.tasks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import io.vertx.core.Context;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
@@ -20,10 +24,13 @@ import io.vertx.junit5.VertxTestContext;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
+import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 
 @ExtendWith(VertxExtension.class)
 class TaskManagerTests {
+	private static final int TEST_MAX_CONCURRENT_TASKS = 16;
+	private Context vertxContext;
 	private KadContext kadContext;
 	private TaskManager manager;
 
@@ -87,7 +94,9 @@ class TaskManagerTests {
 
 	@BeforeEach
 	void setUp(Vertx vertx, VertxTestContext context) {
-		this.kadContext = new KadContext(vertx, vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4, null);
+		vertxContext = vertx.getOrCreateContext();
+		this.kadContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
+				.setConcurrentTasks(TEST_MAX_CONCURRENT_TASKS);
 		this.manager = new TaskManager(kadContext);
 		context.completeNow();
 	}
@@ -189,9 +198,47 @@ class TaskManagerTests {
 		}));
 	}
 
+	/**
+	 * The configured active-task ceiling must actually take effect.
+	 * <p>
+	 * {@link #testMaxActiveTasks} exercises only the default-constructed manager, so it passes whether
+	 * the limit comes from the constructor argument or from the default constant. This test uses a
+	 * ceiling that differs from the default, so a manager that ignores its argument fails here.
+	 */
+	@Test
+	void testConfiguredMaxActiveTasksIsHonored(Vertx vertx, VertxTestContext context) {
+		int configured = 2;
+		KadContext kadContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
+				.setConcurrentTasks(configured);
+		TaskManager limited = new TaskManager(kadContext);
+
+		List<TestTask> tasks = new ArrayList<>();
+		for (int i = 0; i < configured + 3; i++) {
+			TestTask t = new TestTask(kadContext).setName("LimitedTask" + i).addListener(new TestTaskListener());
+			tasks.add(t);
+			kadContext.runOnContext(() -> limited.add(t));
+		}
+
+		try {
+			// wait for the manager to start as many as it is willing to
+			while (tasks.get(configured - 1).isUnstarted())
+				//noinspection BusyWait
+				Thread.sleep(100);
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		assertEquals(configured, limited.getRunningTasks());
+		assertEquals(3, limited.getQueuedTasks());
+		assertFalse(limited.isReady());
+
+		limited.cancelAll();
+		context.completeNow();
+	}
+
 	@Test
 	void testMaxActiveTasks(VertxTestContext context) {
-		int max = TaskManager.MAX_ACTIVE_TASKS;
+		int max = manager.getMaxActiveTasks();
 		TestTask task = null;
 		for (int i = 0; i < max; i++) {
 			task = new TestTask(kadContext).setName("TestTask" + i).addListener(new TestTaskListener());

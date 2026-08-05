@@ -36,7 +36,6 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
-import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.utils.AddressUtils;
 
@@ -50,12 +49,15 @@ import io.bosonnetwork.utils.AddressUtils;
  * @param <S> the specific task type, enabling method chaining
  */
 public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> {
-	/** The maximum number of iterations before giving up. */
-	protected static final int MAX_ITERATIONS = 3 * KBucket.MAX_ENTRIES;
+	/**
+	 * The maximum number of iterations before giving up, derived from the configured bucket size.
+	 * Instance state rather than a constant, because k is a configured value.
+	 */
+	protected final int maxIterations;
 
 	/** The target ID for the lookup. */
 	private final Id target;
-	/** Set of closest nodes to the target, limited to KBucket.MAX_ENTRIES. */
+	/** Set of closest nodes to the target, limited to the configured bucket size (k). */
 	private final ClosestSet closest;
 	/** Queue of candidate nodes to query, prioritized by distance to the target. */
 	private final ClosestCandidates candidates;
@@ -82,8 +84,10 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		this.target = target;
 		this.doneOnEligibleResult = doneOnEligibleResult;
 
-		this.closest = new ClosestSet(target, KBucket.MAX_ENTRIES);
-		this.candidates = new ClosestCandidates(target, KBucket.MAX_ENTRIES * 3, context.isDeveloperMode());
+		int k = context.getK();
+		this.maxIterations = 3 * k;
+		this.closest = new ClosestSet(target, k);
+		this.candidates = new ClosestCandidates(target, k * 3, context.isDeveloperMode());
 	}
 
 	/**
@@ -239,7 +243,7 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	@Override
 	protected boolean isDone() {
 		/*/
-		return lookupDone || iterationCount >= MAX_ITERATIONS ||
+		return lookupDone || iterationCount >= maxIterations ||
 				(super.isDone() && (getCandidateSize() == 0 ||
 				(closest.isEligible() && (candidates.head() == null ||
 						target.threeWayCompare(closest.tail(), candidates.head()) <= 0))));
@@ -250,8 +254,8 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 			log.debug("{}#{} terminating lookup: explicit completion signaled (lookupDone)", getName(), getId());
 			return true;
 		}
-		if (iterationCount >= MAX_ITERATIONS) {
-			log.debug("{}#{} terminating lookup: reached maximum iterations ({})", getName(), getId(), MAX_ITERATIONS);
+		if (iterationCount >= maxIterations) {
+			log.debug("{}#{} terminating lookup: reached maximum iterations ({})", getName(), getId(), maxIterations);
 			return true;
 		}
 		if (!super.isDone()) {

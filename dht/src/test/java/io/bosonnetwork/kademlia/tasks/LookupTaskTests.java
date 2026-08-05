@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.vertx.core.Vertx;
 import net.datafaker.Faker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,15 +24,17 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
+import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
-import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.utils.AddressUtils;
 
 class LookupTaskTests {
 	private static final Faker faker = new Faker();
+	private static final Vertx vertx = Vertx.vertx();
 
 	private TestLookupTask task;
 
@@ -71,7 +74,7 @@ class LookupTaskTests {
 
 	@BeforeEach
 	void setUp() {
-		KadContext context = new KadContext(null, null, new CryptoIdentity(), Network.IPv4, null);
+		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
 		task = new TestLookupTask(context, Id.random());
 	}
 
@@ -80,7 +83,7 @@ class LookupTaskTests {
 		task.addCandidates(List.of(NodeInfo.of(Id.random(), "100.1.1.8", 39001)));
 		task.start();
 
-		for (int i = 0; i < LookupTask.MAX_ITERATIONS; i++)
+		for (int i = 0; i < task.maxIterations; i++)
 			task.iterate();
 
 		assertTrue(task.isDone());
@@ -88,42 +91,42 @@ class LookupTaskTests {
 
 	@Test
 	void testCandidateManagement() {
-		List<NodeInfo> nodes1 = new ArrayList<>(KBucket.MAX_ENTRIES * 2);
-		for (int i = 0; i < KBucket.MAX_ENTRIES * 2; i++)
+		List<NodeInfo> nodes1 = new ArrayList<>(KadConstants.K * 2);
+		for (int i = 0; i < KadConstants.K * 2; i++)
 			nodes1.add(NodeInfo.of(Id.random(), randomAddress()));
 
 		task.addCandidates(nodes1);
-		assertEquals(KBucket.MAX_ENTRIES * 2, task.getCandidateSize());
+		assertEquals(KadConstants.K * 2, task.getCandidateSize());
 
 		nodes1.stream().map(n -> task.getCandidate(n.getId())).forEach(task::addClosest);
-		assertEquals(KBucket.MAX_ENTRIES, task.getClosestSet().size());
+		assertEquals(KadConstants.K, task.getClosestSet().size());
 
 		// add again, should no any change
 		List<CandidateNode> closest = List.copyOf(task.getClosestSet().entries());
 		task.addCandidates(nodes1);
-		assertEquals(KBucket.MAX_ENTRIES * 2, task.getCandidateSize());
+		assertEquals(KadConstants.K * 2, task.getCandidateSize());
 
 		nodes1.stream().map(n -> task.getCandidate(n.getId())).forEach(task::addClosest);
-		assertEquals(KBucket.MAX_ENTRIES, task.getClosestSet().size());
+		assertEquals(KadConstants.K, task.getClosestSet().size());
 		List<CandidateNode> newClosest = List.copyOf(task.getClosestSet().entries());
 		assertEquals(closest, newClosest);
 
-		List<NodeInfo> nodes2 = new ArrayList<>(KBucket.MAX_ENTRIES * 2);
-		for (int i = 0; i < KBucket.MAX_ENTRIES * 2; i++)
+		List<NodeInfo> nodes2 = new ArrayList<>(KadConstants.K * 2);
+		for (int i = 0; i < KadConstants.K * 2; i++)
 			nodes2.add(NodeInfo.of(Id.random(), randomAddress()));
 
 		task.addCandidates(nodes2);
-		assertEquals(KBucket.MAX_ENTRIES * 3, task.getCandidateSize());
+		assertEquals(KadConstants.K * 3, task.getCandidateSize());
 
 		nodes2.stream().map(n -> task.getCandidate(n.getId())).filter(Objects::nonNull).forEach(task::addClosest);
-		assertEquals(KBucket.MAX_ENTRIES, task.getClosestSet().size());
+		assertEquals(KadConstants.K, task.getClosestSet().size());
 
 		List<NodeInfo> all = new ArrayList<>(nodes1);
 		all.addAll(nodes2);
 		Id target = task.getTarget();
 		all.sort((n1, n2) -> target.threeWayCompare(n1.getId(), n2.getId()));
-		assertEquals(all.subList(0, KBucket.MAX_ENTRIES * 3), task.getCandidates().entries().toList());
-		assertEquals(all.subList(0, KBucket.MAX_ENTRIES), task.getClosestSet().stream().toList());
+		assertEquals(all.subList(0, KadConstants.K * 3), task.getCandidates().entries().toList());
+		assertEquals(all.subList(0, KadConstants.K), task.getClosestSet().stream().toList());
 	}
 
 	@Test

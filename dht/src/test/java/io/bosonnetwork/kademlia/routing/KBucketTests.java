@@ -22,9 +22,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
 
 public class KBucketTests {
+	private static final int TEST_MAX_ENTRIES = 32;
+	private static final int TEST_MAX_REPLACEMENT_ENTRIES = 16;
 	private static final Faker faker = new Faker();
 
 	private KBucket bucket;
@@ -33,7 +36,7 @@ public class KBucketTests {
 	@BeforeEach
 	void setUp() {
 		Prefix prefix = new Prefix(Id.random(), 16); // adjust according to your Prefix/Id impl
-		bucket = new KBucket(prefix, p -> true); // home bucket
+		bucket = new KBucket(prefix, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES,  p -> true); // home bucket
 		localId = prefix.createRandomId();
 	}
 
@@ -156,7 +159,7 @@ public class KBucketTests {
 	@Test
 	void testIsFullBehavior() {
 		assertFalse(bucket.isFull(), "New bucket should not be full");
-		addEntries(KBucket.MAX_ENTRIES);
+		addEntries(TEST_MAX_ENTRIES);
 		assertTrue(bucket.isFull(), "Bucket should be full at MAX_ENTRIES");
 	}
 
@@ -236,7 +239,7 @@ public class KBucketTests {
 		assertFalse(bucket.needsToBeRefreshed());
 
 		// mock last refresh time
-		bucket.updateRefreshTime(System.currentTimeMillis() - KBucket.REFRESH_INTERVAL - 10000);
+		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10000);
 		// mark entry needs ping
 		entry.onTimeout();
 		entry.setLastSeen(System.currentTimeMillis() - 35_000);
@@ -253,7 +256,7 @@ public class KBucketTests {
 		bucket.updateRefreshTime();
 
 		// Fill the bucket to full
-		List<KBucketEntry> entries = addEntries(KBucket.MAX_ENTRIES);
+		List<KBucketEntry> entries = addEntries(TEST_MAX_ENTRIES);
 		// make the first entry needs ping
 		entries.get(0).onTimeout();
 		entries.get(0).setLastSeen(System.currentTimeMillis() - 35_000);
@@ -287,10 +290,12 @@ public class KBucketTests {
 		KBucketEntry bootstrap1 = addEntry();
 		KBucketEntry bootstrap2 = addEntry();
 
-		// make the bucket full
-		addEntry();
+		// make the bucket full - sized from k, so raising the bucket size does not silently
+		// turn "full" into "not full" and void the rest of this test
+		final int full = TEST_MAX_ENTRIES;
+		addEntries(full - bucket.size());
 
-		assertEquals(8, bucket.size());
+		assertEquals(full, bucket.size());
 		assertTrue(bucket.isFull());
 		assertTrue(bucket.entries().contains(bootstrap1) && bucket.entries().contains(bootstrap2));
 
@@ -299,21 +304,21 @@ public class KBucketTests {
 		bucket.cleanup(localId, Set.of(bootstrap1.getId(), bootstrap2.getId()), e -> dropped.set(true));
 
 		// one of bootstrap should be removed
-		assertEquals(7, bucket.size());
+		assertEquals(full - 1, bucket.size());
 		assertFalse(dropped.get());
 		assertFalse(bucket.entries().contains(bootstrap1) && bucket.entries().contains(bootstrap2));
 
-		// make the bucket full
+		// make the bucket full again
 		addEntry();
 
-		assertEquals(8, bucket.size());
+		assertEquals(full, bucket.size());
 		assertTrue(bucket.isFull());
 
 		// bucket is full, self not in the bucket, so will remove one of bootstraps, not trigger the drop handle
 		dropped.set(false);
 		bucket.cleanup(localId, Set.of(bootstrap1.getId(), bootstrap2.getId()), e -> dropped.set(true));
 
-		assertEquals(7, bucket.size());
+		assertEquals(full - 1, bucket.size());
 		assertFalse(dropped.get());
 		assertFalse(bucket.entries().contains(bootstrap1) && bucket.entries().contains(bootstrap2));
 	}
@@ -340,8 +345,8 @@ public class KBucketTests {
 
 	@Test
 	void testMainEntriesEvictionWhenOverCapacity() {
-		// Fill the replacements beyond MAX_ENTRIES, ensure pruning to MAX_ENTRIES
-		int max = KBucket.MAX_ENTRIES;
+		// Overfill the main list; the surplus spills into the replacement cache.
+		int max = TEST_MAX_ENTRIES;
 		addEntries(max + 3);
 
 		assertTrue(bucket.size() <= max);
@@ -350,16 +355,16 @@ public class KBucketTests {
 
 	@Test
 	void testReplacementEvictionWhenOverCapacity() {
-		// Fill the replacements beyond MAX_ENTRIES, ensure pruning to MAX_ENTRIES
-		int max = KBucket.MAX_ENTRIES;
+		// The replacement cache has its own, smaller cap than the main list.
+		int max = TEST_MAX_REPLACEMENT_ENTRIES;
 		addReplacements(max + 3);
-		assertTrue(bucket.replacementSize() <= max);
+		assertEquals(max, bucket.replacementSize());
 	}
 
 	@Test
 	void testOnTimeoutPromotesReplacement() {
 		// Fill bucket to capacity
-		int max = KBucket.MAX_ENTRIES;
+		int max = TEST_MAX_ENTRIES;
 		List<KBucketEntry> entries = addEntries(max);
 
 		// Timeout the first entry until it is bad
@@ -379,7 +384,7 @@ public class KBucketTests {
 	@Test
 	void testPromotesReplacementOnTimeout() {
 		// Fill bucket to capacity
-		int max = KBucket.MAX_ENTRIES;
+		int max = TEST_MAX_ENTRIES;
 		List<KBucketEntry> entries = addEntries(max);
 
 		// Add a replacement
@@ -486,8 +491,9 @@ public class KBucketTests {
 			}
 
 			// Check invariants after each operation
-			assertTrue(bucket.entries().size() <= KBucket.MAX_ENTRIES, "Entries size exceeded MAX_ENTRIES");
-			assertTrue(bucket.replacementSize() <= KBucket.MAX_ENTRIES, "Replacements size exceeded MAX_ENTRIES");
+			assertTrue(bucket.entries().size() <= TEST_MAX_ENTRIES, "Entries size exceeded MAX_ENTRIES");
+			assertTrue(bucket.replacementSize() <= TEST_MAX_REPLACEMENT_ENTRIES,
+					"Replacements size exceeded DEFAULT_MAX_REPLACEMENT_ENTRIES");
 
 			// Check no duplicate IDs across entries and replacements
 			Set<Id> seenIds = new HashSet<>();
