@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -64,8 +65,13 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	 */
 	public PingRefreshTask(KadContext context) {
 		super(context);
-		// Initialize with capacity for typical Kademlia bucket size(main entries and replacement entries)
-		this.todo = new ArrayDeque<>(getContext().getK() * 2);
+		// One bucket's worth of work: its main entries plus, at most, its replacement cache. Sized from
+		// both parameters rather than from k alone - they were a single constant until the bucket size
+		// and the replacement cache size were separated, at which point "2 * k" stopped describing
+		// anything real. This is only an initial capacity, so being wrong costs a resize, not
+		// correctness; it is spelled out so the next person does not have to re-derive what the deque
+		// actually holds.
+		this.todo = new ArrayDeque<>(getContext().getK() + getContext().getReplacements());
 	}
 
 	/**

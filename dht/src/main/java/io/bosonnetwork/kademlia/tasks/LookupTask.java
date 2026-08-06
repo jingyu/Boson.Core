@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
@@ -50,8 +51,33 @@ import io.bosonnetwork.utils.AddressUtils;
  */
 public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> {
 	/**
-	 * The maximum number of iterations before giving up, derived from the configured bucket size.
-	 * Instance state rather than a constant, because k is a configured value.
+	 * The iteration budget for this lookup: a backstop, not the termination rule.
+	 * <p>
+	 * <b>What it controls.</b> How many times {@link #iterate()} may run before the lookup gives up
+	 * and reports what it has. Iterations are driven by RPC state changes, so this is effectively a
+	 * ceiling on the RPCs one lookup may spend.
+	 * </p>
+	 * <p>
+	 * <b>Why it is derived, not configured.</b> The lookup normally ends by convergence - see
+	 * {@link #isDone()} - and convergence has a minimum cost set by
+	 * {@link ClosestSet#isEligible()}: about {@code 2 * k} insert attempts, k to fill the closest set
+	 * and k+1 more that fail to improve its tail. A budget below that floor would stop every lookup by
+	 * exhaustion instead, and the caller could not tell, because both outcomes report COMPLETED. So
+	 * the budget is {@code LOOKUP_CONVERGENCE_FACTOR * k} (the floor) plus slack for the depth ramp
+	 * and for iterations lost to unanswered RPCs. Exposing this as a free-standing configuration knob
+	 * would let an operator set it below the floor and quietly break every lookup on the node.
+	 * </p>
+	 * <p>
+	 * <b>Behavior as k grows.</b> The floor grows linearly with k because the convergence rule does.
+	 * The slack term is {@code max(k, alpha * LOOKUP_DEPTH_ALLOWANCE)}, so for small k it is dominated
+	 * by the fixed depth allowance - which is what the old {@code 3 * k} heuristic lacked, leaving
+	 * roughly three unanswered RPCs of margin at k=8 before a lookup would truncate on a lossy path.
+	 * For a super node at large k the depth term is irrelevant (convergence is O(log_k N), so more k
+	 * means fewer rounds) and the budget tracks the convergence floor, as it should.
+	 * </p>
+	 * <p>
+	 * Implementation limit: invisible to peers, bounding only this node's own effort.
+	 * </p>
 	 */
 	protected final int maxIterations;
 
@@ -85,9 +111,32 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		this.doneOnEligibleResult = doneOnEligibleResult;
 
 		int k = context.getK();
-		this.maxIterations = 3 * k;
+
+		// Convergence floor plus slack; see the maxIterations field for the full rationale. The slack
+		// is max(k, alpha * allowance) so that small k still gets a usable depth/loss margin - the
+		// previous 3*k left about three unanswered RPCs of margin at k=8 - while large k is carried by
+		// the floor, which is where the real cost lives.
+		this.maxIterations = KadConstants.LOOKUP_CONVERGENCE_FACTOR * k +
+				Math.max(k, context.getAlpha() * KadConstants.LOOKUP_DEPTH_ALLOWANCE);
+
 		this.closest = new ClosestSet(target, k);
-		this.candidates = new ClosestCandidates(target, k * 3, context.isDeveloperMode());
+		this.candidates = new ClosestCandidates(target, candidateCapacity(k), context.isDeveloperMode());
+	}
+
+	/**
+	 * Returns how many candidates a lookup for the given bucket size will queue.
+	 * <p>
+	 * The k closest plus 2k spares to route around dead or hostile peers, capped by
+	 * {@link KadConstants#MAX_LOOKUP_CANDIDATES} because the queue is re-sorted on every insertion and
+	 * therefore costs CPU quadratic in its size. The cap binds only for large k, where the extra
+	 * spares would never be consulted anyway - reaching them requires 2k peers ahead of them to fail.
+	 * </p>
+	 *
+	 * @param k the Kademlia bucket size.
+	 * @return the candidate queue capacity.
+	 */
+	protected static int candidateCapacity(int k) {
+		return Math.min(3 * k, KadConstants.MAX_LOOKUP_CANDIDATES);
 	}
 
 	/**

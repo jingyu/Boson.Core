@@ -765,11 +765,73 @@ public class DHT extends BosonVerticle {
 		return rpcServer.sendMessage(response);
 	}
 
+	/**
+	 * Returns how many nodes per address family a response may carry, given which families the
+	 * requester asked for.
+	 * <p>
+	 * <b>What this bounds and why it is not just k.</b> k says how many contacts a routing bucket
+	 * keeps; it is a routing-robustness knob and has nothing to do with what fits in a datagram.
+	 * Returning k nodes couples the two, so a node raising k for better routing would silently start
+	 * emitting oversized packets. The count is therefore
+	 * {@code min(k, MAX_NODES_PER_RESPONSE, whatever the packet budget allows)}.
+	 * </p>
+	 * <p>
+	 * <b>Why the packet budget matters more than the declared cap.</b> A response that exceeds the
+	 * path MTU is fragmented, and a fragmented UDP datagram is lost entirely if any one fragment is
+	 * lost - plus middleboxes commonly drop fragments outright. So overshooting the MTU does not
+	 * degrade gradually, it turns a working lookup into a silent black hole on some paths. The
+	 * declared cap alone is not enough to prevent this: at k=16 a dual-family response is roughly
+	 * {@code 24 + 16*44.5 + 16*56.5 + 48} bytes, about 1690, which exceeds both
+	 * {@link Network#maxPacketSize()} budgets (1450 for IPv4, 1200 for IPv6). The single-family cases
+	 * fit comfortably; it is specifically {@code want4 && want6} that overflows, which is why the
+	 * budget is split across the families actually requested rather than applied per family.
+	 * </p>
+	 * <p>
+	 * <b>Resulting numbers</b> at the default k=16, using the per-entry estimates in
+	 * {@link KadConstants}: 16 for a single family (the declared cap binds first), about 12 per family
+	 * for a dual-family response over an IPv4 socket, and about 9 over an IPv6 socket, whose MTU
+	 * budget is smaller. That lands in the same place as Ethereum's discv4, which fits roughly 12
+	 * nodes per Neighbors packet under an equivalent constraint.
+	 * </p>
+	 * <p>
+	 * <b>Trade-off.</b> Fewer nodes per response means more lookup rounds and so higher latency,
+	 * since convergence is O(log_k N) in the count actually returned rather than in the configured k.
+	 * More nodes means larger datagrams and, past the MTU, catastrophic rather than gradual loss. The
+	 * asymmetry is the whole argument for erring low.
+	 * </p>
+	 * <p>
+	 * This is not a protocol rule - the protocol sets no minimum, and a requester must already cope
+	 * with receiving fewer nodes than it asked for, because a small routing table returns fewer. It is
+	 * a transport-driven implementation limit.
+	 * </p>
+	 *
+	 * @param want4 whether the requester asked for IPv4 nodes.
+	 * @param want6 whether the requester asked for IPv6 nodes.
+	 * @return the maximum node count per requested family; 0 if neither family was requested.
+	 */
+	private int nodesPerFamily(boolean want4, boolean want6) {
+		if (!want4 && !want6)
+			return 0;
+
+		// Cost of one node of each family the requester actually asked for. A dual-family response
+		// pays both per slot, which is why it runs out of budget at roughly half the count.
+		int perSlot = (want4 ? KadConstants.NODE_ENTRY_SIZE_V4 : 0) +
+				(want6 ? KadConstants.NODE_ENTRY_SIZE_V6 : 0);
+
+		// The response leaves on this DHT's own socket, so this DHT's family sets the MTU budget -
+		// an IPv6 node has less room to work with even when answering with IPv4 nodes.
+		int budget = network.maxPacketSize() - KadConstants.RESPONSE_OVERHEAD;
+		int fits = budget / perSlot;
+
+		return Math.max(1, Math.min(Math.min(k, KadConstants.MAX_NODES_PER_RESPONSE), fits));
+	}
+
 	private void onFindNode(Message request) {
 		FindNodeRequest body = request.getBody();
 		Id target = body.getTarget();
-		int want4 = body.doesWant4() ? k : 0;
-		int want6 = body.doesWant6() ? k : 0;
+		int want = nodesPerFamily(body.doesWant4(), body.doesWant6());
+		int want4 = body.doesWant4() ? want : 0;
+		int want6 = body.doesWant6() ? want : 0;
 
 		populateClosestNodes(target, want4, want6).onSuccess(closest -> {
 			int token = body.doesWantToken() ?
@@ -793,8 +855,9 @@ public class DHT extends BosonVerticle {
 					value.getSequenceNumber() >= expectedSequenceNumber))
 				return Future.succeededFuture(Message.findValueResponse(request.getTxid(), value));
 
-			int want4 = body.doesWant4() ? k : 0;
-			int want6 = body.doesWant6() ? k : 0;
+			int want = nodesPerFamily(body.doesWant4(), body.doesWant6());
+			int want4 = body.doesWant4() ? want : 0;
+			int want6 = body.doesWant6() ? want : 0;
 			return populateClosestNodes(target, want4, want6).map(closest ->
 					Message.findValueResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {
@@ -842,8 +905,9 @@ public class DHT extends BosonVerticle {
 			if (!peers.isEmpty())
 				return Future.succeededFuture(Message.findPeerResponse(request.getTxid(), peers));
 
-			int want4 = body.doesWant4() ? k : 0;
-			int want6 = body.doesWant6() ? k : 0;
+			int want = nodesPerFamily(body.doesWant4(), body.doesWant6());
+			int want4 = body.doesWant4() ? want : 0;
+			int want6 = body.doesWant6() ? want : 0;
 			return populateClosestNodes(target, want4, want6).map(closest ->
 					Message.findPeerResponse(request.getTxid(), closest.nodes4, closest.nodes6));
 		}).transform(ar -> {
