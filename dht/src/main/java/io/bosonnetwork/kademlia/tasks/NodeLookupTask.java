@@ -167,9 +167,10 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 		// In bootstrap mode, use the maximum distance from the target to start from nodes farthest from the local node
 		Id knsTarget = bootstrap ? getTarget().distance(Id.MAX_ID) : getTarget();
 
-		// delay the filling of the candidate list until we actually start the task
+		// Delay the filling of the candidate list until we actually start the task. Seed with exactly
+		// the candidate queue capacity: anything beyond it would be pruned on insertion anyway.
 		KClosestNodes kns = getContext().getDHT().getRoutingTable()
-				.getClosestNodes(knsTarget, getContext().getK() * 3)
+				.getClosestNodes(knsTarget, candidateCapacity(getContext().getK()))
 				.filter(KBucketEntry::eligibleForLocalLookup)
 				.fill();
 		log.debug("{}#{} initialized {} candidates for target {}", getName(), getId(), kns.entries().size(), knsTarget);

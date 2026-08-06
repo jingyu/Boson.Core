@@ -71,9 +71,10 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 	 */
 	@Override
 	protected void prepare() {
-		// delay the filling of the candidate list until we actually start the task
+		// Delay the filling of the candidate list until we actually start the task. Seed with exactly
+		// the candidate queue capacity: anything beyond it would be pruned on insertion anyway.
 		KClosestNodes kns = getContext().getDHT().getRoutingTable()
-				.getClosestNodes(getTarget(), getContext().getK() * 3)
+				.getClosestNodes(getTarget(), candidateCapacity(getContext().getK()))
 				.filter(KBucketEntry::eligibleForLocalLookup)
 				.fill();
 		log.debug("{}#{} initialized {} candidates for target {}", getName(), getId(), kns.entries().size(), getTarget());
