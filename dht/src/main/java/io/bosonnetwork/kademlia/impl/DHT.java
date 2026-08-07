@@ -77,6 +77,11 @@ public class DHT extends BosonVerticle {
 	private final int replacements;
 	private final int concurrentTasks;
 
+	// Routing-table sizes at which bootstrapping kicks in, derived from k so that "enough contacts to
+	// operate" keeps meaning the same thing at any bucket size. See KadConstants for the rationale.
+	private final int bootstrapThreshold;
+	private final int useBootstrapNodesThreshold;
+
 	private final DataStorage storage;
 	private final Blacklist blacklist;
 	private final TokenManager tokenManager;
@@ -174,6 +179,15 @@ public class DHT extends BosonVerticle {
 		this.k = k;
 		this.replacements = replacements;
 		this.concurrentTasks = concurrentTasks;
+
+		// Both tiers scale with k up to an absolute ceiling. Capping only one would break the invariant
+		// that the server-fallback tier sits strictly below the bootstrap tier: at large k they would
+		// collide and then invert, collapsing the self-bootstrap band and sending routine maintenance
+		// to the shared bootstrap servers. See KadConstants for the arithmetic.
+		this.bootstrapThreshold = Math.min(KadConstants.BOOTSTRAP_THRESHOLD_BUCKETS * k,
+				KadConstants.BOOTSTRAP_THRESHOLD_ENTRIES);
+		this.useBootstrapNodesThreshold = Math.min(KadConstants.USE_BOOTSTRAP_NODES_THRESHOLD_BUCKETS * k,
+				KadConstants.USE_BOOTSTRAP_NODES_THRESHOLD_ENTRIES);
 
 		this.routingTable = new RoutingTable(identity.getId(), k, replacements);
 
@@ -416,10 +430,12 @@ public class DHT extends BosonVerticle {
 		routingTableMaintenance();
 
 		int entries = routingTable.getNumberOfEntries();
-		if (entries < KadConstants.BOOTSTRAP_IF_LESS_THAN_X_ENTRIES || System.currentTimeMillis() - lastBootstrap > KadConstants.SELF_LOOKUP_INTERVAL)
-			// Regularly search for our id to update the routing table
-			doBootstrap(entries < KadConstants.USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES ? bootstrapNodes : Collections.emptyList());
-
+		if (entries < bootstrapThreshold || System.currentTimeMillis() - lastBootstrap > KadConstants.SELF_LOOKUP_INTERVAL)
+			// Regularly search for our id to update the routing table. Below one bucket's worth of
+			// contacts we may be unable to reach the network unaided, so fall back to the configured
+			// bootstrap servers; above it, self-bootstrap from what we already know and leave those
+			// shared servers alone.
+			doBootstrap(entries < useBootstrapNodesThreshold ? bootstrapNodes : Collections.emptyList());
 	}
 
 	private void routingTableMaintenance() {
@@ -628,7 +644,7 @@ public class DHT extends BosonVerticle {
 		List<Future<Void>> futures = new ArrayList<>(routingTable.size());
 
 		routingTable.forEachBucket(bucket -> {
-			if (bucket.isFull() && routingTable.getNumberOfEntries() >= KadConstants.BOOTSTRAP_IF_LESS_THAN_X_ENTRIES)
+			if (bucket.isFull() && routingTable.getNumberOfEntries() >= bootstrapThreshold)
 				return;
 
 			Promise<Void> promise = Promise.promise();

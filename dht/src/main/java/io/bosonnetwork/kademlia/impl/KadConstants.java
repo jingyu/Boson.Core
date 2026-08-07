@@ -318,7 +318,7 @@ public final class KadConstants {
 	 * Minimum time between bootstrap attempts - a rate limiter, not a schedule.
 	 * <p>
 	 * Without it the 30-second tick would re-bootstrap continuously whenever the routing table sat
-	 * below {@link #BOOTSTRAP_IF_LESS_THAN_X_ENTRIES}, which is exactly the situation where the node
+	 * below the {@link #BOOTSTRAP_THRESHOLD_BUCKETS} threshold, which is exactly the situation where the node
 	 * is least able to afford the traffic and most likely to hammer the configured bootstrap servers.
 	 * Those servers are a shared, centralized resource for the whole network, so this interval
 	 * protects them as much as it protects this node.
@@ -462,25 +462,52 @@ public final class KadConstants {
 	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 60 * 1000;            // 60 seconds
 
 	/**
-	 * Routing-table size below which the node keeps trying to bootstrap on every update tick.
+	 * How many buckets' worth of contacts the node wants before it stops trying to bootstrap,
+	 * expressed as a multiple of k rather than as an absolute count.
 	 * <p>
-	 * Above this the table is considered self-sustaining and normal maintenance keeps it healthy;
-	 * below it, the node is at risk of partition and re-bootstraps (subject to
-	 * {@link #BOOTSTRAP_MIN_INTERVAL}). 30 entries is roughly two full buckets at the default k -
-	 * enough for lookups to route, low enough to catch a node whose table is collapsing rather than
-	 * waiting for it to empty.
+	 * Above {@code BOOTSTRAP_THRESHOLD_BUCKETS * k} entries the table is considered self-sustaining
+	 * and normal maintenance keeps it healthy; below it the node is at risk of partition and
+	 * re-bootstraps, subject to {@link #BOOTSTRAP_MIN_INTERVAL}. Three buckets is enough for lookups
+	 * to route in every direction, and low enough to catch a table that is collapsing rather than
+	 * waiting for it to empty. The product is capped by {@link #BOOTSTRAP_THRESHOLD_ENTRIES}.
+	 * </p>
+	 * <p>
+	 * <b>Why a multiple of k and not a constant.</b> "Enough contacts to operate" is inherently
+	 * relative to how many contacts a bucket holds. This was previously the literal 30, which was
+	 * about four buckets when k was 8 - but when k became 16 the same literal silently became under
+	 * two buckets, making the node markedly more reluctant to repair a thinning table without anyone
+	 * choosing that. Deriving it from k keeps the intent stable across any k.
 	 * </p>
 	 */
-	public static final int BOOTSTRAP_IF_LESS_THAN_X_ENTRIES = 30;
+	public static final int BOOTSTRAP_THRESHOLD_BUCKETS = 3;
 
 	/**
-	 * Routing-table size below which bootstrapping actually contacts the configured bootstrap nodes.
+	 * Absolute ceiling on the bootstrap threshold, whatever k is.
 	 * <p>
-	 * <b>Why there are two thresholds.</b> Between this and
-	 * {@link #BOOTSTRAP_IF_LESS_THAN_X_ENTRIES} the node bootstraps using only the peers it already
-	 * knows - a self-lookup seeded from its own routing table. Only when it drops below 8 entries,
-	 * where it genuinely may not be able to reach the network unaided, does it fall back to the
-	 * configured bootstrap servers.
+	 * <b>Why scaling with k has to stop.</b> "Enough contacts to operate" tracks k only up to a point.
+	 * Past some absolute number of contacts a node can route in every direction regardless of how
+	 * large its buckets are, and continuing to scale turns the threshold into a target the node may
+	 * never reach: a super node at k=64 would want 192 entries before it stopped bootstrapping, and
+	 * in a network that never offers it that many it would re-bootstrap every
+	 * {@link #BOOTSTRAP_MIN_INTERVAL} indefinitely - permanently, since the retry has no backoff.
+	 * </p>
+	 * <p>
+	 * <b>Why 64.</b> Roughly the point past which more contacts stop making a node meaningfully more
+	 * able to route. It is inert at the default k (3 * 16 = 48 is already below it) and only binds
+	 * from k=22 upward, so this is purely a super-node guard rather than a change to normal behavior.
+	 * </p>
+	 */
+	public static final int BOOTSTRAP_THRESHOLD_ENTRIES = 64;
+
+	/**
+	 * How many buckets' worth of contacts the node must drop below before bootstrapping falls back to
+	 * the configured bootstrap servers, expressed as a multiple of k.
+	 * <p>
+	 * <b>Why there are two thresholds.</b> Between {@code USE_BOOTSTRAP_NODES_THRESHOLD_BUCKETS * k}
+	 * and {@link #BOOTSTRAP_THRESHOLD_BUCKETS} times k, the node bootstraps using only peers it
+	 * already knows - a self-lookup seeded from its own routing table. Only below one bucket's worth
+	 * of contacts, where it genuinely may not be able to reach the network unaided, does it contact
+	 * the configured servers.
 	 * </p>
 	 * <p>
 	 * That split matters because bootstrap servers are a shared, centralized dependency: every node
@@ -488,8 +515,56 @@ public final class KadConstants {
 	 * precisely when they are least able to cope). Keeping the fallback rare is what stops routine
 	 * table churn from turning into a thundering herd against a handful of hosts.
 	 * </p>
+	 * <p>
+	 * One bucket is the natural unit here: a node that cannot fill a single bucket has no useful
+	 * routing state in any direction. This was previously the literal 8, which was exactly one bucket
+	 * at the old k and became half a bucket when k doubled - narrowing the band in which the node
+	 * self-repairs, and so pushing load onto the bootstrap servers that the two-tier scheme exists to
+	 * protect. The product is capped by {@link #USE_BOOTSTRAP_NODES_THRESHOLD_ENTRIES}.
+	 * </p>
 	 */
-	public static final int USE_BOOTSTRAP_NODES_IF_LESS_THAN_X_ENTRIES = 8;
+	public static final int USE_BOOTSTRAP_NODES_THRESHOLD_BUCKETS = 1;
+
+	/**
+	 * Absolute ceiling on the bootstrap-server fallback threshold, whatever k is.
+	 * <p>
+	 * <b>Why this one needs a cap even more than {@link #BOOTSTRAP_THRESHOLD_ENTRIES} does.</b> That
+	 * threshold governs whether the node spends its <em>own</em> effort; this one governs whether it
+	 * involves the shared bootstrap servers. Leaving it uncapped while capping the other is the wrong
+	 * way round: it lets the tier with externalized cost grow without bound.
+	 * </p>
+	 * <p>
+	 * <b>What goes wrong without it.</b> "One bucket's worth" stops being a sensible measure of
+	 * minimum viable routing state at large k - a node holding 100 contacts can route perfectly well
+	 * whether k is 16 or 128. Uncapped, the two thresholds also collide: at k=64 both land on 64, so
+	 * the self-bootstrap band vanishes and every bootstrap contacts the servers; above that they
+	 * invert, and the routine {@link #SELF_LOOKUP_INTERVAL} self-lookup starts contacting them on
+	 * every fire. That is precisely the thundering herd the two-tier split exists to prevent, and it
+	 * appears only at large k, which is the case least likely to be exercised in testing.
+	 * </p>
+	 * <p>
+	 * <b>Invariant, and why this is expressed as a division.</b> The effective value must stay strictly
+	 * below the effective {@link #BOOTSTRAP_THRESHOLD_ENTRIES}-capped threshold, or the self-bootstrap
+	 * band is empty and the scheme degrades to one tier. Defining this as half the other ceiling makes
+	 * that structural rather than coincidental: once both caps bind, the relationship is 32 &lt; 64 by
+	 * construction, and it cannot drift if someone retunes the ceiling. Below the caps the invariant
+	 * holds trivially, since {@code k < 3k}. Writing the two as independent literals is the same shape
+	 * of mistake as the k-derived literals this file already had to correct once.
+	 * </p>
+	 * <p>
+	 * <b>Why half, rather than lower.</b> The self-bootstrap tier can only help when the contacts the
+	 * node still holds are alive - and a table that shrank because its contacts died is exactly the
+	 * case where a self-lookup cannot recover. Nothing escalates on repeated failure: the tier is
+	 * chosen purely on entry count, so a node stuck with a table of stale contacts would retry the
+	 * same futile self-bootstrap every {@link #BOOTSTRAP_MIN_INTERVAL}. Keeping the fallback threshold
+	 * reasonably high bounds how long that can go on before the servers are consulted.
+	 * </p>
+	 * <p>
+	 * Inert at the default k, where {@code 1 * 16} already sits below it, so normal behavior is
+	 * unchanged; it binds only from k=32 upward.
+	 * </p>
+	 */
+	public static final int USE_BOOTSTRAP_NODES_THRESHOLD_ENTRIES = BOOTSTRAP_THRESHOLD_ENTRIES / 2;
 
 	private KadConstants() {
 	}

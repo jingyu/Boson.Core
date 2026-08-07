@@ -22,6 +22,7 @@
 
 package io.bosonnetwork;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -405,6 +406,60 @@ class NodeConfigurationTests {
 				() -> builder.fromMap(Map.of("kademlia", Map.of("alpha", 0))));
 		assertThrows(IllegalArgumentException.class,
 				() -> new NodeConfiguration.KademliaOptions(0, 16, 8, 32));
+	}
+
+	@Test
+	void testKademliaRejectsValuesAboveRange() {
+		// The upper bounds exist because the limits derived from these parameters were reasoned about
+		// over a bounded range: an absurd k makes lookups quadratically expensive and would overrun the
+		// response MTU budget, and an absurd alpha multiplies the load one node puts on the network.
+		NodeConfiguration.Builder builder = baseBuilder();
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.alpha(NodeConfiguration.KademliaOptions.MAX_ALPHA + 1));
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.k(NodeConfiguration.KademliaOptions.MAX_K + 1));
+		assertThrows(IllegalArgumentException.class,
+				() -> builder.replacements(NodeConfiguration.KademliaOptions.MAX_REPLACEMENTS + 1));
+
+		// The boundary values themselves must be accepted, so the test cannot pass by rejecting everything.
+		assertDoesNotThrow(() -> new NodeConfiguration.KademliaOptions(
+				NodeConfiguration.KademliaOptions.MAX_ALPHA,
+				NodeConfiguration.KademliaOptions.MAX_K,
+				NodeConfiguration.KademliaOptions.MAX_REPLACEMENTS,
+				NodeConfiguration.KademliaOptions.MIN_CONCURRENT_TASKS));
+		assertDoesNotThrow(() -> new NodeConfiguration.KademliaOptions(
+				NodeConfiguration.KademliaOptions.MIN_ALPHA,
+				NodeConfiguration.KademliaOptions.MIN_K,
+				NodeConfiguration.KademliaOptions.MIN_REPLACEMENTS,
+				NodeConfiguration.KademliaOptions.MIN_CONCURRENT_TASKS));
+	}
+
+	/**
+	 * The Builder and the record must agree on what is valid.
+	 * <p>
+	 * They previously did not: the record gained ranges while the Builder still tested only for
+	 * positivity, so a value like {@code k = 2} was accepted by the setter and then thrown from
+	 * {@code build()}, far from the call that caused it. Both now validate through the same checks;
+	 * this pins that down, since the failure mode is silent from the Builder's point of view.
+	 */
+	@Test
+	void testBuilderAndRecordAgreeOnValidity() {
+		int[] invalidK = {NodeConfiguration.KademliaOptions.MIN_K - 1, NodeConfiguration.KademliaOptions.MAX_K + 1};
+		for (int k : invalidK) {
+			assertThrows(IllegalArgumentException.class, () -> baseBuilder().k(k),
+					"Builder must reject k=" + k + " at the setter, not at build()");
+			assertThrows(IllegalArgumentException.class,
+					() -> new NodeConfiguration.KademliaOptions(3, k, 8, 32),
+					"record must reject the same k=" + k);
+		}
+
+		// A value the Builder accepts must survive build(), or the two have diverged again.
+		assertDoesNotThrow(() -> baseBuilder()
+				.alpha(NodeConfiguration.KademliaOptions.MAX_ALPHA)
+				.k(NodeConfiguration.KademliaOptions.MAX_K)
+				.replacements(NodeConfiguration.KademliaOptions.MAX_REPLACEMENTS)
+				.concurrentTasks(NodeConfiguration.KademliaOptions.MIN_CONCURRENT_TASKS)
+				.build());
 	}
 
 	@Test

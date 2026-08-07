@@ -222,24 +222,60 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 	 * @param concurrentTasks the ceiling on concurrently running DHT tasks; further tasks are queued
 	 */
 	public record KademliaOptions(int alpha, int k, int replacements, int concurrentTasks) {
+		/** Accepted range for {@link #alpha()}. */
+		public static final int MIN_ALPHA = 1, MAX_ALPHA = 32;
+		/** Accepted range for {@link #k()}. */
+		public static final int MIN_K = 4, MAX_K = 128;
+		/** Accepted range for {@link #replacements()}. */
+		public static final int MIN_REPLACEMENTS = 4, MAX_REPLACEMENTS = 128;
+		/** Accepted minimum for {@link #concurrentTasks()}; it has no upper bound. */
+		public static final int MIN_CONCURRENT_TASKS = 16;
+
 		/**
-		 * Canonical constructor, and the only place these parameters are validated.
+		 * Canonical constructor. Validates via the shared checks below, so a value rejected here is
+		 * rejected identically wherever else it is supplied.
 		 *
-		 * @param alpha             the concurrency parameter, at least 1
-		 * @param k                 the bucket size, at least 1
-		 * @param replacements      the replacement count, at least 1
-		 * @param concurrentTasks the concurrent task ceiling, at least 1
-		 * @throws IllegalArgumentException if any parameter is less than 1
+		 * @param alpha             the concurrency parameter, in [{@value #MIN_ALPHA}, {@value #MAX_ALPHA}]
+		 * @param k                 the bucket size, in [{@value #MIN_K}, {@value #MAX_K}]
+		 * @param replacements      the replacement count, in [{@value #MIN_REPLACEMENTS}, {@value #MAX_REPLACEMENTS}]
+		 * @param concurrentTasks   the concurrent task ceiling, at least {@value #MIN_CONCURRENT_TASKS}
+		 * @throws IllegalArgumentException if any parameter is outside its accepted range
 		 */
 		public KademliaOptions {
-			if (alpha < 1)
-				throw new IllegalArgumentException("Invalid alpha: " + alpha);
-			if (k < 1)
-				throw new IllegalArgumentException("Invalid k: " + k);
-			if (replacements < 1)
-				throw new IllegalArgumentException("Invalid replacements: " + replacements);
-			if (concurrentTasks < 1)
-				throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks);
+			checkAlpha(alpha);
+			checkK(k);
+			checkReplacements(replacements);
+			checkConcurrentTasks(concurrentTasks);
+		}
+
+		// The accepted ranges live here and nowhere else. Builder validates through these same checks
+		// so that it can fail at the call site - pointing at the offending setter - while remaining
+		// incapable of disagreeing with the constructor. Duplicating the rule in the Builder is how
+		// the two previously drifted: the record gained ranges while the Builder still tested only for
+		// positivity, so builder.k(2) was accepted and then threw from build(), far from its cause.
+
+		static void checkAlpha(int alpha) {
+			if (alpha < MIN_ALPHA || alpha > MAX_ALPHA)
+				throw new IllegalArgumentException("Invalid alpha: " + alpha +
+						", expected [" + MIN_ALPHA + ", " + MAX_ALPHA + "]");
+		}
+
+		static void checkK(int k) {
+			if (k < MIN_K || k > MAX_K)
+				throw new IllegalArgumentException("Invalid k: " + k +
+						", expected [" + MIN_K + ", " + MAX_K + "]");
+		}
+
+		static void checkReplacements(int replacements) {
+			if (replacements < MIN_REPLACEMENTS || replacements > MAX_REPLACEMENTS)
+				throw new IllegalArgumentException("Invalid replacements: " + replacements +
+						", expected [" + MIN_REPLACEMENTS + ", " + MAX_REPLACEMENTS + "]");
+		}
+
+		static void checkConcurrentTasks(int concurrentTasks) {
+			if (concurrentTasks < MIN_CONCURRENT_TASKS)
+				throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks +
+						", expected at least " + MIN_CONCURRENT_TASKS);
 		}
 
 		static KademliaOptions fromMap(@Nullable ConfigMap cm) {
@@ -917,13 +953,13 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 		/**
 		 * Sets the Kademlia concurrency parameter: how many nodes a lookup queries in parallel.
 		 *
-		 * @param alpha the concurrency parameter, at least 1
+		 * @param alpha the concurrency parameter, in
+		 *              [{@value KademliaOptions#MIN_ALPHA}, {@value KademliaOptions#MAX_ALPHA}]
 		 * @return this Builder for chaining
-		 * @throws IllegalArgumentException if alpha is less than 1
+		 * @throws IllegalArgumentException if alpha is outside its accepted range
 		 */
 		public Builder alpha(int alpha) {
-			if (alpha < 1)
-				throw new IllegalArgumentException("Invalid alpha: " + alpha);
+			KademliaOptions.checkAlpha(alpha);
 			this.alpha = alpha;
 			return this;
 		}
@@ -931,13 +967,12 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 		/**
 		 * Sets the Kademlia bucket size.
 		 *
-		 * @param k the bucket size, at least 1
+		 * @param k the bucket size, in [{@value KademliaOptions#MIN_K}, {@value KademliaOptions#MAX_K}]
 		 * @return this Builder for chaining
-		 * @throws IllegalArgumentException if k is less than 1
+		 * @throws IllegalArgumentException if k is outside its accepted range
 		 */
 		public Builder k(int k) {
-			if (k < 1)
-				throw new IllegalArgumentException("Invalid k: " + k);
+			KademliaOptions.checkK(k);
 			this.k = k;
 			return this;
 		}
@@ -945,27 +980,27 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 		/**
 		 * Sets how many replacement entries each routing table bucket keeps.
 		 *
-		 * @param replacements the replacement count, at least 1
+		 * @param replacements the replacement count, in
+		 *                     [{@value KademliaOptions#MIN_REPLACEMENTS}, {@value KademliaOptions#MAX_REPLACEMENTS}]
 		 * @return this Builder for chaining
-		 * @throws IllegalArgumentException if replacements is less than 1
+		 * @throws IllegalArgumentException if replacements is outside its accepted range
 		 */
 		public Builder replacements(int replacements) {
-			if (replacements < 1)
-				throw new IllegalArgumentException("Invalid replacements: " + replacements);
+			KademliaOptions.checkReplacements(replacements);
 			this.replacements = replacements;
 			return this;
 		}
 
 		/**
-		 * Sets the ceiling on DHT queries in flight; requests beyond it are queued.
+		 * Sets the ceiling on concurrently running DHT tasks; further tasks are queued.
 		 *
-		 * @param concurrentTasks the concurrent task ceiling, at least 1
+		 * @param concurrentTasks the concurrent task ceiling, at least
+		 *                        {@value KademliaOptions#MIN_CONCURRENT_TASKS}
 		 * @return this Builder for chaining
-		 * @throws IllegalArgumentException if concurrentTasks is less than 1
+		 * @throws IllegalArgumentException if concurrentTasks is below its accepted minimum
 		 */
 		public Builder concurrentTasks(int concurrentTasks) {
-			if (concurrentTasks < 1)
-				throw new IllegalArgumentException("Invalid concurrentTasks: " + concurrentTasks);
+			KademliaOptions.checkConcurrentTasks(concurrentTasks);
 			this.concurrentTasks = concurrentTasks;
 			return this;
 		}
