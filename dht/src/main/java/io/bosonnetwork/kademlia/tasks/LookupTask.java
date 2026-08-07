@@ -124,12 +124,16 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	}
 
 	/**
-	 * Returns how many candidates a lookup for the given bucket size will queue.
+	 * Returns how many candidates a lookup for the given bucket size will queue, and how many nodes it
+	 * seeds from the local routing table.
 	 * <p>
-	 * The k closest plus 2k spares to route around dead or hostile peers, capped by
-	 * {@link KadConstants#MAX_LOOKUP_CANDIDATES} because the queue is re-sorted on every insertion and
-	 * therefore costs CPU quadratic in its size. The cap binds only for large k, where the extra
-	 * spares would never be consulted anyway - reaching them requires 2k peers ahead of them to fail.
+	 * {@code 3 * k}, bounded by {@link KadConstants#MAX_LOOKUP_CANDIDATES}. Both the origin of the 3
+	 * and the reason for the ceiling are documented on that constant; they are not obvious from the
+	 * expression and are easy to re-derive incorrectly.
+	 * </p>
+	 * <p>
+	 * Seeding and capacity share this value on purpose: seeding more than the queue can hold would
+	 * only prune the surplus on the first insertion.
 	 * </p>
 	 *
 	 * @param k the Kademlia bucket size.
