@@ -326,7 +326,7 @@ public final class KadConstants {
 	 * <p>
 	 * Each tick re-evaluates whether the routing table needs maintenance
 	 * ({@link #ROUTING_TABLE_MAINTENANCE_INTERVAL}) and whether a bootstrap is due
-	 * ({@link #BOOTSTRAP_MIN_INTERVAL}, {@link #SELF_LOOKUP_INTERVAL}). Most ticks do nothing. 30
+	 * ({@link #BOOTSTRAP_INTERVAL}, {@link #SELF_LOOKUP_INTERVAL}). Most ticks do nothing. 30
 	 * seconds is short enough that the node reacts promptly when its table drains - the condition that
 	 * matters most, since a node with an empty table is effectively offline - and the cost of a tick
 	 * that finds nothing to do is a few comparisons.
@@ -343,8 +343,58 @@ public final class KadConstants {
 	 * Those servers are a shared, centralized resource for the whole network, so this interval
 	 * protects them as much as it protects this node.
 	 * </p>
+	 * <p>
+	 * The nominal interval rather than a hard floor, despite the name: an individual attempt lands
+	 * within {@link #BOOTSTRAP_INTERVAL_JITTER_PERCENT} either side of this, so nodes that started
+	 * together do not stay synchronised. The band is symmetric, so this remains the long-run average
+	 * and the true floor is that percentage below it. That constant also records why the interval stays
+	 * flat instead of backing off exponentially.
+	 * </p>
 	 */
-	public static final int BOOTSTRAP_MIN_INTERVAL = 4 * 60 * 1000;                 // 4 minutes
+	public static final int BOOTSTRAP_INTERVAL = 4 * 60 * 1000;                 // 4 minutes
+
+	/**
+	 * How far an individual bootstrap attempt may fall either side of {@link #BOOTSTRAP_INTERVAL},
+	 * as a percentage of that interval.
+	 * <p>
+	 * <b>Why any jitter.</b> A fixed retry period leaves nodes that started together in lockstep
+	 * forever - a fleet rolled out at once, or an entire population reconnecting after the same
+	 * outage - so their attempts arrive at the shared bootstrap servers in synchronised waves rather
+	 * than spread out. Drawing a fresh offset per attempt lets each node's phase drift away from the
+	 * others within a few cycles.
+	 * </p>
+	 * <p>
+	 * <b>Why symmetric.</b> A one-sided offset would decorrelate just as well, but it would also raise
+	 * the mean interval by half its width and keep it there - the node would settle at a permanently
+	 * slower cadence than the one this file documents. Centring the band on the interval leaves the
+	 * long-run average exactly where it is meant to be and only randomises the individual wait.
+	 * </p>
+	 * <p>
+	 * <b>Why 10, and why it cannot be much smaller.</b> The jitter has to survive
+	 * {@link #DHT_UPDATE_INTERVAL}. Bootstrap is only ever reached from a tick of that timer, so the
+	 * wait is effectively rounded up to the node's next tick and any offset shorter than one tick is
+	 * absorbed without changing when the attempt actually fires - a jitter of a second or two would be
+	 * very nearly a no-op. At 10% the band is 48 seconds wide, more than one tick, so an attempt lands
+	 * on one of several distinct ticks instead of always the same one. The other direction bounds it
+	 * too: the wait must stay short enough for a node with a thin routing table, since that table is
+	 * what every lookup depends on.
+	 * </p>
+	 * <p>
+	 * <b>Why not exponential backoff.</b> Considered and rejected. What a permanently failing node
+	 * costs shared infrastructure is one {@code findNode} packet per configured server per interval:
+	 * the expensive part of a bootstrap, {@link #MAX_BUCKET_FILLS_PER_BOOTSTRAP} bucket-filling
+	 * lookups, runs against ordinary peers and is skipped entirely while the RPC server reports itself
+	 * unreachable. Against that, backoff would do its most damage in the scenario that motivates it -
+	 * after a bootstrap-server outage the whole stranded population would sit at its longest interval
+	 * exactly when service returns, turning a 4-minute recovery into a much longer one. Churn also
+	 * undercuts the premise backoff rests on: in a network where a large share of peers turn over
+	 * within one interval, a failed attempt says little about the next one.
+	 * </p>
+	 * <p>
+	 * Implementation detail, not protocol: peers see only the resulting arrival times.
+	 * </p>
+	 */
+	public static final int BOOTSTRAP_INTERVAL_JITTER_PERCENT = 10;
 
 	/**
 	 * How often a node with a healthy routing table still performs a lookup for its own id.
@@ -487,7 +537,7 @@ public final class KadConstants {
 	 * <p>
 	 * Above {@code BOOTSTRAP_THRESHOLD_BUCKETS * k} entries the table is considered self-sustaining
 	 * and normal maintenance keeps it healthy; below it the node is at risk of partition and
-	 * re-bootstraps, subject to {@link #BOOTSTRAP_MIN_INTERVAL}. Three buckets is enough for lookups
+	 * re-bootstraps, subject to {@link #BOOTSTRAP_INTERVAL}. Three buckets is enough for lookups
 	 * to route in every direction, and low enough to catch a table that is collapsing rather than
 	 * waiting for it to empty. The product is capped by {@link #BOOTSTRAP_THRESHOLD_ENTRIES}.
 	 * </p>
@@ -509,7 +559,9 @@ public final class KadConstants {
 	 * large its buckets are, and continuing to scale turns the threshold into a target the node may
 	 * never reach: a super node at k=64 would want 192 entries before it stopped bootstrapping, and
 	 * in a network that never offers it that many it would re-bootstrap every
-	 * {@link #BOOTSTRAP_MIN_INTERVAL} indefinitely - permanently, since the retry has no backoff.
+	 * {@link #BOOTSTRAP_INTERVAL} indefinitely - permanently, since the retry interval is flat by
+	 * design and never lengthens (see {@link #BOOTSTRAP_INTERVAL_JITTER_PERCENT}). This ceiling is
+	 * what stops that state from being reachable in the first place.
 	 * </p>
 	 * <p>
 	 * <b>Why 64.</b> Roughly the point past which more contacts stop making a node meaningfully more
@@ -576,7 +628,7 @@ public final class KadConstants {
 	 * node still holds are alive - and a table that shrank because its contacts died is exactly the
 	 * case where a self-lookup cannot recover. Nothing escalates on repeated failure: the tier is
 	 * chosen purely on entry count, so a node stuck with a table of stale contacts would retry the
-	 * same futile self-bootstrap every {@link #BOOTSTRAP_MIN_INTERVAL}. Keeping the fallback threshold
+	 * same futile self-bootstrap every {@link #BOOTSTRAP_INTERVAL}. Keeping the fallback threshold
 	 * reasonably high bounds how long that can go on before the servers are consulted.
 	 * </p>
 	 * <p>
@@ -599,7 +651,7 @@ public final class KadConstants {
 	 * <b>Why it needs a bound at all.</b> The fan-out is one lookup per eligible bucket, so its cost
 	 * scales with the size of the routing table - the nodes doing the most work fan out the widest.
 	 * Frequency compounds it: bootstrap is not only a startup step, and a node whose table sits below
-	 * the bootstrap threshold re-runs the whole fan-out every {@link #BOOTSTRAP_MIN_INTERVAL} rather
+	 * the bootstrap threshold re-runs the whole fan-out every {@link #BOOTSTRAP_INTERVAL} rather
 	 * than every {@link #SELF_LOOKUP_INTERVAL}. Below that threshold the "skip full buckets" rule also
 	 * stops firing, so every non-empty bucket is filled every time. The burst is largest exactly when
 	 * the table is weakest, which is when the node can least afford it.

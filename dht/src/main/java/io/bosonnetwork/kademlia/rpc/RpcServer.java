@@ -126,6 +126,14 @@ public class RpcServer implements Measured {
 	private long receivedPackets;
 	/** Number of packets received at the last reachability check. */
 	private long receivedPacketsAtLastReachableCheck;
+	/**
+	 * Timestamp of the last request we sent, or 0 if we have never sent one.
+	 * <p>
+	 * Requests only, never responses: this exists to answer "are we waiting for an answer that is not
+	 * coming", and a response we send is not something we expect a reply to.
+	 * </p>
+	 */
+	private long lastCallSent;
 	/** Timestamp of the last reachability check. */
 	private long lastReachableCheck;
 	/** Indicates whether the server is reachable. */
@@ -245,7 +253,7 @@ public class RpcServer implements Measured {
 
 	/**
 	 * Periodically checks server reachability based on received packets.
-	 * Sets the server as unreachable if no packets are received within
+	 * Sets the server as unreachable if a request has gone unanswered for
 	 * {@link #REACHABILITY_TIMEOUT}.
 	 *
 	 * @param unusedTimerId the timer ID (unused)
@@ -258,12 +266,36 @@ public class RpcServer implements Measured {
 			setReachable(true);
 			lastReachableCheck = now;
 			receivedPacketsAtLastReachableCheck = receivedPackets;
-		} else if (now - lastReachableCheck > REACHABILITY_TIMEOUT &&
-				receivedPackets != 0 && receivedPacketsAtLastReachableCheck != 0) {
+		} else if (unanswered(now, lastReachableCheck, lastCallSent)) {
 			setReachable(false);
 			// Reset timeout sampler to avoid stale RTT estimates for new connections
 			timeoutSampler.reset();
 		}
+	}
+
+	/**
+	 * Whether we have asked a question and heard nothing back for long enough to call the socket deaf.
+	 * <p>
+	 * The verdict needs evidence, and the evidence is an unanswered request. {@code lastRequestSent >
+	 * lastReceived} reads as "we sent a request after the last packet that arrived", so a node that
+	 * sends nothing stays in whatever state it was in - no traffic, no verdict - and an idle node whose
+	 * last request <em>was</em> answered is silent rather than deaf.
+	 * </p>
+	 * <p>
+	 * The second condition used to be {@code receivedPackets != 0}, which meant a node whose network
+	 * was broken from the very start - it had never received anything to compare against - could never
+	 * be declared unreachable, and reported itself connected indefinitely. That is exactly the node
+	 * whose background traffic is most futile, so it is the one the reachability gates most need to
+	 * catch.
+	 * </p>
+	 *
+	 * @param now the current time, in milliseconds
+	 * @param lastReceived when a packet last arrived, in milliseconds
+	 * @param lastRequestSent when we last sent a request, or 0 if we never have
+	 * @return true if the socket should be considered unreachable
+	 */
+	static boolean unanswered(long now, long lastReceived, long lastRequestSent) {
+		return now - lastReceived > REACHABILITY_TIMEOUT && lastRequestSent > lastReceived;
 	}
 
 	/**
@@ -388,6 +420,7 @@ public class RpcServer implements Measured {
 				running = true;
 
 				reachable = true;
+				lastCallSent = 0;
 				lastReachableCheck = startTime;
 				// Schedule periodic reachability checks
 				reachableCheckTimer = context.setPeriodic(REACHABILITY_CHECK_INTERVAL * 2,
@@ -656,6 +689,9 @@ public class RpcServer implements Measured {
 		return sendMessage(call.getRequest()).andThen(ar -> {
 			if (ar.succeeded()) {
 				call.sent();
+				// Feeds checkReachability: an unanswered request is the only evidence we have that the
+				// socket has gone deaf, as opposed to the network simply being quiet.
+				lastCallSent = System.currentTimeMillis();
 
 				if (callSentHandler != null)
 					callSentHandler.accept(call);
