@@ -107,6 +107,16 @@ public class DHT extends BosonVerticle {
 	private boolean bootstrapping;
 	private long lastBootstrap;
 
+	// True until the first bootstrap that actually runs has finished.
+	//
+	// Only that first bootstrap enqueues its lookups at the head of the task queue. Until the routing
+	// table exists the node cannot answer anything, so racing to fill it is worth preempting whatever
+	// else is queued. Every later bootstrap is routine maintenance - the periodic self-lookup, or a
+	// table that thinned out - and must not push application lookups behind it. The flag is only
+	// cleared once a bootstrap reaches completion, so an attempt that returns early (rate-limited, or
+	// nothing to contact) leaves the priority for the one that really does the work.
+	private boolean initialBootstrap = true;
+
 	private final RoutingTable routingTable;
 	private long lastMaintenance;
 	private final Path persistFile;
@@ -594,6 +604,8 @@ public class DHT extends BosonVerticle {
 			// only if the routing table is more than 1 bucket
 			return (routingTable.size() <= 1) ? Future.succeededFuture() : fillBuckets();
 		}).andThen(ar -> {
+			// Only the first bootstrap to get this far may preempt the queue; see initialBootstrap.
+			initialBootstrap = false;
 			bootstrapping = false;
 			lastBootstrap = System.currentTimeMillis();
 			log.info("DHT {}:{} bootstrapping finished", network, identity.getId());
@@ -635,7 +647,7 @@ public class DHT extends BosonVerticle {
 				.setBootstrap(true)
 				.injectCandidates(nodes)
 				.addListener(t -> promise.complete());
-		taskManager.add(task, true);
+		taskManager.add(task, initialBootstrap);
 
 		return promise.future();
 	}
@@ -644,6 +656,13 @@ public class DHT extends BosonVerticle {
 		List<Future<Void>> futures = new ArrayList<>(routingTable.size());
 
 		routingTable.forEachBucket(bucket -> {
+			// Only partially populated buckets are worth a lookup. An empty bucket is normally an
+			// artifact of deep splitting - it covers a slice of the keyspace that holds no reachable
+			// nodes - so a lookup there converges on nothing and would repeat, at the full cost of an
+			// iterative lookup, on every bootstrap for the life of the node.
+			if (bucket.isEmpty())
+				return;
+
 			if (bucket.isFull() && routingTable.getNumberOfEntries() >= bootstrapThreshold)
 				return;
 
@@ -652,7 +671,7 @@ public class DHT extends BosonVerticle {
 			NodeLookupTask task = new NodeLookupTask(kadContext, bucket.prefix().createRandomId())
 					.setName("Bootstrap: filling Bucket - " + bucket.prefix())
 					.addListener(t -> promise.complete());
-			taskManager.add(task, true);
+			taskManager.add(task, initialBootstrap);
 
 			futures.add(promise.future());
 		});

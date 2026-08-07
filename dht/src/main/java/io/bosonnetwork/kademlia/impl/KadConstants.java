@@ -182,22 +182,42 @@ public final class KadConstants {
 	 * Hard ceiling on the candidate queue of a single lookup, independent of k.
 	 * <p>
 	 * <b>What it controls.</b> How many not-yet-queried nodes a lookup will remember. The queue is
-	 * normally {@code 3 * k} - the k closest plus 2k spares to route around dead or hostile peers -
-	 * but that product is capped here.
+	 * normally {@code 3 * k}; this caps that product, and so binds only from k=43 upward. At the
+	 * default k it is inert - {@code 3 * 16 = 48} is the value that actually applies.
 	 * </p>
 	 * <p>
-	 * <b>Why cap it.</b> The queue is the main per-lookup cost and it does not scale gracefully.
-	 * {@code ClosestCandidates.add} re-sorts the whole queue on every insertion, so the CPU cost of a
-	 * lookup grows with the square of the queue size, and a single response containing many nodes pays
-	 * that cost on the event loop. Memory is the lesser concern: at 128 entries and up to
-	 * {@link #CONCURRENT_TASKS} lookups in flight, the queues are on the order of a megabyte.
+	 * <b>Where the {@code 3 * k} comes from - read this before retuning either number.</b> It is
+	 * inherited from mldht, which this lookup code derives from, but with a changed meaning. In mldht
+	 * {@code 3 * MAX_ENTRIES_PER_BUCKET} is the <em>seed</em> size: how many nodes to pull out of the
+	 * local routing table to start a lookup. Its candidate set proper is an unbounded map that retains
+	 * everything the lookup subsequently learns. Here the same expression became the <em>capacity</em>
+	 * of the candidate queue, so this implementation discards distant candidates that mldht would
+	 * keep. That is a deliberate memory bound rather than a derived optimum: an earlier version of
+	 * this comment described 3k as "the k closest plus 2k spares", which was a rationalization written
+	 * after the fact, not the reason the number is 3.
 	 * </p>
 	 * <p>
-	 * <b>Behavior as k grows.</b> This is the limit that matters most for a super node. A node raising
-	 * k to 64 for routing robustness would otherwise get a 192-entry queue re-sorted per insertion,
-	 * for no improvement in lookup quality - the extra spares are only ever consulted if 2k peers
-	 * ahead of them fail. At 128 the cap binds from k=43 upward and still leaves at least 2k spares
-	 * for every k up to 64.
+	 * <b>Why bound it at all, and why the cost is smaller than it looks.</b> Pruning is not free but
+	 * it is not quadratic either: {@code ClosestCandidates.add} sorts once per call, and
+	 * {@code LookupTask} calls it once per response with the whole batch of nodes - not once per node.
+	 * So a response costs one O(n log n) pass, about 900 comparisons at n=128. Memory is similarly
+	 * modest: 128 entries across {@link #CONCURRENT_TASKS} concurrent lookups is well under a
+	 * megabyte. Neither number justifies a tight cap; what the ceiling really buys is a predictable
+	 * worst case at large k, which matters on constrained devices.
+	 * </p>
+	 * <p>
+	 * <b>How 128 compares.</b> Implementations that bound the candidate pool at all do so with a fixed
+	 * constant unrelated to k: OpenDHT caps at 14 ({@code SEARCH_NODES}) and libtorrent at 100
+	 * ({@code m_results.resize(100)}). mldht and go-libp2p-kad-dht do not bound it, tracking only the
+	 * closest k for decisions. The effective 48 at the default k therefore sits between the two
+	 * bounding implementations, and this ceiling is near libtorrent's - so it is not a tight limit by
+	 * the standards of the field, and there is no case for lowering it.
+	 * </p>
+	 * <p>
+	 * <b>What it does not bound.</b> Only the candidate map. {@code ClosestCandidates.dedup} also
+	 * retains the id of any node whose id was accepted but whose address then collided, and those are
+	 * reclaimed only for nodes that reached the candidate map - so the structure that can actually
+	 * grow unchecked during a lookup is not the one this caps.
 	 * </p>
 	 * <p>
 	 * Implementation limit, not protocol: purely this node's resource budget.
