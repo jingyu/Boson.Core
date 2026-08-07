@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -652,31 +653,144 @@ public class DHT extends BosonVerticle {
 		return promise.future();
 	}
 
+	/**
+	 * The depth-first phase of bootstrap: top up under-populated buckets by looking up a random id
+	 * inside each one's prefix.
+	 * <p>
+	 * This is the routing-table refresh of the Kademlia paper (section 2.3), and the lookup per bucket
+	 * is the protocol-prescribed part. What is <em>not</em> prescribed is how many buckets to do at
+	 * once, and that is what the budget here controls.
+	 * </p>
+	 * <p>
+	 * <b>Why the fan-out has to be bounded.</b> Unbounded, this loop sizes itself from the routing
+	 * table - one full iterative lookup per eligible bucket - while the queue it shares is fixed at
+	 * {@code concurrentTasks}. So the wider the table, the more this crowds out everything else, which
+	 * is backwards: the nodes with the most contacts are the ones carrying the most application
+	 * traffic. Frequency compounds it. Bootstrap is not only a startup step: {@link #update(long)} calls
+	 * {@link #doBootstrap} whenever the table is below {@link #bootstrapThreshold} <em>or</em> the
+	 * {@link KadConstants#SELF_LOOKUP_INTERVAL} self-lookup is due, and the only brake is
+	 * {@link KadConstants#BOOTSTRAP_MIN_INTERVAL}. A node whose table sits below the threshold - a young
+	 * node, a small network, a node behind a bad NAT - therefore re-runs this every four minutes rather
+	 * than every thirty. And below that threshold the "skip full buckets" rule never fires either, so
+	 * every non-empty bucket qualifies every time. The burst was largest exactly where the table was
+	 * weakest, which is when the node can least afford to spend its budget on maintenance.
+	 * </p>
+	 * <p>
+	 * <b>The cost being bounded.</b> Each of these is a full iterative lookup, not a ping: convergence
+	 * takes on the order of {@link KadConstants#LOOKUP_CONVERGENCE_FACTOR} * k responses, so roughly 32
+	 * at the default k. Twenty eligible buckets meant ~640 RPC round trips per cycle, up to
+	 * {@code concurrentTasks} of them running at once - one to two orders of magnitude more than the
+	 * {@code PingRefreshTask} that routing-table maintenance would spend on the same bucket.
+	 * </p>
+	 * <p>
+	 * <b>What the bound costs.</b> Latency in filling the table, never completeness. Buckets over the
+	 * budget are not dropped: they are simply not refreshed this time, stay stale, and therefore sort to
+	 * the front of the next bootstrap's selection - the deferred ones rotate in without any extra state
+	 * being kept. Combined with the per-bucket rate limit, a bucket is filled at most once per
+	 * {@link KadConstants#BUCKET_REFRESH_INTERVAL} in steady state, which for realistic table sizes
+	 * still covers every bucket within a refresh interval.
+	 * </p>
+	 * <p>
+	 * <b>Effect on startup, which is the case that most needs to stay fast.</b> On a cold start the
+	 * budget does not bind: {@link #fillHomeBucket} runs first, and by the time this is reached the
+	 * table is a handful of buckets. On a restart from a cached routing table it does bind, and binding
+	 * makes startup faster rather than slower. {@code RoutingTable.load()} does not stamp the loaded
+	 * buckets, so all of them read as stale; {@link #deploy()} has already queued one
+	 * {@code PingRefreshTask} per loaded bucket, and the first bootstrap still enqueues at the head of
+	 * the queue. Without a budget that is a full set of expensive lookups preempting a full set of cheap
+	 * pings for the same slots - and the pings are what actually make the table usable, since they
+	 * revalidate contacts already known to be close. Capping the lookups leaves them room. The returned
+	 * future also gates bootstrap completion, and on startup the connection status behind it, so fewer
+	 * lookups to wait on means reaching {@code Connected} sooner as well.
+	 * </p>
+	 *
+	 * @return a future completing when every dispatched lookup has finished.
+	 */
 	private Future<Void> fillBuckets() {
-		List<Future<Void>> futures = new ArrayList<>(routingTable.size());
+		List<KBucket> buckets = selectBucketsToFill(initialBootstrap);
+		if (buckets.isEmpty())
+			return Future.succeededFuture();
 
-		routingTable.forEachBucket(bucket -> {
-			// Only partially populated buckets are worth a lookup. An empty bucket is normally an
-			// artifact of deep splitting - it covers a slice of the keyspace that holds no reachable
-			// nodes - so a lookup there converges on nothing and would repeat, at the full cost of an
-			// iterative lookup, on every bootstrap for the life of the node.
-			if (bucket.isEmpty())
-				return;
-
-			if (bucket.isFull() && routingTable.getNumberOfEntries() >= bootstrapThreshold)
-				return;
-
+		List<Future<Void>> futures = new ArrayList<>(buckets.size());
+		for (KBucket bucket : buckets) {
 			Promise<Void> promise = Promise.promise();
-			bucket.updateRefreshTime();
+			// Stamped before the lookup runs, not after it succeeds: this is a rate limiter, and a
+			// lookup that hangs or finds nothing must not be re-dispatched on the next bootstrap.
+			// Note this is the fill path's own clock - deliberately not KBucket.updateRefreshTime(),
+			// which belongs to the cheaper ping-refresh path and would be muted by an optimistic
+			// stamp here. See the two fields on KBucket.
+			bucket.updateLookupRefreshTime();
 			NodeLookupTask task = new NodeLookupTask(kadContext, bucket.prefix().createRandomId())
 					.setName("Bootstrap: filling Bucket - " + bucket.prefix())
 					.addListener(t -> promise.complete());
 			taskManager.add(task, initialBootstrap);
 
 			futures.add(promise.future());
+		}
+
+		return Future.all(futures).mapEmpty();
+	}
+
+	/**
+	 * Chooses which buckets this bootstrap will top up with an iterative lookup.
+	 * <p>
+	 * Package-private and free of side effects so the selection can be tested without a live network;
+	 * {@code initial} is a parameter rather than a read of {@link #initialBootstrap} for the same
+	 * reason.
+	 * </p>
+	 *
+	 * @param initial true if this is the first bootstrap since startup.
+	 * @return the buckets to fill, at most {@link KadConstants#MAX_BUCKET_FILLS_PER_BOOTSTRAP} of them,
+	 * 		   most overdue first.
+	 */
+	List<KBucket> selectBucketsToFill(boolean initial) {
+		// Below this many contacts the node cannot reach the network unaided, and a random-id lookup
+		// into a sparse bucket has nothing to route through - the budget belongs to fillHomeBucket,
+		// the one lookup seeded with the configured bootstrap servers, which is what can reconnect it.
+		//
+		// Waived for the first bootstrap after startup. The gate's premise is that this is routine
+		// maintenance on a node already serving traffic; on a cold start neither half holds, the table
+		// is small by definition, and time to a usable table is what matters most.
+		if (!initial && routingTable.getNumberOfEntries() < useBootstrapNodesThreshold)
+			return List.of();
+
+		List<KBucket> candidates = new ArrayList<>(routingTable.size());
+		routingTable.forEachBucket(bucket -> {
+			// An empty bucket is normally an artifact of deep splitting - it covers a slice of the
+			// keyspace that holds no reachable nodes - so a lookup there converges on nothing and
+			// would repeat, at the full cost of an iterative lookup, on every bootstrap forever.
+			if (bucket.isEmpty())
+				return;
+
+			// A full bucket has nothing to gain, unless the table as a whole is thin enough that we
+			// want contacts everywhere we can get them.
+			if (bucket.isFull() && routingTable.getNumberOfEntries() >= bootstrapThreshold)
+				return;
+
+			// Per-bucket rate limit. Bootstrap runs as often as every BOOTSTRAP_MIN_INTERVAL when the
+			// table is below the bootstrap threshold, which without this would re-run the same
+			// iterative lookups on the same buckets every few minutes.
+			if (!bucket.needsLookupRefresh())
+				return;
+
+			// The cheap path is already repairing this bucket; stacking an iterative lookup on top of
+			// an in-flight PingRefreshTask spends far more to answer the same question.
+			if (maintenanceTasks.containsKey(bucket))
+				return;
+
+			candidates.add(bucket);
 		});
 
-		return futures.isEmpty() ? Future.succeededFuture() : Future.all(futures).mapEmpty();
+		if (candidates.size() <= KadConstants.MAX_BUCKET_FILLS_PER_BOOTSTRAP)
+			return candidates;
+
+		// Most overdue first, emptiest as the tiebreak - which is also the order on a restart from a
+		// cached routing table, where every bucket reads as equally stale. Filling a bucket stamps it,
+		// so it sinks to the back of the next selection: round-robin over the buckets that miss the
+		// budget falls out of the sort, with no extra state to keep.
+		candidates.sort(Comparator.comparingLong(KBucket::lastLookupRefresh)
+				.thenComparing(Comparator.comparingInt(KBucket::deficit).reversed()));
+		return candidates.subList(0, KadConstants.MAX_BUCKET_FILLS_PER_BOOTSTRAP);
 	}
 
 	private Future<Void> pingRoutingTable() {

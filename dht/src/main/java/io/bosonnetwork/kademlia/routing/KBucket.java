@@ -85,9 +85,40 @@ public class KBucket implements Comparable<KBucket> {
 	private final List<KBucketEntry> replacements;
 
 	/**
-	 * The last time this bucket was refreshed, in milliseconds since the epoch.
+	 * The last time this bucket was refreshed by the ping path, in milliseconds since the epoch.
+	 * <p>
+	 * Owned by routing-table maintenance, which repairs a bucket in place with a cheap
+	 * {@code PingRefreshTask}: it drives {@link #needsToBeRefreshed()} and
+	 * {@link #needsReplacementPing()}. It is also a signal, not just a clock - {@link #put(KBucketEntry)}
+	 * resets it to zero when a reachable node arrives at a full bucket, to demand the ping that
+	 * decides whether the least-recently-seen entry can be evicted for it.
+	 * </p>
+	 * <p>
+	 * Deliberately separate from {@link #lastLookupRefresh}. Merging the two would let the expensive
+	 * mechanism silence the cheap one: a bucket-filling lookup is marked before it runs and regardless
+	 * of what it finds, so a lookup into a sparse region - the case that most often finds nothing -
+	 * would erase the eviction signal above and suppress ping-refresh for a full
+	 * {@link KadConstants#BUCKET_REFRESH_INTERVAL} without having repaired anything.
+	 * </p>
 	 */
 	private long lastRefresh;
+
+	/**
+	 * The last time this bucket was targeted by a bucket-filling lookup, in milliseconds since the epoch.
+	 * <p>
+	 * Owned by {@code DHT.fillBuckets()}, which acquires new contacts for a partially populated bucket
+	 * by running a full iterative lookup on a random id within its prefix. That is one to two orders of
+	 * magnitude more expensive than a ping refresh, so it needs a rate limiter of its own; this is it,
+	 * read through {@link #needsLookupRefresh()}.
+	 * </p>
+	 * <p>
+	 * Stamped before the lookup is dispatched rather than after it completes, which is correct for a
+	 * rate limiter: a lookup that hangs or fails must not be re-dispatched on the next bootstrap. It is
+	 * intentionally never reset by {@link #put(KBucketEntry)} - a full bucket receiving a new node
+	 * wants a ping, not a lookup.
+	 * </p>
+	 */
+	private long lastLookupRefresh;
 
 	/**
 	 * Creates a bucket with the given capacities.
@@ -178,6 +209,19 @@ public class KBucket implements Comparable<KBucket> {
 	 */
 	public boolean isFull() {
 		return entries.size() >= maxEntries;
+	}
+
+	/**
+	 * Returns how many entries this bucket is short of the Kademlia bucket size (k).
+	 * <p>
+	 * Used to order bucket-filling lookups when more buckets want one than the per-bootstrap budget
+	 * allows: among buckets equally overdue, the emptiest gains the most from a lookup.
+	 * </p>
+	 *
+	 * @return the number of entries needed to fill this bucket, zero if it is already full.
+	 */
+	public int deficit() {
+		return Math.max(0, maxEntries - entries.size());
 	}
 
 	/**
@@ -323,6 +367,45 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	/**
+	 * Returns the last time a bucket-filling lookup targeted this bucket, in milliseconds since the epoch.
+	 *
+	 * @return the timestamp, zero if no such lookup has run.
+	 */
+	public long lastLookupRefresh() {
+		return lastLookupRefresh;
+	}
+
+	/**
+	 * Marks this bucket as having been targeted by a bucket-filling lookup, as of now.
+	 */
+	public void updateLookupRefreshTime() {
+		updateLookupRefreshTime(System.currentTimeMillis());
+	}
+
+	// for internal and testing
+	protected void updateLookupRefreshTime(long lastLookupRefresh) {
+		this.lastLookupRefresh = lastLookupRefresh;
+	}
+
+	/**
+	 * Checks whether enough time has passed to spend another bucket-filling lookup on this bucket.
+	 * <p>
+	 * Unlike {@link #needsToBeRefreshed()} this asks only about elapsed time, not about the state of
+	 * the entries. Whether the bucket is worth filling at all - partially populated, not already being
+	 * repaired by the cheaper ping path - is decided by the caller; this is purely the rate limiter
+	 * that keeps the expensive path off the same bucket. It shares
+	 * {@link KadConstants#BUCKET_REFRESH_INTERVAL} with the ping path because the two answer the same
+	 * question, "is this bucket's information stale"; only the remedy differs.
+	 * </p>
+	 *
+	 * @return true if this bucket may be lookup-filled again; false otherwise.
+	 */
+	public boolean needsLookupRefresh() {
+		long now = System.currentTimeMillis();
+		return now - lastLookupRefresh > KadConstants.BUCKET_REFRESH_INTERVAL;
+	}
+
+	/**
 	 * Checks if a replacement entry should be pinged, based on timing and entry status.
 	 *
 	 * @return true if a replacement entry should be pinged; false otherwise.
@@ -381,6 +464,8 @@ public class KBucket implements Comparable<KBucket> {
 			// now we reset the last refresh timestamp
 			// This will force a refresh to run PingRefreshTask with probe replacement on the current bucket
 			// Assumes PingRefreshTask pings least-recent-seen entries for LRS eviction.
+			// Only the ping clock: a full bucket wants the eviction probe, not a lookup for more
+			// contacts it has no room for, so lastLookupRefresh is deliberately left alone.
 			lastRefresh = 0;
 		}
 
@@ -789,7 +874,8 @@ public class KBucket implements Comparable<KBucket> {
 		if (isHomeBucket())
 			repr.append(" [Home]");
 		// Show the duration since the last refresh, not an absolute timestamp.
-		repr.append(", lastRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastRefresh)).append(" ago\n");
+		repr.append(", lastRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastRefresh)).append(" ago");
+		repr.append(", lastLookupRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastLookupRefresh)).append(" ago\n");
 
 		if (!entries.isEmpty()) {
 			repr.ensureCapacity(entries.size() * 100);
@@ -811,7 +897,9 @@ public class KBucket implements Comparable<KBucket> {
 		if (isHomeBucket())
 			out.print(" [Home]");
 		// Show the duration since the last refresh, not an absolute timestamp.
-		out.printf(", lastRefresh: %s\n", Duration.ofMillis(System.currentTimeMillis() - lastRefresh));
+		out.printf(", lastRefresh: %s ago, lastLookupRefresh: %s ago\n",
+				Duration.ofMillis(System.currentTimeMillis() - lastRefresh),
+				Duration.ofMillis(System.currentTimeMillis() - lastLookupRefresh));
 
 		if (!entries.isEmpty()) {
 			out.printf("  entries[%d]:\n", entries.size());
