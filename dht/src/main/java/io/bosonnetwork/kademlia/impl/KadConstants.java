@@ -586,6 +586,51 @@ public final class KadConstants {
 	 */
 	public static final int USE_BOOTSTRAP_NODES_THRESHOLD_ENTRIES = BOOTSTRAP_THRESHOLD_ENTRIES / 2;
 
+	/**
+	 * How many buckets a single bootstrap may fill with an iterative lookup.
+	 * <p>
+	 * <b>What it controls.</b> Bootstrap ends by topping up partially populated buckets, one full
+	 * iterative {@code NodeLookupTask} on a random id per bucket. This bounds how many of those a
+	 * single bootstrap dispatches. Buckets over the budget are not dropped - they are simply not
+	 * refreshed this time, stay stale, and therefore sort to the front of the next bootstrap's
+	 * selection. The cap costs latency in filling the table, never completeness.
+	 * </p>
+	 * <p>
+	 * <b>Why it needs a bound at all.</b> The fan-out is one lookup per eligible bucket, so its cost
+	 * scales with the size of the routing table - the nodes doing the most work fan out the widest.
+	 * Frequency compounds it: bootstrap is not only a startup step, and a node whose table sits below
+	 * the bootstrap threshold re-runs the whole fan-out every {@link #BOOTSTRAP_MIN_INTERVAL} rather
+	 * than every {@link #SELF_LOOKUP_INTERVAL}. Below that threshold the "skip full buckets" rule also
+	 * stops firing, so every non-empty bucket is filled every time. The burst is largest exactly when
+	 * the table is weakest, which is when the node can least afford it.
+	 * </p>
+	 * <p>
+	 * <b>Why 8.</b> A quarter of the default {@link #CONCURRENT_TASKS} and half the smallest value
+	 * that may be configured, so bucket-filling can never own the task manager and starve the
+	 * application lookups and ping refreshes queued alongside it. The absolute number matters less
+	 * than that ratio; what an implementation must not do is let a maintenance fan-out size itself
+	 * from the routing table while the queue it shares is fixed. For reference mldht runs the same
+	 * unbounded loop but caps concurrent tasks at 7, so its fan-out is throttled by the queue instead.
+	 * </p>
+	 * <p>
+	 * <b>Trade-off.</b> Lower fills the table more slowly after a restart from a cached routing table;
+	 * higher lets a burst of maintenance delay user-visible lookups. Note the budget interacts with the
+	 * per-bucket rate limiter - a bucket may be lookup-filled at most once per
+	 * {@link #BUCKET_REFRESH_INTERVAL} - so raising this does not make a node fill the same buckets
+	 * more often, only more distinct buckets at once.
+	 * </p>
+	 * <p>
+	 * <b>Behavior as k grows.</b> This budget counts lookups, and each lookup gets more expensive with
+	 * k: convergence needs roughly {@link #LOOKUP_CONVERGENCE_FACTOR} * k responses. So the real cost
+	 * of a full budget scales with k even though the number does not, and the cap matters more on a
+	 * super node, not less. A larger k is a reason to lower this, never to raise it.
+	 * </p>
+	 * <p>
+	 * Implementation limit, not protocol: purely this node's maintenance budget.
+	 * </p>
+	 */
+	public static final int MAX_BUCKET_FILLS_PER_BOOTSTRAP = 8;
+
 	private KadConstants() {
 	}
 }

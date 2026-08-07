@@ -269,6 +269,75 @@ public class KBucketTests {
 		assertTrue(bucket.needsToBeRefreshed(), "Put should reset refresh time to trigger refresh");
 	}
 
+	/**
+	 * The two refresh clocks belong to two different mechanisms and must not be collapsed into one.
+	 * <p>
+	 * {@code lastRefresh} is the cheap ping path's; {@code lastLookupRefresh} is the expensive
+	 * bucket-filling lookup's, which stamps optimistically - before the lookup runs, regardless of what
+	 * it finds. Sharing one field lets a lookup into a sparse region, the case that most often finds
+	 * nothing, suppress ping refresh for a full BUCKET_REFRESH_INTERVAL having repaired nothing.
+	 * </p>
+	 */
+	@Test
+	void testLookupRefreshTimeIsIndependentOfPingRefreshTime() {
+		KBucketEntry entry = addEntry();
+		// Overdue on both clocks, with an entry that wants a ping so needsToBeRefreshed() can fire.
+		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateLookupRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		entry.onTimeout();
+		entry.setLastSeen(System.currentTimeMillis() - 35_000);
+
+		assertTrue(bucket.needsToBeRefreshed());
+		assertTrue(bucket.needsLookupRefresh());
+
+		// Dispatching a bucket-filling lookup must not mute the ping path.
+		bucket.updateLookupRefreshTime();
+		assertFalse(bucket.needsLookupRefresh(), "Lookup refresh should rate-limit itself");
+		assertTrue(bucket.needsToBeRefreshed(), "Lookup refresh must not stamp the ping refresh clock");
+
+		// And the reverse: a ping refresh does not spend the lookup budget for this bucket.
+		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateLookupRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateRefreshTime();
+		assertFalse(bucket.needsToBeRefreshed());
+		assertTrue(bucket.needsLookupRefresh(), "Ping refresh must not stamp the lookup refresh clock");
+	}
+
+	/**
+	 * {@code put()} zeroing the refresh time is a demand for the LRS eviction ping, not for more
+	 * contacts the full bucket has no room for, so it must leave the lookup clock alone.
+	 */
+	@Test
+	void testPutDoesNotResetLookupRefreshTime() {
+		addEntries(TEST_MAX_ENTRIES);
+		bucket.updateRefreshTime();
+		bucket.updateLookupRefreshTime();
+		assertFalse(bucket.needsLookupRefresh());
+
+		addEntry();
+
+		assertFalse(bucket.needsLookupRefresh(), "Put should not reset the lookup refresh time");
+	}
+
+	/**
+	 * Deficit orders the buckets that compete for the per-bootstrap fill budget.
+	 */
+	@Test
+	void testDeficit() {
+		assertEquals(TEST_MAX_ENTRIES, bucket.deficit());
+
+		// Replacements are not main entries and do not reduce the deficit.
+		addReplacement();
+		assertEquals(TEST_MAX_ENTRIES, bucket.deficit());
+
+		addEntries(5);
+		assertEquals(TEST_MAX_ENTRIES - 5, bucket.deficit());
+
+		addEntries(TEST_MAX_ENTRIES - 5);
+		assertTrue(bucket.isFull());
+		assertEquals(0, bucket.deficit());
+	}
+
 	@Test
 	void testCleanupRemovesSelfAndBootstrap() {
 		addEntries(5);
