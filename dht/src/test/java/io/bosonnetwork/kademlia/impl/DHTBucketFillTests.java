@@ -48,7 +48,7 @@ import io.bosonnetwork.kademlia.security.Blacklist;
  * iterative lookup.
  * <p>
  * The selection is the only thing standing between a large routing table and a burst of one iterative
- * lookup per bucket, dispatched as often as every {@code BOOTSTRAP_MIN_INTERVAL} while the table sits
+ * lookup per bucket, dispatched as often as every {@code BOOTSTRAP_INTERVAL} while the table sits
  * below the bootstrap threshold. It is deliberately a pure function of the routing table so it can be
  * tested here without a network, an event loop, or a deployed verticle.
  * </p>
@@ -133,7 +133,7 @@ public class DHTBucketFillTests {
 
 	/**
 	 * The gate is waived on the first bootstrap after startup: the table is small by definition on a
-	 * cold start, and waiting a full BOOTSTRAP_MIN_INTERVAL for the next cycle is the one cost the
+	 * cold start, and waiting a full BOOTSTRAP_INTERVAL for the next cycle is the one cost the
 	 * startup path cannot pay.
 	 */
 	@Test
@@ -213,7 +213,7 @@ public class DHTBucketFillTests {
 
 	/**
 	 * The per-bucket rate limit. Without it a table below the bootstrap threshold re-runs the same
-	 * iterative lookups on the same buckets every BOOTSTRAP_MIN_INTERVAL.
+	 * iterative lookups on the same buckets every BOOTSTRAP_INTERVAL.
 	 */
 	@Test
 	void testRecentlyFilledBucketsAreSkipped() {

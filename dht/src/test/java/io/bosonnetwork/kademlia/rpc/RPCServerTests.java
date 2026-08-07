@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.rpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.Inet4Address;
 import java.util.ArrayList;
@@ -806,5 +807,54 @@ public class RPCServerTests {
 
 			context.completeNow();
 		}));
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Reachability. RpcServer.unanswered() is the rule that decides the local socket has gone deaf,
+	// which in turn gates the node's self-initiated background traffic. Timings are expressed as
+	// "long ago" and "a moment ago" rather than against REACHABILITY_TIMEOUT itself, so these stay
+	// meaningful if that interval is ever retuned.
+	// ---------------------------------------------------------------------------------------------
+
+	private static final long NOW = 1_700_000_000_000L;
+	private static final long LONG_AGO = NOW - 10 * 60 * 1000;      // well past any plausible timeout
+	private static final long A_MOMENT_AGO = NOW - 1000;            // well inside it
+
+	@Test
+	void testUnansweredWhenARequestGotNoReply() {
+		assertTrue(RpcServer.unanswered(NOW, LONG_AGO, LONG_AGO + 1000));
+	}
+
+	/**
+	 * The case the old rule got wrong. A node whose network never worked has no earlier packet to
+	 * compare against, and used to report itself reachable forever - while being the node whose
+	 * background traffic is the most futile.
+	 */
+	@Test
+	void testUnansweredWhenNothingWasEverReceived() {
+		long startup = LONG_AGO;
+		assertTrue(RpcServer.unanswered(NOW, startup, startup + 1),
+				"a node that has only ever sent must be able to conclude it is deaf");
+	}
+
+	@Test
+	void testAnsweredWhenNothingWasEverSent() {
+		assertFalse(RpcServer.unanswered(NOW, LONG_AGO, 0),
+				"no traffic, no verdict: silence proves nothing if we never asked");
+	}
+
+	/**
+	 * An idle node, not a deaf one: our last request predates the last packet that arrived, so it was
+	 * answered and the quiet since is just quiet.
+	 */
+	@Test
+	void testAnsweredWhenTheLastRequestPredatesTheLastPacket() {
+		assertFalse(RpcServer.unanswered(NOW, LONG_AGO, LONG_AGO - 1000));
+	}
+
+	@Test
+	void testAnsweredWhileStillWithinTheTimeout() {
+		assertFalse(RpcServer.unanswered(NOW, A_MOMENT_AGO, A_MOMENT_AGO + 1),
+				"an outstanding request is not yet an unanswered one");
 	}
 }

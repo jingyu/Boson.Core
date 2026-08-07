@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -107,6 +108,11 @@ public class DHT extends BosonVerticle {
 	private List<Id> bootstrapIds;
 	private boolean bootstrapping;
 	private long lastBootstrap;
+
+	// Whether the "nothing to bootstrap from" warning has already been logged. That condition is a
+	// static misconfiguration rather than an event - no bootstrap servers configured and an empty
+	// routing table - so it would otherwise be reported on every update tick for as long as it lasts.
+	private boolean warnedNoBootstrapSource;
 
 	// True until the first bootstrap that actually runs has finished.
 	//
@@ -268,6 +274,22 @@ public class DHT extends BosonVerticle {
 
 	public RpcServer getRpcServer() {
 		return rpcServer;
+	}
+
+	/**
+	 * Whether the local socket currently appears able to carry traffic.
+	 * <p>
+	 * False means we have sent requests and heard nothing back for a while, so anything we send now is
+	 * most likely going nowhere. It is a signal about <em>our</em> connectivity, not about any peer, and
+	 * it is the gate for self-initiated background work: there is no point spending an iterative lookup
+	 * on a network that cannot answer. Work the application asked for is never gated on it - the
+	 * application's request outranks our guess, and a call that succeeds is itself proof we were wrong.
+	 * </p>
+	 *
+	 * @return {@code true} if the DHT is running and its RPC server considers itself reachable
+	 */
+	public boolean isReachable() {
+		return rpcServer != null && rpcServer.isReachable();
 	}
 
 	public RoutingTable getRoutingTable() {
@@ -440,13 +462,63 @@ public class DHT extends BosonVerticle {
 
 		routingTableMaintenance();
 
-		int entries = routingTable.getNumberOfEntries();
-		if (entries < bootstrapThreshold || System.currentTimeMillis() - lastBootstrap > KadConstants.SELF_LOOKUP_INTERVAL)
-			// Regularly search for our id to update the routing table. Below one bucket's worth of
-			// contacts we may be unable to reach the network unaided, so fall back to the configured
-			// bootstrap servers; above it, self-bootstrap from what we already know and leave those
-			// shared servers alone.
-			doBootstrap(entries < useBootstrapNodesThreshold ? bootstrapNodes : Collections.emptyList());
+		switch (selectBootstrapTier(routingTable.getNumberOfEntries(), System.currentTimeMillis(),
+				rpcServer.isReachable())) {
+			case SERVERS -> doBootstrap(bootstrapNodes);
+			case SELF -> doBootstrap(Collections.emptyList());
+			case NONE -> { }
+		}
+	}
+
+	/**
+	 * Which bootstrap the periodic update should run, if any.
+	 */
+	enum BootstrapTier {
+		/** Nothing to do, or nothing that could work right now. */
+		NONE,
+		/** Self-bootstrap: a lookup seeded only from contacts we already hold. */
+		SELF,
+		/** Seed the lookup with the configured bootstrap servers - shared infrastructure. */
+		SERVERS
+	}
+
+	/**
+	 * Decides whether the periodic update should bootstrap, and from what.
+	 * <p>
+	 * Two independent questions, in order. First, is a bootstrap due at all: the routing table is below
+	 * the point where it can be relied on to route, or the periodic self-lookup that keeps us present in
+	 * other nodes' tables has come round. Second, which tier - below one bucket's worth of contacts we
+	 * may be unable to reach the network unaided and fall back to the configured bootstrap servers;
+	 * above it we self-bootstrap from what we already know and leave that shared resource alone.
+	 * </p>
+	 * <p>
+	 * <b>The reachability gate.</b> While the RPC server reports itself unreachable every packet we send
+	 * is going nowhere, so a routine re-bootstrap is pure waste and is skipped. The exception is the
+	 * server tier, and it is load-bearing rather than a hedge: {@code randomPing} - which is deliberately
+	 * never gated, because it is how the node notices the network came back - needs an entry in the
+	 * routing table to ping. Once the table drains there is nothing left to ping, nothing is ever sent,
+	 * nothing is ever received, and the node would be stranded permanently. Asking a configured server is
+	 * the only way back from there, and it costs one packet per server per
+	 * {@link KadConstants#BOOTSTRAP_INTERVAL}.
+	 * </p>
+	 * <p>
+	 * Side-effect free and a pure function of its arguments, so the decision can be tested without a
+	 * socket or a deployed verticle.
+	 * </p>
+	 *
+	 * @param entries the current number of routing table entries
+	 * @param now the current time, in milliseconds
+	 * @param reachable whether the RPC server currently considers itself reachable
+	 * @return the tier to bootstrap from, or {@link BootstrapTier#NONE}
+	 */
+	BootstrapTier selectBootstrapTier(int entries, long now, boolean reachable) {
+		if (entries >= bootstrapThreshold && now - lastBootstrap <= KadConstants.SELF_LOOKUP_INTERVAL)
+			return BootstrapTier.NONE;
+
+		if (entries < useBootstrapNodesThreshold)
+			return BootstrapTier.SERVERS;
+
+		return reachable ? BootstrapTier.SELF : BootstrapTier.NONE;
 	}
 
 	private void routingTableMaintenance() {
@@ -457,6 +529,10 @@ public class DHT extends BosonVerticle {
 		log.info("Routing table maintenance ...");
 		lastMaintenance = now;
 
+		// Deliberately not gated on reachability, unlike the other periodic work. A maintenance pass is
+		// local bookkeeping - merging buckets, cleaning up entries, promoting verified replacements -
+		// and all of it stays correct while the socket is deaf. The only part that touches the network
+		// is the refresh handler, and tryPingMaintenance already returns early when unreachable.
 		routingTable.maintenance(bootstrapIds, bucket ->
 				tryPingMaintenance(bucket, false, false, true,
 						"RoutingTable maintenance: refreshing bucket - " + bucket.prefix())
@@ -542,17 +618,49 @@ public class DHT extends BosonVerticle {
 		return promise.future();
 	}
 
+	/**
+	 * The quiet period before another bootstrap may run: {@link KadConstants#BOOTSTRAP_INTERVAL}
+	 * with a fresh symmetric jitter drawn for this attempt.
+	 * <p>
+	 * The interval on its own is a fixed period, so nodes that started together stay in lockstep
+	 * indefinitely - a fleet rolled out at once, or a whole population reconnecting after the same
+	 * outage, hits the shared bootstrap servers in synchronised waves. Redrawing an offset per attempt
+	 * lets each node's phase random-walk away from the others'. Centred on the interval rather than
+	 * added to it, so randomising the individual wait does not also slow the long-run cadence.
+	 * </p>
+	 * <p>
+	 * See {@link KadConstants#BOOTSTRAP_INTERVAL_JITTER_PERCENT} for why the band has to be as wide as
+	 * it is, and for why this stays a flat interval rather than backing off exponentially.
+	 * </p>
+	 *
+	 * @return the interval to enforce for this attempt, in milliseconds
+	 */
+	static long bootstrapInterval() {
+		int jitter = KadConstants.BOOTSTRAP_INTERVAL / 100 * KadConstants.BOOTSTRAP_INTERVAL_JITTER_PERCENT;
+		return KadConstants.BOOTSTRAP_INTERVAL + ThreadLocalRandom.current().nextInt(-jitter, jitter + 1);
+	}
+
 	private Future<Void> doBootstrap(Collection<NodeInfo> bootstrapNodes) {
 		if (bootstrapping)
 			return Future.failedFuture(new IllegalStateException("DHT is bootstrapping"));
 
-		if (System.currentTimeMillis() - lastBootstrap < KadConstants.BOOTSTRAP_MIN_INTERVAL)
+		if (System.currentTimeMillis() - lastBootstrap < bootstrapInterval())
 			return Future.succeededFuture();
 
 		if (bootstrapNodes.isEmpty() && routingTable.getNumberOfEntries() == 0) {
-			log.warn("No bootstrap nodes found, and the routingtable is empty, skipping bootstrap.");
+			// Deliberately does not stamp lastBootstrap. There is no address to send anything to, so
+			// nothing was attempted and there is nothing to rate-limit - and the state cannot change by
+			// itself, only when an inbound packet hands us a contact. Stamping here would make the node
+			// sit out a full interval it never used before it could act on that contact. The warning is
+			// logged once rather than on every tick, since it reports a static misconfiguration.
+			if (!warnedNoBootstrapSource) {
+				log.warn("No bootstrap nodes found, and the routingtable is empty, skipping bootstrap.");
+				warnedNoBootstrapSource = true;
+			}
 			return Future.succeededFuture();
 		}
+
+		warnedNoBootstrapSource = false;
 
 		bootstrapping = true;
 		log.info("DHT {}:{} bootstrapping...", network, identity.getId());
@@ -602,8 +710,12 @@ public class DHT extends BosonVerticle {
 					Future.succeededFuture() : fillHomeBucket(nodes);
 		}).compose(v -> {
 			// depth-first lookup: fill each bucket
-			// only if the routing table is more than 1 bucket
-			return (routingTable.size() <= 1) ? Future.succeededFuture() : fillBuckets();
+			// only if the routing table is more than 1 bucket, and only while the socket can carry the
+			// traffic - this is the expensive half of a bootstrap, and while we are deaf every one of
+			// those lookups can do nothing but time out. The gate lives here rather than in
+			// selectBucketsToFill so that method stays a pure function of the routing table.
+			return (routingTable.size() <= 1 || !rpcServer.isReachable()) ?
+					Future.succeededFuture() : fillBuckets();
 		}).andThen(ar -> {
 			// Only the first bootstrap to get this far may preempt the queue; see initialBootstrap.
 			initialBootstrap = false;
@@ -669,7 +781,7 @@ public class DHT extends BosonVerticle {
 	 * traffic. Frequency compounds it. Bootstrap is not only a startup step: {@link #update(long)} calls
 	 * {@link #doBootstrap} whenever the table is below {@link #bootstrapThreshold} <em>or</em> the
 	 * {@link KadConstants#SELF_LOOKUP_INTERVAL} self-lookup is due, and the only brake is
-	 * {@link KadConstants#BOOTSTRAP_MIN_INTERVAL}. A node whose table sits below the threshold - a young
+	 * {@link KadConstants#BOOTSTRAP_INTERVAL}. A node whose table sits below the threshold - a young
 	 * node, a small network, a node behind a bad NAT - therefore re-runs this every four minutes rather
 	 * than every thirty. And below that threshold the "skip full buckets" rule never fires either, so
 	 * every non-empty bucket qualifies every time. The burst was largest exactly where the table was
@@ -767,7 +879,7 @@ public class DHT extends BosonVerticle {
 			if (bucket.isFull() && routingTable.getNumberOfEntries() >= bootstrapThreshold)
 				return;
 
-			// Per-bucket rate limit. Bootstrap runs as often as every BOOTSTRAP_MIN_INTERVAL when the
+			// Per-bucket rate limit. Bootstrap runs as often as every BOOTSTRAP_INTERVAL when the
 			// table is below the bootstrap threshold, which without this would re-run the same
 			// iterative lookups on the same buckets every few minutes.
 			if (!bucket.needsLookupRefresh())

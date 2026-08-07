@@ -308,6 +308,22 @@ public class KadNode extends BosonVerticle implements Node {
 		return network == Network.IPv4 ? dht4 : dht6;
 	}
 
+	/**
+	 * Whether any of this node's stacks currently appears able to carry traffic.
+	 * <p>
+	 * Either stack is enough: an operation on a dual-stack node is announced on both, and one working
+	 * family is a working network. Used to skip self-initiated background work, never work the caller
+	 * asked for - see {@link DHT#isReachable()}.
+	 * </p>
+	 *
+	 * @return {@code true} if at least one running DHT considers itself reachable.
+	 */
+	public boolean isReachable() {
+		DHT d4 = dht4;
+		DHT d6 = dht6;
+		return (d4 != null && d4.isReachable()) || (d6 != null && d6.isReachable());
+	}
+
 	@Override
 	public void addConnectionStatusListener(ConnectionStatusListener listener) {
 		Objects.requireNonNull(listener, "listener cannot be null");
@@ -888,6 +904,15 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	private void persistentAnnounce() {
+		// One full iterative lookup per persisted value and per peer, so this is the heaviest periodic
+		// work the node does. While no stack can carry traffic every one of those lookups can only time
+		// out, and nothing is lost by waiting: the announced time is updated on success only, so the
+		// next cycle picks the same items up again.
+		if (!isReachable()) {
+			log.info("Skipping the re-announce, no reachable network.");
+			return;
+		}
+
 		log.info("Re-announce the persistent values and peers...");
 
 		long before = System.currentTimeMillis() - MAX_VALUE_AGE + RE_ANNOUNCE_INTERVAL * 2;
