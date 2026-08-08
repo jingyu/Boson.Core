@@ -62,6 +62,13 @@ import io.bosonnetwork.metrics.Measured;
  * and uses Vert.x for asynchronous socket operations.
  */
 public class RpcServer implements Measured {
+	// Transport-layer parameters, owned by this class rather than by KadConstants: each one is
+	// meaningful only inside the RPC layer's own machinery - the socket, the reachability detector,
+	// the per-address throttles, the timeout sampler - and none is node-wide policy. The three
+	// RPC_CALL_TIMEOUT_* values in particular are calibrated as a set and are the arguments to one
+	// TimeoutSampler constructor call. RPC_CALL_TIMEOUT_MAX is the only one published outward: it is
+	// this layer's promise about how long a call can take, which RpcCall and KBucketEntry both rely on.
+
 	/** Socket send buffer size (1 MB). */
 	private static final int SOCKET_SEND_BUFFER_SIZE = 1024 * 1024;
 	/** Socket receive buffer size (1 MB). */

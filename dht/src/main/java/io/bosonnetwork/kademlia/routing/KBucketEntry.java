@@ -34,6 +34,7 @@ import java.util.Map;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
 
@@ -65,9 +66,23 @@ public class KBucketEntry extends NodeInfo {
 	public static final	int MAX_FAILURES = 5;
 	public static final int OLD_AND_STALE_FAILURES = 2;
 
-	// haven't seen it for a long time + timeout == evict sooner than pure timeout
-	// based threshold. e.g. for old entries that we haven't touched for a long time
-	public static final int OLD_AND_STALE_TIME = 15 * 60 * 1000; // 15 minutes
+	/**
+	 * How long a contact may stay silent before it is treated as old and stale.
+	 * <p>
+	 * Silence here means no successful interaction: the entry may still be in the table, and may never
+	 * have failed a request. Being stale makes the entry worth a ping ({@link #needsPing()}), and - once
+	 * it has also failed {@link #OLD_AND_STALE_FAILURES} times - worth replacing ({@link #oldAndStale()}).
+	 * </p>
+	 * <p>
+	 * <b>Derived, not merely equal.</b> This is the same silence horizon that
+	 * {@link KadConstants#BUCKET_REFRESH_INTERVAL} applies one level up, and the two are used together:
+	 * a bucket is refreshed only when it is stale by that interval <em>and</em> holds an entry that is
+	 * stale by this one. The bucket's clock is its last refresh, the entry's is its last sighting, but
+	 * the question - how long is too long to hear nothing from a peer - is one question with one answer,
+	 * so it is tuned in one place.
+	 * </p>
+	 */
+	public static final int OLD_AND_STALE_TIME = KadConstants.BUCKET_REFRESH_INTERVAL; // 15 minutes
 	public static final int PING_BACKOFF_BASE_INTERVAL = 60 * 1000; // 1 minute
 
 	private static final double RTT_EMA_WEIGHT = 0.3;

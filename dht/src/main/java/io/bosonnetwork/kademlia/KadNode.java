@@ -44,6 +44,7 @@ import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.DHTConnectionStatusListener;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
@@ -59,14 +60,15 @@ import io.bosonnetwork.vertx.VertxCaffeine;
 
 @NullMarked
 public class KadNode extends BosonVerticle implements Node {
+	// This implementation's identity on the wire. Not tuning: NAME and SHORT_NAME are what peers see
+	// in the version field, so they belong to this class rather than to KadConstants.
 	public static final String NAME = "Orca";
 	public static final String SHORT_NAME = "OR";
 	public static final int VERSION_NUMBER = 1;
 	public static final int VERSION = Version.build(SHORT_NAME, VERSION_NUMBER);
 
-	public static final int RE_ANNOUNCE_INTERVAL = 5 * 60 * 1000;        // 5 minutes in milliseconds
-	public static final int STORAGE_EXPIRE_INTERVAL = 10 * 60 * 1000;    // 10 minutes in milliseconds
-
+	// How many peers findPeer collects when the caller does not say. A default for this API only -
+	// it bounds one call's result set and has no effect on routing, storage or maintenance.
 	private static final int DEFAULT_EXPECTED_PEER_COUNT = 8;
 
 	private final NodeConfiguration config;
@@ -449,10 +451,12 @@ public class KadNode extends BosonVerticle implements Node {
 			return Future.all(futures);
 		}).andThen(ar -> {
 			if (ar.succeeded()) {
-				long timer = vertx.setPeriodic(30_000, STORAGE_EXPIRE_INTERVAL, unused -> storage.purge());
+				long timer = vertx.setPeriodic(KadConstants.STORAGE_EXPIRE_INITIAL_DELAY,
+						KadConstants.STORAGE_EXPIRE_INTERVAL, unused -> storage.purge());
 				timers.add(timer);
 
-				timer = vertx.setPeriodic(60_000, RE_ANNOUNCE_INTERVAL, unused -> persistentAnnounce());
+				timer = vertx.setPeriodic(KadConstants.RE_ANNOUNCE_INITIAL_DELAY,
+						KadConstants.RE_ANNOUNCE_INTERVAL, unused -> persistentAnnounce());
 				timers.add(timer);
 
 				timer = vertx.setPeriodic(TokenManager.TOKEN_TIMEOUT, TokenManager.TOKEN_TIMEOUT, unused ->
@@ -915,7 +919,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 		log.info("Re-announce the persistent values and peers...");
 
-		long before = System.currentTimeMillis() - MAX_VALUE_AGE + RE_ANNOUNCE_INTERVAL * 2;
+		long before = System.currentTimeMillis() - MAX_VALUE_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
 		// Best-effort, fire-and-forget re-announce: each item's chain logs its own outcome; the periodic
 		// timer reruns regardless, so we don't aggregate/await the per-item futures.
 		storage.getValues(true, before).onSuccess(values -> {
@@ -934,7 +938,7 @@ public class KadNode extends BosonVerticle implements Node {
 				log.error("Failed to re-announce the values", e)
 		);
 
-		before = System.currentTimeMillis() - MAX_PEER_AGE + RE_ANNOUNCE_INTERVAL * 2;
+		before = System.currentTimeMillis() - MAX_PEER_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
 		storage.getPeers(true, before).onSuccess(peers -> {
 			for (PeerInfo peer : peers) {
 				log.debug("Re-announce the peer: {}", peer.getId());
