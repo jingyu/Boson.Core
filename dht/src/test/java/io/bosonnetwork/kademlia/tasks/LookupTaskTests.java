@@ -90,6 +90,31 @@ class LookupTaskTests {
 	}
 
 	@Test
+	void testIterationBudgetStaysAboveTheConvergenceFloor() {
+		// The budget is a backstop. If it ever dropped below what convergence costs, every lookup would
+		// end by exhaustion instead - and still report COMPLETED, so nothing downstream could tell.
+		// k=64 is included because the slack term used to grow with k, which is backwards: convergence
+		// is O(log_k N), so a larger k needs fewer rounds, not more.
+		int slackAtSmallestK = -1;
+
+		for (int k : new int[] { 8, 16, 64 }) {
+			KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4)
+					.setK(k);
+			TestLookupTask t = new TestLookupTask(context, Id.random());
+
+			int floor = k + ClosestSet.stabilityMargin(k) + 1;
+			assertEquals(floor + context.getAlpha() * KadConstants.LOOKUP_DEPTH_ALLOWANCE, t.maxIterations);
+			assertTrue(t.maxIterations > floor, "the budget must leave room above the convergence floor");
+
+			int slack = t.maxIterations - floor;
+			if (slackAtSmallestK < 0)
+				slackAtSmallestK = slack;
+			else
+				assertEquals(slackAtSmallestK, slack, "the slack above the floor must not scale with k");
+		}
+	}
+
+	@Test
 	void testCandidateManagement() {
 		List<NodeInfo> nodes1 = new ArrayList<>(KadConstants.K * 2);
 		for (int i = 0; i < KadConstants.K * 2; i++)

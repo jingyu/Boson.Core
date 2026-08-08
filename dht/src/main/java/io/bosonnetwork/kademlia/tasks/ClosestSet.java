@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 
 /**
  * A class for managing a set of the closest nodes to a target ID in a Kademlia DHT.
@@ -218,13 +219,41 @@ public class ClosestSet {
 	}
 
 	/**
-	 * Checks if the set is eligible for lookup termination (full and stable).
-	 * Stability is determined by no modifications to the tail after more than capacity attempts.
+	 * How many consecutive non-improving responses this set requires before it will call itself stable.
+	 * <p>
+	 * Shared with {@code LookupTask}, which derives its iteration budget from the same expression: the
+	 * budget must never fall below what convergence costs, and the only way to guarantee that is for
+	 * both to read one definition.
+	 * </p>
+	 *
+	 * @param capacity the size of the closest set, which is k.
+	 * @return the number of non-improving responses that must be exceeded.
+	 */
+	static int stabilityMargin(int capacity) {
+		return Math.min(capacity, KadConstants.LOOKUP_STABILITY_ATTEMPTS);
+	}
+
+	/**
+	 * Checks whether the set is full and has stopped improving.
+	 * <p>
+	 * <b>This is not the termination rule.</b> {@code LookupTask.isDone()} ands it with the rule that
+	 * actually decides the question - no unqueried candidate is closer than this set's tail, so nothing
+	 * left to ask can enter the set. What this method adds is an <em>exploration margin</em> on top of
+	 * that: keep probing for {@link #stabilityMargin(int)} more responses past the plateau, because a
+	 * node farther from the target may still know one closer to it that we have never seen. Without the
+	 * margin a lookup would stop at the first plateau it meets.
+	 * </p>
+	 * <p>
+	 * <b>What it costs.</b> The counter only moves once the set is full, so convergence needs about
+	 * {@code k} responses to fill the set plus {@code margin + 1} that fail to improve its tail. The
+	 * margin is deliberately capped rather than being the capacity itself - see
+	 * {@link KadConstants#LOOKUP_STABILITY_ATTEMPTS}.
+	 * </p>
 	 *
 	 * @return true if eligible, false otherwise
 	 */
 	public boolean isEligible() {
-		return reachedCapacity() && insertAttemptsSinceTailModification > capacity;
+		return reachedCapacity() && insertAttemptsSinceTailModification > stabilityMargin(capacity);
 	}
 
 	/**

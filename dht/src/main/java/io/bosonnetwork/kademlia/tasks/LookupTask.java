@@ -59,21 +59,27 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 * </p>
 	 * <p>
 	 * <b>Why it is derived, not configured.</b> The lookup normally ends by convergence - see
-	 * {@link #isDone()} - and convergence has a minimum cost set by
-	 * {@link ClosestSet#isEligible()}: about {@code 2 * k} insert attempts, k to fill the closest set
-	 * and k+1 more that fail to improve its tail. A budget below that floor would stop every lookup by
-	 * exhaustion instead, and the caller could not tell, because both outcomes report COMPLETED. So
-	 * the budget is {@code LOOKUP_CONVERGENCE_FACTOR * k} (the floor) plus slack for the depth ramp
-	 * and for iterations lost to unanswered RPCs. Exposing this as a free-standing configuration knob
-	 * would let an operator set it below the floor and quietly break every lookup on the node.
+	 * {@link #isDone()} - and convergence has a minimum cost: {@code k} responses to fill the closest
+	 * set, plus {@link ClosestSet#stabilityMargin(int)} + 1 more that fail to improve its tail. The
+	 * floor is read from {@code ClosestSet} rather than restated here, so the two cannot drift apart.
+	 * A budget below it would stop every lookup by exhaustion instead, and the caller could not tell,
+	 * because both outcomes report COMPLETED. Exposing this as a free-standing configuration knob would
+	 * let an operator set it below the floor and quietly break every lookup on the node.
 	 * </p>
 	 * <p>
-	 * <b>Behavior as k grows.</b> The floor grows linearly with k because the convergence rule does.
-	 * The slack term is {@code max(k, alpha * LOOKUP_DEPTH_ALLOWANCE)}, so for small k it is dominated
-	 * by the fixed depth allowance - which is what the old {@code 3 * k} heuristic lacked, leaving
-	 * roughly three unanswered RPCs of margin at k=8 before a lookup would truncate on a lossy path.
-	 * For a super node at large k the depth term is irrelevant (convergence is O(log_k N), so more k
-	 * means fewer rounds) and the budget tracks the convergence floor, as it should.
+	 * <b>An iteration is not an RPC, and that is what sizes the slack.</b> {@code Task.tryIterate} runs
+	 * on every call state change at or past {@code STALLED}, and a call stalls as soon as it outlives
+	 * the timeout sampler's estimate - a percentile, so a share of perfectly healthy calls stall by
+	 * construction. A fast response therefore costs one iteration, a slow one costs two, and a lost one
+	 * costs two plus the retry it re-queues. The budget over-counts RPCs by up to a factor of two
+	 * exactly when the network is bad, which is why the slack is a flat
+	 * {@code alpha * LOOKUP_DEPTH_ALLOWANCE} rather than something tighter: at the default k it leaves
+	 * about 24 iterations above a 25-response floor.
+	 * </p>
+	 * <p>
+	 * <b>Behavior as k grows.</b> The floor grows with k, but no longer at twice the rate - the
+	 * stability margin is capped, so the floor is {@code k + min(k, 8) + 1}. The slack does not grow
+	 * with k at all: convergence is O(log_k N), so a larger k needs fewer rounds, not more.
 	 * </p>
 	 * <p>
 	 * Implementation limit: invisible to peers, bounding only this node's own effort.
@@ -112,12 +118,11 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 
 		int k = context.getK();
 
-		// Convergence floor plus slack; see the maxIterations field for the full rationale. The slack
-		// is max(k, alpha * allowance) so that small k still gets a usable depth/loss margin - the
-		// previous 3*k left about three unanswered RPCs of margin at k=8 - while large k is carried by
-		// the floor, which is where the real cost lives.
-		this.maxIterations = KadConstants.LOOKUP_CONVERGENCE_FACTOR * k +
-				Math.max(k, context.getAlpha() * KadConstants.LOOKUP_DEPTH_ALLOWANCE);
+		// Convergence floor plus slack; see the maxIterations field for the full rationale. The floor
+		// comes from ClosestSet so the budget cannot fall below what convergence actually costs, and
+		// the slack is flat in k because the depth ramp shrinks as k grows.
+		this.maxIterations = k + ClosestSet.stabilityMargin(k) + 1 +
+				context.getAlpha() * KadConstants.LOOKUP_DEPTH_ALLOWANCE;
 
 		this.closest = new ClosestSet(target, k);
 		this.candidates = new ClosestCandidates(target, candidateCapacity(k), context.isDeveloperMode());
