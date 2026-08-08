@@ -29,6 +29,34 @@ package io.bosonnetwork.kademlia.impl;
  * Centralized so the values that govern one node's behavior can be read and adjusted in one place
  * rather than being spread across the routing, task and RPC layers.
  * </p>
+ * <p>
+ * <b>What belongs here.</b> A value belongs here when it is node-wide policy: it decides how much
+ * work the node does or how much traffic it emits, more than one component cares about it, or it is
+ * calibrated against another value in this file. Everything here should be readable as an answer to
+ * "what does a node of this implementation do, and how often".
+ * </p>
+ * <p>
+ * <b>What deliberately does not.</b> A value that is only meaningful inside one component stays with
+ * that component, because moving it would separate it from the code that gives it meaning and imply a
+ * generality it does not have. Three groups are deliberately left where they are:
+ * </p>
+ * <ul>
+ *   <li>{@code RpcServer}'s socket buffers, reachability detector, throttle rates and timeout-sampler
+ *       bounds - transport and abuse-control parameters of one layer. The sampler bounds in particular
+ *       are calibrated as a set and are arguments to a single constructor call.</li>
+ *   <li>{@code KBucketEntry}'s failure counts, ping backoff base and RTT smoothing weight - the
+ *       machinery of a single entry's liveness state, meaningless outside it. Its one value that does
+ *       have a partner here, {@code OLD_AND_STALE_TIME}, is derived from
+ *       {@link #BUCKET_REFRESH_INTERVAL} rather than repeated.</li>
+ *   <li>{@code KadNode}'s {@code NAME} / {@code SHORT_NAME} / {@code VERSION} - this implementation's
+ *       identity on the wire, not a tuning dial; and {@code TokenManager.TOKEN_TIMEOUT}, which is the
+ *       token's own lifetime and is referenced by whoever needs to match it.</li>
+ * </ul>
+ * <p>
+ * The age limits that bound stored data, {@code Node.MAX_VALUE_AGE} and {@code Node.MAX_PEER_AGE},
+ * are not here either: they are part of the public API contract in the {@code api} module, and
+ * {@link #RE_ANNOUNCE_INTERVAL} is calibrated against them from this side.
+ * </p>
  */
 public final class KadConstants {
 	// ---------------------------------------------------------------------------------------------
@@ -467,6 +495,13 @@ public final class KadConstants {
 	 * node cannot be admitted, deliberately forcing a refresh so the bucket's dead entries are
 	 * revalidated and the newcomer gets a chance to replace one.
 	 * </p>
+	 * <p>
+	 * <b>Also the entry-level staleness horizon.</b> {@code KBucketEntry.OLD_AND_STALE_TIME} is defined
+	 * as this value rather than repeating it, because the two are halves of one rule - a bucket refresh
+	 * needs both clocks to have run out - and were previously two independent literals that nothing kept
+	 * in step. Retuning here therefore also moves when an individual contact is considered stale, which
+	 * is the intent: they answer the same question at different granularities.
+	 * </p>
 	 */
 	public static final int BUCKET_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes in milliseconds
 
@@ -530,6 +565,48 @@ public final class KadConstants {
 	 * </p>
 	 */
 	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 60 * 1000;            // 60 seconds
+
+	/**
+	 * Delay before the first purge of expired local storage after startup.
+	 * See {@link #STORAGE_EXPIRE_INTERVAL}.
+	 */
+	public static final int STORAGE_EXPIRE_INITIAL_DELAY = 30 * 1000;               // 30 seconds
+
+	/**
+	 * How often values and peers that have outlived their age limit are dropped from local storage.
+	 * <p>
+	 * Purely local: no traffic, no protocol effect, and nothing observable by peers. The age limits
+	 * themselves are the public contract ({@code Node.MAX_VALUE_AGE} and {@code Node.MAX_PEER_AGE}),
+	 * so this interval only decides how long an already-expired row lingers on disk - it can never
+	 * keep a value alive past its limit, because reads filter by age.
+	 * </p>
+	 */
+	public static final int STORAGE_EXPIRE_INTERVAL = 10 * 60 * 1000;               // 10 minutes
+
+	/**
+	 * Delay before the first re-announce pass after startup.
+	 * See {@link #RE_ANNOUNCE_INTERVAL}.
+	 */
+	public static final int RE_ANNOUNCE_INITIAL_DELAY = 60 * 1000;                  // 60 seconds
+
+	/**
+	 * How often the node re-publishes the values and peers it is persistently announcing.
+	 * <p>
+	 * <b>The most expensive periodic work here.</b> Unlike the rest of this section, one pass is not a
+	 * bounded amount of traffic: it runs a full iterative store-or-announce lookup for every item due,
+	 * so its cost scales with what the application has asked the node to keep published. Skipped
+	 * entirely while the RPC server reports itself unreachable.
+	 * </p>
+	 * <p>
+	 * <b>Why 5 minutes against a 2-hour limit.</b> An item must be refreshed on its remote holders
+	 * before they expire it at {@code Node.MAX_VALUE_AGE} / {@code Node.MAX_PEER_AGE}. The selection
+	 * query allows two intervals of slack ({@code MAX_VALUE_AGE - 2 * RE_ANNOUNCE_INTERVAL}), so a
+	 * missed pass - the node was unreachable, or the lookup failed - still leaves many further
+	 * attempts before anything is actually dropped. Raising this interval eats into that margin;
+	 * raising it past roughly half the age limit removes the margin altogether.
+	 * </p>
+	 */
+	public static final int RE_ANNOUNCE_INTERVAL = 5 * 60 * 1000;                   // 5 minutes
 
 	/**
 	 * How many buckets' worth of contacts the node wants before it stops trying to bootstrap,
