@@ -24,7 +24,9 @@
 package io.bosonnetwork.kademlia.rpc;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -452,7 +454,17 @@ public class RpcServer implements Measured {
 
 			inboundThrottle.clear();
 			outboundThrottle.clear();
+
+			// Cancel rather than drop. A call outstanding when the socket closes can never be answered,
+			// and its timeout timer belongs to the verticle context, which Vert.x tears down on undeploy
+			// - so simply clearing the map leaves every caller waiting on a future that will never
+			// settle. DHT.doBootstrap is one such caller, and a bootstrap that never completes leaves
+			// its in-progress flag set, blocking every later attempt for the life of the instance.
+			// Snapshot first: cancelling notifies listeners, which may reach back into this map.
+			List<RpcCall> outstanding = new ArrayList<>(pendingCalls.values());
 			pendingCalls.clear();
+			for (RpcCall call : outstanding)
+				call.cancel();
 
 			if (ar.succeeded())
 				log.info("RPC server at {}:{} stopped", host, port);

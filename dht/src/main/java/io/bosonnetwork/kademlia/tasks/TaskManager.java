@@ -102,6 +102,12 @@ public class TaskManager {
 		if (!task.setState(Task.State.INITIAL, Task.State.QUEUED)) {
 			log.error("!!!INTERNAL ERROR: task is not in INITIAL state: {}", task);
 			task.endHandler(null);
+			// Cancel rather than drop silently. Callers wait on this task through a listener, so a task
+			// that leaves here without ever reaching a terminal state leaves them waiting forever - and
+			// the state they are guarding is often a latch, so what looks like one lost task is really a
+			// mechanism disabled for good. cancel() is a no-op if the task already ended, in which case
+			// the listeners have fired already.
+			task.cancel();
 			return;
 		}
 

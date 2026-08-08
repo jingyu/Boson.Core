@@ -38,11 +38,10 @@ import io.bosonnetwork.kademlia.security.Blacklist;
  * Covers {@link DHT#selectBootstrapTier(int, long, boolean)} - whether the periodic update bootstraps,
  * and whether it is allowed to seed the attempt with the configured bootstrap servers.
  * <p>
- * Two rules meet here. The tier split keeps routine maintenance off shared infrastructure, and the
- * reachability gate keeps a deaf node from spending traffic that cannot arrive. They conflict in one
- * place - a node that is both deaf and out of contacts - and the resolution matters: that node has no
- * other way back, so the server tier wins. The selection is a pure function of its arguments so all of
- * this is decidable without a socket or a deployed verticle.
+ * Two rules meet here. The tier split keeps routine maintenance off shared infrastructure by reasoning
+ * from the routing table, and deafness overrides it because a deaf node's table is not evidence of
+ * anything - it cannot be reached and it cannot repair itself. The selection is a pure function of its
+ * arguments so all of this is decidable without a socket or a deployed verticle.
  * </p>
  */
 public class DHTBootstrapTierTests {
@@ -108,28 +107,46 @@ public class DHTBootstrapTierTests {
 	}
 
 	/**
-	 * The gate proper: while the socket is deaf a self-bootstrap can only produce timeouts, and the node
-	 * still holds enough contacts for randomPing to notice when the network comes back.
+	 * A deaf node asks the bootstrap servers whatever its table looks like, and without waiting for the
+	 * self-lookup clock.
+	 * <p>
+	 * The entry count is not evidence here. A deaf node's contacts are all still in the table and none
+	 * of them answers, and the table cannot repair itself either - every eviction path is gated on
+	 * reachability or does not evict for staleness - so the count stays wherever the outage left it.
+	 * Reasoning from it would leave a node that went deaf with a full table permanently stranded: never
+	 * below a threshold, never on the server tier, and pinging dead contacts forever. This is the
+	 * laptop that suspends on one network and wakes on another.
+	 * </p>
 	 */
 	@Test
-	void testDeafNodeWithContactsDoesNotSelfBootstrap() {
-		assertEquals(BootstrapTier.NONE,
+	void testDeafNodeAlwaysAsksTheBootstrapServers() {
+		// A healthy table with nothing otherwise due - the case that used to strand the node for good.
+		assertEquals(BootstrapTier.SERVERS,
+				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_NOT_DUE, DEAF));
+		assertEquals(BootstrapTier.SERVERS,
+				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD * 4, SELF_LOOKUP_NOT_DUE, DEAF));
+
+		// And every thinner table, with or without the self-lookup due.
+		assertEquals(BootstrapTier.SERVERS,
 				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD, SELF_LOOKUP_DUE, DEAF));
-		assertEquals(BootstrapTier.NONE,
-				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_DUE, DEAF));
+		assertEquals(BootstrapTier.SERVERS,
+				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD - 1, SELF_LOOKUP_NOT_DUE, DEAF));
+		assertEquals(BootstrapTier.SERVERS,
+				dht.selectBootstrapTier(0, SELF_LOOKUP_NOT_DUE, DEAF));
 	}
 
 	/**
-	 * The exception, and the reason the gate is not simply applied to everything: randomPing recovers a
-	 * node that still holds contacts, but a drained table leaves nothing to ping. Asking a configured
-	 * server is the only way back, so it has to survive the gate or the node is stranded permanently.
+	 * The mirror of the above: a reachable node is never pushed onto the shared servers by anything the
+	 * deafness rule does, so routine maintenance keeps off that infrastructure exactly as before.
 	 */
 	@Test
-	void testDeafNodeWithNoContactsStillAsksTheBootstrapServers() {
-		assertEquals(BootstrapTier.SERVERS,
-				dht.selectBootstrapTier(0, SELF_LOOKUP_NOT_DUE, DEAF));
-		assertEquals(BootstrapTier.SERVERS,
-				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD - 1, SELF_LOOKUP_NOT_DUE, DEAF));
+	void testReachableNodeIsUnaffectedByTheDeafnessRule() {
+		assertEquals(BootstrapTier.NONE,
+				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_NOT_DUE, REACHABLE));
+		assertEquals(BootstrapTier.SELF,
+				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_DUE, REACHABLE));
+		assertEquals(BootstrapTier.SELF,
+				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD, SELF_LOOKUP_NOT_DUE, REACHABLE));
 	}
 
 	/**

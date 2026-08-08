@@ -318,6 +318,19 @@ public class DHT extends BosonVerticle {
 
 		log.info("Starting DHT {}:{} on {}:{}......", network, identity.getId(), host, port);
 
+		// Bootstrap state belongs to a deployment, not to this object, so it is reset here as well as in
+		// the constructor. Carrying it across a redeploy is silently wrong in every direction: a stale
+		// lastBootstrap makes the startup bootstrap trip its own rate limiter and return immediately, so
+		// the node skips the one bootstrap whose latency matters and waits out the rest of an interval it
+		// never used; a bootstrapping flag left set by a shutdown mid-attempt blocks every attempt for
+		// good; and maintenanceTasks entries whose tasks died with the previous deployment exclude those
+		// buckets from both refresh paths permanently.
+		bootstrapping = false;
+		lastBootstrap = 0;
+		initialBootstrap = true;
+		warnedNoBootstrapSource = false;
+		maintenanceTasks.clear();
+
 		final boolean needPingCachedRoutingTable;
 		if (persistFile != null && Files.exists(persistFile) && Files.isRegularFile(persistFile)) {
 			log.info("Loading routing table from {} ...", persistFile);
@@ -474,7 +487,7 @@ public class DHT extends BosonVerticle {
 	 * Which bootstrap the periodic update should run, if any.
 	 */
 	enum BootstrapTier {
-		/** Nothing to do, or nothing that could work right now. */
+		/** Nothing due: the table is healthy and the periodic self-lookup has not come round. */
 		NONE,
 		/** Self-bootstrap: a lookup seeded only from contacts we already hold. */
 		SELF,
@@ -492,14 +505,23 @@ public class DHT extends BosonVerticle {
 	 * above it we self-bootstrap from what we already know and leave that shared resource alone.
 	 * </p>
 	 * <p>
-	 * <b>The reachability gate.</b> While the RPC server reports itself unreachable every packet we send
-	 * is going nowhere, so a routine re-bootstrap is pure waste and is skipped. The exception is the
-	 * server tier, and it is load-bearing rather than a hedge: {@code randomPing} - which is deliberately
-	 * never gated, because it is how the node notices the network came back - needs an entry in the
-	 * routing table to ping. Once the table drains there is nothing left to ping, nothing is ever sent,
-	 * nothing is ever received, and the node would be stranded permanently. Asking a configured server is
-	 * the only way back from there, and it costs one packet per server per
-	 * {@link KadConstants#BOOTSTRAP_INTERVAL}.
+	 * <b>Why being unreachable overrides both questions.</b> Every rule above reasons from the routing
+	 * table, and a deaf node's table tells it nothing: the contacts are all still there, none of them
+	 * answers, and the node cannot tell the difference. Worse, that table cannot repair itself, because
+	 * every path that evicts a dead entry is either gated on reachability - {@code onTimeout} and the
+	 * ping-refresh maintenance both are, deliberately, so that our own outage does not punish peers - or
+	 * does not evict for staleness at all, which is the case for {@code KBucket.cleanup}. So the entry
+	 * count stays wherever the outage left it, forever.
+	 * </p>
+	 * <p>
+	 * A node deaf with a full table would therefore never fall below any threshold, never select the
+	 * server tier, and never contact a bootstrap server again - while {@code randomPing}, the probe that
+	 * is meant to notice the network returning, pinged contacts that no longer answer. That is the
+	 * ordinary case of a laptop suspending on one network and waking on another, and it stranded the
+	 * node permanently. Deafness is itself the evidence that the cached contacts are not working, which
+	 * is precisely when the configured servers are the right thing to ask, so it makes a bootstrap due
+	 * now rather than on the self-lookup clock. The cost is bounded by
+	 * {@link KadConstants#BOOTSTRAP_INTERVAL} and comes to one packet per configured server.
 	 * </p>
 	 * <p>
 	 * Side-effect free and a pure function of its arguments, so the decision can be tested without a
@@ -512,13 +534,13 @@ public class DHT extends BosonVerticle {
 	 * @return the tier to bootstrap from, or {@link BootstrapTier#NONE}
 	 */
 	BootstrapTier selectBootstrapTier(int entries, long now, boolean reachable) {
+		if (!reachable)
+			return BootstrapTier.SERVERS;
+
 		if (entries >= bootstrapThreshold && now - lastBootstrap <= KadConstants.SELF_LOOKUP_INTERVAL)
 			return BootstrapTier.NONE;
 
-		if (entries < useBootstrapNodesThreshold)
-			return BootstrapTier.SERVERS;
-
-		return reachable ? BootstrapTier.SELF : BootstrapTier.NONE;
+		return entries < useBootstrapNodesThreshold ? BootstrapTier.SERVERS : BootstrapTier.SELF;
 	}
 
 	private void routingTableMaintenance() {
@@ -705,9 +727,17 @@ public class DHT extends BosonVerticle {
 		}
 
 		return future.compose(nodes -> {
-			// breadth-first lookup: fill more buckets
-			return (nodes.isEmpty() && routingTable.getNumberOfEntries() == 0) ?
-					Future.succeededFuture() : fillHomeBucket(nodes);
+			// breadth-first lookup: fill more buckets.
+			//
+			// Skipped when the attempt has nothing to work with. An empty table is the obvious case. The
+			// other is being deaf with no answer from any server: the lookup would then run entirely
+			// against contacts that are not answering, and a deaf node retries every BOOTSTRAP_INTERVAL,
+			// so that would be a full iterative lookup's worth of timeouts on repeat. Keeping it out
+			// holds the cost of a deaf retry at what it should be - one packet per configured server. A
+			// server that did answer puts nodes in hand, and then the lookup is exactly what we want.
+			boolean nothingToLookupWith = nodes.isEmpty() &&
+					(routingTable.getNumberOfEntries() == 0 || !rpcServer.isReachable());
+			return nothingToLookupWith ? Future.succeededFuture() : fillHomeBucket(nodes);
 		}).compose(v -> {
 			// depth-first lookup: fill each bucket
 			// only if the routing table is more than 1 bucket, and only while the socket can carry the
@@ -943,6 +973,11 @@ public class DHT extends BosonVerticle {
 					.probeReplacement(probeReplacement)
 					.bucket(bucket);
 
+			// The entry is claimed before the task is handed over and released by the task's own
+			// listener, so this depends on TaskManager always driving a task it accepts to a terminal
+			// state - including the paths where it rejects one. A task that ends silently would strand
+			// the entry, and an entry here excludes its bucket from the ping path above and from
+			// selectBucketsToFill as well, so the bucket would never be refreshed again by either.
 			if (maintenanceTasks.putIfAbsent(bucket, task) == null) {
 				task.addListener(t -> maintenanceTasks.remove(bucket, task));
 				taskManager.add(task);
