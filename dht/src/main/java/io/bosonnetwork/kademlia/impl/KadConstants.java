@@ -98,9 +98,11 @@ public final class KadConstants {
 	 * </p>
 	 * <p>
 	 * <b>What raising it costs.</b> More than it first appears, which is why several other limits
-	 * exist to contain it. Memory grows as k per bucket. The lookup convergence rule
-	 * ({@code ClosestSet.isEligible}) needs about 2k insert attempts, so lookups get proportionally
-	 * more expensive - see {@link #LOOKUP_CONVERGENCE_FACTOR}. The candidate queue would grow as 3k and
+	 * exist to contain it. Memory grows as k per bucket. Lookups cost more, though no longer in
+	 * proportion: filling the closest set takes k responses, but the stability margin on top of it is
+	 * capped at {@link #LOOKUP_STABILITY_ATTEMPTS} rather than being k as well - which is what it was
+	 * until that cap was introduced, and it doubled the cost of every lookup at k=16. The candidate
+	 * queue would grow as 3k and
 	 * is re-sorted per insertion, hence {@link #MAX_LOOKUP_CANDIDATES}. Response size would grow as k
 	 * and overrun the MTU, hence {@link #MAX_NODES_PER_RESPONSE}. A super node raising k gets the
 	 * routing robustness it wants without those consequences only because those caps are in place.
@@ -158,33 +160,59 @@ public final class KadConstants {
 	// incompatible with any other. What they protect is this node's own CPU, memory and outbound
 	// bandwidth, and they act as a backstop for the case where the real termination rule cannot fire.
 	//
-	// The real termination rule is convergence, in LookupTask#isDone(): the lookup stops when the
-	// closest set is "eligible" (ClosestSet#isEligible) and no unqueried candidate is closer than its
-	// tail. Everything below exists for the paths where that never happens - an unresponsive region
-	// of the network, packet loss, or a peer feeding an endless stream of plausible-looking nodes.
+	// The real termination rule is convergence, in LookupTask#isDone(): the lookup stops when no
+	// unqueried candidate is closer than the closest set's tail - nothing left to ask could enter the
+	// set - and the set has additionally held still for LOOKUP_STABILITY_ATTEMPTS more responses, which
+	// is the allowance for a farther node knowing a closer one. Everything below exists for the paths
+	// where that never happens - an unresponsive region of the network, packet loss, or a peer feeding
+	// an endless stream of plausible-looking nodes.
 	// ---------------------------------------------------------------------------------------------
 
 	/**
-	 * Multiplier on k giving the number of insert attempts a lookup needs before it can possibly
-	 * converge, used to size {@code LookupTask.maxIterations}.
+	 * How many consecutive non-improving responses a lookup collects before it may call its closest set
+	 * stable - the exploration margin in
+	 * {@link io.bosonnetwork.kademlia.tasks.ClosestSet#isEligible()}.
 	 * <p>
-	 * <b>Why 2.</b> {@link io.bosonnetwork.kademlia.tasks.ClosestSet#isEligible()} is
-	 * {@code reachedCapacity() && insertAttemptsSinceTailModification > capacity}, and the capacity is
-	 * k. So a lookup needs about k insert attempts to fill the closest set, then a further k+1 attempts
-	 * that fail to improve the tail before it may declare convergence - roughly {@code 2 * k} attempts
-	 * in total. Insert attempts track responses about one for one, and an iteration is driven by a
-	 * response, so {@code 2 * k} is the floor below which the iteration cap would cut the lookup off
-	 * before the convergence rule could ever fire.
+	 * <b>What it buys.</b> Not termination - that is decided by {@code LookupTask#isDone()}, which
+	 * requires in addition that no unqueried candidate is closer than the set's tail, at which point
+	 * nothing left to ask can enter the set. This is the allowance spent <em>past</em> that point,
+	 * because a node farther from the target may still know a closer one that no response has mentioned
+	 * yet. Without it a lookup stops at the first plateau; with it, a plateau must hold for this many
+	 * consecutive probes before the lookup believes it.
 	 * </p>
 	 * <p>
-	 * <b>Trade-off.</b> This term is not slack - it is the minimum. Setting the iteration cap below it
-	 * does not merely make lookups cheaper, it makes every lookup terminate by exhaustion instead of by
-	 * convergence, and (see {@code LookupTask#isDone()}) the caller cannot tell the difference: both
-	 * report COMPLETED. A store built on a truncated lookup silently lands on fewer nodes than
-	 * intended. This is why the cap is derived rather than configured.
+	 * <b>Why it is capped rather than being k.</b> The rule used to read
+	 * {@code insertAttemptsSinceTailModification > capacity}, where the capacity is k, so raising k from
+	 * 8 to 16 silently doubled the margin - 17 non-improving responses instead of 9, on every lookup.
+	 * That was inherited from mldht, where the same expression sits at that project's own k of 8; it was
+	 * never a decision that the margin should scale. Escaping a false plateau is a property of the
+	 * graph, not of how many contacts we choose to keep, and if anything a larger k makes plateaus
+	 * <em>less</em> likely, since each response carries up to {@link #MAX_NODES_PER_RESPONSE} nodes.
+	 * </p>
+	 * <p>
+	 * <b>Why 8.</b> It restores mldht's effective margin, so a node running k=8 behaves exactly as
+	 * before and only larger k changes. The saving is real: at k=16 a converging lookup needs about 25
+	 * responses instead of 33.
+	 * </p>
+	 * <p>
+	 * <b>Why it is applied as {@code min(k, 8)} rather than flat, given the argument above.</b> Taken
+	 * literally, "the margin is a property of the graph" would also say it should not <em>shrink</em>
+	 * below 8 for a node configured under that - k may go as low as
+	 * {@code NodeConfiguration.KademliaOptions.MIN_K}. It is capped by k anyway, for reasons that are
+	 * about the small-k case specifically rather than about plateaus. A node configured with a tiny k
+	 * is buying cheapness, and holding it to a margin twice its whole closest set spends its budget
+	 * against that intent. It is also not the safety net - {@code LookupTask.isDone()} still requires
+	 * that no unqueried candidate is closer than the set's tail, which is the sound termination rule on
+	 * its own - and alpha puts a hard floor underneath it regardless, since a task cannot be done while
+	 * any call is in flight, so no lookup converges on fewer than one full round of settled responses.
+	 * The practical effect of the cap's lower half is nil: it leaves every k below 8 behaving exactly as
+	 * it did before this constant existed.
+	 * </p>
+	 * <p>
+	 * Implementation policy, invisible to peers: it changes only how long this node keeps asking.
 	 * </p>
 	 */
-	public static final int LOOKUP_CONVERGENCE_FACTOR = 2;
+	public static final int LOOKUP_STABILITY_ATTEMPTS = 8;
 
 	/**
 	 * Number of lookup rounds' worth of extra iterations allowed on top of the convergence floor, in
@@ -194,14 +222,23 @@ public final class KadConstants {
 	 * closest set starts filling, and iterations consumed without progress. Kademlia converges in
 	 * O(log_k N) rounds rather than O(log2 N), because every response returns up to k nodes - for a
 	 * 10^9-node network at k=16 that is about 7 rounds, or ~21 RPCs at alpha 3. Separately, an
-	 * unanswered RPC currently consumes iterations without inserting anything (a call transitions
-	 * STALLED and then TIMEOUT, and both drive an iteration), so a lossy path burns budget.
+	 * iteration is not an RPC: a call that answers slowly costs two (STALLED, then RESPONDED) and one
+	 * that is lost costs two plus the retry it re-queues, so a slow or lossy path burns budget at up to
+	 * twice the rate a healthy one does. That factor, not the depth ramp, is what sizes this term in
+	 * practice.
 	 * </p>
 	 * <p>
 	 * <b>Why 8.</b> {@code alpha * 8} = 24 at the default alpha, which covers the ~7-round depth ramp
 	 * for a network far larger than this one is likely to get, with room for a handful of dead peers.
 	 * Erring high is cheap here: the budget is a ceiling, and a healthy lookup converges long before
-	 * reaching it. Erring low is not cheap - see LOOKUP_CONVERGENCE_FACTOR.
+	 * reaching it. Erring low is not cheap - a lookup truncated by the budget still reports COMPLETED,
+	 * so a store built on it silently lands on fewer nodes than intended.
+	 * </p>
+	 * <p>
+	 * <b>Why it does not scale with k.</b> It used to be wrapped in {@code max(k, ...)}, which grew the
+	 * slack as k grew - backwards, since convergence is O(log_k N) and a larger k therefore needs
+	 * <em>fewer</em> rounds, not more. The wrapper bound only from k=25 up, so its only effect was to
+	 * inflate super-node budgets.
 	 * </p>
 	 */
 	public static final int LOOKUP_DEPTH_ALLOWANCE = 8;
@@ -750,9 +787,10 @@ public final class KadConstants {
 	 * </p>
 	 * <p>
 	 * <b>Behavior as k grows.</b> This budget counts lookups, and each lookup gets more expensive with
-	 * k: convergence needs roughly {@link #LOOKUP_CONVERGENCE_FACTOR} * k responses. So the real cost
-	 * of a full budget scales with k even though the number does not, and the cap matters more on a
-	 * super node, not less. A larger k is a reason to lower this, never to raise it.
+	 * k: convergence needs about {@code k + min(k, }{@link #LOOKUP_STABILITY_ATTEMPTS}{@code ) + 1}
+	 * responses. So the real cost of a full budget scales with k even though the number does not, and
+	 * the cap matters more on a super node, not less. A larger k is a reason to lower this, never to
+	 * raise it.
 	 * </p>
 	 * <p>
 	 * Implementation limit, not protocol: purely this node's maintenance budget.

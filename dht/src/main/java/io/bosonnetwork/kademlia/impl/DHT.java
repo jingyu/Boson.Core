@@ -819,8 +819,9 @@ public class DHT extends BosonVerticle {
 	 * </p>
 	 * <p>
 	 * <b>The cost being bounded.</b> Each of these is a full iterative lookup, not a ping: convergence
-	 * takes on the order of {@link KadConstants#LOOKUP_CONVERGENCE_FACTOR} * k responses, so roughly 32
-	 * at the default k. Twenty eligible buckets meant ~640 RPC round trips per cycle, up to
+	 * takes {@code k} responses to fill the closest set plus
+	 * {@link KadConstants#LOOKUP_STABILITY_ATTEMPTS} + 1 more to call it stable, so roughly 25 at the
+	 * default k. Twenty eligible buckets meant ~500 RPC round trips per cycle, up to
 	 * {@code concurrentTasks} of them running at once - one to two orders of magnitude more than the
 	 * {@code PingRefreshTask} that routing-table maintenance would spend on the same bucket.
 	 * </p>
