@@ -857,4 +857,48 @@ public class RPCServerTests {
 		assertFalse(RpcServer.unanswered(NOW, A_MOMENT_AGO, A_MOMENT_AGO + 1),
 				"an outstanding request is not yet an unanswered one");
 	}
+
+	/**
+	 * A call outstanding when the socket closes must be driven to a terminal state, not dropped.
+	 * <p>
+	 * Its timeout timer belongs to the verticle context, which Vert.x tears down on undeploy, so nothing
+	 * else will ever finish it. Callers wait on these calls through a listener - {@code DHT.doBootstrap}
+	 * waits on one per configured bootstrap server - and a future that never settles there leaves the
+	 * bootstrap's in-progress flag set, which blocks every later bootstrap for the life of the node.
+	 * </p>
+	 */
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	void testStopCancelsPendingCalls(Vertx vertx, VertxTestContext context) {
+		Context vertxContext = vertx.getOrCreateContext();
+		KadContext kadContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
+				.setDeveloperMode(false);
+		RpcServer server = new RpcServer(kadContext, "127.0.0.1", 39201,
+				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+
+		// A real key, not Id.random(): the request is encrypted to the target id, so random bytes are
+		// only sometimes a decodable public key and the test would fail at random.
+		// Nothing is listening there, so the call is sent and then simply sits in pendingCalls.
+		Id target = new CryptoIdentity().getId();
+		RpcCall call = new RpcCall(NodeInfo.of(target, "127.0.0.1", 39299), Message.pingRequest());
+		Promise<RpcCall.State> ended = Promise.promise();
+		call.addListener(new RpcCallListener() {
+			@Override
+			public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+				if (state.isFinal())
+					ended.tryComplete(state);
+			}
+		});
+
+		vertxContext.runOnContext(unused -> server.start()
+				.compose(v -> server.sendCall(call))
+				.compose(v -> server.stop())
+				.onFailure(context::failNow));
+
+		ended.future().onComplete(context.succeeding(state -> {
+			context.verify(() -> assertEquals(RpcCall.State.CANCELED, state,
+					"stopping the server must cancel what it had outstanding"));
+			context.completeNow();
+		}));
+	}
 }

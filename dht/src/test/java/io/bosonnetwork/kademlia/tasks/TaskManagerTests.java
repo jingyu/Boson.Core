@@ -273,4 +273,44 @@ class TaskManagerTests {
 			context.completeNow();
 		}));
 	}
+
+	/**
+	 * A task the manager refuses must still reach a terminal state.
+	 * <p>
+	 * Callers wait on a task through its listener, and the state they guard while waiting tends to be a
+	 * latch - an "already bootstrapping" flag, a per-bucket "maintenance in flight" entry. A task that
+	 * leaves {@code add} without ever ending leaves that latch set for good, so one rejected task is
+	 * really a mechanism disabled permanently. Rejection here means the task was not INITIAL, which is
+	 * an internal error; the point is that the error path is not also a leak.
+	 * </p>
+	 */
+	@Test
+	void testRejectedTaskStillEnds(VertxTestContext context) {
+		CountDownLatch endedSignal = new CountDownLatch(1);
+
+		TestTask task = new TestTask(kadContext)
+				.setName("AlreadyQueued")
+				.addListener(new TestTaskListener() {
+					public void ended(TestTask task) {
+						super.ended(task);
+						endedSignal.countDown();
+					}
+				});
+
+		kadContext.runOnContext(() -> {
+			// The first add leaves the task QUEUED, so the second finds it out of INITIAL and rejects it.
+			manager.add(task);
+			manager.add(task);
+		});
+
+		try {
+			if (!endedSignal.await(5, TimeUnit.SECONDS))
+				context.failNow("a rejected task never ended - its listeners would wait forever");
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		context.verify(() -> assertTrue(task.isEnd(), "a rejected task must be in a terminal state"));
+		context.completeNow();
+	}
 }
