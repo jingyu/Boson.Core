@@ -462,6 +462,59 @@ public final class KadConstants {
 	public static final int BOOTSTRAP_INTERVAL_JITTER_PERCENT = 10;
 
 	/**
+	 * The most bootstrap nodes one periodic attempt will contact.
+	 * <p>
+	 * <b>A ceiling, not a quota.</b> At 8 this leaves any ordinary configuration alone - an operator
+	 * listing a handful of bootstrap nodes has all of them contacted, exactly as before this existed.
+	 * What it bounds is the pathological list, where a node's load on shared infrastructure would
+	 * otherwise scale with however many entries someone pasted in. That is backwards: listing more
+	 * bootstrap nodes for redundancy should buy resilience, not cost traffic on every attempt, forever.
+	 * </p>
+	 * <p>
+	 * <b>Why it can afford to be this generous.</b> Above about three answers the extra nodes are not
+	 * even kept: each response carries up to {@link #MAX_NODES_PER_RESPONSE} nodes and a lookup's
+	 * candidate queue holds {@code min(3k, }{@link #MAX_LOOKUP_CANDIDATES}{@code )}, so the surplus is
+	 * pruned on insertion. What the extra contacts buy is not seeds but the probability that at least
+	 * one node answers at all - and the only nodes that reach this path are deaf or thin-tabled, which
+	 * is precisely when that probability is what matters and when frugality is the wrong instinct. The
+	 * cost of erring high is a few UDP packets per {@link #BOOTSTRAP_INTERVAL}, paid by a node that is
+	 * already in trouble.
+	 * </p>
+	 * <p>
+	 * <b>Periodic attempts only.</b> The startup bootstrap contacts every configured node - first
+	 * contact is where latency matters most and there is no repetition to economise on - and an
+	 * application-supplied bootstrap contacts exactly what it was given. When the ceiling does bind,
+	 * the draw is fresh each attempt rather than a set chosen once, so no node is permanently unlucky
+	 * and a recovered one is picked up without any health tracking.
+	 * </p>
+	 */
+	public static final int BOOTSTRAP_NODES_PER_ATTEMPT = 8;
+
+	/**
+	 * How long a bootstrap keeps collecting responses after the first one arrives.
+	 * <p>
+	 * <b>Not a timeout.</b> The calls it stops waiting for are still outstanding and are still answered
+	 * normally - a late responder still enters the routing table like any other peer that answers us.
+	 * This only bounds how long the bootstrap holds off on the work that follows.
+	 * </p>
+	 * <p>
+	 * <b>What it replaced.</b> Waiting for every bootstrap node to settle means waiting at the pace of
+	 * the worst one, and a dead one only settles when its RPC times out. That put a ten-second delay in
+	 * front of the startup bootstrap - which gates the node reporting itself connected - whenever one
+	 * configured bootstrap node was down, however fast the others answered.
+	 * </p>
+	 * <p>
+	 * <b>Why one second.</b> Sized against the spread between healthy bootstrap nodes rather than
+	 * against the RPC timeout: hosts that are up answer within tens of milliseconds of each other even
+	 * across continents, so a second captures the stragglers and keeps the merged seed set, while
+	 * bounding what a dead one costs to the first response time plus this. It is also what makes it
+	 * safe to start the clock on a bootstrap node that answers from an empty table - that answer seeds
+	 * nothing, but a slower one with nodes still lands well inside the window.
+	 * </p>
+	 */
+	public static final int BOOTSTRAP_NODE_GRACE = 1000;                          // 1 second
+
+	/**
 	 * How often a node with a healthy routing table still performs a lookup for its own id.
 	 * <p>
 	 * <b>Why do this at all when the table is fine.</b> The point is not to improve this node's table

@@ -61,6 +61,7 @@ import io.bosonnetwork.kademlia.tasks.TaskManager;
 import io.bosonnetwork.kademlia.tasks.ValueAnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ValueLookupTask;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
 
 public class DHT extends BosonVerticle {
@@ -110,7 +111,7 @@ public class DHT extends BosonVerticle {
 	private long lastBootstrap;
 
 	// Whether the "nothing to bootstrap from" warning has already been logged. That condition is a
-	// static misconfiguration rather than an event - no bootstrap servers configured and an empty
+	// static misconfiguration rather than an event - no bootstrap nodes configured and an empty
 	// routing table - so it would otherwise be reported on every update tick for as long as it lasts.
 	private boolean warnedNoBootstrapSource;
 
@@ -198,9 +199,9 @@ public class DHT extends BosonVerticle {
 		this.concurrentTasks = concurrentTasks;
 
 		// Both tiers scale with k up to an absolute ceiling. Capping only one would break the invariant
-		// that the server-fallback tier sits strictly below the bootstrap tier: at large k they would
+		// that the node-fallback tier sits strictly below the bootstrap tier: at large k they would
 		// collide and then invert, collapsing the self-bootstrap band and sending routine maintenance
-		// to the shared bootstrap servers. See KadConstants for the arithmetic.
+		// to the shared bootstrap nodes. See KadConstants for the arithmetic.
 		this.bootstrapThreshold = Math.min(KadConstants.BOOTSTRAP_THRESHOLD_BUCKETS * k,
 				KadConstants.BOOTSTRAP_THRESHOLD_ENTRIES);
 		this.useBootstrapNodesThreshold = Math.min(KadConstants.USE_BOOTSTRAP_NODES_THRESHOLD_BUCKETS * k,
@@ -477,7 +478,9 @@ public class DHT extends BosonVerticle {
 
 		switch (selectBootstrapTier(routingTable.getNumberOfEntries(), System.currentTimeMillis(),
 				rpcServer.isReachable())) {
-			case SERVERS -> doBootstrap(bootstrapNodes);
+			// Capped here and nowhere else: this is the attempt that repeats, every BOOTSTRAP_INTERVAL
+			// for as long as the node stays thin or deaf. See selectBootstrapNodes.
+			case BOOTSTRAP_NODES -> doBootstrap(selectBootstrapNodes(bootstrapNodes));
 			case SELF -> doBootstrap(Collections.emptyList());
 			case NONE -> { }
 		}
@@ -491,8 +494,8 @@ public class DHT extends BosonVerticle {
 		NONE,
 		/** Self-bootstrap: a lookup seeded only from contacts we already hold. */
 		SELF,
-		/** Seed the lookup with the configured bootstrap servers - shared infrastructure. */
-		SERVERS
+		/** Seed the lookup with the configured bootstrap nodes - shared infrastructure. */
+		BOOTSTRAP_NODES
 	}
 
 	/**
@@ -501,7 +504,7 @@ public class DHT extends BosonVerticle {
 	 * Two independent questions, in order. First, is a bootstrap due at all: the routing table is below
 	 * the point where it can be relied on to route, or the periodic self-lookup that keeps us present in
 	 * other nodes' tables has come round. Second, which tier - below one bucket's worth of contacts we
-	 * may be unable to reach the network unaided and fall back to the configured bootstrap servers;
+	 * may be unable to reach the network unaided and fall back to the configured bootstrap nodes;
 	 * above it we self-bootstrap from what we already know and leave that shared resource alone.
 	 * </p>
 	 * <p>
@@ -515,13 +518,13 @@ public class DHT extends BosonVerticle {
 	 * </p>
 	 * <p>
 	 * A node deaf with a full table would therefore never fall below any threshold, never select the
-	 * server tier, and never contact a bootstrap server again - while {@code randomPing}, the probe that
-	 * is meant to notice the network returning, pinged contacts that no longer answer. That is the
-	 * ordinary case of a laptop suspending on one network and waking on another, and it stranded the
-	 * node permanently. Deafness is itself the evidence that the cached contacts are not working, which
-	 * is precisely when the configured servers are the right thing to ask, so it makes a bootstrap due
-	 * now rather than on the self-lookup clock. The cost is bounded by
-	 * {@link KadConstants#BOOTSTRAP_INTERVAL} and comes to one packet per configured server.
+	 * bootstrap-nodes tier, and never contact a bootstrap node again - while {@code randomPing}, the
+	 * probe that is meant to notice the network returning, pinged contacts that no longer answer. That
+	 * is the ordinary case of a laptop suspending on one network and waking on another, and it stranded
+	 * the node permanently. Deafness is itself the evidence that the cached contacts are not working,
+	 * which is precisely when the configured bootstrap nodes are the right thing to ask, so it makes a
+	 * bootstrap due now rather than on the self-lookup clock. The cost is bounded by
+	 * {@link KadConstants#BOOTSTRAP_INTERVAL} and comes to one packet per configured bootstrap node.
 	 * </p>
 	 * <p>
 	 * Side-effect free and a pure function of its arguments, so the decision can be tested without a
@@ -535,12 +538,12 @@ public class DHT extends BosonVerticle {
 	 */
 	BootstrapTier selectBootstrapTier(int entries, long now, boolean reachable) {
 		if (!reachable)
-			return BootstrapTier.SERVERS;
+			return BootstrapTier.BOOTSTRAP_NODES;
 
 		if (entries >= bootstrapThreshold && now - lastBootstrap <= KadConstants.SELF_LOOKUP_INTERVAL)
 			return BootstrapTier.NONE;
 
-		return entries < useBootstrapNodesThreshold ? BootstrapTier.SERVERS : BootstrapTier.SELF;
+		return entries < useBootstrapNodesThreshold ? BootstrapTier.BOOTSTRAP_NODES : BootstrapTier.SELF;
 	}
 
 	private void routingTableMaintenance() {
@@ -568,7 +571,7 @@ public class DHT extends BosonVerticle {
 					.setName("Periodic: random node Lookup");
 			taskManager.add(task);
 		} else {
-			log.info("Periodic: not performing random lookup, server is unreachable.");
+			log.info("Periodic: not performing random lookup, node is unreachable.");
 		}
 	}
 
@@ -582,7 +585,7 @@ public class DHT extends BosonVerticle {
 				rpcServer.sendCall(c);
 			}
 		} else {
-			log.info("Periodic: random ping - skip due to server has pending calls.");
+			log.info("Periodic: random ping - skip due to node has pending calls.");
 		}
 	}
 
@@ -646,7 +649,7 @@ public class DHT extends BosonVerticle {
 	 * <p>
 	 * The interval on its own is a fixed period, so nodes that started together stay in lockstep
 	 * indefinitely - a fleet rolled out at once, or a whole population reconnecting after the same
-	 * outage, hits the shared bootstrap servers in synchronised waves. Redrawing an offset per attempt
+	 * outage, hits the shared bootstrap nodes in synchronised waves. Redrawing an offset per attempt
 	 * lets each node's phase random-walk away from the others'. Centred on the interval rather than
 	 * added to it, so randomising the individual wait does not also slow the long-run cadence.
 	 * </p>
@@ -660,6 +663,125 @@ public class DHT extends BosonVerticle {
 	static long bootstrapInterval() {
 		int jitter = KadConstants.BOOTSTRAP_INTERVAL / 100 * KadConstants.BOOTSTRAP_INTERVAL_JITTER_PERCENT;
 		return KadConstants.BOOTSTRAP_INTERVAL + ThreadLocalRandom.current().nextInt(-jitter, jitter + 1);
+	}
+
+	/**
+	 * Picks the bootstrap nodes to contact on a periodic attempt.
+	 * <p>
+	 * A pure function of the configured list, so it stays testable without a socket - the same shape as
+	 * {@link #selectBootstrapTier} and {@code selectBucketsToFill}.
+	 * </p>
+	 * <p>
+	 * <b>Why only some of them.</b> Contacting every configured bootstrap node on every attempt makes a node's
+	 * load on shared infrastructure scale with how long the operator's list is, which is backwards -
+	 * listing more bootstrap nodes for redundancy should not cost more traffic. It matters at population scale
+	 * rather than per node: the tier that reaches this code only fires for a node that is deaf or whose
+	 * table is thin, and after a network-wide outage that is everybody at once, all retrying against
+	 * the same handful of hosts.
+	 * </p>
+	 * <p>
+	 * <b>What it does not cost.</b> A thin-table node still gets up to
+	 * {@code BOOTSTRAP_NODES_PER_ATTEMPT * MAX_NODES_PER_RESPONSE} seeds from one attempt, more than
+	 * a lookup's candidate queue holds. A deaf node still recovers: while the socket is deaf the choice
+	 * is irrelevant because nothing arrives either way, and once it works again a single answer
+	 * restores reachability. Drawing fresh each attempt rather than keeping a chosen set is what keeps
+	 * a node from being permanently unlucky.
+	 * </p>
+	 * <p>
+	 * Applied to the periodic path only. The startup bootstrap contacts every node, because first
+	 * contact is where latency matters most, and {@link #bootstrap(Collection)} contacts every node
+	 * it was handed, because the application named those explicitly.
+	 * </p>
+	 *
+	 * @param bootstrapNodes the configured bootstrap nodes.
+	 * @return the nodes to contact on this attempt.
+	 */
+	static List<NodeInfo> selectBootstrapNodes(Collection<NodeInfo> bootstrapNodes) {
+		if (bootstrapNodes.size() <= KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT)
+			return List.copyOf(bootstrapNodes);
+
+		List<NodeInfo> shuffled = new ArrayList<>(bootstrapNodes);
+		Collections.shuffle(shuffled, ThreadLocalRandom.current());
+		return List.copyOf(shuffled.subList(0, KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT));
+	}
+
+	/**
+	 * Asks the given bootstrap nodes for a random target, and collects the nodes they return.
+	 * <p>
+	 * <b>Resolves on the first useful answer, not the last.</b> Waiting for every call to settle means
+	 * waiting at the pace of the worst node, and a dead one only settles at the RPC timeout - ten
+	 * seconds during which the startup bootstrap holds {@link ConnectionStatus#Connected} back even
+	 * though another node answered in milliseconds and the table was usable immediately. So the first
+	 * response arms a short grace timer ({@link KadConstants#BOOTSTRAP_NODE_GRACE}), and whatever has
+	 * arrived when it expires is the result.
+	 * </p>
+	 * <p>
+	 * Any response arms it, including one from a node whose own table is empty. That node gave us
+	 * nothing to seed with, but it did prove the path works, and the grace is wide enough to still catch
+	 * a slower node that does have nodes. Waiting on the empty answer instead would reintroduce the
+	 * very delay this avoids whenever a fresh node shares a list with a dead one.
+	 * </p>
+	 * <p>
+	 * <b>Nothing is abandoned by resolving early.</b> The outstanding calls are still outstanding, and
+	 * a late response still runs through the normal receive path, so its sender still enters the
+	 * routing table. All that is given up is the node list it carried, by which point we already have
+	 * another node's list and a lookup running on it.
+	 * </p>
+	 * <p>
+	 * Confined to this DHT's event loop: call listeners and the timer both fire on this context, so the
+	 * accumulator needs no synchronization. The result is copied out of it because a straggler may
+	 * still write to it afterwards.
+	 * </p>
+	 *
+	 * @param bootstrapNodes the nodes to contact.
+	 * @return the deduplicated nodes they returned; empty if none answered.
+	 */
+	private Future<Collection<NodeInfo>> askBootstrapNodes(Collection<NodeInfo> bootstrapNodes) {
+		// Nothing to wait for. Guarded here rather than only at the call site: the promise below is
+		// completed by call listeners, so with no calls to make there would be nobody to complete it.
+		if (bootstrapNodes.isEmpty())
+			return Future.succeededFuture(Collections.emptyList());
+
+		Promise<Collection<NodeInfo>> promise = Promise.promise();
+		Map<Id, NodeInfo> nodes = new HashMap<>();
+		// Single-threaded by context confinement; the holders exist so the listeners can capture and
+		// mutate them, not for thread safety.
+		Variable<Integer> outstanding = Variable.of(bootstrapNodes.size());
+		Variable<Long> graceTimer = Variable.empty();
+
+		Runnable resolve = () -> {
+			if (promise.tryComplete(List.copyOf(nodes.values())) && graceTimer.isPresent()) {
+				kadContext.cancelTimer(graceTimer.get());
+				graceTimer.clear();
+			}
+		};
+
+		for (NodeInfo bootstrapNode : bootstrapNodes) {
+			Message request = Message.findNodeRequest(Id.random(), network.isIPv4(), network.isIPv6());
+			RpcCall call = new RpcCall(bootstrapNode, request).addListener(new RpcCallListener() {
+				@Override
+				public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+					if (!state.isFinal())
+						return;
+
+					if (state == RpcCall.State.RESPONDED) {
+						for (NodeInfo node : c.getResponse().<FindNodeResponse>getBody().getNodes(network))
+							nodes.put(node.getId(), node);
+
+						if (graceTimer.isEmpty() && !promise.future().isComplete())
+							graceTimer.set(kadContext.setTimer(KadConstants.BOOTSTRAP_NODE_GRACE,
+									unused -> resolve.run()));
+					}
+
+					if (outstanding.updateAndGet(v -> v - 1) == 0)
+						resolve.run();
+				}
+			});
+
+			rpcServer.sendCall(call);
+		}
+
+		return promise.future();
 	}
 
 	private Future<Void> doBootstrap(Collection<NodeInfo> bootstrapNodes) {
@@ -687,54 +809,15 @@ public class DHT extends BosonVerticle {
 		bootstrapping = true;
 		log.info("DHT {}:{} bootstrapping...", network, identity.getId());
 
-		Future<Collection<NodeInfo>> future;
-		if (!bootstrapNodes.isEmpty()) {
-			// do random lookup to make ourselves known to random parts of the keyspace
-			List<Future<List<NodeInfo>>> futures = new ArrayList<>(bootstrapNodes.size());
-			for (NodeInfo node : bootstrapNodes) {
-				Promise<List<NodeInfo>> promise = Promise.promise();
-
-				Message request = Message.findNodeRequest(Id.random(), network.isIPv4(), network.isIPv6());
-				RpcCall call = new RpcCall(node, request).addListener(new RpcCallListener() {
-					@Override
-					public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
-						if (state.isFinal()) {
-							if (state == RpcCall.State.RESPONDED) {
-								Message response = c.getResponse();
-								promise.complete(response.<FindNodeResponse>getBody().getNodes(network));
-							} else {
-								promise.complete(Collections.emptyList());
-							}
-						}
-					}
-				});
-
-				futures.add(promise.future());
-				rpcServer.sendCall(call);
-			}
-
-			future = Future.all(futures).map(cf -> {
-				Map<Id, NodeInfo> nodes = new HashMap<>();
-				for (int i = 0; i < cf.size(); i++) {
-					List<NodeInfo> l = cf.resultAt(i);
-					for (NodeInfo node : l)
-						nodes.put(node.getId(), node);
-				}
-				return nodes.values();
-			});
-		} else {
-			future = Future.succeededFuture(Collections.emptyList());
-		}
-
-		return future.compose(nodes -> {
+		return askBootstrapNodes(bootstrapNodes).compose(nodes -> {
 			// breadth-first lookup: fill more buckets.
 			//
 			// Skipped when the attempt has nothing to work with. An empty table is the obvious case. The
-			// other is being deaf with no answer from any server: the lookup would then run entirely
+			// other is being deaf with no answer from any bootstrap node: the lookup would then run entirely
 			// against contacts that are not answering, and a deaf node retries every BOOTSTRAP_INTERVAL,
 			// so that would be a full iterative lookup's worth of timeouts on repeat. Keeping it out
-			// holds the cost of a deaf retry at what it should be - one packet per configured server. A
-			// server that did answer puts nodes in hand, and then the lookup is exactly what we want.
+			// holds the cost of a deaf retry at what it should be - one packet per configured node. A
+			// bootstrap node that did answer puts nodes in hand, and then the lookup is exactly what we want.
 			boolean nothingToLookupWith = nodes.isEmpty() &&
 					(routingTable.getNumberOfEntries() == 0 || !rpcServer.isReachable());
 			return nothingToLookupWith ? Future.succeededFuture() : fillHomeBucket(nodes);
@@ -889,7 +972,7 @@ public class DHT extends BosonVerticle {
 	List<KBucket> selectBucketsToFill(boolean initial) {
 		// Below this many contacts the node cannot reach the network unaided, and a random-id lookup
 		// into a sparse bucket has nothing to route through - the budget belongs to fillHomeBucket,
-		// the one lookup seeded with the configured bootstrap servers, which is what can reconnect it.
+		// the one lookup seeded with the configured bootstrap nodes, which is what can reconnect it.
 		//
 		// Waived for the first bootstrap after startup. The gate's premise is that this is routine
 		// maintenance on a node already serving traffic; on a cold start neither half holds, the table

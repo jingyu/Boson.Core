@@ -25,11 +25,16 @@ package io.bosonnetwork.kademlia.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.bosonnetwork.Id;
+import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.kademlia.impl.DHT.BootstrapTier;
 import io.bosonnetwork.kademlia.security.Blacklist;
@@ -100,9 +105,9 @@ public class DHTBootstrapTierTests {
 
 	@Test
 	void testTableBelowTheFallbackThresholdUsesTheBootstrapServers() {
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD - 1, SELF_LOOKUP_NOT_DUE, REACHABLE));
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(0, SELF_LOOKUP_NOT_DUE, REACHABLE));
 	}
 
@@ -121,17 +126,17 @@ public class DHTBootstrapTierTests {
 	@Test
 	void testDeafNodeAlwaysAsksTheBootstrapServers() {
 		// A healthy table with nothing otherwise due - the case that used to strand the node for good.
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_NOT_DUE, DEAF));
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD * 4, SELF_LOOKUP_NOT_DUE, DEAF));
 
 		// And every thinner table, with or without the self-lookup due.
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD, SELF_LOOKUP_DUE, DEAF));
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD - 1, SELF_LOOKUP_NOT_DUE, DEAF));
-		assertEquals(BootstrapTier.SERVERS,
+		assertEquals(BootstrapTier.BOOTSTRAP_NODES,
 				dht.selectBootstrapTier(0, SELF_LOOKUP_NOT_DUE, DEAF));
 	}
 
@@ -147,6 +152,57 @@ public class DHTBootstrapTierTests {
 				dht.selectBootstrapTier(BOOTSTRAP_THRESHOLD, SELF_LOOKUP_DUE, REACHABLE));
 		assertEquals(BootstrapTier.SELF,
 				dht.selectBootstrapTier(USE_BOOTSTRAP_NODES_THRESHOLD, SELF_LOOKUP_NOT_DUE, REACHABLE));
+	}
+
+	/**
+	 * The per-attempt subset of the configured bootstrap servers, so a node's load on shared
+	 * infrastructure stops scaling with how many servers the operator listed. A pure function of the
+	 * list, so no socket is involved.
+	 */
+	@Test
+	void testShortServerListIsUsedWhole() {
+		for (int size = 1; size <= KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT; size++) {
+			List<NodeInfo> servers = servers(size);
+			assertEquals(servers, DHT.selectBootstrapNodes(servers),
+					"a list no longer than the budget must be used as-is, in order");
+		}
+	}
+
+	@Test
+	void testLongServerListIsCutToTheBudget() {
+		List<NodeInfo> servers = servers(KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT * 4);
+
+		for (int attempt = 0; attempt < 100; attempt++) {
+			List<NodeInfo> selected = DHT.selectBootstrapNodes(servers);
+
+			assertEquals(KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT, selected.size());
+			assertEquals(selected.size(), Set.copyOf(selected).size(), "a server must not be picked twice");
+			assertTrue(servers.containsAll(selected), "every pick must come from the configured list");
+		}
+	}
+
+	/**
+	 * The draw is fresh per attempt rather than a subset chosen once, which is what keeps a server from
+	 * being permanently unlucky - and is why this needs no per-server health tracking to recover from a
+	 * server that was down when the node started.
+	 */
+	@Test
+	void testEveryServerIsEventuallySelected() {
+		List<NodeInfo> servers = servers(KadConstants.BOOTSTRAP_NODES_PER_ATTEMPT * 4);
+		Set<NodeInfo> seen = new HashSet<>();
+
+		for (int attempt = 0; attempt < 200 && seen.size() < servers.size(); attempt++)
+			seen.addAll(DHT.selectBootstrapNodes(servers));
+
+		assertEquals(Set.copyOf(servers), seen, "no configured server may be starved by the selection");
+	}
+
+	private static List<NodeInfo> servers(int count) {
+		List<NodeInfo> servers = new ArrayList<>(count);
+		for (int i = 0; i < count; i++)
+			servers.add(NodeInfo.of(Id.random(), "192.168.1." + (i + 1), 39001 + i));
+
+		return List.copyOf(servers);
 	}
 
 	/**
