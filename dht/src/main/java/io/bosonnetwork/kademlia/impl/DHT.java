@@ -130,7 +130,8 @@ public class DHT extends BosonVerticle {
 	private final Path persistFile;
 
 	// True when this run began by loading a persisted routing table. Set in start(), not here, so a
-	// redeployed instance re-decides - the mistake N-17 was about.
+	// redeployed instance re-decides: state whose lifetime is a deployment must not be initialized with
+	// the lifetime of the object.
 	private boolean loadedRoutingTable;
 
 	private final List<Long> timers;

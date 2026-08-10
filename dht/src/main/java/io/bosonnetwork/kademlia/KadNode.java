@@ -7,14 +7,17 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -90,6 +93,25 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private final List<Long> timers;
 
+	// The re-announce cycle: work selected but not yet started, and how much of it is running. See
+	// persistentAnnounce. Confined to the node's context, like everything else the timers touch.
+	private final Deque<Supplier<Future<?>>> announceTodo;
+	private int announceInFlight;
+	private boolean announceDispatching;
+	// Bumped by start(), so an item still in flight from a previous deployment cannot decrement the
+	// counter belonging to the new one. Such a decrement has no matching increment, so it would not
+	// self-correct: the baseline stays low for the life of the node and the budget silently runs wide.
+	//
+	// No deployment reaches that today - start() refuses a second call, because BosonVerticle.prepare
+	// assigns this.vertx and nothing ever clears it, and start() is the only caller that deploys a
+	// KadNode. This is kept so the invariant survives that guard changing rather than because the case
+	// is live. DHT has the same shape and does allow a direct redeploy, which is why it resets its own
+	// per-deployment state in deploy().
+	private int announceGeneration;
+	// How many items the re-announce runs at once. Derived from concurrentTasks in start(), where
+	// KademliaOptions is unwrapped, so nothing below depends on the configuration type.
+	private int announceConcurrency;
+
 	private volatile boolean running;
 	private ListenerProxy connectionStatusListener;
 
@@ -164,6 +186,7 @@ public class KadNode extends BosonVerticle implements Node {
 		this.running = false;
 
 		this.timers = new ArrayList<>(4);
+		this.announceTodo = new ArrayDeque<>();
 	}
 
 	// Only what NodeConfiguration itself cannot guarantee. The listen endpoint, the key pair, the
@@ -394,6 +417,19 @@ public class KadNode extends BosonVerticle implements Node {
 		final int k = kademlia.k();
 		final int replacements = kademlia.replacements();
 		final int concurrentTasks = kademlia.concurrentTasks();
+		// A quarter of the slots, and not more: an item in flight is a lookup task plus the announce
+		// task nested behind it, on each configured stack, so a quarter of the items is about half the
+		// runners once dual-stack is counted. See persistentAnnounce for why the bound is on items in
+		// flight rather than on items per cycle.
+		this.announceConcurrency = Math.max(1, concurrentTasks / 4);
+
+		// Re-announce state is reset here rather than in the constructor, so a redeployed instance starts
+		// a clean cycle instead of inheriting the counters of the one it replaced. State whose lifetime
+		// is a deployment belongs to the deployment, not to the object.
+		this.announceTodo.clear();
+		this.announceInFlight = 0;
+		this.announceDispatching = false;
+		this.announceGeneration++;
 
 		return storage.initialize(vertx, MAX_VALUE_AGE, MAX_PEER_AGE).compose(unused -> {
 			ArrayList<Future<Void>> futures = new ArrayList<>(2);
@@ -482,6 +518,13 @@ public class KadNode extends BosonVerticle implements Node {
 				timers.forEach(vertx::cancelTimer);
 				timers.clear();
 			}
+
+			// Re-announce work selected but not yet started. Dropped rather than drained: the DHTs are
+			// about to go, and the announced times were never moved, so a node that comes back re-selects
+			// exactly these items. Leaving it would let a redeployed instance inherit a cycle aimed at
+			// DHTs that no longer exist, and would keep persistentAnnounce skipping forever on the
+			// still-draining check.
+			announceTodo.clear();
 		}).compose(v -> {
 			List<Future<Void>> stopFutures = new ArrayList<>(2);
 
@@ -907,53 +950,166 @@ public class KadNode extends BosonVerticle implements Node {
 		return promise.future();
 	}
 
+	/**
+	 * Re-publishes the values and peers this node is persistently announcing.
+	 * <p>
+	 * The heaviest periodic work the node does: one full iterative store-or-announce lookup per item
+	 * due, so its cost scales with what the application has asked the node to keep published rather
+	 * than with anything the DHT controls. It used to start all of them at once. That never produced
+	 * hundreds of concurrent lookups - {@code TaskManager} caps what runs at {@code concurrentTasks}
+	 * and queues the rest - but it did produce hundreds of queued tasks, four per item once a lookup,
+	 * its nested announce and both stacks are counted. That queue is FIFO and undifferentiated, and
+	 * every user-facing call site adds without {@code prior}, so a {@code findValue} arriving mid-cycle
+	 * waited behind the whole backlog. The bound here is therefore on queue depth, which is what hurts;
+	 * bandwidth was already bounded.
+	 * </p>
+	 * <p>
+	 * Work is dispatched {@link #announceConcurrency} items at a time and refilled as each finishes, so
+	 * the queue never holds more than that and user work is never more than a few tasks from a runner.
+	 * The ordering that makes a bounded cycle safe lives in the selection queries, which return the
+	 * least recently announced first - see
+	 * {@code SqlDialect.selectValuesByPersistentAndAnnouncedBefore}. Serving a fixed number of the
+	 * <i>most</i> recently announced, which is what those queries used to return, would have starved
+	 * the items nearest expiry indefinitely.
+	 * </p>
+	 * <p>
+	 * <b>The deadline this has and bucket maintenance does not.</b> A deferred bucket refresh costs
+	 * nothing; a deferred announce can cost the item. The selection window opens only
+	 * {@code 2 * RE_ANNOUNCE_INTERVAL} before the remote holders expire it, so the eligible set has to
+	 * clear in about two cycles or data is dropped by the network. Two things keep that comfortable:
+	 * items become eligible spread across their own announce times rather than together, and a cycle
+	 * of ten minutes at this concurrency covers far more items than a node is expected to hold. A node
+	 * that cannot keep up was already not keeping up - the old code queued the same work behind the
+	 * same 32 runners - but it now degrades by falling behind quietly rather than by blocking
+	 * everything else the node does.
+	 * </p>
+	 * <p>
+	 * Skipped entirely while unreachable, and nothing is lost by skipping: the announced time is
+	 * updated on success only, so the next cycle re-selects the same items.
+	 * </p>
+	 */
 	private void persistentAnnounce() {
-		// One full iterative lookup per persisted value and per peer, so this is the heaviest periodic
-		// work the node does. While no stack can carry traffic every one of those lookups can only time
-		// out, and nothing is lost by waiting: the announced time is updated on success only, so the
-		// next cycle picks the same items up again.
 		if (!isReachable()) {
 			log.info("Skipping the re-announce, no reachable network.");
 			return;
 		}
 
+		// A cycle still draining is not a reason to select again. The outstanding work is the same
+		// items in the same order - the announced times have not moved, because they move on success
+		// only - so a second selection would queue duplicates of what is already running and defeat the
+		// bound. Falling behind is visible here, and is the one thing worth warning about.
+		if (!announceTodo.isEmpty() || announceInFlight > 0) {
+			log.warn("Skipping the re-announce, the previous cycle is still running: {} in flight, {} pending.",
+					announceInFlight, announceTodo.size());
+			return;
+		}
+
 		log.info("Re-announce the persistent values and peers...");
 
-		long before = System.currentTimeMillis() - MAX_VALUE_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
-		// Best-effort, fire-and-forget re-announce: each item's chain logs its own outcome; the periodic
-		// timer reruns regardless, so we don't aggregate/await the per-item futures.
-		storage.getValues(true, before).onSuccess(values -> {
-			for (Value value : values) {
-				log.debug("Re-announce the value: {}", value.getId());
-				doStoreValue(value, value.getSequenceNumber()).compose(v ->
-						storage.updateValueAnnouncedTime(value.getId())
-				).andThen(ar -> {
-					if (ar.succeeded())
-						log.debug("Re-announce the value {} success", value.getId());
-					else
-						log.error("Re-announce the value {} failed", value.getId(), ar.cause());
-				});
-			}
-		}).onFailure(e ->
-				log.error("Failed to re-announce the values", e)
-		);
+		long valuesBefore = System.currentTimeMillis() - MAX_VALUE_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
+		long peersBefore = System.currentTimeMillis() - MAX_PEER_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
 
-		before = System.currentTimeMillis() - MAX_PEER_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
-		storage.getPeers(true, before).onSuccess(peers -> {
-			for (PeerInfo peer : peers) {
-				log.debug("Re-announce the peer: {}", peer.getId());
-				doAnnouncePeer(peer, -1).compose(v ->
-						storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint())
-				).andThen(ar -> {
-					if (ar.succeeded())
-						log.debug("Re-announce the peer {} success", peer.getId());
-					else
-						log.error("Re-announce the peer {} failed", peer.getId(), ar.cause());
+		storage.getValues(true, valuesBefore)
+				.compose(values -> storage.getPeers(true, peersBefore).map(peers -> {
+					enqueueAnnounces(values, peers);
+					return (Void) null;
+				}))
+				.onSuccess(unused -> dispatchAnnounces())
+				.onFailure(e -> log.error("Failed to select the items to re-announce", e));
+	}
+
+	/**
+	 * Queues one unit of work per item, taking from the two lists alternately.
+	 * <p>
+	 * Alternating rather than concatenating is what keeps the two kinds from starving each other: both
+	 * lists arrive sorted by their own urgency, but they share one budget, and a node holding many more
+	 * values than peers would otherwise spend every cycle on values alone.
+	 * </p>
+	 */
+	private void enqueueAnnounces(List<Value> values, List<PeerInfo> peers) {
+		int count = Math.max(values.size(), peers.size());
+		for (int i = 0; i < count; i++) {
+			if (i < values.size()) {
+				final Value value = values.get(i);
+				announceTodo.addLast(() -> {
+					log.debug("Re-announce the value: {}", value.getId());
+					return doStoreValue(value, value.getSequenceNumber())
+							.compose(v -> storage.updateValueAnnouncedTime(value.getId()))
+							.andThen(ar -> {
+								if (ar.succeeded())
+									log.debug("Re-announce the value {} success", value.getId());
+								else
+									log.error("Re-announce the value {} failed", value.getId(), ar.cause());
+							});
 				});
 			}
-		}).onFailure(e ->
-				log.error("Failed to re-announce the peers", e)
-		);
+
+			if (i < peers.size()) {
+				final PeerInfo peer = peers.get(i);
+				announceTodo.addLast(() -> {
+					log.debug("Re-announce the peer: {}", peer.getId());
+					return doAnnouncePeer(peer, -1)
+							.compose(v -> storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint()))
+							.andThen(ar -> {
+								if (ar.succeeded())
+									log.debug("Re-announce the peer {} success", peer.getId());
+								else
+									log.error("Re-announce the peer {} failed", peer.getId(), ar.cause());
+							});
+				});
+			}
+		}
+	}
+
+	/**
+	 * Starts as much queued re-announce work as the budget allows, and is called again by each item as
+	 * it finishes, so the number in flight holds at the budget until the queue empties.
+	 * <p>
+	 * Still fire-and-forget per item: each one logs its own outcome and the next cycle re-selects
+	 * whatever did not succeed. What is awaited is only the slot, not the result.
+	 * </p>
+	 */
+	private void dispatchAnnounces() {
+		// An item whose future is already settled - no DHT deployed, say - completes inside get(), which
+		// re-enters here through the completion handler. Returning lets the loop below carry on instead:
+		// it re-reads announceInFlight each turn, so the slot the re-entrant call freed is filled by the
+		// next iteration rather than by a nested call, and a fully synchronous queue cannot recurse to
+		// the depth of the queue.
+		if (announceDispatching)
+			return;
+
+		announceDispatching = true;
+		try {
+			final int generation = announceGeneration;
+			while (announceInFlight < announceConcurrency && !announceTodo.isEmpty()) {
+				Supplier<Future<?>> work = announceTodo.pollFirst();
+				announceInFlight++;
+
+				Future<?> started;
+				try {
+					started = work.get();
+				} catch (RuntimeException e) {
+					// A slot taken by an item that never started would never be given back, and the
+					// still-draining check in persistentAnnounce would then skip every cycle from here on -
+					// the re-announce would stop silently, which is the one failure mode worth being
+					// careful about on this path.
+					log.error("Re-announce item failed to start", e);
+					announceInFlight--;
+					continue;
+				}
+
+				started.onComplete(ar -> {
+					// An item outliving the deployment that started it must not touch the new one's budget.
+					if (generation != announceGeneration)
+						return;
+
+					announceInFlight--;
+					dispatchAnnounces();
+				});
+			}
+		} finally {
+			announceDispatching = false;
+		}
 	}
 
 	@Override

@@ -688,6 +688,11 @@ public final class KadConstants {
 	 * entirely while the RPC server reports itself unreachable.
 	 * </p>
 	 * <p>
+	 * Bounded in <i>concurrency</i>, though, not in total work: {@code KadNode.persistentAnnounce}
+	 * keeps a fixed number of items in flight and refills as they finish, so a pass spreads across the
+	 * interval instead of queueing every item's tasks ahead of whatever a user asks for next.
+	 * </p>
+	 * <p>
 	 * <b>Why 5 minutes against a 2-hour limit.</b> An item must be refreshed on its remote holders
 	 * before they expire it at {@code Node.MAX_VALUE_AGE} / {@code Node.MAX_PEER_AGE}. The selection
 	 * query allows two intervals of slack ({@code MAX_VALUE_AGE - 2 * RE_ANNOUNCE_INTERVAL}), so a

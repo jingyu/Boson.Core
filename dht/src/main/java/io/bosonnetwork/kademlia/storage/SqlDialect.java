@@ -35,19 +35,38 @@ public interface SqlDialect {
 		return "SELECT * FROM valores WHERE id = #{id}";
 	}
 
+	/**
+	 * Values due for a re-announce, <b>least recently announced first</b>.
+	 * <p>
+	 * The order is the opposite of the listing queries below, and deliberately so: this one feeds the
+	 * re-announce, which serves a bounded number of items per cycle, so whatever sorts first is what
+	 * gets served and the rest wait for the next cycle. {@code updated} is the announced time, and an
+	 * item is dropped by the rest of the network once it is not re-announced within
+	 * {@code MAX_VALUE_AGE} - so the item that must go first is the one closest to that, which is the
+	 * oldest, not the newest.
+	 * </p>
+	 * <p>
+	 * Ascending also makes the rotation free and self-correcting, the same way {@code lastRefresh}
+	 * does for bucket maintenance. A served item has its announced time set to now and sorts to the
+	 * back; an item whose announce failed keeps its old timestamp - {@code updateValueAnnouncedTime}
+	 * runs on success only - and stays at the front, which is where something closer to expiring than
+	 * everything else belongs.
+	 * </p>
+	 */
 	default String selectValuesByPersistentAndAnnouncedBefore() {
 		return """
 				SELECT * FROM valores
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id
+					ORDER BY updated ASC, id
 				""";
 	}
 
+	/** @see #selectValuesByPersistentAndAnnouncedBefore() for why this orders ascending. */
 	default String selectValuesByPersistentAndAnnouncedBeforePaginated() {
 		return """
 				SELECT * FROM valores
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id
+					ORDER BY updated ASC, id
 					LIMIT #{limit} OFFSET #{offset}
 				""";
 
@@ -128,19 +147,22 @@ public interface SqlDialect {
 				""";
 	}
 
+	/** Peers due for a re-announce, least recently announced first.
+	 *  @see #selectValuesByPersistentAndAnnouncedBefore() for why this orders ascending. */
 	default String selectPeersByPersistentAndAnnouncedBefore() {
 		return """
 				SELECT * FROM peers
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id, fingerprint
+					ORDER BY updated ASC, id, fingerprint
 				""";
 	}
 
+	/** @see #selectValuesByPersistentAndAnnouncedBefore() for why this orders ascending. */
 	default String selectPeersByPersistentAndAnnouncedBeforePaginated() {
 		return """
 				SELECT * FROM peers
 					WHERE persistent = #{persistent} AND updated <= #{updatedBefore}
-					ORDER BY updated DESC, id, fingerprint
+					ORDER BY updated ASC, id, fingerprint
 					LIMIT #{limit} OFFSET #{offset}
 				""";
 	}
