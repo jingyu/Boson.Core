@@ -73,6 +73,11 @@ import io.bosonnetwork.utils.AddressUtils;
  * {@code Connecting}.
  * </p>
  * <p>
+ * The second test covers the other half of the same startup: whether the sweep pings anything at all.
+ * It used to depend on how long the process had been down, which is not evidence about whether the
+ * cached contacts are still there.
+ * </p>
+ * <p>
  * The dead contacts here are UDP sockets that receive and never reply. Closed ports would not do: the
  * OS answers those with ICMP unreachable, the calls settle at once, and the case under test never
  * happens.
@@ -173,14 +178,13 @@ public class DHTWarmStartTests {
 
 	/**
 	 * Writes the cache the node under test will warm-start from: the live server first, then the dead
-	 * contacts, all last seen an hour ago.
+	 * contacts, all last seen at the given time.
 	 * <p>
-	 * Written as CBOR rather than through {@code RoutingTable.save}, because the age is the whole
-	 * point and a saved table can only carry the age of the entries in it - which, built here, would be
-	 * seconds. {@code KBucketEntry.needsPing} declines to ping anything seen within the last 30 seconds
-	 * and anything younger than {@code OLD_AND_STALE_TIME}, so a fresh cache is swept without a single
-	 * packet being sent and the case under test never happens. An hour old is what a restart normally
-	 * looks like.
+	 * Written as CBOR rather than through {@code RoutingTable.save}, because the age is a parameter of
+	 * these tests and a saved table can only carry the age of the entries in it - which, built here,
+	 * would always be seconds. The two ages that matter are on either side of
+	 * {@code KBucketEntry.OLD_AND_STALE_TIME}: an hour, which is what a restart normally looks like, and
+	 * now, which is the fast restart the sweep used to skip entirely.
 	 * </p>
 	 * <p>
 	 * Only the fields {@code toMap} would have written are written here, and for the same reason: the
@@ -188,9 +192,8 @@ public class DHTWarmStartTests {
 	 * the {@code (long)} casts in {@code fromMap} would reject, dropping the entry silently.
 	 * </p>
 	 */
-	private void writeCache(CryptoIdentity identity) throws IOException {
+	private void writeCache(CryptoIdentity identity, long lastSeen) throws IOException {
 		long now = System.currentTimeMillis();
-		long lastSeen = now - TimeUnit.HOURS.toMillis(1);
 
 		List<NodeInfo> contacts = new ArrayList<>();
 		// The live server goes first: order survives the file, and the sweep pings alpha at a time, so
@@ -254,7 +257,7 @@ public class DHTWarmStartTests {
 	void testDeadCachedContactsDoNotHoldUpTheConnectionStatus(Vertx vertx, VertxTestContext testContext)
 			throws IOException {
 		CryptoIdentity identity = new CryptoIdentity();
-		writeCache(identity);
+		writeCache(identity, System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1));
 
 		node = newDht(identity, NODE_PORT, persistFile, new TokenManager());
 
@@ -294,9 +297,41 @@ public class DHTWarmStartTests {
 	}
 
 	/**
+	 * The same sweep against a cache written moments ago, which is what a crash-restart or a quick
+	 * bounce leaves behind - and which used to be revalidated not at all.
+	 * <p>
+	 * {@code PingRefreshTask} disagreed with itself: {@code removeOnTimeout} queued every entry, and
+	 * then {@code iterate()} re-tested each one with {@code KBucketEntry.needsPing} and skipped it. That
+	 * declines anything seen inside 30 seconds and anything silent for less than
+	 * {@code OLD_AND_STALE_TIME}, so the tasks dispatched, sent nothing, finished at once, and the node
+	 * reported {@code Connected} off contacts no one had spoken to since the process died. The hour-old
+	 * fixture above cannot catch it - at that age {@code needsPing} is true for every entry, so the
+	 * sweep does the right thing for the wrong reason.
+	 * </p>
+	 * <p>
+	 * Purging is the assertion rather than the connection status, because it is the part that cannot
+	 * happen without a packet on the wire. The window this covers is the one where a restart is most
+	 * likely to be a crash or a network change, and so the one where a cached contact is most likely to
+	 * have gone.
+	 * </p>
+	 */
+	@Test
+	@Timeout(value = 120, timeUnit = TimeUnit.SECONDS)
+	void testAFreshCacheIsRevalidatedToo(Vertx vertx, VertxTestContext testContext) throws IOException {
+		CryptoIdentity identity = new CryptoIdentity();
+		writeCache(identity, System.currentTimeMillis());
+
+		node = newDht(identity, NODE_PORT, persistFile, new TokenManager());
+
+		vertx.deployVerticle(node).onComplete(testContext.succeeding(unused ->
+				awaitSweep(vertx, testContext, System.currentTimeMillis() + 90_000)));
+	}
+
+	/**
 	 * Polls until the sweep has purged the bulk of the dead contacts, then checks the live one is still
-	 * there. That is the proof that settling the status early neither cancelled the tasks behind it nor
-	 * cost the table the contact that answered.
+	 * there. That is the proof that the sweep really pinged what it loaded - and, where the status was
+	 * settled early, that settling it neither cancelled the tasks behind it nor cost the table the
+	 * contact that answered.
 	 * <p>
 	 * The bar is most of them rather than all of them on purpose. Exactly how far a single
 	 * {@code PingRefreshTask} drains its queue is that task's own business and is not what this change
@@ -313,8 +348,8 @@ public class DHTWarmStartTests {
 		}
 
 		if (System.currentTimeMillis() > deadline) {
-			testContext.failNow("the sweep left " + entries + " entries in the table; it should have "
-					+ "carried on pinging the dead cached contacts after the status was settled");
+			testContext.failNow("the sweep left " + entries + " entries in the table; it should have pinged "
+					+ "every cached contact it loaded and removed the ones that stayed silent");
 			return;
 		}
 

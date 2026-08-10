@@ -1177,8 +1177,25 @@ public class DHT extends BosonVerticle {
 				return;
 
 			KBucket bucket = buckets.get(index);
+			// checkAll, even though removeOnTimeout already queues every entry: without it iterate()
+			// re-tests each one with needsPing() and skips it, so what actually got pinged was whatever
+			// that allowed - nothing seen inside 30 seconds, nothing silent for less than
+			// OLD_AND_STALE_TIME. A restart inside that window therefore revalidated none of its cache
+			// and reported Connected off entries no one had spoken to since the process died.
+			//
+			// This is not a wider eviction policy, only a consistent one. A node that has been down
+			// longer than OLD_AND_STALE_TIME already had needsPing() true for every cached entry, with
+			// any pre-shutdown backoff long expired, so ping-everything-and-purge-on-timeout was the
+			// behaviour for every ordinary warm start; checkAll changes only the fast restart, which had
+			// been getting no validation at all. How long the process happened to be down is not
+			// evidence about whether its contacts are still there.
+			//
+			// The NAT-binding reasoning behind the 30-second rule in needsPing does not reach here
+			// either: it exists to let bindings expire in steady state, and a node that has just started
+			// holds a fresh socket with no prior bindings to keep alive.
 			PingRefreshTask task = new PingRefreshTask(kadContext)
 					.setName("Bootstrap: ping cached routingtable - " + bucket.prefix())
+					.checkAll(true)
 					.removeOnTimeout(true)
 					.bucket(bucket)
 					.onFirstResponse(answered)
