@@ -194,4 +194,52 @@ public class TaskTests {
 		setCallResponse(call, response);
 		assertTrue(task.canDoRequest());
 	}
+
+	/**
+	 * A task that cannot prepare itself has to end, not sit in RUNNING.
+	 * <p>
+	 * Iteration is driven only by call state changes, and a task that failed to prepare has sent no
+	 * calls - so nothing will ever drive it again. TaskManager counts it against {@code concurrentTasks}
+	 * from the moment it dequeues it and only releases that slot through the end handler, and callers
+	 * wait on the same listener, so a task left running here costs a slot for the life of the node and
+	 * strands whoever was waiting. This is the reason prepare() is handled apart from iteration, where
+	 * surviving a failure is the right call.
+	 * </p>
+	 */
+	@Test
+	void testPrepareFailureEndsTheTask() {
+		Variable<Boolean> ended = Variable.of(false);
+		TestTask failing = new TestTask(context) {
+			@Override
+			protected void prepare() {
+				throw new IllegalStateException("cannot prepare");
+			}
+		};
+		// What TaskManager installs to reclaim the slot, and what callers wait on.
+		failing.endHandler(t -> ended.set(true));
+
+		failing.start();
+
+		assertEquals(Task.State.CANCELED, failing.getState());
+		assertTrue(failing.isEnd());
+		assertTrue(ended.get(), "the end handler must fire, or the task's slot is never reclaimed");
+	}
+
+	/**
+	 * The counterpart: a failure once the task is under way leaves it running, because its in-flight
+	 * calls will drive it again.
+	 */
+	@Test
+	void testIterationFailureLeavesTheTaskRunning() {
+		TestTask failing = new TestTask(context) {
+			@Override
+			protected void iterate() {
+				throw new IllegalStateException("cannot iterate");
+			}
+		};
+
+		failing.start();
+
+		assertEquals(Task.State.RUNNING, failing.getState());
+	}
 }

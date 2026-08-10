@@ -296,11 +296,24 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 			getLogger().debug("{}#{} starting...", name, taskId);
 			startTime = System.currentTimeMillis();
 
-			prepare();
-			if (listener != null)
-				listener.started((S) this);
+			try {
+				prepare();
+			} catch (Exception e) {
+				// Terminal, unlike an iteration failure, so it gets its own handling. Nothing has been
+				// queued and no call has been sent, and iteration is driven only by call state changes -
+				// so there is no future iteration for the task to be kept alive for. Left in RUNNING it
+				// would hold one of the manager's slots for the life of the node and never notify its
+				// listener, and callers wait on this task through that listener. Same reasoning as the
+				// failed state transition in TaskManager.add.
+				getLogger().error("{}#{} prepare failed", name, taskId, e);
+				cancel();
+				return;
+			}
 
 			try {
+				if (listener != null)
+					listener.started((S) this);
+
 				tryIterate();
 			} catch (Exception e) {
 				// Log error but do not cancel task to allow future iterations

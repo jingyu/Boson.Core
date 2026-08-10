@@ -32,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
-import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucket;
@@ -49,12 +48,16 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	/** Queue of bucket entries to ping. */
 	private final Deque<KBucketEntry> todo;
 
+	/** The bucket to refresh, added to the ping queue. */
+	private KBucket bucket;
 	/** Whether to ping all nodes in the bucket, regardless of their ping status. */
 	private boolean checkAll;
 	/** Whether to remove nodes from the routing table if their PING RPC times out. */
 	private boolean removeOnTimeout;
 	/** Whether to ping a replacement node from the bucket’s cache. */
 	private boolean probeReplacement;
+	/** Notified once, on the first PING that is answered. Null when nobody asked. */
+	private Runnable onFirstResponse;
 
 	private static final Logger log = LoggerFactory.getLogger(PingRefreshTask.class);
 
@@ -108,6 +111,24 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	}
 
 	/**
+	 * Registers a callback to run when the first PING of this task is answered.
+	 * <p>
+	 * A refresh task normally reports only that it has finished, which is the answer to "is this bucket
+	 * clean". A caller that instead needs to know "did anyone at all answer" would otherwise have to
+	 * wait for the whole bucket to drain, and a bucket of dead contacts drains at the RPC timeout. The
+	 * first response answers that question immediately, and the task carries on regardless - this
+	 * observes, it does not steer.
+	 * </p>
+	 *
+	 * @param onFirstResponse the callback, run at most once; null to clear
+	 * @return this task for method chaining
+	 */
+	public PingRefreshTask onFirstResponse(Runnable onFirstResponse) {
+		this.onFirstResponse = onFirstResponse;
+		return this;
+	}
+
+	/**
 	 * Sets the bucket to refresh, adding its nodes to the ping queue.
 	 *
 	 * @param bucket the bucket to refresh, must not be null
@@ -117,17 +138,17 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	public PingRefreshTask bucket(KBucket bucket) {
 		if (bucket == null)
 			throw new IllegalArgumentException("Bucket must not be null");
-
-		addBucket(bucket);
+		this.bucket = bucket;
 		return this;
 	}
 
 	/**
 	 * Adds nodes from the specified bucket to the ping queue based on configuration.
-	 *
-	 * @param bucket the bucket whose nodes to add
 	 */
-	private void addBucket(KBucket bucket) {
+	protected void prepare() {
+		if (bucket == null)
+			throw new IllegalStateException("Bucket not set");
+
 		bucket.updateRefreshTime();
 
 		// Add nodes that need pinging based on configuration
@@ -142,6 +163,22 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 			if (entry != null)
 				todo.add(entry);
 		}
+	}
+
+	/**
+	 * Reports the first answered PING to whoever registered for it, then stops looking.
+	 *
+	 * @param call the RPC call that was answered
+	 */
+	@Override
+	protected void callResponded(RpcCall call) {
+		if (onFirstResponse == null)
+			return;
+
+		// Cleared before the callback runs, so "at most once" holds even if the callback re-enters.
+		Runnable callback = onFirstResponse;
+		onFirstResponse = null;
+		callback.run();
 	}
 
 	/**
