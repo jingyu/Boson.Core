@@ -129,6 +129,10 @@ public class DHT extends BosonVerticle {
 	private long lastMaintenance;
 	private final Path persistFile;
 
+	// True when this run began by loading a persisted routing table. Set in start(), not here, so a
+	// redeployed instance re-decides - the mistake N-17 was about.
+	private boolean loadedRoutingTable;
+
 	private final List<Long> timers;
 
 	private final SuspiciousNodeDetector suspiciousNodeDetector;
@@ -331,14 +335,14 @@ public class DHT extends BosonVerticle {
 		initialBootstrap = true;
 		warnedNoBootstrapSource = false;
 		maintenanceTasks.clear();
+		lastMaintenance = 0;
 
-		final boolean needPingCachedRoutingTable;
 		if (persistFile != null && Files.exists(persistFile) && Files.isRegularFile(persistFile)) {
 			log.info("Loading routing table from {} ...", persistFile);
 			routingTable.load(persistFile);
-			needPingCachedRoutingTable = !routingTable.isEmpty();
+			this.loadedRoutingTable = !routingTable.isEmpty();
 		} else {
-			needPingCachedRoutingTable = false;
+			this.loadedRoutingTable = false;
 		}
 
 		rpcServer = new RpcServer(kadContext, host, port, blacklist, suspiciousNodeDetector, enableSpamThrottling, metrics);
@@ -358,20 +362,13 @@ public class DHT extends BosonVerticle {
 				}
 			});
 
-			List<Future<Void>> connectFutures = new ArrayList<>(routingTable.size() + 1);
+			List<Future<Void>> connectFutures = new ArrayList<>(2);
 
-			if (needPingCachedRoutingTable) {
-				routingTable.forEachBucket(bucket -> {
-					Promise<Void> promise = Promise.promise();
-					PingRefreshTask task = new PingRefreshTask(kadContext)
-							.setName("Bootstrap: ping cached routingtable - " + bucket.prefix())
-							.removeOnTimeout(true)
-							.bucket(bucket)
-							.addListener(t -> promise.complete());
-					taskManager.add(task);
-					connectFutures.add(promise.future());
-				});
-			}
+			// One future for the whole sweep, not one per bucket: this gates the connection status, and
+			// the status question is answered by the first cached contact that answers rather than by
+			// the last one to time out. See pingRoutingTable.
+			if (loadedRoutingTable)
+				connectFutures.add(pingRoutingTable());
 
 			Future<Void> bootstrapFuture = doBootstrap(bootstrapNodes);
 			connectFutures.add(bootstrapFuture);
@@ -557,11 +554,79 @@ public class DHT extends BosonVerticle {
 		// Deliberately not gated on reachability, unlike the other periodic work. A maintenance pass is
 		// local bookkeeping - merging buckets, cleaning up entries, promoting verified replacements -
 		// and all of it stays correct while the socket is deaf. The only part that touches the network
-		// is the refresh handler, and tryPingMaintenance already returns early when unreachable.
-		routingTable.maintenance(bootstrapIds, bucket ->
-				tryPingMaintenance(bucket, false, false, true,
-						"RoutingTable maintenance: refreshing bucket - " + bucket.prefix())
-		);
+		// is the refresh, and tryPingMaintenance already returns early when unreachable.
+		//
+		// The handler collects rather than dispatches: RoutingTable reports which buckets want a
+		// refresh, and how many of them we can afford this pass is a policy question that belongs here,
+		// next to the other two selections. See selectBucketsToRefresh.
+		List<KBucket> candidates = new ArrayList<>();
+		routingTable.maintenance(bootstrapIds, candidates::add);
+
+		// removeOnTimeout stays false here, unlike the warm-start sweep. This is steady state: a single
+		// timeout is weak evidence, and entries that keep failing are demoted by the routing table
+		// anyway. Purging a stale cache is the sweep's job and the sweep now finishes it, so there is
+		// nothing left here for a one-shot to clean up.
+		for (KBucket bucket : selectBucketsToRefresh(candidates))
+			tryPingMaintenance(bucket, false, false, true,
+					"RoutingTable maintenance: refreshing bucket - " + bucket.prefix());
+	}
+
+	/**
+	 * Chooses which of the buckets asking for a refresh this pass can afford.
+	 * <p>
+	 * Package-private and free of side effects apart from the sort, so the policy can be tested without
+	 * a live network - the same shape as {@link #selectBucketsToFill} and {@link #selectBucketsToPing}.
+	 * </p>
+	 * <p>
+	 * <b>Why this needs a budget at all.</b> {@code RoutingTable.maintenance} reports every bucket that
+	 * wants a refresh, and this used to turn all of them into tasks. That is the same
+	 * unbounded-per-bucket shape {@link #selectBucketsToFill} and {@link #selectBucketsToPing} fixed on
+	 * the other two paths, and it is the one that repeats for the life of the node - so a warm start
+	 * did not avoid the burst, it postponed it to the first maintenance pass.
+	 * </p>
+	 * <p>
+	 * <b>The budget is against live tasks, not against this pass.</b> {@code maintenanceTasks} holds
+	 * exactly the refreshes still running, so subtracting it bounds the work in flight no matter how
+	 * passes overlap. A per-pass budget would only bound the burst if every task always finished inside
+	 * {@link KadConstants#ROUTING_TABLE_MAINTENANCE_INTERVAL}, which is true of today's constants and
+	 * is not a property worth depending on.
+	 * </p>
+	 * <p>
+	 * <b>Nothing is starved, and that is what the first sort key buys.</b> Ordering by distance alone
+	 * would starve the tail outright: a pass serves the nearest few, they become eligible again one
+	 * {@link KadConstants#BUCKET_REFRESH_INTERVAL} later, and being nearest they are chosen again ahead
+	 * of buckets that have never been served at all. With more eligible buckets than a refresh interval
+	 * has capacity for - which is exactly a warm start, where the whole loaded table is stale at once -
+	 * everything past that capacity would be refreshed never. Least-recently-refreshed first fixes it
+	 * for good, because {@code PingRefreshTask} stamps what it covers: a served bucket sorts behind
+	 * every unserved one, so the whole table is reached before anything repeats. The same key, for the
+	 * same reason, orders {@link #selectBucketsToFill}.
+	 * </p>
+	 * <p>
+	 * Distance breaks the tie, which is what makes the warm start behave as intended without a special
+	 * case: {@code load()} does not stamp the buckets it reads, so they all arrive tied at zero and the
+	 * nearest is served first.
+	 * </p>
+	 *
+	 * @param candidates the buckets {@code RoutingTable.maintenance} reported, in table order.
+	 * @return the buckets to refresh now, longest-unrefreshed first and nearest first among equals,
+	 * 		   within what the budget still allows.
+	 */
+	List<KBucket> selectBucketsToRefresh(List<KBucket> candidates) {
+		// A quarter of the slots, matching MAX_BUCKET_FILLS_PER_BOOTSTRAP at the default and holding the
+		// same relation at any configured value. Half, as the warm-start sweep takes, would be too much
+		// for work that runs forever rather than once.
+		int budget = Math.max(1, concurrentTasks / 4) - maintenanceTasks.size();
+		if (budget <= 0)
+			return List.of();
+
+		if (candidates.size() <= budget)
+			return candidates;
+
+		Id localId = identity.getId();
+		candidates.sort(Comparator.comparingLong(KBucket::lastRefresh)
+				.thenComparing((a, b) -> localId.threeWayCompare(a.prefix(), b.prefix())));
+		return candidates.subList(0, budget);
 	}
 
 	private void randomLookup(long unusedTimerId) {
@@ -1019,25 +1084,173 @@ public class DHT extends BosonVerticle {
 		return candidates.subList(0, KadConstants.MAX_BUCKET_FILLS_PER_BOOTSTRAP);
 	}
 
+	/**
+	 * Revalidates a routing table loaded from the persist file, and reports whether any of it is still
+	 * alive.
+	 * <p>
+	 * <b>What the returned future means.</b> Not "the sweep is finished" - "the cached table has been
+	 * shown to be usable, or shown not to be". It resolves on the <em>first</em> answered ping, which
+	 * is simultaneous proof that the socket works and that at least one cached contact is still there;
+	 * failing that, when every dispatched task has settled.
+	 * </p>
+	 * <p>
+	 * <b>Why the distinction is worth the plumbing.</b> Until this sweep answered, nothing else did:
+	 * {@code RpcServer.reachable} starts out {@code true} and only notifies on a change, so the
+	 * reachable handler is silent at startup, leaving {@code Future.all(connectFutures)} as the sole
+	 * exit from {@code Connecting}. Waiting on the last answer rather than the first is the same defect
+	 * {@link #askBootstrapNodes} had, and it costs the same ten seconds. A cached contact that has gone
+	 * away is not refused, it is simply silent, so its
+	 * ping settles only at {@code RPC_CALL_TIMEOUT_MAX} - and a freshly started node has no RTT samples
+	 * yet, so {@code TimeoutSampler} hands out exactly that maximum until something answers. A task
+	 * pings {@code alpha} at a time and holds those slots for the full timeout, so any bucket with one
+	 * dead contact among its first {@code alpha} entries takes ten seconds to drain no matter how
+	 * quickly the rest of it answers. That is nearly every warm start.
+	 * </p>
+	 * <p>
+	 * The cost is bounded by the timeout, not multiplied by the bucket, because the first response also
+	 * feeds the sampler and collapses the timeout for everything sent afterwards.
+	 * </p>
+	 * <p>
+	 * <b>The whole table gets covered, a batch at a time.</b> Coverage and concurrency are separate
+	 * questions, and only the second one caused the trouble this method was written for: what starves
+	 * the bootstrap is claiming every runner at once, not continuing to work afterwards.
+	 * {@code TaskManager} runs at most {@code concurrentTasks} and does not preempt, so the sweep holds
+	 * at most half of them and refills as tasks finish, until every loaded bucket has been revalidated
+	 * once. That is what lets the whole cache be purged rather than the front of it, and it is why no
+	 * bucket is left to the maintenance path to finish - a partly-cleaned cache is the worst of both.
+	 * </p>
+	 * <p>
+	 * The tail is cheap in the case that matters. A dead contact costs the full RPC timeout only until
+	 * something answers; after that the sampler recalibrates and later batches drain in milliseconds.
+	 * A live cache is therefore swept in about as long as it takes to hear back once, and only a cache
+	 * that is dead all the way through pays the timeout per batch - a node with nothing better to do.
+	 * </p>
+	 * <p>
+	 * <b>Resolving early abandons nothing.</b> The returned future settles as soon as a batch's worth of
+	 * tasks has finished, not when the sweep has, so the status decision never waits on coverage it does
+	 * not need; the rest carries on detached. Nothing is cancelled, and every dead contact is still
+	 * pinged and purged.
+	 * </p>
+	 *
+	 * @return a future resolving when the cached table has proved itself, or when a batch's worth of
+	 * 		   tasks has given up on it.
+	 */
 	private Future<Void> pingRoutingTable() {
-		if (routingTable.isEmpty())
+		List<KBucket> buckets = selectBucketsToPing();
+		if (buckets.isEmpty())
 			return Future.succeededFuture();
 
-		List<Future<Void>> futures = new ArrayList<>(routingTable.size());
-		routingTable.forEachBucket(bucket -> {
-			if (!bucket.isEmpty()) {
-				Promise<Void> promise = Promise.promise();
-				PingRefreshTask task = new PingRefreshTask(kadContext)
-						.setName("Bootstrap: cached routing table ping bucket - " + bucket.prefix())
-						.removeOnTimeout(true)
-						.addListener(t -> promise.complete());
-				taskManager.add(task);
+		Promise<Void> promise = Promise.promise();
 
-				futures.add(promise.future());
-			}
+		// Half the slots, so the bootstrap queued beside this always has a runner. The other startup
+		// work fits in what is left: at the default 32 that is 16 here, up to
+		// MAX_BUCKET_FILLS_PER_BOOTSTRAP for fillBuckets and one for the home-bucket fill. All of them
+		// come out of the same concurrentTasks, so a reader retuning it should retune them together.
+		int batch = Math.min(Math.max(1, concurrentTasks / 2), buckets.size());
+
+		// Single-threaded by context confinement; the holders exist so the listeners can capture and
+		// mutate them, not for thread safety. `next` is the read cursor into buckets. `pending` counts
+		// down a batch's worth of finished tasks and is then cleared for good - the fallback the status
+		// decision falls back on when nothing ever answers.
+		Variable<Integer> next = Variable.of(0);
+		Variable<Integer> pending = Variable.of(batch);
+
+		// Reported the moment a cached contact answers, rather than left to the combinator that waits on
+		// this future. The combinator also waits on the bootstrap, and on the warm start that matters -
+		// the one where the cache went stale while the node was down - the bootstrap is the slower of
+		// the two, since its lookups route through the same dead contacts this sweep is pinging.
+		// Resolving the sweep alone would therefore change nothing observable. Announcing the evidence
+		// directly is what the reachability handler does with the same kind of evidence, and it can only
+		// move Connected earlier: the combinator still runs and still has the final say.
+		Runnable answered = () -> {
+			setStatus(ConnectionStatus.Connected);
+			promise.tryComplete();
+		};
+
+		// Dispatches one bucket and, when its task ends, the next one still waiting - so the number in
+		// flight stays at the batch size until the list runs out. Recursion is bounded by the task
+		// lifecycle rather than the stack: the listener fires from the event loop, not from here.
+		Variable<Runnable> dispatch = Variable.empty();
+		dispatch.set(() -> {
+			int index = next.updateAndGet(v -> v + 1) - 1;
+			if (index >= buckets.size())
+				return;
+
+			KBucket bucket = buckets.get(index);
+			PingRefreshTask task = new PingRefreshTask(kadContext)
+					.setName("Bootstrap: ping cached routingtable - " + bucket.prefix())
+					.removeOnTimeout(true)
+					.bucket(bucket)
+					.onFirstResponse(answered)
+					.addListener(t -> {
+						// A batch's worth of finished tasks is enough to answer the status question -
+						// whichever tasks they turn out to be, not the opening batch specifically, so one
+						// slow bucket cannot hold the status while equivalent work has already settled.
+						// Waiting for the whole sweep instead would keep a node in Connecting for as long
+						// as its cache takes to clean, which on an all-dead cache is minutes.
+						if (pending.isPresent() && pending.updateAndGet(v -> v - 1) == 0) {
+							pending.clear();
+							promise.tryComplete();
+						}
+
+						dispatch.get().run();
+					});
+			taskManager.add(task);
 		});
 
-		return futures.isEmpty() ? Future.succeededFuture() : Future.all(futures).mapEmpty();
+		for (int i = 0; i < batch; i++)
+			dispatch.get().run();
+
+		return promise.future();
+	}
+
+	/**
+	 * Chooses which cached buckets the warm start revalidates now.
+	 * <p>
+	 * Package-private and free of side effects so the selection can be tested without a live network,
+	 * the same shape as {@link #selectBucketsToFill} and {@link #selectBootstrapNodes}.
+	 * </p>
+	 * <p>
+	 * <b>Every non-empty bucket, in the order to take them</b> - the whole loaded table is revalidated,
+	 * so what this decides is priority, not membership. The bound that matters is on how many are in
+	 * flight at once, and that belongs to {@link #pingRoutingTable}, which dispatches from this list a
+	 * batch at a time: a sweep starves the bootstrap by claiming every runner, not by continuing to
+	 * work. Keeping the two apart is what lets the whole cache be purged instead of the front of it.
+	 * </p>
+	 * <p>
+	 * <b>Ordering.</b> Closest to home first, by XOR distance from our own id to the bucket's prefix.
+	 * Staleness cannot discriminate here - {@code load()} does not stamp the buckets it reads, so on a
+	 * warm start they are all equally stale - and closeness is what should be validated first, since
+	 * the buckets nearest us hold the contacts a lookup actually routes through.
+	 * </p>
+	 *
+	 * @return every non-empty bucket, closest to home first.
+	 */
+	List<KBucket> selectBucketsToPing() {
+		List<KBucket> candidates = new ArrayList<>(routingTable.size());
+		routingTable.forEachBucket(bucket -> {
+			// A task built from an empty bucket has an empty todo queue: it would be dispatched, occupy
+			// a slot, ping nobody and finish. The inline loop this replaced did exactly that.
+			if (!bucket.isEmpty())
+				candidates.add(bucket);
+		});
+
+		// XOR distance from our own id to the bucket's prefix, nearest first - the same ordering the
+		// lookup layer uses for nodes, applied to prefixes, which Prefix supports by extending Id.
+		//
+		// Deliberately not prefix depth, which looks like a proxy for closeness and is not one. Depth
+		// counts a prefix's fixed bits; it says nothing about whether those bits match ours. That would
+		// be equivalent under classic Kademlia, where only the home bucket ever splits and the tree is
+		// a caterpillar, but needsSplit() here splits any full bucket whose new entry lands in the high
+		// branch, so a far branch can be deeper than the home bucket. Sorting by depth would then put
+		// buckets covering keyspace nowhere near us at the front of the sweep.
+		//
+		// The home bucket needs no special case: its prefix is a prefix of our id, so it differs from
+		// us only below its own depth, while every other bucket differs at a more significant bit. It
+		// sorts first on its own.
+		Id localId = identity.getId();
+		candidates.sort((a, b) -> localId.threeWayCompare(a.prefix(), b.prefix()));
+		return candidates;
 	}
 
 	private void tryPingMaintenance(KBucket bucket, boolean checkAll, boolean removeOnTimeout, boolean probeReplacement, String name) {

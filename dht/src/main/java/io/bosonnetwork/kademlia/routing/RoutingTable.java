@@ -457,9 +457,11 @@ public class RoutingTable {
 	 * and promoting verified replacements as needed.
 	 *
 	 * @param bootstrapIds         a collection of bootstrap node IDs used during cleanup
-	 * @param bucketRefreshHandler a consumer invoked to handle bucket refresh operations.
-	 *                             The handler implementation should initialize a PingRefreshTask
-	 *                             with probe replacements option enabled.
+	 * @param bucketRefreshHandler a consumer invoked once for every bucket that wants a refresh, in
+	 *                             table order. It reports demand and does not oblige the caller to meet
+	 *                             it: on a large table this fires for many buckets at once, so a caller
+	 *                             that turns each one into a task straight away has an unbounded
+	 *                             fan-out. Collect here and decide how many to serve afterwards.
 	 */
 	public void maintenance(Collection<Id> bootstrapIds, Consumer<KBucket> bucketRefreshHandler) {
 		// Merges incrementally to avoid event loop blocking;

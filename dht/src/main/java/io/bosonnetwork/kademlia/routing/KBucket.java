@@ -367,6 +367,21 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	/**
+	 * Returns the last time a ping refresh covered this bucket, in milliseconds since the epoch.
+	 * <p>
+	 * Zero means it has never been covered, which is also what a bucket read back by {@code load()}
+	 * reports - {@code load()} does not stamp what it reads. Callers that ration refreshes across
+	 * buckets order by this, so that a bucket which has never had one is served before any bucket is
+	 * served twice.
+	 * </p>
+	 *
+	 * @return the timestamp, zero if no ping refresh has covered this bucket.
+	 */
+	public long lastRefresh() {
+		return lastRefresh;
+	}
+
+	/**
 	 * Returns the last time a bucket-filling lookup targeted this bucket, in milliseconds since the epoch.
 	 *
 	 * @return the timestamp, zero if no such lookup has run.
