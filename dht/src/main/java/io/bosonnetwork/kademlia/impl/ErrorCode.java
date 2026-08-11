@@ -36,7 +36,6 @@ public enum ErrorCode {
 	NotValueOwner(4),
 	ValueNoRecipient(5),
 
-
 	// Standard errors
 	GenericError(201),
 	ServerError(202),
