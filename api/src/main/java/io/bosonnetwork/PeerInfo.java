@@ -78,31 +78,43 @@ public class PeerInfo {
 	public static final Object ATTRIBUTE_PEER_ID = new Object();
 
 	/**
-	 * The maximum length of an endpoint, in UTF-8 bytes.
+	 * The maximum combined length, in bytes, of the endpoint and the extra data.
 	 * <p>
-	 * A peer is published by being carried in a lookup response, and a response has to fit one UDP
-	 * datagram or it fragments and is dropped on paths that discard fragments. The endpoint and the
-	 * extra data are the only variable-length parts of a peer, so they are the only things that could
-	 * make an entry too large to publish; bounding them here is what lets a node assume that anything
-	 * it accepted, it can also serve.
+	 * A peer travels inside a single UDP datagram - an ANNOUNCE_PEER going out, a FIND_PEER response
+	 * coming back - and a datagram over the path MTU is fragmented, which on paths that drop fragments
+	 * loses the whole exchange rather than degrading. The endpoint and the extra data are the only
+	 * variable-length parts of a peer, so together they are the only thing that could make one too
+	 * large to publish. Bounding them is what lets a node assume that a peer it accepted is a peer it
+	 * can also serve.
 	 * </p>
 	 * <p>
-	 * 256 bytes covers a scheme, a 253-character host - the longest a DNS name can be - a port, and a
-	 * short path. Longer than that is a URI carrying data rather than naming a service.
+	 * <b>Why one budget rather than one limit each.</b> Two separate limits each have to assume the
+	 * other is at its maximum, so the space they protect is the sum of two worst cases that never
+	 * happen together - a peer with a 20-byte endpoint gains nothing from the 236 bytes the endpoint
+	 * limit was holding for it. A shared budget spends the same total on whichever field actually
+	 * needs it: a long URI with no metadata, or a short URI with a large record, but not both.
+	 * </p>
+	 * <p>
+	 * <b>Where the number comes from.</b> The binding case is a node-authenticated peer in an
+	 * ANNOUNCE_PEER, the largest envelope a peer travels in: measured at 337 bytes around the variable
+	 * part, counting the message base, the peer and node ids, both signatures, the sequence number,
+	 * the fingerprint, the token, and the 72 bytes the RPC layer prepends (sender id, nonce, MAC).
+	 * Against the 1200-byte IPv6 packet budget - the smaller of the two, and the one whose 1280-byte
+	 * minimum MTU is a guarantee rather than a hope about the path - that allows 863. 768 is chosen,
+	 * leaving ~95 bytes of headroom for a field added to a message later.
+	 * </p>
+	 * <p>
+	 * 768 is also exactly what the two former separate limits allowed between them, so the worst-case
+	 * peer entry is unchanged and nothing about response sizing or the amplification ratio moves. What
+	 * changed is only that the split is now the caller's to choose.
+	 * </p>
+	 * <p>
+	 * The authenticated case sets the limit for every peer rather than each type getting its own,
+	 * because a peer's type is not fixed: authentication can be added to an existing peer by an
+	 * update. A larger allowance for unauthenticated peers would be one an update could invalidate.
 	 * </p>
 	 */
-	public static final int MAX_ENDPOINT_BYTES = 256;
-
-	/**
-	 * The maximum length of the extra data, in bytes.
-	 * <p>
-	 * Bounded for the same reason as {@link #MAX_ENDPOINT_BYTES}, and more generously because the
-	 * content is free-form. 512 bytes is ample for the metadata this is meant to carry - a handful of
-	 * fields naming an alternative endpoint or a capability - while leaving a worst-case peer entry
-	 * comfortably inside a single datagram.
-	 * </p>
-	 */
-	public static final int MAX_EXTRA_DATA_BYTES = 512;
+	public static final int MAX_PAYLOAD_BYTES = 768;
 
 	/** The peer ID. */
 	private final Id publicKey;
@@ -232,11 +244,10 @@ public class PeerInfo {
 	 */
 	private static PeerInfo create(Identity peer, byte @Nullable [] privateKey, @Nullable Identity node,
 	                               int sequenceNumber, long fingerprint, String endpoint, byte @Nullable [] extraData) {
-		if (endpoint.getBytes(UTF_8).length > MAX_ENDPOINT_BYTES)
-			throw new IllegalArgumentException("Invalid endpoint: longer than " + MAX_ENDPOINT_BYTES + " bytes");
-
-		if (extraData != null && extraData.length > MAX_EXTRA_DATA_BYTES)
-			throw new IllegalArgumentException("Invalid extra data: longer than " + MAX_EXTRA_DATA_BYTES + " bytes");
+		int payload = payloadSize(endpoint, extraData);
+		if (payload > MAX_PAYLOAD_BYTES)
+			throw new IllegalArgumentException("Invalid endpoint and extra data: " + payload +
+					" bytes together, longer than the " + MAX_PAYLOAD_BYTES + " they share");
 
 		Id publicKey = peer.getId();
 		Id nodeId;
@@ -354,6 +365,24 @@ public class PeerInfo {
 	}
 
 	/**
+	 * Returns the combined size, in bytes, of this peer's endpoint and extra data - the part of it that
+	 * is bounded by {@link #MAX_PAYLOAD_BYTES}.
+	 * <p>
+	 * The endpoint is measured in UTF-8 bytes rather than characters, because bytes are what has to fit
+	 * in the datagram; a non-ASCII host name costs more than its length suggests.
+	 * </p>
+	 *
+	 * @return the number of bytes the two variable-length fields occupy together.
+	 */
+	public int payloadSize() {
+		return payloadSize(endpoint, extraData);
+	}
+
+	private static int payloadSize(String endpoint, byte @Nullable [] extraData) {
+		return endpoint.getBytes(UTF_8).length + (extraData == null ? 0 : extraData.length);
+	}
+
+	/**
 	 * Checks if the extra data is present.
 	 *
 	 * @return {@code true} if the extra data is present, {@code false} otherwise.
@@ -438,7 +467,7 @@ public class PeerInfo {
 	 * <ul>
 	 *     <li>Data integrity checks (non-null fields where expected).</li>
 	 *     <li>Length limits on the variable-length fields, so that an accepted peer is one that can
-	 *         also be published - see {@link #MAX_ENDPOINT_BYTES}.</li>
+	 *         also be published - see {@link #MAX_PAYLOAD_BYTES}.</li>
 	 *     <li>Signature verification:
 	 *         <ul>
 	 *             <li>If authenticated (nodeId present), verifies the node signature against the node ID.</li>
@@ -461,10 +490,7 @@ public class PeerInfo {
 		if (sequenceNumber < 0)
 			return false;
 
-		if (endpoint.getBytes(UTF_8).length > MAX_ENDPOINT_BYTES)
-			return false;
-
-		if (extraData != null && extraData.length > MAX_EXTRA_DATA_BYTES)
+		if (payloadSize() > MAX_PAYLOAD_BYTES)
 			return false;
 
 		if (nodeId != null) {

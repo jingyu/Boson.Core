@@ -397,7 +397,7 @@ public final class KadConstants {
 	 * <p>
 	 * The variable parts - endpoint and extra data - are measured from the entry rather than estimated,
 	 * so only the framing is approximate. Both are bounded at announce time by
-	 * {@code PeerInfo.MAX_ENDPOINT_BYTES} and {@code PeerInfo.MAX_EXTRA_DATA_BYTES}, which is what
+	 * {@code PeerInfo.MAX_PAYLOAD_BYTES}, the budget the two of them share, which is what
 	 * keeps a single entry from exceeding a datagram on its own.
 	 * </p>
 	 * <p>
