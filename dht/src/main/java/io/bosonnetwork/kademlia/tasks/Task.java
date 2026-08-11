@@ -553,14 +553,21 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
-	 * Enqueue the send call action to the event loop of current vertx context.
+	 * Hands the call to the DHT to be sent.
+	 * <p>
+	 * Overridable so a test can observe or divert what a task sends without a socket; production code
+	 * has no reason to.
+	 * </p>
+	 * <p>
+	 * Nothing is enqueued here. {@code DHT.sendCall} drops the call if the DHT has been undeployed and
+	 * moves it onto the DHT's context if this is not already running there, so a task neither has to
+	 * check whether the transport is still alive nor which thread it is on.
+	 * </p>
 	 *
 	 * @param call the RPC request message
 	 */
-	// for testing purposes only
 	protected void sendCall(RpcCall call) {
-		// context.runOnContext(unused -> context.getDHT().getRpcServer().sendCall(call));
-		context.getDHT().getRpcServer().sendCall(call);
+		context.getDHT().sendCall(call);
 	}
 
 	/**
@@ -621,7 +628,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
-	 * Returns a detailed string representation of the task’s state.
+	 * Returns a detailed string representation of the task's state.
 	 *
 	 * @return the status string
 	 */
