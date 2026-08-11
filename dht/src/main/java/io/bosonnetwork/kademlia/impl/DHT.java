@@ -1,5 +1,7 @@
 package io.bosonnetwork.kademlia.impl;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetAddress;
@@ -1393,13 +1395,13 @@ public class DHT extends BosonVerticle {
 	 * degrade gradually, it turns a working lookup into a silent black hole on some paths. The
 	 * declared cap alone is not enough to prevent this: at k=16 a dual-family response is roughly
 	 * {@code 24 + 16*44.5 + 16*56.5 + 48} bytes, about 1690, which exceeds both
-	 * {@link Network#maxPacketSize()} budgets (1450 for IPv4, 1200 for IPv6). The single-family cases
+	 * {@link Network#maxPacketSize()} budgets (1400 for IPv4, 1200 for IPv6). The single-family cases
 	 * fit comfortably; it is specifically {@code want4 && want6} that overflows, which is why the
 	 * budget is split across the families actually requested rather than applied per family.
 	 * </p>
 	 * <p>
 	 * <b>Resulting numbers</b> at the default k=16, using the per-entry estimates in
-	 * {@link KadConstants}: 16 for a single family (the declared cap binds first), about 12 per family
+	 * {@link KadConstants}: 16 for a single family (the declared cap binds first), about 11 per family
 	 * for a dual-family response over an IPv4 socket, and about 9 over an IPv6 socket, whose MTU
 	 * budget is smaller. That lands in the same place as Ethereum's discv4, which fits roughly 12
 	 * nodes per Neighbors packet under an equivalent constraint.
@@ -1435,6 +1437,104 @@ public class DHT extends BosonVerticle {
 		int fits = budget / perSlot;
 
 		return Math.max(1, Math.min(Math.min(k, KadConstants.MAX_NODES_PER_RESPONSE), fits));
+	}
+
+	/**
+	 * Returns how many peers a FIND_PEER response may select, given the count the requester asked for.
+	 * <p>
+	 * The requested count arrives straight off the wire and becomes the {@code LIMIT} of a database
+	 * query, so an unbounded one lets a 63-byte datagram ask this node to select and serialize every
+	 * peer it holds for an id. Because UDP source addresses are unverified, that is both work this node
+	 * does for a stranger and a response it can be made to aim at a third party. A local lookup names
+	 * its own count too, but a local caller is spending its own node's time on its own behalf; a
+	 * requester on the wire is spending someone else's.
+	 * </p>
+	 * <p>
+	 * <b>This bounds the query, not the response.</b> That split is what makes peers different from
+	 * nodes: a node entry is fixed-size, so capping the count caps the bytes, but a peer entry carries
+	 * a variable-length endpoint and optional extra data. The byte side is {@link #fitPeers}; this is
+	 * only the ceiling on how much of the database one request may touch.
+	 * </p>
+	 *
+	 * @param requested the count from the request; zero or negative means unspecified.
+	 * @return the number of peers to select, at least one.
+	 */
+	int peersPerResponse(int requested) {
+		// An unspecified count gets the declared cap rather than the old inline 16, which no datagram
+		// could ever have carried at ~160 bytes per entry - it was unreachable, not intentional.
+		int wanted = requested > 0 ? requested : KadConstants.MAX_PEERS_PER_RESPONSE;
+
+		// Selecting more entries than a datagram could carry is pure database work, so the packet
+		// budget bounds the query too, using the smallest entry an answer could consist of.
+		int budget = network.maxPacketSize() - KadConstants.RESPONSE_OVERHEAD;
+		int fits = budget / KadConstants.PEER_ENTRY_BASE_SIZE;
+
+		return Math.max(1, Math.min(Math.min(wanted, KadConstants.MAX_PEERS_PER_RESPONSE), fits));
+	}
+
+	/**
+	 * Estimated wire cost, in bytes, of one peer entry in a response.
+	 * <p>
+	 * The variable parts are measured from the entry itself and only the CBOR framing is estimated,
+	 * which is as close to the encoded size as this can get without serializing the entry to find out.
+	 * See {@link KadConstants#PEER_ENTRY_BASE_SIZE} for where the fixed part comes from.
+	 * </p>
+	 *
+	 * @param peer the peer to size.
+	 * @return the estimated number of bytes the entry costs in a response.
+	 */
+	static int peerEntrySize(PeerInfo peer) {
+		int size = KadConstants.PEER_ENTRY_BASE_SIZE + peer.getEndpoint().getBytes(UTF_8).length;
+
+		if (peer.isAuthenticated())
+			size += KadConstants.PEER_ENTRY_NODE_AUTH_SIZE;
+
+		byte[] extraData = peer.getExtraData();
+		if (extraData != null)
+			size += extraData.length;
+
+		return size;
+	}
+
+	/**
+	 * Takes the prefix of the given peers that fits in one datagram on this DHT's socket.
+	 * <p>
+	 * The count cap in {@link #peersPerResponse} cannot do this on its own, because a peer entry is
+	 * variable-size: the endpoint is a free-form string and the extra data is free-form bytes. Both are
+	 * bounded when a peer is announced, so a well-formed entry always fits - but a peer stored before
+	 * those bounds existed may not, and one entry is enough to fragment a response.
+	 * </p>
+	 * <p>
+	 * An entry that does not fit is <b>skipped</b> rather than ending the list, and no minimum is kept.
+	 * A peer whose entry alone exceeds the budget cannot be delivered over this transport at all, so
+	 * returning it would buy nothing and cost a fragmented datagram; the smaller peers behind it are
+	 * still worth sending. An empty result falls through to the closest-node response, which is bounded
+	 * separately.
+	 * </p>
+	 *
+	 * @param peers the selected peers, in the order the storage returned them.
+	 * @return the peers that fit, preserving order.
+	 */
+	List<PeerInfo> fitPeers(List<PeerInfo> peers) {
+		if (peers.isEmpty())
+			return peers;
+
+		int budget = network.maxPacketSize() - KadConstants.RESPONSE_OVERHEAD;
+		List<PeerInfo> fitted = new ArrayList<>(peers.size());
+
+		for (PeerInfo peer : peers) {
+			int size = peerEntrySize(peer);
+			if (size > budget) {
+				log.debug("Peer {} needs {} bytes, more than the {} left in the response, skipped",
+						peer.getId(), size, budget);
+				continue;
+			}
+
+			fitted.add(peer);
+			budget -= size;
+		}
+
+		return fitted;
 	}
 
 	private void onFindNode(Message request) {
@@ -1511,8 +1611,8 @@ public class DHT extends BosonVerticle {
 		FindPeerRequest body = request.getBody();
 		Id target = body.getTarget();
 		int expectedSequenceNumber = body.getExpectedSequenceNumber();
-		int expectedCount = body.getExpectedCount() > 0 ? body.getExpectedCount() : 16;
-		storage.getPeers(target, expectedSequenceNumber, expectedCount).compose(peers -> {
+		int expectedCount = peersPerResponse(body.getExpectedCount());
+		storage.getPeers(target, expectedSequenceNumber, expectedCount).map(this::fitPeers).compose(peers -> {
 			if (!peers.isEmpty())
 				return Future.succeededFuture(Message.findPeerResponse(request.getTxid(), peers));
 

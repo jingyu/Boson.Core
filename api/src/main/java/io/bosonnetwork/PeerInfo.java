@@ -77,6 +77,33 @@ public class PeerInfo {
 	/** Attribute key of the peer ID used in JsonContext. */
 	public static final Object ATTRIBUTE_PEER_ID = new Object();
 
+	/**
+	 * The maximum length of an endpoint, in UTF-8 bytes.
+	 * <p>
+	 * A peer is published by being carried in a lookup response, and a response has to fit one UDP
+	 * datagram or it fragments and is dropped on paths that discard fragments. The endpoint and the
+	 * extra data are the only variable-length parts of a peer, so they are the only things that could
+	 * make an entry too large to publish; bounding them here is what lets a node assume that anything
+	 * it accepted, it can also serve.
+	 * </p>
+	 * <p>
+	 * 256 bytes covers a scheme, a 253-character host - the longest a DNS name can be - a port, and a
+	 * short path. Longer than that is a URI carrying data rather than naming a service.
+	 * </p>
+	 */
+	public static final int MAX_ENDPOINT_BYTES = 256;
+
+	/**
+	 * The maximum length of the extra data, in bytes.
+	 * <p>
+	 * Bounded for the same reason as {@link #MAX_ENDPOINT_BYTES}, and more generously because the
+	 * content is free-form. 512 bytes is ample for the metadata this is meant to carry - a handful of
+	 * fields naming an alternative endpoint or a capability - while leaving a worst-case peer entry
+	 * comfortably inside a single datagram.
+	 * </p>
+	 */
+	public static final int MAX_EXTRA_DATA_BYTES = 512;
+
 	/** The peer ID. */
 	private final Id publicKey;
 	/** The private key to sign the peer info. Optional. */
@@ -205,6 +232,12 @@ public class PeerInfo {
 	 */
 	private static PeerInfo create(Identity peer, byte @Nullable [] privateKey, @Nullable Identity node,
 	                               int sequenceNumber, long fingerprint, String endpoint, byte @Nullable [] extraData) {
+		if (endpoint.getBytes(UTF_8).length > MAX_ENDPOINT_BYTES)
+			throw new IllegalArgumentException("Invalid endpoint: longer than " + MAX_ENDPOINT_BYTES + " bytes");
+
+		if (extraData != null && extraData.length > MAX_EXTRA_DATA_BYTES)
+			throw new IllegalArgumentException("Invalid extra data: longer than " + MAX_EXTRA_DATA_BYTES + " bytes");
+
 		Id publicKey = peer.getId();
 		Id nodeId;
 		byte[] nodeSig;
@@ -404,6 +437,8 @@ public class PeerInfo {
 	 * <p>This method performs the following checks:
 	 * <ul>
 	 *     <li>Data integrity checks (non-null fields where expected).</li>
+	 *     <li>Length limits on the variable-length fields, so that an accepted peer is one that can
+	 *         also be published - see {@link #MAX_ENDPOINT_BYTES}.</li>
 	 *     <li>Signature verification:
 	 *         <ul>
 	 *             <li>If authenticated (nodeId present), verifies the node signature against the node ID.</li>
@@ -412,6 +447,11 @@ public class PeerInfo {
 	 *     </li>
 	 * </ul>
 	 *
+	 * <p>The length limits are checked here rather than in {@link #of}, which reconstructs a PeerInfo
+	 * from storage or from the wire. Rejecting there would turn one over-length record written before
+	 * the limits existed into a permanent read failure for every peer sharing its id; rejecting here
+	 * means such a record loads, reads as invalid, and is skipped.
+	 *
 	 * @return {@code true} if the value is valid, {@code false} otherwise.
 	 */
 	public boolean isValid() {
@@ -419,6 +459,12 @@ public class PeerInfo {
 			return false;
 
 		if (sequenceNumber < 0)
+			return false;
+
+		if (endpoint.getBytes(UTF_8).length > MAX_ENDPOINT_BYTES)
+			return false;
+
+		if (extraData != null && extraData.length > MAX_EXTRA_DATA_BYTES)
 			return false;
 
 		if (nodeId != null) {

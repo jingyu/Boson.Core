@@ -35,7 +35,7 @@ public enum Network {
 	/**
 	 * IPv4 network.
 	 */
-	IPv4(StandardProtocolFamily.INET, Inet4Address.class, 20 + 8, 1450),
+	IPv4(StandardProtocolFamily.INET, Inet4Address.class, 20 + 8, 1400),
 
 	/**
 	 * IPv6 network.
@@ -49,12 +49,12 @@ public enum Network {
 
 	/**
 	 * Constructs a Network enum constant with the specified protocol family, preferred address type,
-	 * UDP protocol header size, and maximum UDP packet size.
+	 * UDP protocol header size, and maximum UDP payload size.
 	 *
 	 * @param family the protocol family (e.g., INET or INET6)
 	 * @param addressType the preferred InetAddress subclass for this network (e.g., Inet4Address or Inet6Address)
 	 * @param headerSize the size in bytes of the network and UDP headers for this protocol
-	 * @param maxPacketSize the maximum supported UDP packet size for this network type
+	 * @param maxPacketSize the maximum UDP payload size for this network type; see {@link #maxPacketSize()}
 	 */
 	Network(StandardProtocolFamily family, Class<? extends InetAddress> addressType, int headerSize, int maxPacketSize) {
 		this.protocolFamily = family;
@@ -113,18 +113,44 @@ public enum Network {
 	}
 
 	/**
-	 * Get the UDP protocol header size of this network type.
+	 * Get the combined IP and UDP header size of this network type.
+	 * <p>
+	 * This documents the other half of the {@link #maxPacketSize()} arithmetic rather than being
+	 * something a sender subtracts: the budget already excludes these bytes, so subtracting them a
+	 * second time silently shrinks every message. It is here so the relationship
+	 * {@code maxPacketSize() + protocolHeaderSize() <= path MTU} can be checked against a real link.
+	 * </p>
 	 *
-	 * @return the UDP protocol header size.
+	 * @return the IP and UDP header size in bytes.
 	 */
 	public int protocolHeaderSize() {
 		return protocolHeaderSize;
 	}
 
 	/**
-	 * Get the maximum UDP packet size of this network type.
+	 * Get the maximum UDP payload size of this network type - the budget a message must fit in to
+	 * travel as a single unfragmented datagram.
+	 * <p>
+	 * This is the <b>payload</b>, not the IP packet: the packet on the wire is this plus
+	 * {@link #protocolHeaderSize()}. A message that exceeds the path MTU is fragmented, and a
+	 * fragmented UDP datagram is lost entirely if any one fragment is lost - middleboxes commonly drop
+	 * fragments outright - so overshooting does not degrade gradually, it turns a working exchange into
+	 * a silent black hole on some paths.
+	 * </p>
+	 * <p>
+	 * <b>IPv6, 1200.</b> With the 48-byte header that is a 1248-byte packet, inside the 1280-byte
+	 * minimum link MTU that IPv6 guarantees (RFC 8200). The same floor QUIC mandates, and for the same
+	 * reason: it is the largest size that needs no path discovery to be safe.
+	 * </p>
+	 * <p>
+	 * <b>IPv4, 1400.</b> With the 28-byte header that is a 1428-byte packet. The Ethernet limit of 1500
+	 * would allow more, but a client is rarely on plain Ethernet end to end: GRE caps at 1476, DS-Lite
+	 * and 6in4 around 1460-1480, IPsec around 1400-1438. Sizing to the medium rather than to the
+	 * tunnels above it means the loss shows up only for the clients behind one, which is the hardest
+	 * form of this defect to diagnose.
+	 * </p>
 	 *
-	 * @return the maximum UDP packet.
+	 * @return the maximum UDP payload size in bytes.
 	 */
 	public int maxPacketSize() {
 		return maxPacketSize;
