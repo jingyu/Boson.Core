@@ -322,12 +322,22 @@ public class RPCServerTests {
 		return peer;
 	}
 
+	/**
+	 * Stores {@code count} peers under one id, capped at what a FIND_PEER response can carry.
+	 * <p>
+	 * The test responder answers with the whole stored list, where the real one trims it to the packet
+	 * budget first ({@code DHT.fitPeers}). Without the cap the fixture builds responses the RPC layer
+	 * now refuses to send - a datagram over the MTU is fragmented, and a fragmented UDP datagram is lost
+	 * entirely if any one fragment is lost - which is the transport being right and the fixture being
+	 * unrealistic. Four authenticated peers is roughly 1000 bytes against the 1400-byte IPv4 budget.
+	 * </p>
+	 */
 	protected static Id createPeerInfo(int count) {
 		Signature.KeyPair keyPair = Signature.KeyPair.random();
 		Id id = Id.of(keyPair.publicKey().bytes());
 
 		List<PeerInfo> infos = new ArrayList<>();
-		for (int i = 0; i < count; i++) {
+		for (int i = 0; i < Math.min(count, 4); i++) {
 			PeerInfo peer = switch (Random.random().nextInt(0, 5)) {
 				case 1 -> PeerInfo.builder().key(keyPair).endpoint("http://foo.example.com/").build();
 				case 2 -> PeerInfo.builder().key(keyPair).endpoint("tcp://203.0.113.10:1234").build();

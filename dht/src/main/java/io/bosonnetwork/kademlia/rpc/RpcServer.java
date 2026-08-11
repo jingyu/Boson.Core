@@ -43,6 +43,8 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
+import io.bosonnetwork.kademlia.exceptions.MessageTooBigException;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
@@ -746,6 +748,14 @@ public class RpcServer implements Measured {
 			return Future.failedFuture(e);
 		}
 
+		// The last line of defense on the size of a datagram, and the only one that measures rather
+		// than estimates: every other bound is a per-field limit or a per-entry estimate applied while
+		// a message is being built, so nothing above this point has ever seen the bytes that actually
+		// go on the wire. What it catches is a message whose size was derived wrongly, or one built
+		// from a record stored before the limits that derive it existed.
+		if (buffer.length() > network.maxPacketSize())
+			return tooBigToSend(message, buffer.length());
+
 		SocketAddress remote = message.getRemoteAddress();
 		return socket.send(buffer, remote.port(), remote.host()).andThen(ar -> {
 			if (ar.succeeded()) {
@@ -770,7 +780,7 @@ public class RpcServer implements Measured {
 
 				// A send failure (incl. transient socket-buffer exhaustion / ENOBUFS) drops this datagram
 				// and fails the associated RpcCall; the iterative tasks tolerate individual losses via their
-				// α-concurrency, so no retransmit is attempted here (UDP best-effort, matching Kademlia).
+				// alpha-concurrency, so no retransmit is attempted here (UDP best-effort, matching Kademlia).
 				/*/
 				// Checking for specific errors by inspecting a generic IOException and its message is not ideal
 				if (ar.cause() != null && Objects.equals(ar.cause().getMessage(), "No buffer space available")) {
@@ -780,6 +790,53 @@ public class RpcServer implements Measured {
 				*/
 			}
 		});
+	}
+
+	/**
+	 * Handles a message that will not fit one datagram on this socket.
+	 * <p>
+	 * Sending it anyway is the worst of the options: an oversized datagram is fragmented, a fragmented
+	 * UDP datagram is lost entirely if any one fragment is lost, and middleboxes drop fragments
+	 * outright - so it would work on the paths that need it least and fail silently on the rest.
+	 * </p>
+	 * <p>
+	 * A <b>response</b> is replaced by an {@link ErrorCode#MessageTooBig} error, so the requester
+	 * learns immediately instead of waiting out a timeout it would read as this node being
+	 * unreachable. The substitute carries a fixed message and no payload, so it cannot itself be
+	 * oversized; were it somehow refused as well it would arrive back here as an error, which is not
+	 * substituted again, so the recursion is bounded at one step.
+	 * </p>
+	 * <p>
+	 * Anything else - a request this node originated, or an error - simply fails. There is no remote
+	 * party waiting on a request that was never sent, and the caller learns through the returned
+	 * future: {@link #sendCall} drops the pending call and fails it with the same cause.
+	 * </p>
+	 * <p>
+	 * Reaching here is a defect in whatever built the message, not an expected condition, which is why
+	 * it is logged at error even though it is handled.
+	 * </p>
+	 *
+	 * @param message the message that does not fit.
+	 * @param size    the size of the datagram it would have produced, in bytes.
+	 * @return a future failed with the same error code the remote party is told, or the result of
+	 *         sending the substituted error response.
+	 */
+	private Future<Void> tooBigToSend(Message message, int size) {
+		log.error("Message {}/{} to {}@{} needs {} bytes, more than the {}-byte {} packet budget, not sent",
+				message.getMethod(), message.getType(), message.getRemoteId(), message.getRemoteAddress(),
+				size, network.maxPacketSize(), network);
+
+		MessageTooBigException cause = new MessageTooBigException("Message too big to send in one datagram");
+
+		if (metrics != null)
+			metrics.messageSendFailed(message.getRemoteAddress(), cause);
+
+		if (!message.isResponse())
+			return Future.failedFuture(cause);
+
+		Message error = Message.error(message.getMethod(), message.getTxid(), cause.getCode(), cause.getMessage());
+		error.setRemote(message.getRemoteId(), message.getRemoteAddress());
+		return sendMessage(error);
 	}
 
 	/**

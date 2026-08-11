@@ -481,6 +481,20 @@ public class Value {
 	}
 
 	/**
+	 * Returns the length of the data, in bytes.
+	 * <p>
+	 * The same as {@code getData().length}, but without copying the data to find out - which matters
+	 * where a value is only being sized, such as deciding whether it still fits what a transport can
+	 * carry. Compare against {@link #maxDataBytes()}.
+	 * </p>
+	 *
+	 * @return the length of the data in bytes.
+	 */
+	public int dataSize() {
+		return data.length;
+	}
+
+	/**
 	 * Decrypts the value's data for the recipient.
 	 *
 	 * @param recipientSk The recipient's private key.

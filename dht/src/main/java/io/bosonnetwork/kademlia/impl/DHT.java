@@ -1537,6 +1537,34 @@ public class DHT extends BosonVerticle {
 		return fitted;
 	}
 
+	/**
+	 * Whether a stored value can still be served in one datagram.
+	 * <p>
+	 * The value half of what {@link #fitPeers} does for peers, and it exists for the same reason: the
+	 * limits are enforced when a value is stored, so anything accepted since they existed fits by
+	 * construction - but a record written before them does not, and unlike a peer a value has no list
+	 * to be dropped from. Serving it would fragment every response for that id, permanently, on a key
+	 * nothing else can repair.
+	 * </p>
+	 * <p>
+	 * Only the length is checked, not {@link Value#isValid()}: this decides what the transport can
+	 * carry, and verifying a signature on every lookup would put elliptic-curve work on the event loop
+	 * to answer a question nobody asked. A value that does not fit falls through to the closest-node
+	 * response, which is bounded separately - the same answer this node would give if it held nothing.
+	 * </p>
+	 *
+	 * @param value the stored value.
+	 * @return {@code true} if the value is within the limit for its type.
+	 */
+	static boolean valueFits(Value value) {
+		if (value.dataSize() <= value.maxDataBytes())
+			return true;
+
+		log.debug("Value {} holds {} bytes, more than the {} its type allows, not served",
+				value.getId(), value.dataSize(), value.maxDataBytes());
+		return false;
+	}
+
 	private void onFindNode(Message request) {
 		FindNodeRequest body = request.getBody();
 		Id target = body.getTarget();
@@ -1562,7 +1590,7 @@ public class DHT extends BosonVerticle {
 		Id target = body.getTarget();
 		int expectedSequenceNumber = body.getExpectedSequenceNumber();
 		storage.getValue(target).compose(value -> {
-			if (value != null && (!value.isMutable() || expectedSequenceNumber < 0 ||
+			if (value != null && valueFits(value) && (!value.isMutable() || expectedSequenceNumber < 0 ||
 					value.getSequenceNumber() >= expectedSequenceNumber))
 				return Future.succeededFuture(Message.findValueResponse(request.getTxid(), value));
 
