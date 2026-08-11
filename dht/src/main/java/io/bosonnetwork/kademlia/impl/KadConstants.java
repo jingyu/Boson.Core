@@ -368,6 +368,55 @@ public final class KadConstants {
 	 */
 	public static final int RESPONSE_OVERHEAD = 128;
 
+	/**
+	 * The declared ceiling on how many peers one FIND_PEER response may carry.
+	 * <p>
+	 * Matches the default a local lookup asks for, so the common request is served whole. It exists
+	 * mainly to bound the {@code LIMIT} of the database query the request turns into: a requester
+	 * names the count, and without a ceiling a 63-byte datagram can ask a node to select and serialize
+	 * every peer it holds for an id.
+	 * </p>
+	 * <p>
+	 * This cap alone does <b>not</b> bound the size of the response, which is the difference between
+	 * peers and nodes. A node entry is fixed-size, so a count bounds the bytes. A peer entry carries a
+	 * variable-length endpoint and optional extra data, so the byte budget has to be applied to the
+	 * entries themselves - see {@link #PEER_ENTRY_BASE_SIZE}.
+	 * </p>
+	 */
+	public static final int MAX_PEERS_PER_RESPONSE = 8;
+
+	/**
+	 * Estimated wire cost, in bytes, of the fixed part of one peer entry in a response.
+	 * <p>
+	 * Covers the 32-byte peer id, the 64-byte signature, the sequence number and fingerprint, and the
+	 * CBOR field framing around them. Derived from the golden vectors in {@code FindPeerTests}: the
+	 * five-peer list costs 812 bytes in every variant that carries it (1192-380, 1288-476, 1644-832),
+	 * of which 117 bytes are endpoints and one entry is node-authenticated, leaving ~118 fixed per
+	 * entry. Rounded up here so the estimate errs toward smaller responses.
+	 * </p>
+	 * <p>
+	 * The variable parts - endpoint and extra data - are measured from the entry rather than estimated,
+	 * so only the framing is approximate. Both are bounded at announce time by
+	 * {@code PeerInfo.MAX_ENDPOINT_BYTES} and {@code PeerInfo.MAX_EXTRA_DATA_BYTES}, which is what
+	 * keeps a single entry from exceeding a datagram on its own.
+	 * </p>
+	 * <p>
+	 * If the peer entry encoding changes, this estimate and the test vectors move together - the
+	 * vectors are the source of truth and will fail first.
+	 * </p>
+	 */
+	public static final int PEER_ENTRY_BASE_SIZE = 128;
+
+	/**
+	 * Additional estimated wire cost, in bytes, of a node-authenticated peer entry.
+	 * <p>
+	 * The 32-byte node id plus its 64-byte signature and framing. Added only for peers where
+	 * {@code PeerInfo.isAuthenticated()} holds; see {@link #PEER_ENTRY_BASE_SIZE} for how this was
+	 * derived.
+	 * </p>
+	 */
+	public static final int PEER_ENTRY_NODE_AUTH_SIZE = 104;
+
 	// ---------------------------------------------------------------------------------------------
 	// Maintenance cadence
 	//

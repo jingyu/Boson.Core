@@ -1,6 +1,8 @@
 package io.bosonnetwork;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -556,5 +558,75 @@ public class PeerInfoTests {
 			);
 			assertTrue(e.getMessage().startsWith("Invalid PeerInfo: peer id can not be null"));
 		}
+	}
+
+	/**
+	 * Signs a peer the way a hostile client would - computing the digest itself rather than going
+	 * through the builder - so the length limits can be tested against a peer whose signature is
+	 * genuinely valid. Nothing stops a stranger from doing exactly this, which is why the limits are
+	 * re-checked on the receiving side and not only where a peer is created.
+	 */
+	private static PeerInfo signedPeer(String endpoint, byte[] extraData) {
+		Signature.KeyPair keyPair = Signature.KeyPair.random();
+		Id peerId = Id.of(keyPair.publicKey().bytes());
+
+		// The same field order PeerInfo signs over; nothing about it is secret.
+		byte[] digest = extraData == null ?
+				Hash.sha256(peerId.bytesUnsafe(), Bytes.fromInteger(0), Bytes.fromLong(0),
+						endpoint.getBytes(UTF_8)) :
+				Hash.sha256(peerId.bytesUnsafe(), Bytes.fromInteger(0), Bytes.fromLong(0),
+						endpoint.getBytes(UTF_8), extraData);
+		byte[] signature = Signature.sign(digest, keyPair.privateKey());
+
+		return PeerInfo.of(peerId, null, 0, null, null, signature, 0, endpoint, extraData);
+	}
+
+	@Test
+	void testEndpointLengthLimit() {
+		String atLimit = "tcp://" + "a".repeat(PeerInfo.MAX_ENDPOINT_BYTES - "tcp://".length());
+		assertTrue(PeerInfo.builder().endpoint(atLimit).build().isValid(),
+				"an endpoint exactly at the limit must still be usable");
+
+		// A peer is published inside a lookup response, so an endpoint too long to fit a datagram is a
+		// peer that could be stored but never served.
+		String overLimit = atLimit + "a";
+		assertThrows(IllegalArgumentException.class, () -> PeerInfo.builder().endpoint(overLimit).build());
+
+		// And the same peer signed by someone who does not use this builder, which is the case the
+		// receiving side actually has to defend against.
+		PeerInfo hostile = signedPeer(overLimit, null);
+		assertFalse(hostile.isValid(), "an over-length endpoint must be rejected however well it is signed");
+		assertTrue(signedPeer(atLimit, null).isValid(), "the same peer within the limit must be accepted");
+	}
+
+	@Test
+	void testExtraDataLengthLimit() {
+		byte[] atLimit = Random.randomBytes(PeerInfo.MAX_EXTRA_DATA_BYTES);
+		String endpoint = "tcp://203.0.113.10:5678";
+		assertTrue(PeerInfo.builder().endpoint(endpoint).extra(atLimit).build().isValid(),
+				"extra data exactly at the limit must still be usable");
+
+		byte[] overLimit = Random.randomBytes(PeerInfo.MAX_EXTRA_DATA_BYTES + 1);
+		assertThrows(IllegalArgumentException.class,
+				() -> PeerInfo.builder().endpoint(endpoint).extra(overLimit).build());
+
+		PeerInfo hostile = signedPeer(endpoint, overLimit);
+		assertFalse(hostile.isValid(), "over-length extra data must be rejected however well it is signed");
+		assertTrue(signedPeer(endpoint, atLimit).isValid(), "the same peer within the limit must be accepted");
+	}
+
+	/**
+	 * The limits are enforced where a peer is judged, not where it is reconstructed. A record written
+	 * before they existed has to keep loading: throwing in {@code of()} would turn one such row into a
+	 * permanent read failure for every peer sharing its id, rather than a peer that reads as invalid
+	 * and is skipped.
+	 */
+	@Test
+	void testOverLengthPeerStillLoads() {
+		String overLimit = "tcp://" + "a".repeat(PeerInfo.MAX_ENDPOINT_BYTES);
+		PeerInfo peer = assertDoesNotThrow(() -> signedPeer(overLimit, null));
+
+		assertEquals(overLimit, peer.getEndpoint());
+		assertFalse(peer.isValid());
 	}
 }
