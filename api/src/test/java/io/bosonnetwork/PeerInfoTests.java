@@ -581,49 +581,71 @@ public class PeerInfoTests {
 		return PeerInfo.of(peerId, null, 0, null, null, signature, 0, endpoint, extraData);
 	}
 
-	@Test
-	void testEndpointLengthLimit() {
-		String atLimit = "tcp://" + "a".repeat(PeerInfo.MAX_ENDPOINT_BYTES - "tcp://".length());
-		assertTrue(PeerInfo.builder().endpoint(atLimit).build().isValid(),
-				"an endpoint exactly at the limit must still be usable");
-
-		// A peer is published inside a lookup response, so an endpoint too long to fit a datagram is a
-		// peer that could be stored but never served.
-		String overLimit = atLimit + "a";
-		assertThrows(IllegalArgumentException.class, () -> PeerInfo.builder().endpoint(overLimit).build());
-
-		// And the same peer signed by someone who does not use this builder, which is the case the
-		// receiving side actually has to defend against.
-		PeerInfo hostile = signedPeer(overLimit, null);
-		assertFalse(hostile.isValid(), "an over-length endpoint must be rejected however well it is signed");
-		assertTrue(signedPeer(atLimit, null).isValid(), "the same peer within the limit must be accepted");
-	}
-
-	@Test
-	void testExtraDataLengthLimit() {
-		byte[] atLimit = Random.randomBytes(PeerInfo.MAX_EXTRA_DATA_BYTES);
-		String endpoint = "tcp://203.0.113.10:5678";
-		assertTrue(PeerInfo.builder().endpoint(endpoint).extra(atLimit).build().isValid(),
-				"extra data exactly at the limit must still be usable");
-
-		byte[] overLimit = Random.randomBytes(PeerInfo.MAX_EXTRA_DATA_BYTES + 1);
-		assertThrows(IllegalArgumentException.class,
-				() -> PeerInfo.builder().endpoint(endpoint).extra(overLimit).build());
-
-		PeerInfo hostile = signedPeer(endpoint, overLimit);
-		assertFalse(hostile.isValid(), "over-length extra data must be rejected however well it is signed");
-		assertTrue(signedPeer(endpoint, atLimit).isValid(), "the same peer within the limit must be accepted");
+	private static String endpointOf(int bytes) {
+		return "tcp://" + "a".repeat(bytes - "tcp://".length());
 	}
 
 	/**
-	 * The limits are enforced where a peer is judged, not where it is reconstructed. A record written
-	 * before they existed has to keep loading: throwing in {@code of()} would turn one such row into a
+	 * The budget is shared, so either field may take all of it. That is the point of having one limit
+	 * instead of two: a peer with a short endpoint should not be denied space the endpoint was never
+	 * going to use.
+	 */
+	@Test
+	void testPayloadLimitCanBeSpentOnEitherField() {
+		String longEndpoint = endpointOf(PeerInfo.MAX_PAYLOAD_BYTES);
+		PeerInfo allEndpoint = PeerInfo.builder().endpoint(longEndpoint).build();
+		assertTrue(allEndpoint.isValid(), "the whole budget spent on the endpoint must be usable");
+		assertEquals(PeerInfo.MAX_PAYLOAD_BYTES, allEndpoint.payloadSize());
+
+		String shortEndpoint = "tcp://203.0.113.10:5678";
+		byte[] extra = Random.randomBytes(PeerInfo.MAX_PAYLOAD_BYTES - shortEndpoint.length());
+		PeerInfo allExtra = PeerInfo.builder().endpoint(shortEndpoint).extra(extra).build();
+		assertTrue(allExtra.isValid(), "the whole budget spent on extra data must be usable");
+		assertEquals(PeerInfo.MAX_PAYLOAD_BYTES, allExtra.payloadSize());
+	}
+
+	/**
+	 * What a shared budget has to enforce that two separate limits did not: neither field is over on
+	 * its own, but together they are.
+	 */
+	@Test
+	void testPayloadLimitIsCumulative() {
+		String endpoint = endpointOf(PeerInfo.MAX_PAYLOAD_BYTES / 2);
+		byte[] extra = Random.randomBytes(PeerInfo.MAX_PAYLOAD_BYTES / 2 + 1);
+
+		assertTrue(PeerInfo.builder().endpoint(endpoint).build().isValid(),
+				"precondition: the endpoint alone is within budget");
+		assertTrue(PeerInfo.builder().endpoint("tcp://a").extra(extra).build().isValid(),
+				"precondition: the extra data alone is within budget");
+
+		assertThrows(IllegalArgumentException.class,
+				() -> PeerInfo.builder().endpoint(endpoint).extra(extra).build());
+
+		// And signed by someone who does not use this builder, which is what the receiving side has to
+		// defend against - an attacker signs their own peers.
+		PeerInfo hostile = signedPeer(endpoint, extra);
+		assertFalse(hostile.isValid(), "a cumulative overrun must be rejected however well it is signed");
+	}
+
+	/** The endpoint counts as bytes, not characters, or a non-ASCII host would be undercounted. */
+	@Test
+	void testPayloadIsMeasuredInBytes() {
+		String endpoint = "http://\u00e9\u00e9\u00e9.example.com/";
+		PeerInfo peer = PeerInfo.builder().endpoint(endpoint).build();
+
+		assertEquals(endpoint.getBytes(UTF_8).length, peer.payloadSize());
+		assertTrue(peer.payloadSize() > endpoint.length(), "precondition: multi-byte endpoint");
+	}
+
+	/**
+	 * The limit is enforced where a peer is judged, not where it is reconstructed. A record written
+	 * before it existed has to keep loading: throwing in {@code of()} would turn one such row into a
 	 * permanent read failure for every peer sharing its id, rather than a peer that reads as invalid
 	 * and is skipped.
 	 */
 	@Test
 	void testOverLengthPeerStillLoads() {
-		String overLimit = "tcp://" + "a".repeat(PeerInfo.MAX_ENDPOINT_BYTES);
+		String overLimit = endpointOf(PeerInfo.MAX_PAYLOAD_BYTES + 1);
 		PeerInfo peer = assertDoesNotThrow(() -> signedPeer(overLimit, null));
 
 		assertEquals(overLimit, peer.getEndpoint());

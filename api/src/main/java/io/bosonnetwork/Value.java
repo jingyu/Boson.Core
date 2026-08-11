@@ -30,6 +30,7 @@ import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
+import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Hash;
@@ -56,6 +57,72 @@ import io.bosonnetwork.utils.Hex;
 public class Value {
 	/** The number of bytes in the CryptoBox nonce carried by encrypted values. */
 	public static final int NONCE_BYTES = 24;
+
+	// ---------------------------------------------------------------------------------------------
+	// Data length limits
+	//
+	// A value travels inside a single UDP datagram - a STORE_VALUE going out, a FIND_VALUE response
+	// coming back - and a datagram over the path MTU is fragmented, which on paths that drop fragments
+	// loses the whole exchange rather than degrading. The data is the only variable-length part of a
+	// value, so it is the only thing that could push one over.
+	//
+	// The limit is per type because the three types do not carry the same envelope, and the difference
+	// is large enough to be worth spending: a mutable value pays for an owner id and a signature that
+	// an immutable one does not, and an encrypted one pays again for a recipient id, a nonce and a
+	// MAC. One shared limit would have to be the smallest of the three, which would cost an immutable
+	// value a quarter of its capacity to protect a case it does not have.
+	//
+	// Each number is the measured on-wire ceiling minus headroom. The ceilings, taken against the
+	// 1200-byte IPv6 packet budget - the smaller of the two, and the one whose 1280-byte minimum MTU
+	// is a guarantee rather than a hope about the path - and measured on a STORE_VALUE, which is the
+	// larger of the two envelopes a value travels in:
+	//
+	//   type         envelope   ceiling   limit   headroom
+	//   immutable        111      1089    1024          65
+	//   mutable          217       983     896          87
+	//   encrypted        283       917     832          85
+	//
+	// The envelope counts the message base, the sequence number, the ids, the nonce, the signature,
+	// the token, and the 72 bytes the RPC layer prepends (sender id, nonce, MAC). ValueSizeLimitTests
+	// pins all three against a real encrypted datagram, so a message field added later fails there
+	// rather than silently spending the headroom.
+	//
+	// Headroom is deliberately not spent to the last byte: reducing one of these limits is a
+	// wire-visible change, and it is better to make it zero times than twice.
+	// ---------------------------------------------------------------------------------------------
+
+	/**
+	 * The maximum data length, in bytes, of an immutable value.
+	 * <p>
+	 * The largest of the three, because an immutable value carries nothing but its data - no owner id,
+	 * no signature, no sequence number.
+	 * </p>
+	 */
+	public static final int MAX_IMMUTABLE_DATA_BYTES = 1024;
+
+	/**
+	 * The maximum data length, in bytes, of a mutable value that is not encrypted.
+	 * <p>
+	 * Smaller than {@link #MAX_IMMUTABLE_DATA_BYTES} by the owner id, the signature and the sequence
+	 * number that make the value updatable.
+	 * </p>
+	 */
+	public static final int MAX_MUTABLE_DATA_BYTES = 896;
+
+	/**
+	 * The maximum data length, in bytes, of an encrypted value, measured on the stored ciphertext.
+	 * <p>
+	 * Smaller again by the recipient id and the nonce. Note this bounds what goes on the wire, which
+	 * for an encrypted value is the ciphertext, and encryption appends a {@code CryptoBox.MAC_BYTES}
+	 * tag - so the plaintext a caller may supply is {@code MAX_ENCRYPTED_DATA_BYTES - MAC_BYTES}.
+	 * </p>
+	 * <p>
+	 * The three limits never interact, because a value's type is fixed when it is created: a builder
+	 * refuses to add or change a recipient during an update. So a value is judged by one limit for its
+	 * whole life, and an update cannot move it under a smaller one.
+	 * </p>
+	 */
+	public static final int MAX_ENCRYPTED_DATA_BYTES = 832;
 
 	/** The public key for mutable values. */
 	private final @Nullable Id publicKey;
@@ -217,6 +284,9 @@ public class Value {
 		Objects.requireNonNull(data, "data");
 		if (data.length == 0)
 			throw new IllegalArgumentException("Invalid data: must not be empty");
+		if (data.length > MAX_IMMUTABLE_DATA_BYTES)
+			throw new IllegalArgumentException("Invalid data: longer than " + MAX_IMMUTABLE_DATA_BYTES +
+					" bytes, the limit for an immutable value");
 
 		return new Value(null, null, null, null, 0, null, data);
 	}
@@ -239,6 +309,9 @@ public class Value {
 		Objects.requireNonNull(data, "data");
 		if (data.length == 0)
 			throw new IllegalArgumentException("Invalid data: must not be empty");
+		if (data.length > MAX_MUTABLE_DATA_BYTES)
+			throw new IllegalArgumentException("Invalid data: longer than " + MAX_MUTABLE_DATA_BYTES +
+					" bytes, the limit for a mutable value");
 
 		Id publicKey = identity.getId();
 		byte[] digest = computeDigest(publicKey, null, null, sequenceNumber, data);
@@ -270,6 +343,14 @@ public class Value {
 		Objects.requireNonNull(data, "data");
 		if (data.length == 0)
 			throw new IllegalArgumentException("Invalid data: must not be empty");
+
+		// Checked against the plaintext limit rather than the ciphertext, so the caller is told the
+		// number that applies to what it passed. Encryption appends a MAC of exactly MAC_BYTES, so the
+		// two statements of the limit are the same one - see MAX_ENCRYPTED_DATA_BYTES.
+		int maxPlainBytes = MAX_ENCRYPTED_DATA_BYTES - CryptoBox.MAC_BYTES;
+		if (data.length > maxPlainBytes)
+			throw new IllegalArgumentException("Invalid data: longer than " + maxPlainBytes +
+					" bytes, the limit for an encrypted value");
 
 		// A fresh nonce per build, including on update: reusing a nonce across two plaintexts under
 		// the same sender/recipient shared secret would destroy the confidentiality of both.
@@ -516,6 +597,24 @@ public class Value {
 	}
 
 	/**
+	 * Returns the data length limit that applies to this value, in bytes.
+	 * <p>
+	 * Which of the three applies is decided by what the value carries, not by how it was built, so a
+	 * value reconstructed from storage or from the wire is judged by the same rule as one created
+	 * here. For an encrypted value this is the limit on the stored ciphertext; see
+	 * {@link #MAX_ENCRYPTED_DATA_BYTES}.
+	 * </p>
+	 *
+	 * @return the maximum length of {@link #getData()} for a value of this type.
+	 */
+	public int maxDataBytes() {
+		if (isEncrypted())
+			return MAX_ENCRYPTED_DATA_BYTES;
+
+		return isMutable() ? MAX_MUTABLE_DATA_BYTES : MAX_IMMUTABLE_DATA_BYTES;
+	}
+
+	/**
 	 * Computes the digest for signing the value.
 	 *
 	 * @return the digest
@@ -542,11 +641,16 @@ public class Value {
 	 * <p>
 	 * For mutable values, this verifies the signature against the computed digest.
 	 * For immutable values, this verifies that the id matches the hash of the data.
+	 * <p>
+	 * The data length is checked here as well as where a value is created, because a value arriving
+	 * over the wire was signed by whoever sent it - a sender who does not use this class is free to
+	 * sign any length it likes. Checked here rather than in {@link #of}, so that a record written
+	 * before the limit existed loads and reads as invalid instead of throwing on every read.
 	 *
 	 * @return {@code true} if the value is valid, {@code false} otherwise.
 	 */
 	public boolean isValid() {
-		if (data.length == 0)
+		if (data.length == 0 || data.length > maxDataBytes())
 			return false;
 
 		if (publicKey != null) {

@@ -75,12 +75,13 @@ public class DHTPeerResponseBudgetTests {
 		return network.maxPacketSize() - KadConstants.RESPONSE_OVERHEAD;
 	}
 
-	/** A peer at the announce-time limits: the largest entry a node will now accept. */
+	/** A peer at the announce-time limit: the largest entry a node will now accept. */
 	private static PeerInfo maximalPeer() {
+		String endpoint = "tcp://203.0.113.10:5678";
 		return PeerInfo.builder()
 				.key(Signature.KeyPair.random())
-				.endpoint("tcp://" + "a".repeat(PeerInfo.MAX_ENDPOINT_BYTES - "tcp://".length()))
-				.extra(new byte[PeerInfo.MAX_EXTRA_DATA_BYTES])
+				.endpoint(endpoint)
+				.extra(new byte[PeerInfo.MAX_PAYLOAD_BYTES - endpoint.length()])
 				.build();
 	}
 
