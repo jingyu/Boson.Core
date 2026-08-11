@@ -27,8 +27,12 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Scanner;
+import java.util.Set;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Signature;
@@ -39,6 +43,14 @@ import io.bosonnetwork.utils.Base58;
  * BootstrapSetup is a utility to initialize the configuration for a Boson Bootstrap Node.
  */
 public class BootstrapSetup {
+	/**
+	 * Mode for the generated configuration: readable by the owner and the group the node runs as,
+	 * and by nobody else. {@code node.yaml} carries the node's private key in clear text, so the
+	 * default mode would publish the node's identity to every account on the host.
+	 */
+	private static final Set<PosixFilePermission> CONFIG_PERMISSIONS =
+			PosixFilePermissions.fromString("rw-r-----");
+
 	private final Path homeDir;
 	private final boolean batch;
 
@@ -83,6 +95,9 @@ public class BootstrapSetup {
 				System.out.println("Configuration already exists, skipping initialization.");
 				return;
 			}
+
+			if (!confirmOverwrite(configDir.resolve("node.yaml")))
+				return;
 		}
 
 		// 1. Generate Identity
@@ -119,6 +134,45 @@ public class BootstrapSetup {
 		System.out.println("  Config: " + configDir.resolve("node.yaml"));
 	}
 
+	/**
+	 * Asks whether an existing bootstrap configuration may be replaced.
+	 * <p>
+	 * A bootstrap node's value is that other nodes have its id in their configuration, which makes
+	 * its identity the one thing here that cannot be regenerated: replacing the key pair does not
+	 * reconfigure this node, it removes it from the network as far as every node that already knows
+	 * it is concerned. So this is a confirmation rather than a warning, and anything other than an
+	 * explicit yes aborts - including a closed or redirected stdin, where there is nobody to ask.
+	 * </p>
+	 *
+	 * @param configFile the configuration file that would be overwritten.
+	 * @return {@code true} if the operator confirmed the overwrite.
+	 */
+	private boolean confirmOverwrite(Path configFile) {
+		System.out.println("WARNING: This bootstrap node is already configured:");
+		System.out.println("  " + configFile);
+		System.out.println();
+		System.out.println("Continuing generates a new node identity. The current private key is");
+		System.out.println("lost, and every node configured with this bootstrap node's current id");
+		System.out.println("will no longer be able to reach it.");
+		System.out.println();
+		System.out.print("Type 'yes' to confirm overwrite, or press Enter to abort: ");
+
+		// Closing the Scanner closes System.in for the whole process. Safe here: this is the only
+		// prompt in the setup, and nothing reads standard input after it either way.
+		String answer;
+		try (Scanner scanner = new Scanner(System.in)) {
+			answer = scanner.hasNextLine() ? scanner.nextLine().trim() : "";
+		}
+
+		if (!"yes".equals(answer)) {
+			System.out.println("Setup aborted, the existing configuration is unchanged.");
+			return false;
+		}
+
+		System.out.println();
+		return true;
+	}
+
 	private Path getTemplateDir() {
 		if (homeDir != null) {
 			Path distTemplates = homeDir.resolve("config/templates/bootstrap");
@@ -136,6 +190,32 @@ public class BootstrapSetup {
 		for (Map.Entry<String, String> entry : vars.entrySet()) {
 			content = content.replace("${" + entry.getKey() + "}", entry.getValue());
 		}
+
+		restrict(target);
 		Files.writeString(target, content);
+	}
+
+	/**
+	 * Creates the target file empty and already restricted to its owner and group.
+	 * <p>
+	 * Done before the write rather than after it: setting the mode afterwards leaves the private key
+	 * on disk under the default umask - world-readable on a stock system - for the moment in between,
+	 * and that moment is enough on a host where the operator is not the only account.
+	 * </p>
+	 * <p>
+	 * Skipped where the file system has no POSIX permissions to set. The bootstrap node's packaged
+	 * layout is Linux-only; elsewhere this is a developer running the setup by hand.
+	 * </p>
+	 *
+	 * @param target the file about to be written.
+	 * @throws IOException if the file cannot be replaced.
+	 */
+	private static void restrict(Path target) throws IOException {
+		if (!target.getFileSystem().supportedFileAttributeViews().contains("posix"))
+			return;
+
+		// An existing file keeps its own mode through a write, so replace it rather than truncate it.
+		Files.deleteIfExists(target);
+		Files.createFile(target, PosixFilePermissions.asFileAttribute(CONFIG_PERMISSIONS));
 	}
 }
