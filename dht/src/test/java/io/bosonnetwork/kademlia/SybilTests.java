@@ -142,7 +142,7 @@ public class SybilTests {
 				}
 			});
 
-			sybil.getDHT(Network.IPv4).getRpcServer().sendCall(call);
+			sybil.getDHT(Network.IPv4).sendCall(call);
 
 			synchronized(result) {
 				result.wait();
@@ -204,7 +204,7 @@ public class SybilTests {
 				}
 			});
 
-			sybil.getDHT(Network.IPv4).getRpcServer().sendCall(call);
+			sybil.getDHT(Network.IPv4).sendCall(call);
 
 			synchronized(result) {
 				result.wait();

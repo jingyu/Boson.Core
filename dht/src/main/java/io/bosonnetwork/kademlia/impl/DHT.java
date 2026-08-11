@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -280,10 +281,6 @@ public class DHT extends BosonVerticle {
 		return nodeInfo;
 	}
 
-	public RpcServer getRpcServer() {
-		return rpcServer;
-	}
-
 	/**
 	 * Whether the local socket currently appears able to carry traffic.
 	 * <p>
@@ -297,7 +294,9 @@ public class DHT extends BosonVerticle {
 	 * @return {@code true} if the DHT is running and its RPC server considers itself reachable
 	 */
 	public boolean isReachable() {
-		return rpcServer != null && rpcServer.isReachable();
+		// Read the field once: undeploy clears it, and a second read could see the null.
+		RpcServer server = rpcServer;
+		return server != null && server.isReachable();
 	}
 
 	public RoutingTable getRoutingTable() {
@@ -650,7 +649,7 @@ public class DHT extends BosonVerticle {
 			if (entry != null) {
 				Message request = Message.pingRequest();
 				RpcCall c = new RpcCall(entry, request);
-				rpcServer.sendCall(c);
+				sendCallInternal(c);
 			}
 		} else {
 			log.info("Periodic: random ping - skip due to node has pending calls.");
@@ -846,7 +845,7 @@ public class DHT extends BosonVerticle {
 				}
 			});
 
-			rpcServer.sendCall(call);
+			sendCallInternal(call);
 		}
 
 		return promise.future();
@@ -1356,7 +1355,7 @@ public class DHT extends BosonVerticle {
 	private void onPing(Message request) {
 		Message response = Message.pingResponse(request.getTxid())
 				.setRemote(request.getRemoteId(), request.getRemoteAddress());
-		rpcServer.sendMessage(response);
+		sendResponse(response);
 	}
 
 	/**
@@ -1370,12 +1369,80 @@ public class DHT extends BosonVerticle {
 	 * @return a future that completes when the response is sent, or fails if it was dropped.
 	 */
 	private Future<Void> sendResponse(Message response) {
-		if (!running || rpcServer == null) {
+		RpcServer server = rpcServer;
+		if (!running || server == null) {
 			log.debug("DHT {}:{} stopped while assembling a response, dropping it", network, identity.getId());
 			return Future.failedFuture(new IllegalStateException("DHT is not running"));
 		}
 
-		return rpcServer.sendMessage(response);
+		return server.sendMessage(response);
+	}
+
+	/**
+	 * Sends an RPC call from this DHT, and the only way to do so from outside it.
+	 * <p>
+	 * Two things have to be true for a call to be safe to send, and neither is the caller's to check.
+	 * The DHT can be undeployed between the moment a caller decides to send and the moment it does -
+	 * a task resuming from a timer, an application request crossing threads - and undeploy clears the
+	 * RPC server, so the send has to be dropped rather than dereference it. And the RPC server's
+	 * pending-call table, outbound throttle and timeout timers are single-threaded state owned by this
+	 * verticle's context, so a call arriving on any other thread has to be moved onto that context
+	 * before it touches them.
+	 * </p>
+	 * <p>
+	 * The context hop is taken only when the caller is not already on this DHT's context, so the
+	 * common case - a task or a handler already running here - still sends inline. The running check
+	 * is repeated after the hop, because the queued action can be delivered after an undeploy.
+	 * </p>
+	 *
+	 * @param call the RPC call to send.
+	 * @return a future that completes with the call once it is sent, or fails if it was dropped.
+	 */
+	public Future<RpcCall> sendCall(RpcCall call) {
+		RpcServer server = rpcServer;
+		if (!running || server == null) {
+			//noinspection LoggingSimilarMessage
+			log.debug("DHT {}:{} is not running, dropping the RPC call to {}",
+					network, identity.getId(), call.getTargetId());
+			return Future.failedFuture(new IllegalStateException("DHT is not running"));
+		}
+
+		if (Vertx.currentContext() != vertxContext) {
+			Promise<RpcCall> promise = promise();
+			runOnContext(unused -> sendCallInternal(call).onComplete(promise));
+			return promise.future();
+		}
+
+		return server.sendCall(call);
+	}
+
+	/**
+	 * Sends an RPC call from a caller already known to be on this DHT's context.
+	 * <p>
+	 * Same guard as {@link #sendCall}, without the context check that method exists to make. Callers
+	 * inside this class reach the transport from a handler, a timer or a continuation that this
+	 * verticle owns, so the check could only ever answer one way for them.
+	 * </p>
+	 * <p>
+	 * <b>CAUTION:</b> this is the one entry point that assumes rather than establishes the context, so
+	 * it must not be reached from anywhere that could be running on another thread. The RPC server's
+	 * pending-call table is a plain map and its timers are context-bound; calling this from off the
+	 * context corrupts them silently rather than failing.
+	 * </p>
+	 *
+	 * @param call the RPC call to send.
+	 * @return a future that completes with the call once it is sent, or fails if it was dropped.
+	 */
+	private Future<RpcCall> sendCallInternal(RpcCall call) {
+		RpcServer server = rpcServer;
+		if (!running || server == null) {
+			//noinspection LoggingSimilarMessage
+			log.debug("DHT {}:{} is not running, dropping the RPC call to {}",
+					network, identity.getId(), call.getTargetId());
+			return Future.failedFuture(new IllegalStateException("DHT is not running"));
+		}
+
+		return server.sendCall(call);
 	}
 
 	/**
@@ -1631,7 +1698,7 @@ public class DHT extends BosonVerticle {
 			Message response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
-			return rpcServer.sendMessage(response);
+			return sendResponse(response);
 		});
 	}
 
@@ -1688,7 +1755,7 @@ public class DHT extends BosonVerticle {
 			Message response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
 			response.setRemote(request.getId(), request.getRemoteAddress());
-			return rpcServer.sendMessage(response);
+			return sendResponse(response);
 		});
 	}
 
@@ -1696,7 +1763,7 @@ public class DHT extends BosonVerticle {
 		Message response = Message.error(request.getMethod(), request.getTxid(), ErrorCode.MethodUnknown.value(),
 				"Unknown method: " + request.getMethod());
 		response.setRemote(request.getId(), request.getRemoteAddress());
-		rpcServer.sendMessage(response);
+		sendResponse(response);
 	}
 
 	@SuppressWarnings("unused")
@@ -1835,7 +1902,7 @@ public class DHT extends BosonVerticle {
 			// only if the new entry is unreachable and the bucket is not full yet
 			Message request = Message.pingRequest();
 			RpcCall ping = new RpcCall(newEntry, request);
-			rpcServer.sendCall(ping);
+			sendCallInternal(ping);
 		}
 	}
 
