@@ -3,11 +3,13 @@ package io.bosonnetwork.kademlia.impl;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -133,9 +135,10 @@ public class DHT extends BosonVerticle {
 	private long lastMaintenance;
 	private final Path persistFile;
 
-	// True when this run began by loading a persisted routing table. Set in start(), not here, so a
-	// redeployed instance re-decides: state whose lifetime is a deployment must not be initialized with
-	// the lifetime of the object.
+	// True when this run began by loading a persisted routing table that actually held contacts - not
+	// merely that a file was there, and not that the table is non-empty, which it structurally always
+	// is. Set in start(), not here, so a redeployed instance re-decides: state whose lifetime is a
+	// deployment must not be initialized with the lifetime of the object.
 	private boolean loadedRoutingTable;
 
 	private final List<Long> timers;
@@ -304,9 +307,24 @@ public class DHT extends BosonVerticle {
 		return routingTable;
 	}
 
+	/**
+	 * Wires the DHT serving the other address family, so that a lookup on either can answer with nodes
+	 * from both.
+	 * <p>
+	 * The sibling must serve the other family. Nothing downstream re-checks it: the two are read into
+	 * fixed IPv4 and IPv6 slots by family, so a same-family sibling would quietly fill the wrong slot
+	 * and put IPv4 nodes in the IPv6 half of every response.
+	 * </p>
+	 *
+	 * @param dht the DHT serving the other address family, or null to unwire.
+	 * @throws IllegalArgumentException if the given DHT is this one, or serves the same family.
+	 */
 	public void setSibling(@Nullable DHT dht) {
 		if (dht == this)
 			throw new IllegalArgumentException("Can not set self as sibling");
+
+		if (dht != null && dht.network == network)
+			throw new IllegalArgumentException("Can not set a " + network + " DHT as the sibling of another " + network + " DHT");
 
 		this.sibling = dht;
 	}
@@ -340,19 +358,39 @@ public class DHT extends BosonVerticle {
 		maintenanceTasks.clear();
 		lastMaintenance = 0;
 
-		if (persistFile != null && Files.exists(persistFile) && Files.isRegularFile(persistFile)) {
+		// The cached routing table is a warm start, not a precondition. A node whose cache cannot be read
+		// still deploys - it just bootstraps from scratch, which is exactly what an absent file already
+		// meant - so the failure is recovered here rather than propagated into the chain below, where it
+		// would abort the deployment over an unreadable optimization. An unreadable cache is therefore
+		// the same answer as a missing one, zero, and the flag below reads the same either way.
+		//
+		// The flag has to come from what the load returned, not from the table it loaded into: a table
+		// holds one all-covering bucket from construction, so every emptiness test that goes through the
+		// table itself answers the wrong question - it reports that a routing table exists, which it
+		// always does, rather than that a cached one was restored, which is what the warm-start sweep
+		// below is asking.
+		Future<Void> loaded;
+		if (persistFile != null) {
 			log.info("Loading routing table from {} ...", persistFile);
-			routingTable.load(persistFile);
-			this.loadedRoutingTable = !routingTable.isEmpty();
+			loaded = loadRoutingTable().otherwise(cause -> {
+				log.error("Failed to load routing table from {}", persistFile, cause);
+				return 0;
+			}).map(loadedEntries -> {
+				this.loadedRoutingTable = loadedEntries > 0;
+				return null;
+			});
 		} else {
 			this.loadedRoutingTable = false;
+			loaded = Future.succeededFuture();
 		}
 
-		rpcServer = new RpcServer(kadContext, host, port, blacklist, suspiciousNodeDetector, enableSpamThrottling, metrics);
-		rpcServer.setMessageHandler(this::onMessage);
-		rpcServer.setCallSentHandler(this::onSend);
-		rpcServer.setCallTimeoutHandler(this::onTimeout);
-		return rpcServer.start().map(v -> {
+		return loaded.compose(unused -> {
+			rpcServer = new RpcServer(kadContext, host, port, blacklist, suspiciousNodeDetector, enableSpamThrottling, metrics);
+			rpcServer.setMessageHandler(this::onMessage);
+			rpcServer.setCallSentHandler(this::onSend);
+			rpcServer.setCallTimeoutHandler(this::onTimeout);
+			return rpcServer.start();
+		}).<Void>map(v -> {
 			// Set before anything below can send. The startup bootstrap runs inside this block, and
 			// every send is gated on this flag - see sendCall and sendResponse - so leaving it until the
 			// andThen below would drop the bootstrap's own calls. They would not fail, they would simply
@@ -393,7 +431,7 @@ public class DHT extends BosonVerticle {
 			});
 
 			setupPeriodicTasks();
-			return (Void) null;
+			return null;
 		}).andThen(ar -> {
 			if (ar.succeeded()) {
 				log.info("Started DHT {}:{} on {}:{}.", network, identity.getId(), host, port);
@@ -431,20 +469,34 @@ public class DHT extends BosonVerticle {
 				rpcServer.setReachableHandler(null);
 				return rpcServer.stop().andThen(ar -> rpcServer = null);
 			}
-		}).andThen(ar -> {
-			if (persistFile != null) {
-				try {
-					log.info("Persisting routing table on shutdown...");
-					routingTable.save(persistFile);
-				} catch (IOException e) {
-					log.error("Persisting routing table failed", e);
-				}
-			}
-
+		// Runs whether the stop succeeded or not, and does not change its outcome - the table is worth
+		// keeping either way, and failing to write it does not make the shutdown a failure. Undeploy
+		// does wait for it: the shutdown is not finished while the file it leaves behind is half written.
+		}).eventually(this::persistRoutingTableOnShutdown).andThen(ar -> {
 			if (ar.succeeded())
 				log.info("Stopped DHT {}:{} on {}:{}.", network, identity.getId(), host, port);
 			else
 				log.error("Failed to stop DHT {}:{} on {}:{}.", network, identity.getId(), host, port, ar.cause());
+		});
+	}
+
+	/**
+	 * Writes the routing table out as the last step of undeploy.
+	 * <p>
+	 * Failures are logged and swallowed: a table that could not be written costs the next start its warm
+	 * start, and nothing else, so it must not turn a clean shutdown into a failed one.
+	 * </p>
+	 *
+	 * @return a future completed once the write has finished, successfully or not.
+	 */
+	private Future<Void> persistRoutingTableOnShutdown() {
+		if (persistFile == null)
+			return Future.succeededFuture();
+
+		log.info("Persisting routing table on shutdown...");
+		return saveRoutingTable().otherwise(cause -> {
+			log.error("Persisting routing table failed", cause);
+			return null;
 		});
 	}
 
@@ -690,6 +742,16 @@ public class DHT extends BosonVerticle {
 		}
 	}
 
+	/**
+	 * Pings a random routing table entry, to keep the socket's own reachability observation fresh.
+	 * <p>
+	 * Deliberately skipped whenever calls are already in flight, which on a busy node means it rarely
+	 * runs at all. That is the intent rather than a missed case: the probe exists to produce traffic
+	 * when there is none, and pending calls are already producing the evidence it would gather.
+	 * </p>
+	 *
+	 * @param unusedTimerId the periodic timer id, unused.
+	 */
 	private void randomPing(long unusedTimerId) {
 		if (!rpcServer.hasPendingCalls()) {
 			log.info("Periodic: random ping...");
@@ -704,13 +766,100 @@ public class DHT extends BosonVerticle {
 		}
 	}
 
+	/**
+	 * Periodically writes the routing table out, so that a node that dies without a clean shutdown still
+	 * has recent contacts to warm-start from.
+	 *
+	 * @param unusedTimerId the periodic timer id, unused.
+	 */
 	private void persistRoutingTable(long unusedTimerId) {
-		try {
-			log.info("Periodic: persisting routing table ...");
-			routingTable.save(persistFile);
-		} catch (IOException e) {
-			log.error("Can not save the routing table: {}", e.getMessage(), e);
-		}
+		log.info("Periodic: persisting routing table ...");
+		saveRoutingTable().onFailure(cause -> log.error("Can not save the routing table: {}", cause.getMessage(), cause));
+	}
+
+	/**
+	 * Encodes the routing table and writes it to {@code persistFile}.
+	 * <p>
+	 * The two halves run in different places on purpose. Encoding walks the buckets and their entries -
+	 * single-threaded state owned by this verticle - so it happens here, on this context, before any
+	 * worker is involved. Only the file write goes to a worker thread, because that is the part that
+	 * blocks. Handing the whole job to {@code executeBlocking} would take the I/O off the event loop by
+	 * putting the table traversal on a worker instead, which trades a blocked event loop for a data
+	 * race; doing neither would put a file write on the event loop every ten minutes for the life of
+	 * the node.
+	 * </p>
+	 * <p>
+	 * The write is staged through a temporary file in the same directory and moved into place
+	 * atomically, so an interrupted write cannot leave a truncated table to be read back at the next
+	 * start. Callers own the failure policy - both of them log and continue.
+	 * </p>
+	 * <p>
+	 * Only called where {@code persistFile} is known to be set: the periodic timer is registered only
+	 * when it is, and the shutdown path checks it first.
+	 * </p>
+	 *
+	 * @return a future completed when the file has been written, failed if it could not be.
+	 */
+	private Future<Void> saveRoutingTable() {
+		byte[] data = routingTable.save();
+		// Nothing worth writing, and no worker taken to discover that. Note this leaves any previously
+		// written file in place rather than truncating it: a node that empties its table has not learned
+		// that its last known contacts are bad, only that it currently has none.
+		if (data == null || data.length == 0)
+			return Future.succeededFuture();
+
+		return kadContext.executeBlocking(() -> {
+			if (Files.exists(persistFile)) {
+				if (!Files.isRegularFile(persistFile))
+					throw new IOException("Routing table file is not a regular file: " + persistFile);
+			} else {
+				Files.createDirectories(persistFile.getParent());
+			}
+
+			Path tempFile = Files.createTempFile(persistFile.getParent(), persistFile.getFileName().toString(),
+					"-" + System.currentTimeMillis());
+			try (OutputStream out = Files.newOutputStream(tempFile)) {
+				out.write(data);
+				out.close();
+				Files.move(tempFile, persistFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} finally {
+				// Force delete the tempFile if error occurred
+				Files.deleteIfExists(tempFile);
+			}
+
+			return null;
+		});
+	}
+
+	/**
+	 * Reads {@code persistFile} and loads it into the routing table.
+	 * <p>
+	 * The mirror of {@link #saveRoutingTable()}, split the same way and for the same reason: the read
+	 * blocks and runs on a worker, the parse inserts into the buckets and runs back here, on the context
+	 * that owns them.
+	 * </p>
+	 * <p>
+	 * A missing file is not a failure - it is the normal first start - and neither is a corrupt one,
+	 * which {@link RoutingTable#load(byte[])} reports by logging and keeping whatever it could read. The
+	 * future fails only if the file exists and cannot be read at all.
+	 * </p>
+	 *
+	 * @return a future carrying how much the cache contributed: the number of entries and replacements
+	 *         restored, zero for a missing, empty or unusable file. That count is the answer to whether
+	 *         there is anything to warm-start from, which cannot be read back off the table afterwards -
+	 *         a table that restored nothing is indistinguishable from a fresh one.
+	 */
+	private Future<Integer> loadRoutingTable() {
+		return kadContext.executeBlocking(() -> {
+			if (Files.notExists(persistFile) || !Files.isRegularFile(persistFile))
+				return null;
+			return Files.readAllBytes(persistFile);
+		}).map(serialized -> {
+			if (serialized != null && serialized.length > 0)
+				return routingTable.load(serialized);
+			else
+				return 0;
+		});
 	}
 
 	public Future<Void> bootstrap(Collection<NodeInfo> nodes) {
@@ -1381,7 +1530,6 @@ public class DHT extends BosonVerticle {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	private void onMessage(Message message) {
 		if (!isRunning())
 			return;
@@ -1399,7 +1547,6 @@ public class DHT extends BosonVerticle {
 		received(message);
 	}
 
-	@SuppressWarnings("unchecked")
 	private void onRequest(Message message) {
 		switch (message.getMethod()) {
 			case PING -> onPing(message);
@@ -1700,8 +1847,8 @@ public class DHT extends BosonVerticle {
 		int want6 = body.doesWant6() ? want : 0;
 
 		populateClosestNodes(target, want4, want6).onSuccess(closest -> {
-			int token = body.doesWantToken() ?
-					tokenManager.generateToken(request.getId(), request.getRemoteAddress(), target) : 0;
+			int token = body.doesWantToken() ? tokenManager.generateToken(request.getId(),
+					request.getRemoteIpAddress(), request.getRemotePort(), target) : 0;
 
 			Message response = Message.findNodeResponse(request.getTxid(), closest.nodes4, closest.nodes6, token)
 					.setRemote(request.getId(), request.getRemoteAddress());
@@ -1741,7 +1888,7 @@ public class DHT extends BosonVerticle {
 			Value value = body.getValue();
 
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
-					request.getRemoteAddress(), value.getId())) {
+					request.getRemoteIpAddress(), request.getRemotePort(), value.getId())) {
 				log.warn("Received a store value request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidTokenException("Invalid token for STORE VALUE request");
 			}
@@ -1799,7 +1946,7 @@ public class DHT extends BosonVerticle {
 			PeerInfo peer = body.getPeer();
 
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
-					request.getRemoteAddress(), peer.getId())) {
+					request.getRemoteIpAddress(), request.getRemotePort(), peer.getId())) {
 				log.warn("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidTokenException("Invalid token for ANNOUNCE PEER request");
 			}
@@ -1831,10 +1978,55 @@ public class DHT extends BosonVerticle {
 		// Nothing to do
 	}
 
+	/**
+	 * How much of a peer-supplied string is worth putting in a log record.
+	 */
+	private static final int MAX_LOGGED_REMOTE_TEXT = 128;
+
+	/**
+	 * Renders a string that arrived over the wire as a single-line, length-bounded log field.
+	 * <p>
+	 * Two things a sender must not be able to do with text that ends up in our log: make one record
+	 * arbitrarily long, and make one record look like several. A newline in an error message is enough
+	 * for the second, so control characters are replaced rather than escaped - the point is that
+	 * whatever comes back is one line of printable characters, not that it round-trips.
+	 * </p>
+	 *
+	 * @param text the peer-supplied text, may be null.
+	 * @return a bounded single-line rendering of the text.
+	 */
+	private static String forLog(@Nullable String text) {
+		if (text == null)
+			return "";
+
+		int length = Math.min(text.length(), MAX_LOGGED_REMOTE_TEXT);
+		StringBuilder repr = new StringBuilder(length + 3);
+		for (int i = 0; i < length; i++) {
+			char c = text.charAt(i);
+			repr.append(c < 0x20 || c == 0x7f ? '.' : c);
+		}
+
+		if (text.length() > length)
+			repr.append("...");
+
+		return repr.toString();
+	}
+
 	private void onError(Message error) {
 		Error body = error.getBody();
-		log.warn("Error from {}/{} - {}:{}, method {}, txid {}", error.getRemoteAddress(), error.getReadableVersion(),
-				body.getCode(), body.getMessage(), error.getMethod(), error.getTxid());
+		// Every peer-supplied field on this line goes through forLog, including the version, which
+		// Version.toString has already made printable. The redundancy is deliberate and the rule is
+		// what makes it worth keeping: one that says "wrap what the sender wrote" survives the next
+		// edit to this line, where one that says "wrap what is not sanitized elsewhere" needs whoever
+		// makes that edit to know which fields those are. On an eight-character string the wrapper
+		// costs nothing.
+		//
+		// It is not a substitute for the check in Version.toString, and neither is a substitute for the
+		// other: the same version string reaches the log through KBucketEntry.toString and
+		// Message.toString, where there is no wrapper and no call site to put one at.
+		log.warn("Error from {}/{} - {}:{}, method {}, txid {}", error.getRemoteAddress(),
+				forLog(error.getReadableVersion()), body.getCode(), forLog(body.getMessage()),
+				error.getMethod(), error.getTxid());
 	}
 
 	/**
@@ -1904,8 +2096,8 @@ public class DHT extends BosonVerticle {
 			// We already know a node with that address but with a different ID.
 			// This might happen if one node changes its ID.
 			// Force remove from the routing table to prevent suspicious behavior
-			log.warn("Received a message from suspicious node {}@{}, force-removing routing table entries because ID-change was detected; new ID {}",
-					message.getId(), message.getRemoteAddress(), knownId);
+			log.warn("Received a message from suspicious node {}, force-removing routing table entries because ID-change was detected; previously known ID {}, new ID {}",
+					message.getRemoteAddress(), knownId, message.getId());
 
 			if (routingTable.remove(knownId)) {
 				// Might be a pollution attack, check other entries in the same bucket too.
@@ -1954,12 +2146,20 @@ public class DHT extends BosonVerticle {
 
 		routingTable.put(newEntry);
 
-		// Optimize: not the standard Kademlia behavior
-		// incoming request && the new entry is unreachable && the target bucket not full,
-		// then try to do a ping request to the new entry check its availability.
+		// Optimize: not the standard Kademlia behavior. A node we have not heard a response from gets one
+		// unsolicited ping, to speed up the bootstrap process and to make the buckets more reliable.
+		//
+		// There is no bucket-fullness condition here, and adding one is not the cheap improvement it
+		// looks like: put() files an entry that is not yet reachable in the replacements, and this ping
+		// is what makes it reachable, so gating on the bucket having room stops the promotion that would
+		// have made room. Measured, not reasoned - restricting it to buckets with room empties the
+		// routing tables enough that a lookup for a specific node id stops finding it.
+		//
+		// What this path is not: bounded. A request's source address is unverified, so a sender forging
+		// addresses gets one ping emitted per packet it sends, and never responds, so its entries never
+		// become reachable and never fill anything. Bounding that is a throttling question, and belongs
+		// with the throttle rather than here.
 		if (existing == null && !newEntry.isReachable()) {
-			// Verify the node, speed up the bootstrap process or make the bucket more reliable.
-			// only if the new entry is unreachable and the bucket is not full yet
 			Message request = Message.pingRequest();
 			RpcCall ping = new RpcCall(newEntry, request);
 			sendCallInternal(ping);

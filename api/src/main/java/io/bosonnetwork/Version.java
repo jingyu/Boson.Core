@@ -62,18 +62,53 @@ public final class Version {
 
 	/**
 	 * Convert the integer version information to readable string.
+	 * <p>
+	 * The result is safe to log. On a received message the version is whatever the sender put on the
+	 * wire, and its two name bytes become characters here - so this is where they stop being bytes and
+	 * have to start being text.
+	 * </p>
 	 *
 	 * @param version the integer version information.
-	 * @return a readable string version.
+	 * @return a readable string version, printable ASCII throughout and at most eight characters long.
 	 */
 	public static String toString(int version) {
 		if (version == 0)
 			return VERSION_NOT_AVAILABLE;
 
-		String n = new String(new byte[] { (byte)(version >>> 24),
-				(byte)((version & 0x00ff0000) >>> 16) }, StandardCharsets.US_ASCII);
+		String n = printable(new String(new byte[] { (byte)(version >>> 24),
+				(byte)((version & 0x00ff0000) >>> 16) }, StandardCharsets.US_ASCII));
 		String v = Integer.toString(version & 0x0000ffff);
 
 		return names.getOrDefault(n, n) + "/" + v;
+	}
+
+	/**
+	 * Replaces everything that is not printable ASCII with a dot.
+	 * <p>
+	 * Applied to the name before the lookup, not after, so that a known name still matches - the two
+	 * registered names are printable, and anything that needed replacing was never going to match one.
+	 * </p>
+	 * <p>
+	 * Two bytes is too few to flood a log with, which is why the length is left alone, and too few to
+	 * fake a record with. It is not too few to break one: a name of 0x0a puts a real line break in the
+	 * middle of every log line that carries this version, splitting one record into two, and 0x1b begins
+	 * a terminal escape sequence that a reader paging the file will execute rather than see. Both are
+	 * cheap for a peer to send and cost nothing to prevent here.
+	 * </p>
+	 *
+	 * @param name the decoded name, which may contain anything the sender chose.
+	 * @return the name with every non-printable character replaced.
+	 */
+	private static String printable(String name) {
+		char[] chars = name.toCharArray();
+		for (int i = 0; i < chars.length; i++) {
+			// US-ASCII decoding already folds bytes above 0x7f to the replacement character, which this
+			// then replaces in turn - the point is a known character set on the way out, not a faithful
+			// rendering of what arrived.
+			if (chars[i] < 0x20 || chars[i] > 0x7e)
+				chars[i] = '.';
+		}
+
+		return new String(chars);
 	}
 }

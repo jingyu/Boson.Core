@@ -54,19 +54,53 @@ public class BootstrapSetup {
 	private final Path homeDir;
 	private final boolean batch;
 
+	private static void printUsage() {
+		System.out.println("Usage: bootstrap-setup [OPTIONS]");
+		System.out.println("Options:");
+		System.out.println("  --home <path>    Home directory of the user the bootstrap node runs as.");
+		System.out.println("  --batch          Run without prompting, leaving an existing configuration alone.");
+		System.out.println("  -h, --help       Display this help message and exit.");
+	}
+
+	/**
+	 * Program entry point.
+	 * <p>
+	 * REMARK: this is a command line entry point that happens to ship inside the library jar, which is
+	 * why it is the only place here that calls {@link System#exit}. Everything it does beyond argument
+	 * handling is in {@link #run()}, which reports failure by throwing - so calling that in-process
+	 * cannot take the JVM down with it.
+	 * </p>
+	 *
+	 * @param args the command line arguments.
+	 */
 	public static void main(String[] args) {
 		Path home = null;
 		boolean batch = false;
 
 		for (int i = 0; i < args.length; i++) {
 			switch (args[i]) {
-				case "--home":
-					if (i + 1 < args.length)
-						home = Path.of(args[++i]);
-					break;
-				case "--batch":
-					batch = true;
-					break;
+				case "--home" -> {
+					// An option whose value went missing is a mistake in whatever produced this command
+					// line, and silently continuing without a home directory is the worst way to answer
+					// it - the setup would go on and write somewhere the caller did not ask for.
+					if (i + 1 >= args.length) {
+						System.err.println("Error: Missing directory path for home option");
+						printUsage();
+						System.exit(1);
+					}
+
+					home = Path.of(args[++i]);
+				}
+				case "--batch" -> batch = true;
+				case "--help", "-h" -> {
+					printUsage();
+					System.exit(0);
+				}
+				default -> {
+					System.err.println("Error: Unknown argument '" + args[i] + "' at index " + i);
+					printUsage();
+					System.exit(1);
+				}
 			}
 		}
 

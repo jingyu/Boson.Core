@@ -33,6 +33,7 @@ import picocli.CommandLine.Parameters;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
@@ -114,10 +115,13 @@ public class StoreValueCommand implements Callable<Integer> {
 			}
 		}
 
-		if (localOnly)
-			ContextualFuture.of(Main.getBosonNode().getStorage().putValue(value, persistent)).get();
-		else
+		if (localOnly) {
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
+			ContextualFuture.of(storage.putValue(value, persistent)).get();
+		} else {
 			Main.getBosonNode().storeValue(value, persistent).get();
+		}
 
 		System.out.println("Value " + value.getId() + " stored.");
 		return 0;

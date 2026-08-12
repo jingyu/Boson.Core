@@ -25,11 +25,8 @@ package io.bosonnetwork.kademlia.impl;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.security.MessageDigest;
 import java.util.concurrent.atomic.AtomicLong;
-
-import io.vertx.core.net.SocketAddress;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Hash;
@@ -37,10 +34,30 @@ import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.utils.Bytes;
 
 /**
+ * Issues and verifies the anti-spoofing token that gates STORE_VALUE and ANNOUNCE_PEER.
+ * <p>
+ * REMARK: the address is taken as an {@link InetAddress}, never as a host string. There used to be
+ * overloads accepting a Vert.x {@code SocketAddress}, which resolved it with
+ * {@code InetAddress.getByName(address.hostAddress())} - a blocking DNS lookup on the event loop for any
+ * address that was not already a literal. Callers on the message path have the parsed literal in hand
+ * ({@code Message.getRemoteIpAddress()}), so the overloads are gone rather than guarded.
+ * </p>
+ *
  * @hidden
  */
 public class TokenManager {
 	public static final int	TOKEN_TIMEOUT = 5 * 60 * 1000;	// 5 minutes
+
+	/**
+	 * How often {@link #updateTokenTimestamps()} should be called.
+	 * <p>
+	 * Rotation happens on the first call that finds the window already expired, so the timer period is
+	 * the granularity of the rotation, not the rotation period itself. Driving it at {@code TOKEN_TIMEOUT}
+	 * made a window last between one and two timeouts depending on where the timer's own jitter fell;
+	 * checking five times per window bounds that overshoot to a fifth of a window.
+	 * </p>
+	 */
+	public static final int ROTATION_CHECK_INTERVAL = TOKEN_TIMEOUT / 5;	// 1 minute
 
 	private final byte[] sessionSecret;
 	private final AtomicLong timestamp;
@@ -49,7 +66,13 @@ public class TokenManager {
 	public TokenManager() {
 		this.sessionSecret = new byte[32];
 		Random.secureRandom().nextBytes(sessionSecret);
-		timestamp = new AtomicLong(System.currentTimeMillis());
+		long now = System.currentTimeMillis();
+		timestamp = new AtomicLong(now);
+		// Seeded to the current window rather than left at 0: the previous-window fallback derives a
+		// second acceptable token from this value, and until the first rotation that second token would
+		// otherwise be the one keyed on timestamp 0 - a whole extra token accepted for no reason, from
+		// startup onwards. Equal to timestamp means the fallback simply recomputes the current token.
+		previousTimestamp = now;
 	}
 
 	public void updateTokenTimestamps() {
@@ -96,14 +119,6 @@ public class TokenManager {
 		return generateToken(nodeId, address.getAddress(), address.getPort(), targetId, timestamp.get());
 	}
 
-	public int generateToken(Id nodeId, SocketAddress address, Id targetId) {
-		try {
-			return generateToken(nodeId, InetAddress.getByName(address.hostAddress()), address.port(), targetId, timestamp.get());
-		} catch (UnknownHostException e) {
-			throw new IllegalArgumentException(e);
-		}
-	}
-
 	public int generateToken(Id nodeId, InetAddress address, int port, Id targetId) {
 		return generateToken(nodeId, address, port, targetId, timestamp.get());
 	}
@@ -119,13 +134,5 @@ public class TokenManager {
 
 	public boolean verifyToken(int token, Id nodeId, InetSocketAddress address, Id targetId) {
 		return verifyToken(token, nodeId, address.getAddress(), address.getPort(), targetId);
-	}
-
-	public boolean verifyToken(int token, Id nodeId, SocketAddress address, Id targetId) {
-		try {
-			return verifyToken(token, nodeId, InetAddress.getByName(address.hostAddress()), address.port(), targetId);
-		} catch (UnknownHostException e) {
-			throw new IllegalArgumentException(e);
-		}
 	}
 }
