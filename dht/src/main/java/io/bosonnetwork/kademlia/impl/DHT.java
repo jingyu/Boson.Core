@@ -2144,22 +2144,29 @@ public class DHT extends BosonVerticle {
 			newEntry.updateLastSent(call.getSentTime());
 		}
 
-		routingTable.put(newEntry);
+		boolean accepted = routingTable.put(newEntry);
 
 		// Optimize: not the standard Kademlia behavior. A node we have not heard a response from gets one
 		// unsolicited ping, to speed up the bootstrap process and to make the buckets more reliable.
 		//
-		// There is no bucket-fullness condition here, and adding one is not the cheap improvement it
-		// looks like: put() files an entry that is not yet reachable in the replacements, and this ping
-		// is what makes it reachable, so gating on the bucket having room stops the promotion that would
-		// have made room. Measured, not reasoned - restricting it to buckets with room empties the
-		// routing tables enough that a lookup for a specific node id stops finding it.
+		// The gate is what the table did with the entry, not what state the bucket was in. Filing as a
+		// replacement counts as accepted, and there is deliberately no bucket-fullness condition: put()
+		// files an entry that is not yet reachable in the replacements, and this ping is what makes it
+		// reachable, so gating on the bucket having room stops the promotion that would have made room.
+		// Measured, not reasoned - restricting it to buckets with room empties the routing tables enough
+		// that a lookup for a specific node id stops finding it.
 		//
-		// What this path is not: bounded. A request's source address is unverified, so a sender forging
-		// addresses gets one ping emitted per packet it sends, and never responds, so its entries never
-		// become reachable and never fill anything. Bounding that is a throttling question, and belongs
-		// with the throttle rather than here.
-		if (existing == null && !newEntry.isReachable()) {
+		// A rejected entry is not pinged because there would be nothing to ping for: the table kept a
+		// conflicting entry in its place, so no answer to this ping could promote anything.
+		//
+		// That is a consistency gate rather than a budget, and it is not where the budget belongs. A
+		// request's source address is unverified, so a sender forging addresses gets one ping emitted
+		// towards each address it names; naming one address repeatedly collides with the entry the first
+		// packet left behind and stops there, but the collision test covers the port, and a forged port
+		// costs a sender nothing. The rate ceiling comes from the layer below, before anything arrives
+		// here: the inbound throttle counts packets per source IP address, which a varying port does not
+		// escape, and the suspicious-node detector feeds the blacklist that drops the rest.
+		if (accepted && existing == null && !newEntry.isReachable()) {
 			Message request = Message.pingRequest();
 			RpcCall ping = new RpcCall(newEntry, request);
 			sendCallInternal(ping);

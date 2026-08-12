@@ -250,10 +250,18 @@ public class RoutingTable {
 	/**
 	 * Inserts or updates a node entry in the routing table.
 	 * The routing table may split buckets as necessary to accommodate the new entry.
+	 * <p>
+	 * The return value reports whether the table took the entry, so that a caller with follow-up work
+	 * to do on a stored entry can tell there is something to follow up on. It says nothing about where
+	 * the entry landed: an entry filed as a replacement is accepted, because a replacement is a slot a
+	 * later verification can promote into the bucket proper.
+	 * </p>
 	 *
 	 * @param entry the node entry to add or update
+	 * @return true if the table holds the entry after this call, false if it was dropped in favour of
+	 *         an entry that already claims the same id or address.
 	 */
-	public void put(KBucketEntry entry) {
+	public boolean put(KBucketEntry entry) {
 		log.trace("Putting entry: {}...", entry);
 
 		Id nodeId = entry.getId();
@@ -266,8 +274,8 @@ public class RoutingTable {
 			bucket = bucketOf(nodeId);
 		}
 
-		bucket.put(entry);
-		log.trace("New entry {} putted into bucket {}", entry.getId(), bucket.prefix());
+		log.trace("Putting new entry {} into bucket {}", entry.getId(), bucket.prefix());
+		return bucket.put(entry);
 	}
 
 	/**

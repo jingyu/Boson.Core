@@ -439,16 +439,29 @@ public class KBucket implements Comparable<KBucket> {
 	/**
 	 * Notify bucket of a new entry learned from a node, perform update or insert
 	 * existing nodes where appropriate
+	 * <p>
+	 * Acceptance means the bucket now holds the entry, whether as a main entry or as a replacement,
+	 * or already held it and merged the new observation into it. Being filed as a replacement counts:
+	 * a replacement is a real, addressable slot that a later verification can promote, so a caller
+	 * that treats it as a rejection would suppress exactly the follow-up that fills the bucket.
+	 * </p>
+	 * <p>
+	 * Rejection means nothing was stored, and there is only one reason for it: another entry already
+	 * claims this id or this address. That entry is kept and the new one is dropped, so there is no
+	 * slot here for a caller to act on.
+	 * </p>
 	 *
 	 * @param entry The entry to insert
+	 * @return true if the bucket holds the entry after this call, false if it was dropped in favour
+	 *         of a conflicting entry.
 	 */
-	protected void put(KBucketEntry entry) {
+	protected boolean put(KBucketEntry entry) {
 		// find existing
 		for (KBucketEntry existing : entries) {
 			// Update entry if existing
 			if (existing.equals(entry)) {
 				existing.merge(entry);
-				return;
+				return true;
 			}
 
 			// Node is inconsistent: id and address conflict
@@ -459,7 +472,7 @@ public class KBucket implements Comparable<KBucket> {
 						+ "ignoring until old entry times out", entry, existing);
 
 				// Should not be so aggressive, keep the existing entry.
-				return;
+				return false;
 			}
 		}
 
@@ -467,12 +480,12 @@ public class KBucket implements Comparable<KBucket> {
 		if (entry.isReachable()) {
 			if (entries.size() < maxEntries) {
 				putAsMainEntry(entry);
-				return;
+				return true;
 			}
 
 			// Try to replace the bad entry
 			if (replaceBadWith(entry))
-				return;
+				return true;
 
 			// When bucket full and new reachable entry arrives, Kademlia(original paper) pings the
 			// oldest/least-recent when full; if unresponsive, replace from cache, else cache the new one.
@@ -484,9 +497,10 @@ public class KBucket implements Comparable<KBucket> {
 			lastRefresh = 0;
 		}
 
-		// put the new entry to the replacements
-		log().debug("New node {} is not reachable, putting in replacements", entry);
-		putAsReplacement(entry);
+		// put the new entry to the replacements: either it is not reachable yet, or it is reachable but
+		// the bucket has no room for it
+		log().debug("New node {} can not be a main entry, putting in replacements", entry);
+		return putAsReplacement(entry);
 	}
 
 	protected void updateIfPresent(KBucketEntry entry) {
@@ -600,13 +614,26 @@ public class KBucket implements Comparable<KBucket> {
 		}
 	}
 
-	protected void putAsReplacement(KBucketEntry entry) {
+	/**
+	 * Puts the entry into the replacement cache, evicting the least valuable replacement if the cache
+	 * is over capacity.
+	 * <p>
+	 * The eviction can fall on the entry that was just added, so acceptance is decided after the trim
+	 * rather than before it. A caller that follows up on a stored entry - verifying it, promoting it -
+	 * has nothing to follow up on if the cache preferred the entries it already had.
+	 * </p>
+	 *
+	 * @param entry the entry to cache.
+	 * @return true if the replacement cache holds the entry after this call, false if it was dropped,
+	 *         either in favour of a conflicting entry or by the capacity trim.
+	 */
+	protected boolean putAsReplacement(KBucketEntry entry) {
 		// Check the existing, avoid the duplicated entry
 		for (KBucketEntry existing : replacements) {
 			// Update entry if existing
 			if (existing.equals(entry)) {
 				existing.merge(entry);
-				return;
+				return true;
 			}
 
 			// Node is inconsistent: id and address conflict
@@ -617,15 +644,19 @@ public class KBucket implements Comparable<KBucket> {
 						+ "ignoring until old entry times out", entry, existing);
 
 				// Should not be so aggressive, keep the existing entry.
-				return;
+				return false;
 			}
 		}
 
 		replacements.add(entry);
 		if (replacements.size() > maxReplacements) {
 			replacements.sort(KBucketEntry::replacementOrder);
-			replacements.remove(replacements.size() - 1);
+			// Identity, not equality: the entry that loses the sort is the one that was not kept, and a
+			// merged duplicate would have returned above.
+			return replacements.remove(replacements.size() - 1) != entry;
 		}
+
+		return true;
 	}
 
 	/**
