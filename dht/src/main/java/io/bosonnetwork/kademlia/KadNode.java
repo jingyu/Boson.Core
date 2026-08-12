@@ -44,9 +44,6 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
 import io.bosonnetwork.crypto.CryptoException;
-import io.bosonnetwork.kademlia.exceptions.ImmutableSubstitutionException;
-import io.bosonnetwork.kademlia.exceptions.NotOwnerException;
-import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
 import io.bosonnetwork.kademlia.impl.DHT;
 import io.bosonnetwork.kademlia.impl.DHTConnectionStatusListener;
 import io.bosonnetwork.kademlia.impl.KadConstants;
@@ -771,31 +768,6 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 	}
 
-	private Future<Void> checkValue(Value value, int expectedSequenceNumber) {
-		return storage.getValue(value.getId()).compose(existing -> {
-			if (existing == null)
-				return Future.succeededFuture();
-
-			// Immutable check
-			if (existing.isMutable() != value.isMutable()) {
-				log.warn("Rejecting value {}: cannot replace mismatched mutable/immutable", value.getId());
-				return Future.failedFuture(new ImmutableSubstitutionException("Cannot replace mismatched mutable/immutable value"));
-			}
-
-			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
-				log.warn("Rejecting value {}: sequence number not expected", value.getId());
-				return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
-			}
-
-			if (existing.hasPrivateKey() && !value.hasPrivateKey()) {
-				log.warn("Rejecting value {}: new value not owned by this node", value.getId());
-				return Future.failedFuture(new NotOwnerException("new value no private key"));
-			}
-
-			return Future.succeededFuture();
-		});
-	}
-
 	@Override
 	public ContextualFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(value, "Invalid value");
@@ -803,8 +775,17 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		runOnContext(na -> checkValue(value, expectedSequenceNumber)
-				.compose(v -> storage.putValue(value, persistent))
+		// The atomic validate-and-store, not a check followed by a separate write. The checks are the
+		// same three this method used to run inline - mutability, sequence number, ownership - but run
+		// inside putValue's transaction, so two concurrent local stores of the same id cannot interleave
+		// between the check and the write. This is the guarantee DHT.onStoreValue already documents for
+		// the network path; the local path had been the one without it.
+		//
+		// failIfNotOwner is true where the network path passes false: a remote store that would displace
+		// a value this node owns is silently kept as-is, but a local caller asked for this store and has
+		// to be told it did not happen.
+		runOnContext(na -> storage.putValue(value, expectedSequenceNumber, persistent, true)
+				.onFailure(cause -> log.warn("Rejecting local store of value {}: {}", value.getId(), cause.getMessage()))
 				.compose(v -> doStoreValue(value, expectedSequenceNumber))
 				.compose(v -> storage.updateValueAnnouncedTime(value.getId()))
 				.<Void>mapEmpty()
@@ -912,25 +893,6 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 	}
 
-	private Future<Void> checkPeer(PeerInfo peer, int expectedSequenceNumber) {
-		return storage.getPeer(peer.getId(), peer.getFingerprint()).compose(existing -> {
-			if (existing == null)
-				return Future.succeededFuture();
-
-			if (expectedSequenceNumber >= 0 && existing.getSequenceNumber() > expectedSequenceNumber) {
-				log.warn("Rejecting peer {}: sequence number not expected", peer.getId());
-				return Future.failedFuture(new SequenceNotExpectedException("Sequence number not expected"));
-			}
-
-			if (existing.hasPrivateKey() && !peer.hasPrivateKey()) {
-				log.warn("Rejecting peer {}: new peer not owned by this node", peer.getId());
-				return Future.failedFuture(new NotOwnerException("new peer no private key"));
-			}
-
-			return Future.succeededFuture();
-		});
-	}
-
 	@Override
 	public ContextualFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(peer, "Invalid value");
@@ -938,8 +900,9 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Void> promise = Promise.promise();
 
-		runOnContext(na -> checkPeer(peer, expectedSequenceNumber)
-				.compose(v -> storage.putPeer(peer, persistent))
+		// Atomic validate-and-store, for the reasons given on storeValue above.
+		runOnContext(na -> storage.putPeer(peer, expectedSequenceNumber, persistent, true)
+				.onFailure(cause -> log.warn("Rejecting local announce of peer {}: {}", peer.getId(), cause.getMessage()))
 				.compose(v -> doAnnouncePeer(peer, expectedSequenceNumber))
 				.compose(v -> storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint()))
 				.<Void>mapEmpty()
