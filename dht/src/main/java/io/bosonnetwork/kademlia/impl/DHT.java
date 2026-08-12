@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
+import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
@@ -2126,10 +2127,20 @@ public class DHT extends BosonVerticle {
 
 	public Future<Void> dumpRoutingTable(PrintStream out) {
 		Promise<Void> promise = Promise.promise();
-		runOnContext(v -> {
+		// Read once, and require it to be present: before deployment both sides of this comparison
+		// are null, which would otherwise dump an undeployed routing table and report success
+		// instead of failing with "Vert.x context is not available".
+		Context ctx = vertxContext;
+		if (ctx != null && Vertx.currentContext() == ctx) {
 			routingTable.dump(out);
 			promise.complete();
-		});
+		} else {
+			runOnContext(v -> {
+				routingTable.dump(out);
+				promise.complete();
+			});
+		}
+
 		return promise.future();
 	}
 }
