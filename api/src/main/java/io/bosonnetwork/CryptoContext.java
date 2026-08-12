@@ -25,6 +25,7 @@ package io.bosonnetwork;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jspecify.annotations.Nullable;
 
@@ -42,9 +43,10 @@ import io.bosonnetwork.crypto.CryptoException;
  * (see {@link #decrypt(byte[])} for the precise, limited guarantee).
  * </p>
  * <p>
- * <b>Thread Safety:</b> The nonce generation for outgoing messages is synchronized to ensure
- * thread safety when used from multiple threads. The class is otherwise not strictly thread-safe
- * for other operations.
+ * <b>Thread Safety:</b> Outgoing nonce generation is synchronized, so no nonce is ever handed out
+ * twice, and the incoming duplicate check is a single atomic read-and-replace. Both encryption and
+ * decryption may therefore be driven from several threads at once. That is the whole of it: nothing
+ * here makes the underlying box or the caller's own message handling thread-safe.
  * </p>
  */
 public class CryptoContext implements AutoCloseable {
@@ -52,7 +54,10 @@ public class CryptoContext implements AutoCloseable {
 	private final CryptoBox box;
 
 	private Nonce nextNonce;
-	private volatile @Nullable Nonce lastPeerNonce;
+	// Read and replaced in one step, so the check below holds no matter how many threads decrypt from
+	// this peer at once. A separate volatile read and write cannot: two threads both read the previous
+	// nonce, both find no match, and a duplicate passes between them.
+	private final AtomicReference<@Nullable Nonce> lastPeerNonce = new AtomicReference<>();
 
 	/**
 	 * Constructs a CryptoContext with the given Id and CryptoBox.
@@ -145,10 +150,16 @@ public class CryptoContext implements AutoCloseable {
 	 * Decrypts the given data, verifying and extracting the prepended nonce.
 	 * <p>
 	 * As a basic safeguard this rejects an exact repeat of the <em>immediately previous</em>
-	 * peer nonce (throwing {@link CryptoException}). This is <strong>not</strong> full replay
-	 * protection: it does not detect reuse of any earlier nonce, and the check is not thread-safe
-	 * (concurrent {@code decrypt} calls may race). Callers that need strong replay protection must
-	 * track seen nonces themselves.
+	 * peer nonce (throwing {@link CryptoException}). This is duplicate suppression, <strong>not</strong>
+	 * replay protection: it does not detect reuse of any earlier nonce, so an attacker who interleaves
+	 * one other message from the same peer walks straight past it. Callers that need real replay
+	 * protection must track seen nonces themselves.
+	 * </p>
+	 * <p>
+	 * What it does guarantee holds under concurrent {@code decrypt} calls: the previous nonce is read
+	 * and replaced in one step, so two threads cannot both find no match and let a duplicate through
+	 * between them. This matters because a caller may well decrypt several messages from one peer at
+	 * the same time - the DHT decrypts every datagram on a worker pool.
 	 * </p>
 	 *
 	 * @param data The encrypted data, with the nonce prepended (nonce || ciphertext).
@@ -164,10 +175,8 @@ public class CryptoContext implements AutoCloseable {
 		// TODO: how to avoid the memory copy?!
 		byte[] n = Arrays.copyOfRange(data, 0, Nonce.BYTES);
 		Nonce nonce = Nonce.fromBytes(n);
-		if (Objects.equals(nonce, lastPeerNonce))
+		if (Objects.equals(nonce, lastPeerNonce.getAndSet(nonce)))
 			throw new CryptoException("Duplicated nonce");
-
-		lastPeerNonce = nonce;
 
 		byte[] cipher = Arrays.copyOfRange(data, Nonce.BYTES, data.length);
 		return box.decrypt(cipher, nonce);
@@ -183,7 +192,7 @@ public class CryptoContext implements AutoCloseable {
 	 * to nonce reuse in cryptographic operations.
 	 */
 	public void resetNonce() {
-		lastPeerNonce = null;
+		lastPeerNonce.set(null);
 	}
 
 	/**
