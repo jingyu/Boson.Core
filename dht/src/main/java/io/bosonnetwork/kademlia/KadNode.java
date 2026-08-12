@@ -16,7 +16,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -516,7 +515,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 
 			return Future.all(futures);
-		}).andThen(ar -> {
+		}).transform(ar -> {
 			if (ar.succeeded()) {
 				long timer = vertx.setPeriodic(KadConstants.STORAGE_EXPIRE_INITIAL_DELAY,
 						KadConstants.STORAGE_EXPIRE_INTERVAL, unused -> storage.purge());
@@ -526,20 +525,46 @@ public class KadNode extends BosonVerticle implements Node {
 						KadConstants.RE_ANNOUNCE_INTERVAL, unused -> persistentAnnounce());
 				timers.add(timer);
 
-				timer = vertx.setPeriodic(TokenManager.TOKEN_TIMEOUT, TokenManager.TOKEN_TIMEOUT, unused ->
-						tokenManager.updateTokenTimestamps()
+				// Checked several times per window rather than once: the rotation happens on the first
+				// check that finds the window expired, so this period is the overshoot, not the lifetime.
+				timer = vertx.setPeriodic(TokenManager.ROTATION_CHECK_INTERVAL, TokenManager.ROTATION_CHECK_INTERVAL,
+						unused -> tokenManager.updateTokenTimestamps()
 				);
 				timers.add(timer);
 
 				running = true;
 				log.info("Kademlia node started.");
+				return Future.succeededFuture();
 			} else {
-				undeploy();
 				log.error("Failed to start Kademlia node.", ar.cause());
+				// Tear down whatever did come up - a DHT may have deployed before its sibling failed -
+				// and report the original failure only once that teardown has finished. This is the only
+				// teardown a failed start gets: the framework's rollback fails the pending start promise
+				// and never calls undeploy on a deployable that did not start, so nothing else will
+				// release the storage and the sockets. Discarding the future here let the deployment be
+				// reported as failed while both were still closing.
+				return undeploy().transform(unused -> Future.<Void>failedFuture(ar.cause()));
 			}
-		}).mapEmpty();
+		});
 	}
 
+	/**
+	 * Tears the node down: timers, both DHTs, and the storage.
+	 * <p>
+	 * Called once per deployment, from one of two places that cannot both happen. The framework calls it
+	 * when undeploying a verticle that started; the failure branch of {@link #deploy()} calls it directly
+	 * when one did not. Those are exclusive because the framework only undeploys an instance whose start
+	 * succeeded - its rollback for a failed deployment fails the pending start promise instead, and never
+	 * reaches the deployable - so a node that failed to start would be left holding its sockets and its
+	 * storage if {@code deploy()} did not clean up after itself.
+	 * </p>
+	 * <p>
+	 * Which also means the direct call is the only teardown on that path, and the failure branch has to
+	 * wait for it before reporting the failure rather than fire it and move on.
+	 * </p>
+	 *
+	 * @return a future completed when teardown has finished.
+	 */
 	@Override
 	protected Future<Void> undeploy() {
 		running = false;
@@ -926,27 +951,6 @@ public class KadNode extends BosonVerticle implements Node {
 		}
 	}
 
-	public DataStorage getStorage() {
-		checkRunning();
-		return storage;
-	}
-
-	public <T> Future<T> execute(Callable<T> action) {
-		Objects.requireNonNull(action, "Invalid action");
-		checkRunning();
-
-		Promise<T> promise = Promise.promise();
-		runOnContext(v -> {
-			try {
-				T result = action.call();
-				promise.complete(result);
-			} catch (Exception e) {
-				promise.fail(e);
-			}
-		});
-		return promise.future();
-	}
-
 	/**
 	 * Re-publishes the values and peers this node is persistently announcing.
 	 * <p>
@@ -1227,10 +1231,43 @@ public class KadNode extends BosonVerticle implements Node {
 		return identity.createCryptoContext(id);
 	}
 
+	/**
+	 * Hands out the infrastructure this node was built on: its {@code Vertx} instance, and its
+	 * {@link DataStorage}.
+	 * <p>
+	 * Reaching for the storage this way is reaching past the node. What comes back is the node's own
+	 * storage rather than a view of it, so a caller can read, write and delete anything the node has
+	 * stored, with none of the checks the DHT paths apply on the way in. The local administration
+	 * commands in the shell do exactly that on purpose - inspecting and seeding storage directly is what
+	 * they are for - and they are the only callers. Application code has the store, announce and find
+	 * methods on this class, and wants those instead.
+	 * </p>
+	 * <p>
+	 * That is also why this is the door rather than a named accessor. The exposure is the same either
+	 * way; what a named {@code getStorage()} added was the suggestion that reaching for it is ordinary.
+	 * An unwrap call says at the call site that the caller knows it is not.
+	 * </p>
+	 * <p>
+	 * The storage is handed out only while the node is running, which is the check the accessor it
+	 * replaced made explicitly. Gating on the field being set is not the same test and is not enough:
+	 * deploy creates the storage well before it finishes initializing it and longer still before the
+	 * node is running, and undeploy stops running first and closes the storage several steps later, so
+	 * both ends of a deployment have a window where the field holds a storage that no caller should be
+	 * given. The {@code Vertx} instance above needs no such gate - it belongs to the framework rather
+	 * than to this deployment, and is assigned before deploy and never cleared.
+	 * </p>
+	 *
+	 * @param clazz the type of the infrastructure component.
+	 * @param <T>   the type parameter.
+	 * @return the component, or empty if this node has nothing of that type to give - including a
+	 *         storage asked for before the node is running or after it has stopped.
+	 */
 	@Override
 	public <T> Optional<T> unwrap(Class<T> clazz) {
 		if (clazz.isInstance(vertx))
 			return Optional.of(clazz.cast(vertx));
+		if (clazz.isInstance(storage))
+			return running ? Optional.of(clazz.cast(storage)) : Optional.empty();
 
 		return Optional.empty();
 	}
@@ -1240,16 +1277,30 @@ public class KadNode extends BosonVerticle implements Node {
 		return "Kademlia node: " + identity.getId().toString();
 	}
 
-	private static class ListenerProxy extends CopyOnWriteArrayList<ConnectionStatusListener> implements DHTConnectionStatusListener {
-		private static final long serialVersionUID = 2740228489813224483L;
+	/**
+	 * Folds the per-family status of the two DHTs into the one status a KadNode has, and fans changes
+	 * out to the node's listeners.
+	 * <p>
+	 * Holds its listeners rather than extending the list. What this is, is a listener; being a
+	 * {@code List} as well published every list operation to callers that only ever add and remove, and
+	 * made it {@code Serializable} - with the {@code serialVersionUID} that obligation carries - for
+	 * something that can never meaningfully be serialized.
+	 * </p>
+	 */
+	private static class ListenerProxy implements DHTConnectionStatusListener {
+		private final CopyOnWriteArrayList<ConnectionStatusListener> listeners = new CopyOnWriteArrayList<>();
 
 		// Written on the KadNode context but read from the DHT verticles' own event-loop threads.
 		private volatile @Nullable Context context;
 		private volatile ConnectionStatus status4 = ConnectionStatus.Disconnected;
 		private volatile ConnectionStatus status6 = ConnectionStatus.Disconnected;
 
-		public ListenerProxy() {
-			super();
+		void add(ConnectionStatusListener listener) {
+			listeners.add(listener);
+		}
+
+		void remove(ConnectionStatusListener listener) {
+			listeners.remove(listener);
 		}
 
 		private void setContext(@Nullable Context context) {
@@ -1263,62 +1314,71 @@ public class KadNode extends BosonVerticle implements Node {
 
 		@Override
 		public void connecting(Network network) {
-			if (network.isIPv4())
-				status4 = ConnectionStatus.Connecting;
-			if (network.isIPv6())
-				status6 = ConnectionStatus.Connecting;
-
-			// A KadNode is considered to be connecting if at least one DHT (IPv4 or IPv6) is in the connecting state.
-			for (ConnectionStatusListener listener : this) {
-				runOnContext(v -> {
-					try {
-						listener.connecting();
-					} catch (Exception e) {
-						log.error("Error dispatching connecting to listener: {}", listener, e);
-					}
-				});
-			}
+			update(network, ConnectionStatus.Connecting);
 		}
 
 		@Override
 		public void connected(Network network) {
-			if (network.isIPv4())
-				status4 = ConnectionStatus.Connected;
-			if (network.isIPv6())
-				status6 = ConnectionStatus.Connected;
+			update(network, ConnectionStatus.Connected);
+		}
 
-			// A KadNode is considered to be connected if at least one DHT (IPv4 or IPv6) is in the connected state.
-			for (ConnectionStatusListener listener : this) {
+		@Override
+		public void disconnected(Network network) {
+			update(network, ConnectionStatus.Disconnected);
+		}
+
+		/**
+		 * Records one family's new status and, if that moved the node's own status, tells the listeners.
+		 * <p>
+		 * The transition check is what makes the three directions symmetric. Only the disconnected one
+		 * used to have it, so a dual-stack node whose second DHT came up behind the first announced
+		 * itself connected twice - two events for one thing happening, from a listener's point of view.
+		 * </p>
+		 *
+		 * @param network the address family that changed.
+		 * @param status  its new status.
+		 */
+		private void update(Network network, ConnectionStatus status) {
+			ConnectionStatus previous = nodeStatus();
+
+			if (network.isIPv4())
+				status4 = status;
+			if (network.isIPv6())
+				status6 = status;
+
+			ConnectionStatus current = nodeStatus();
+			if (current == previous)
+				return;
+
+			for (ConnectionStatusListener listener : listeners) {
 				runOnContext(v -> {
 					try {
-						listener.connected();
+						switch (current) {
+							case Connecting -> listener.connecting();
+							case Connected -> listener.connected();
+							case Disconnected -> listener.disconnected();
+						}
 					} catch (Exception e) {
-						log.error("Error dispatching connected to listener: {}", listener, e);
+						log.error("Error dispatching {} to listener: {}", current, listener, e);
 					}
 				});
 			}
 		}
 
-		@Override
-		public void disconnected(Network network) {
-			if (network.isIPv4())
-				status4 = ConnectionStatus.Disconnected;
-			if (network.isIPv6())
-				status6 = ConnectionStatus.Disconnected;
+		/**
+		 * The node's status, taken as the best of its DHTs': connected if either family is connected,
+		 * connecting while either is still trying, disconnected only once both have stopped.
+		 *
+		 * @return the node-wide connection status.
+		 */
+		private ConnectionStatus nodeStatus() {
+			if (status4 == ConnectionStatus.Connected || status6 == ConnectionStatus.Connected)
+				return ConnectionStatus.Connected;
 
-			if (status4 != ConnectionStatus.Disconnected || status6 != ConnectionStatus.Disconnected)
-				return;
+			if (status4 == ConnectionStatus.Connecting || status6 == ConnectionStatus.Connecting)
+				return ConnectionStatus.Connecting;
 
-			// A KadNode is considered disconnected only when all enabled DHTs (IPv4 and IPv6) are disconnected.
-			for (ConnectionStatusListener listener : this) {
-				runOnContext(v -> {
-					try {
-						listener.disconnected();
-					} catch (Exception e) {
-						log.error("Error dispatching disconnected to listener: {}", listener, e);
-					}
-				});
-			}
+			return ConnectionStatus.Disconnected;
 		}
 	}
 }

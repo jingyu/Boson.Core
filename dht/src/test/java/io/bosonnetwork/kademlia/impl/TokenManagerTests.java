@@ -165,15 +165,12 @@ public class TokenManagerTests {
 	}
 
 	@Test
-	@DisplayName("the Vert.x SocketAddress overloads agree with the address/port form")
-	void vertxSocketAddressOverloadsAgree() {
-		io.vertx.core.net.SocketAddress socketAddress =
-				io.vertx.core.net.SocketAddress.inetSocketAddress(PORT, address.getHostAddress());
-
-		int token = tokenManager.generateToken(nodeId, socketAddress, targetId);
-		assertEquals(generate(), token);
-		assertTrue(tokenManager.verifyToken(token, nodeId, socketAddress, targetId));
-		assertTrue(verify(token));
+	@DisplayName("the rotation is checked several times per window")
+	void rotationIsCheckedMoreOftenThanItRotates() {
+		// The rotation happens on the first check that finds the window expired, so a check interval
+		// equal to the timeout leaves the overshoot up to the timer's jitter - a window lasting anywhere
+		// between one and two timeouts. This is the relationship that bounds it; the exact ratio is free.
+		assertTrue(TokenManager.ROTATION_CHECK_INTERVAL < TokenManager.TOKEN_TIMEOUT);
 	}
 
 	@Test

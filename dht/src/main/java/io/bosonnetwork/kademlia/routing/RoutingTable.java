@@ -23,13 +23,10 @@
 
 package io.bosonnetwork.kademlia.routing;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,6 +40,7 @@ import java.util.stream.Stream;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
 import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +56,11 @@ import io.bosonnetwork.json.Json;
  * adhering to Kademlia's bucket splitting and replacement policies.
  * <p>
  * Designed for use within single-threaded environments (e.g., Vert.x verticles), this implementation avoids synchronization overhead.
+ * <p>
+ * That thread confinement is also why persistence stops at the encoding here: {@link #save()} returns bytes and
+ * {@link #load(byte[])} takes them, and neither knows where those bytes live. Both walk the buckets, so both belong
+ * on the owning thread, while the file I/O they used to do must not run there - keeping the two separate lets the
+ * caller put each half where it belongs instead of choosing between a blocked event loop and a data race.
  */
 public class RoutingTable {
 	private final Id localId;
@@ -485,25 +488,46 @@ public class RoutingTable {
 	}
 
 	/**
-	 * Loads the routing table's state from the specified file.
-	 * The file is expected to be in CBOR format containing entries and replacements.
-	 * Existing routing table state will be updated accordingly.
+	 * Restores the routing table's state from a previously {@link #save() saved} encoding.
+	 * <p>
+	 * Entries are merged into the existing state rather than replacing it, and entries whose stored id
+	 * does not match this table's local id, or whose snapshot is older than a day, are inserted through
+	 * the normal path instead of being restored to their recorded buckets.
+	 * </p>
+	 * <p>
+	 * Decoding only. Where the bytes came from is the caller's business, and so is reading them: this
+	 * walks the buckets, so it belongs on whatever thread owns this table, and blocking that thread on a
+	 * file read is exactly what keeping the two apart avoids.
+	 * </p>
+	 * <p>
+	 * Damaged input is survivable by design. A truncated or corrupt encoding is logged and abandoned
+	 * partway, keeping whatever was already restored - a cache that turns out to be unusable should cost
+	 * a node its warm start, not its startup. The count that comes back is what makes that survivable
+	 * case answerable: a caller cannot tell an empty cache from a broken one by looking at the table
+	 * afterwards, because a table that restored nothing looks exactly like the one it started with.
+	 * </p>
 	 *
-	 * @param file the path to the file to load from
+	 * @param data the saved routing table, in the CBOR format {@link #save()} produces; null or empty
+	 *             restores nothing.
+	 * @return how many entries and replacements were read out of the encoding - what this call
+	 *         contributed, not what the table now holds. Zero means the cache was empty, unreadable, or
+	 *         damaged before its first entry, and the three are deliberately not distinguished: to every
+	 *         caller so far they mean the same thing, that there is nothing here to warm-start from. Use
+	 *         {@link #getNumberOfEntries()} for the state of the table itself.
 	 */
-	public void load(Path file) {
-		if (Files.notExists(file) || !Files.isRegularFile(file))
-			return;
+	public int load(byte @Nullable [] data) {
+		if (data == null || data.length == 0)
+			return 0;
 
 		final long MAX_AGE = 24 * 60 * 60 * 1000;
 		int totalEntries = 0;
 		int totalReplacements = 0;
 
-		try (InputStream in = Files.newInputStream(file)) {
+		try {
 			CBORMapper mapper = new CBORMapper();
-			JsonNode root = mapper.readTree(in);
+			JsonNode root = mapper.readTree(data);
 			if (root.isEmpty())
-				return;
+				return 0;
 
 			// A corrupt or partial file may be missing required fields; guard against
 			// NullPointerException (which would escape the IOException handler below) by
@@ -572,37 +596,42 @@ public class RoutingTable {
 				}
 			}
 
-			log.info("Loaded {} entries {} replacements from persistent file. it was {} old.",
+			log.info("Loaded {} entries {} replacements from the saved routing table, it was {} old.",
 					totalEntries, totalReplacements, Duration.ofMillis(System.currentTimeMillis() - timestamp));
 		} catch (IOException e) {
 			log.error("Can not load the routing table.", e);
 		}
+
+		return totalEntries + totalReplacements;
 	}
 
 	/**
-	 * Saves the current state of the routing table to the specified file in CBOR format.
-	 * The method writes to a temporary file first and then atomically moves it to the target location to ensure data integrity.
-	 * If the routing table is empty or the target file is not a regular file, the save operation is skipped.
+	 * Encodes the current state of the routing table as CBOR, for a later {@link #load(byte[])}.
+	 * <p>
+	 * Returns the bytes rather than storing them anywhere. Persisting them is the caller's business:
+	 * this class is the routing table, not its storage, and the one caller that does persist has to
+	 * treat the two differently anyway - this walks the buckets and their entries, so it must run on the
+	 * thread that owns the table, while writing a file must not run there at all.
+	 * </p>
+	 * <p>
+	 * Entries needing replacement are left out, so what comes back is the contacts worth trying again
+	 * rather than a faithful image of the table.
+	 * </p>
 	 *
-	 * @param file the path to the file where the routing table should be saved
-	 * @throws IOException if an I/O error occurs during saving
+	 * @return the encoded routing table, or null if it holds no entries worth saving.
+	 * @throws UncheckedIOException if the encoding fails, which means a defect in the encoder or in an
+	 *                              entry rather than an I/O problem - nothing is being written here.
 	 */
-	public void save(Path file) throws IOException {
-		if (this.getNumberOfEntries() == 0) {
+	public byte @Nullable [] save() {
+		if (getNumberOfEntries() == 0) {
 			log.trace("Skip to save the empty routing table.");
-			return;
-		}
-
-		if (Files.exists(file)) {
-			if (!Files.isRegularFile(file))
-				return;
-		} else {
-			Files.createDirectories(file.getParent());
+			return null;
 		}
 
 		long now = System.currentTimeMillis();
-		Path tempFile = Files.createTempFile(file.getParent(), file.getFileName().toString(), "-" + now);
-		try (OutputStream out = Files.newOutputStream(tempFile)) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream(4096);
+
+		try {
 			CBORGenerator gen = Json.cborFactory().createGenerator(out);
 			gen.writeStartObject();
 			gen.writeBinaryField("nodeId", localId.bytesUnsafe());
@@ -647,12 +676,13 @@ public class RoutingTable {
 
 			gen.writeEndObject();
 			gen.close();
-			out.close();
-			Files.move(tempFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-		} finally {
-			// Force delete the tempFile if error occurred
-			Files.deleteIfExists(tempFile);
+		} catch (IOException e) {
+			// Encoding to memory: an IOException here is not an I/O failure, it is a bug in the encoder
+			// or in an entry's toMap(). Nothing the caller could do about it differs from any other bug.
+			throw new UncheckedIOException("Can not encode the routing table", e);
 		}
+
+		return out.toByteArray();
 	}
 
 	@Override

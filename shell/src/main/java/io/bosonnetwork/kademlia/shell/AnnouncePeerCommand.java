@@ -32,6 +32,7 @@ import picocli.CommandLine.Parameters;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.utils.Hex;
 import io.bosonnetwork.vertx.ContextualFuture;
 
@@ -95,10 +96,13 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 			pb.extra(extraData);
 		PeerInfo peer = pb.build();
 
-		if (localOnly)
-			ContextualFuture.of(Main.getBosonNode().getStorage().putPeer(peer)).get();
-		else
+		if (localOnly) {
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
+			ContextualFuture.of(storage.putPeer(peer)).get();
+		} else {
 			Main.getBosonNode().announcePeer(peer, persistent).get();
+		}
 
 		System.out.println("Peer " + peer.getId() + " announced with private key " +
 				Hex.encode(peer.getPrivateKey()));

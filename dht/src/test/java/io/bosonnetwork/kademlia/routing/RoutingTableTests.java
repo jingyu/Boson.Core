@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -494,6 +495,20 @@ class RoutingTableTests {
 	}
 	*/
 
+	// The file half of what save() and load() used to do. It lives here rather than in RoutingTable
+	// because these round-trip tests are the only place left that wants the two glued together - the
+	// production caller keeps them apart on purpose, so that only the file I/O leaves its event loop.
+	private static void saveRoutingTable(RoutingTable routingTable, Path path) throws IOException {
+		byte[] serialized = routingTable.save();
+		if (serialized != null && serialized.length > 0)
+			Files.write(path, serialized);
+	}
+
+	private static void loadRoutingTable(RoutingTable routingTable, Path path) throws IOException {
+		byte[] serialized = Files.readAllBytes(path);
+		routingTable.load(serialized);
+	}
+
 	@Test
 	void testSaveAndLoad() throws Exception {
 		Random rnd = new Random();
@@ -501,10 +516,10 @@ class RoutingTableTests {
 			routingTable.put(new StubEntry(Id.random(), rnd.nextBoolean()));
 
 		Path tempFile = Files.createTempFile("routingTable", ".cbor");
-		routingTable.save(tempFile);
+		saveRoutingTable(routingTable, tempFile);
 
 		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
-		loaded.load(tempFile);
+		loadRoutingTable(loaded, tempFile);
 		System.out.printf(">>>>>>>> The loaded routing table[entries: %d, replacements: %d]\n", loaded.getNumberOfEntries(), loaded.getNumberOfReplacements());
 		assertEquals(routingTable.size(), loaded.size());
 		assertEquals(routingTable.getNumberOfEntries(), loaded.getNumberOfEntries());
@@ -525,7 +540,7 @@ class RoutingTableTests {
 		Files.write(tempFile, Json.cborMapper().writeValueAsBytes(bad));
 
 		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
-		loaded.load(tempFile); // must not throw
+		loadRoutingTable(loaded, tempFile); // must not throw
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
 
@@ -541,7 +556,7 @@ class RoutingTableTests {
 		Files.write(tempFile, garbage);
 
 		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
-		loaded.load(tempFile); // must not throw
+		loadRoutingTable(loaded, tempFile); // must not throw
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
 
@@ -551,10 +566,10 @@ class RoutingTableTests {
 	@Test
 	void testEmptyTableSaveAndLoad() throws Exception {
 		Path tempFile = Files.createTempFile("emptyRoutingTable", ".cbor");
-		routingTable.save(tempFile);
+		saveRoutingTable(routingTable, tempFile);
 
 		RoutingTable loaded = new RoutingTable(localId, TEST_MAX_ENTRIES, TEST_MAX_REPLACEMENT_ENTRIES);
-		loaded.load(tempFile);
+		loadRoutingTable(loaded, tempFile);
 		assertEquals(1, loaded.size());
 		assertEquals(0, loaded.getNumberOfEntries());
 

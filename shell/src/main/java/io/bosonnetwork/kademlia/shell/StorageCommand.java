@@ -56,7 +56,8 @@ public class StorageCommand {
 
 		@Override
 		public Integer call() throws Exception {
-			DataStorage storage = Main.getBosonNode().getStorage();
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
 
 			ContextualFuture.of(storage.getValues().map(values -> {
 				values.forEach(v -> {
@@ -89,7 +90,8 @@ public class StorageCommand {
 				return -1;
 			}
 
-			DataStorage storage = Main.getBosonNode().getStorage();
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
 			ContextualFuture.of(storage.getValue(valueId).map(value -> {
 				if (value != null)
 					System.out.println(value);
@@ -112,7 +114,8 @@ public class StorageCommand {
 
 		@Override
 		public Integer call() throws Exception {
-			DataStorage storage = Main.getBosonNode().getStorage();
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
 
 			ContextualFuture.of(storage.getPeers().map(peers -> {
 				peers.forEach(p -> {
@@ -145,7 +148,8 @@ public class StorageCommand {
 				return -1;
 			}
 
-			DataStorage storage = Main.getBosonNode().getStorage();
+			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
+					.orElseThrow(() -> new IllegalStateException("Node not running"));
 
 			ContextualFuture.of(storage.getPeers(peerId).map(peers -> {
 				peers.forEach(System.out::println);
