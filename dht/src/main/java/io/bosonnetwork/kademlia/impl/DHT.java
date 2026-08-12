@@ -352,6 +352,14 @@ public class DHT extends BosonVerticle {
 		rpcServer.setCallSentHandler(this::onSend);
 		rpcServer.setCallTimeoutHandler(this::onTimeout);
 		return rpcServer.start().map(v -> {
+			// Set before anything below can send. The startup bootstrap runs inside this block, and
+			// every send is gated on this flag - see sendCall and sendResponse - so leaving it until the
+			// andThen below would drop the bootstrap's own calls. They would not fail, they would simply
+			// never complete: nothing decrements the outstanding count for a call that was never sent,
+			// so the bootstrap promise stays pending, its in-progress flag stays set, and the DHT never
+			// leaves Connecting. The socket is open at this point, which is what the flag means.
+			running = true;
+
 			this.taskManager = new TaskManager(kadContext);
 			setStatus(ConnectionStatus.Connecting);
 
@@ -387,9 +395,9 @@ public class DHT extends BosonVerticle {
 			return (Void) null;
 		}).andThen(ar -> {
 			if (ar.succeeded()) {
-				running = true;
 				log.info("Started DHT {}:{} on {}:{}.", network, identity.getId(), host, port);
 			} else {
+				// Covers a throw from the block above, which may have run after the flag was set.
 				running = false;
 				log.error("Failed to start DHT {}:{} on {}:{}.", network, identity.getId(), host, port, ar.cause());
 			}
@@ -1690,7 +1698,7 @@ public class DHT extends BosonVerticle {
 				throw new InvalidValueException("Invalid value for STORE VALUE request");
 
 			return value;
-		}).compose(value ->
+		}, false).compose(value ->
 			// Atomic validate-and-store: existence check + immutable/CAS/owner validation + write in one
 			// transaction (see DataStorage#putValue). failIfNotOwner=false: keep our own value on conflict.
 			storage.putValue(value, body.getExpectedSequenceNumber(), false, false)
@@ -1748,7 +1756,7 @@ public class DHT extends BosonVerticle {
 				throw new InvalidPeerException("Invalid value for ANNOUNCE PEER request");
 
 			return peer;
-		}).compose(peer ->
+		}, false).compose(peer ->
 			// Atomic validate-and-store (see DataStorage#putPeer). failIfNotOwner=false: keep our own peer on conflict.
 			storage.putPeer(peer, body.getExpectedSequenceNumber(), false, false)
 		).transform(ar -> {
