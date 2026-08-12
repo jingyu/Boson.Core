@@ -53,8 +53,20 @@ public class TokenManager {
 	}
 
 	public void updateTokenTimestamps() {
+		updateTokenTimestamps(System.currentTimeMillis());
+	}
+
+	/**
+	 * Rotates the token timestamps as of the given wall-clock time.
+	 * <p>
+	 * Package-private so a test can drive the rotation without waiting out {@link #TOKEN_TIMEOUT};
+	 * production code calls the no-argument form.
+	 * </p>
+	 *
+	 * @param now the current time in milliseconds.
+	 */
+	void updateTokenTimestamps(long now) {
 		long current = timestamp.get();
-		long now = System.currentTimeMillis();
 		while (now - current > TOKEN_TIMEOUT) {
 			if (timestamp.compareAndSet(current, now)) {
 				previousTimestamp = current;

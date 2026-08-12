@@ -640,12 +640,51 @@ public class DHT extends BosonVerticle {
 		return candidates.subList(0, budget);
 	}
 
+	/**
+	 * Queues a task, unless this deployment is on its way down.
+	 * <p>
+	 * Every dispatch goes through here, because a task's listeners run synchronously the moment the
+	 * task ends - including when {@link TaskManager#cancelAll()} ends it during undeploy. Listeners
+	 * queue follow-up work all over this class: the bootstrap chain advances to its next phase, the
+	 * warm-start sweep dispatches the next bucket, a lookup hands over to its announce task. Each of
+	 * those re-enters the manager from inside its own cancellation loop, where {@code add} throws
+	 * because the manager is canceling, and the loop is iterating the very queue the add would append
+	 * to. An NPE against the nulled {@code taskManager} is only the last of those outcomes, reached by
+	 * a listener that fires after undeploy rather than during it; the first is a shutdown that throws
+	 * before it has cleared its queues.
+	 * </p>
+	 * <p>
+	 * {@code running} is cleared at the top of {@link #undeploy()}, before any of that begins, so a
+	 * test of it here keeps the re-entry out. Callers must settle whatever waits on the task when this
+	 * returns false - a promise completed by a listener of a task that was never queued would never be
+	 * completed at all.
+	 * </p>
+	 *
+	 * @param task  the task to queue.
+	 * @param prior true to queue it ahead of the tasks already waiting.
+	 * @return true if the task was queued, false if this DHT is stopping.
+	 */
+	private boolean dispatchTask(Task<?> task, boolean prior) {
+		TaskManager tm = taskManager;
+		if (!running || tm == null) {
+			log.debug("DHT {}:{} is stopping, not dispatching task: {}", network, identity.getId(), task);
+			return false;
+		}
+
+		tm.add(task, prior);
+		return true;
+	}
+
+	private boolean dispatchTask(Task<?> task) {
+		return dispatchTask(task, false);
+	}
+
 	private void randomLookup(long unusedTimerId) {
 		if (rpcServer.isReachable()) {
 			log.info("Periodic: random lookup ...");
 			NodeLookupTask task = new NodeLookupTask(kadContext, Id.random())
 					.setName("Periodic: random node Lookup");
-			taskManager.add(task);
+			dispatchTask(task);
 		} else {
 			log.info("Periodic: not performing random lookup, node is unreachable.");
 		}
@@ -949,7 +988,8 @@ public class DHT extends BosonVerticle {
 				.setBootstrap(true)
 				.injectCandidates(nodes)
 				.addListener(t -> promise.complete());
-		taskManager.add(task, initialBootstrap);
+		if (!dispatchTask(task, initialBootstrap))
+			return Future.failedFuture(new IllegalStateException("DHT is not running"));
 
 		return promise.future();
 	}
@@ -1025,7 +1065,10 @@ public class DHT extends BosonVerticle {
 			NodeLookupTask task = new NodeLookupTask(kadContext, bucket.prefix().createRandomId())
 					.setName("Bootstrap: filling Bucket - " + bucket.prefix())
 					.addListener(t -> promise.complete());
-			taskManager.add(task, initialBootstrap);
+			// Abandon the whole phase rather than the one bucket: the DHT is stopping, and the buckets
+			// already dispatched are being cancelled behind us.
+			if (!dispatchTask(task, initialBootstrap))
+				return Future.failedFuture(new IllegalStateException("DHT is not running"));
 
 			futures.add(promise.future());
 		}
@@ -1223,7 +1266,10 @@ public class DHT extends BosonVerticle {
 
 						dispatch.get().run();
 					});
-			taskManager.add(task);
+			// Nothing further to sweep if the DHT is stopping. The promise gates the startup connection
+			// status, so it is failed rather than left pending on a task that will never run.
+			if (!dispatchTask(task))
+				promise.tryFail(new IllegalStateException("DHT is not running"));
 		});
 
 		for (int i = 0; i < batch; i++)
@@ -1305,7 +1351,12 @@ public class DHT extends BosonVerticle {
 			// selectBucketsToFill as well, so the bucket would never be refreshed again by either.
 			if (maintenanceTasks.putIfAbsent(bucket, task) == null) {
 				task.addListener(t -> maintenanceTasks.remove(bucket, task));
-				taskManager.add(task);
+				// The claim above is released by that listener, which only ever fires for a task the
+				// manager accepted. Releasing it here as well is what keeps a refused dispatch from
+				// stranding the entry - and a stranded entry excludes its bucket from both refresh
+				// paths for the life of the deployment.
+				if (!dispatchTask(task))
+					maintenanceTasks.remove(bucket, task);
 			}
 		}
 	}
@@ -2018,7 +2069,8 @@ public class DHT extends BosonVerticle {
 							promise.complete(t.getResult())
 					);
 
-			taskManager.add(task);
+			if (!dispatchTask(task))
+				promise.fail(new IllegalStateException("DHT is not running"));
 		});
 
 		return promise.future();
@@ -2035,7 +2087,8 @@ public class DHT extends BosonVerticle {
 							promise.complete(t.getResult().getValue())
 					);
 
-			taskManager.add(task);
+			if (!dispatchTask(task))
+				promise.fail(new IllegalStateException("DHT is not running"));
 		});
 
 		return promise.future();
@@ -2066,10 +2119,15 @@ public class DHT extends BosonVerticle {
 						}
 
 						announceTask.closest(closest);
-						taskManager.add(announceTask);
+						// Cancelled rather than dropped, as in the branch above: the promise is completed
+						// by this task's listener, so a task that never reaches a terminal state leaves
+						// the caller waiting for a store that is not going to happen.
+						if (!dispatchTask(announceTask))
+							announceTask.cancel();
 					});
 
-			taskManager.add(lookupTask);
+			if (!dispatchTask(lookupTask))
+				promise.fail(new IllegalStateException("DHT is not running"));
 		});
 
 		return promise.future();
@@ -2085,7 +2143,8 @@ public class DHT extends BosonVerticle {
 					.setName("Lookup peer: " + id)
 					.addListener(t -> promise.complete(t.getResult().getPeers()));
 
-			taskManager.add(task);
+			if (!dispatchTask(task))
+				promise.fail(new IllegalStateException("DHT is not running"));
 		});
 
 		return promise.future();
@@ -2116,10 +2175,13 @@ public class DHT extends BosonVerticle {
 						}
 
 						announceTask.closest(closest);
-						taskManager.add(announceTask);
+						// Cancelled rather than dropped, for the reason given in storeValue.
+						if (!dispatchTask(announceTask))
+							announceTask.cancel();
 					});
 
-			taskManager.add(lookupTask);
+			if (!dispatchTask(lookupTask))
+				promise.fail(new IllegalStateException("DHT is not running"));
 		});
 
 		return promise.future();
