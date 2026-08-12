@@ -23,13 +23,12 @@
 
 package io.bosonnetwork.kademlia.shell;
 
+import java.net.StandardProtocolFamily;
 import java.util.concurrent.Callable;
 
 import picocli.CommandLine.Command;
 
-import io.bosonnetwork.kademlia.impl.DHT;
-import io.bosonnetwork.kademlia.impl.Network;
-import io.bosonnetwork.vertx.ContextualFuture;
+import io.bosonnetwork.kademlia.KadNode;
 
 /**
  * @hidden
@@ -39,17 +38,16 @@ import io.bosonnetwork.vertx.ContextualFuture;
 public class RoutingTableCommand implements Callable<Integer> {
 	@Override
 	public Integer call() throws Exception {
-		DHT dht4 = Main.getBosonNode().getDHT(Network.IPv4);
-		if (dht4 != null) {
+		KadNode node = Main.getBosonNode();
+		if (node.isIPv4Enabled()) {
 			System.out.println("Routing table for IPv4: ");
-			ContextualFuture.of(dht4.dumpRoutingTable(System.out)).get();
+			node.dumpRoutingTable(StandardProtocolFamily.INET, System.out).get();
 			System.out.println();
 		}
 
-		DHT dht6 = Main.getBosonNode().getDHT(Network.IPv6);
-		if (dht6 != null) {
+		if (node.isIPv6Enabled()) {
 			System.out.println("Routing table for IPv6: ");
-			ContextualFuture.of(dht6.dumpRoutingTable(System.out)).get();
+			node.dumpRoutingTable(StandardProtocolFamily.INET6, System.out).get();
 			System.out.println();
 		}
 

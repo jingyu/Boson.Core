@@ -1,10 +1,12 @@
 package io.bosonnetwork.kademlia;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.StandardProtocolFamily;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -85,8 +87,10 @@ public class KadNode extends BosonVerticle implements Node {
 	private final @Nullable String host6;
 	private final int port;
 
-	private @Nullable DHT dht4;
-	private @Nullable DHT dht6;
+	// Written on this node's context during deploy/undeploy, read from any thread by the public
+	// accessors below; volatile so a caller cannot observe a stale or half-published DHT.
+	private volatile @Nullable DHT dht4;
+	private volatile @Nullable DHT dht6;
 
 	private LookupOption defaultLookupOption;
 
@@ -231,8 +235,11 @@ public class KadNode extends BosonVerticle implements Node {
 
 	@Override
 	public Optional<NodeInfo> getNodeInfo() {
-		NodeInfo n4 = dht4 != null ? dht4.getNodeInfo() : null;
-		NodeInfo n6 = dht6 != null ? dht6.getNodeInfo() : null;
+		// Read each field once: undeploy clears it, and a second read could see the null.
+		DHT d4 = dht4;
+		DHT d6 = dht6;
+		NodeInfo n4 = d4 != null ? d4.getNodeInfo() : null;
+		NodeInfo n6 = d6 != null ? d6.getNodeInfo() : null;
 		return Optional.ofNullable(mergeNodeInfo(getId(), n4, n6));
 	}
 
@@ -327,13 +334,35 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	/**
+	 * Whether this node runs an IPv4 stack.
+	 *
+	 * @return {@code true} if the IPv4 DHT is deployed.
+	 */
+	public boolean isIPv4Enabled() {
+		return dht4 != null;
+	}
+
+	/**
+	 * Whether this node runs an IPv6 stack.
+	 *
+	 * @return {@code true} if the IPv6 DHT is deployed.
+	 */
+	public boolean isIPv6Enabled() {
+		return dht6 != null;
+	}
+
+	/**
 	 * Returns the internal DHT instance for the given network family, or {@code null} if this node
 	 * does not run that family (single-stack node).
+	 * <p>
+	 * REMARK: this method is not part of the public API, just for internal use. It is package-private
+	 * rather than protected on purpose: this class is public and not final, so a protected member
+	 * would still publish the internal DHT type to any subclass.
 	 *
 	 * @param network the network family.
 	 * @return the DHT instance, or {@code null} if not enabled for this node.
 	 */
-	public @Nullable DHT getDHT(Network network) {
+	@Nullable DHT getDHT(Network network) {
 		return network == Network.IPv4 ? dht4 : dht6;
 	}
 
@@ -381,11 +410,12 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Void> promise = Promise.promise();
 		runOnContext(v -> {
-			String deploymentId = vertxContext != null ? vertxContext.deploymentID() : null;
+			Context ctx = vertxContext;
+			String deploymentId = ctx != null ? ctx.deploymentID() : null;
 			if (deploymentId == null)
 				promise.fail(new IllegalStateException("Not started"));
-
-			vertx.undeploy(deploymentId).onComplete(promise);
+			else
+				ctx.owner().undeploy(deploymentId).onComplete(promise);
 		});
 
 		return ContextualFuture.of(promise.future());
@@ -1161,6 +1191,41 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Boolean> future = storage.removePeer(peerId, fingerprint);
+		return ContextualFuture.of(future);
+	}
+
+	/**
+	 * Writes a human-readable dump of the routing table of the given family to {@code out}.
+	 * <p>
+	 * The dump runs on the owning DHT's context, so it sees the routing table in a consistent state
+	 * rather than one being mutated underneath it.
+	 * </p>
+	 *
+	 * @param family the network family to dump, {@link StandardProtocolFamily#INET} or
+	 *               {@link StandardProtocolFamily#INET6}.
+	 * @param out    the stream to write the dump to; not closed by this method.
+	 * @return a future that completes when the dump has been written, failed if this node does not
+	 *         run the requested family.
+	 */
+	public ContextualFuture<Void> dumpRoutingTable(StandardProtocolFamily family, PrintStream out) {
+		Objects.requireNonNull(family, "Invalid protocol family");
+		Objects.requireNonNull(out, "Invalid output stream");
+
+		Future<Void> future = switch (family) {
+			// Read the field once: undeploy clears it, and a second read could see the null.
+			case INET -> {
+				DHT dht = dht4;
+				yield dht != null ? dht.dumpRoutingTable(out) :
+						Future.failedFuture(new IllegalStateException("No DHT/IPv4 available"));
+			}
+			case INET6 -> {
+				DHT dht = dht6;
+				yield dht != null ? dht.dumpRoutingTable(out) :
+						Future.failedFuture(new IllegalStateException("No DHT/IPv6 available"));
+			}
+			default -> Future.failedFuture(new IllegalArgumentException("Unsupported protocol family"));
+		};
+
 		return ContextualFuture.of(future);
 	}
 

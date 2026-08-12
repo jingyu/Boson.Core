@@ -16,6 +16,7 @@ import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.StandardProtocolFamily;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,7 +55,6 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
-import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -215,7 +215,8 @@ public class NodeAsyncTests {
 		var file = testDir.resolve("nodes" + File.separator + name + File.separator + "routingtable");
 		try {
 			var out = new PrintStream(Files.newOutputStream(file));
-			return ContextualFuture.of(bootstrap.getDHT(Network.IPv4).dumpRoutingTable(out).andThen(ar -> out.close()));
+			return ContextualFuture.of(node.dumpRoutingTable(StandardProtocolFamily.INET, out)
+					.whenComplete((r, e) -> out.close()));
 		} catch (IOException e) {
 			return ContextualFuture.failedFuture(e);
 		}

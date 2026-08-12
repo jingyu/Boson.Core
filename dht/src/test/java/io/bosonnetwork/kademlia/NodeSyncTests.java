@@ -16,6 +16,7 @@ import java.lang.reflect.Type;
 import java.lang.reflect.WildcardType;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.StandardProtocolFamily;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -46,7 +47,6 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.crypto.Signature.KeyPair;
-import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.utils.FileUtils;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -135,17 +135,16 @@ public class NodeSyncTests {
 		System.out.format("\007🟢 Dumping the routing table of bootstrap node %s ...\n", bootstrap.getId());
 		var file = testDir.resolve("nodes" + File.separator + "node-bootstrap" + File.separator + "routingtable");
 		try (var out = new PrintStream(Files.newOutputStream(file))) {
-			ContextualFuture.of(bootstrap.getDHT(Network.IPv4).dumpRoutingTable(out)).get();
+			bootstrap.dumpRoutingTable(StandardProtocolFamily.INET, out).get();
 		}
 
 		for (int i = 0; i < testNodes.size(); i++) {
 			var node = testNodes.get(i);
 			System.out.format("\007🟢 Dumping the routing table of node %s ...\n", node.getId());
-			var dht = node.getDHT(Network.IPv4);
 			//noinspection SpellCheckingInspection
 			file = testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "routingtable");
 			try (var out = new PrintStream(Files.newOutputStream(file))) {
-				ContextualFuture.of(dht.dumpRoutingTable(out)).get();
+				node.dumpRoutingTable(StandardProtocolFamily.INET, out).get();
 			}
 		}
 	}
