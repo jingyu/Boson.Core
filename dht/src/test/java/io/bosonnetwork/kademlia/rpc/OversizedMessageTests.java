@@ -48,6 +48,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.exceptions.KadException;
@@ -167,6 +168,31 @@ public class OversizedMessageTests {
 				.compose(unused -> body.apply(node1, node2))
 				.eventually(() -> Future.all(vertx.undeploy(node1.deploymentID()), vertx.undeploy(node2.deploymentID())))
 				.mapEmpty();
+	}
+
+	/**
+	 * The size check runs before encryption, so that a message which cannot be sent does not cost an
+	 * encryption first. That makes what it checks a derivation of the datagram size - sender id, nonce,
+	 * MAC and the serialized message - rather than the datagram itself.
+	 * <p>
+	 * A derivation is only as correct as the envelope it assumes, and nothing else in the module would
+	 * notice if that envelope changed: the guard would keep passing and simply stop bounding anything,
+	 * which is the failure this whole check exists to prevent. So the arithmetic is pinned here, against
+	 * the encryption actually used rather than against a restatement of it.
+	 * </p>
+	 */
+	@Test
+	void theDerivedDatagramSizeMatchesTheEncryptedEnvelope() throws Exception {
+		Identity identity = new CryptoIdentity();
+		// A real key pair, not Id.random(): encryption converts the recipient id to a curve point.
+		Id recipient = new CryptoIdentity().getId();
+
+		for (int payload : new int[] { 1, 64, 512, 1024 }) {
+			byte[] plain = Random.randomBytes(payload);
+			assertEquals(plain.length + CryptoBox.Nonce.BYTES + CryptoBox.MAC_BYTES,
+					identity.encrypt(recipient, plain).length,
+					"RpcServer adds Id.BYTES to this to decide whether a message fits one datagram");
+		}
 	}
 
 	/**

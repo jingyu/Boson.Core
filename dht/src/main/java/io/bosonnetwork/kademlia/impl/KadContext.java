@@ -192,6 +192,10 @@ public class KadContext implements Timer, Executor {
 		return getVertxContext().executeBlocking(handler);
 	}
 
+	public <T> Future<T> executeBlocking(Callable<T> handler, boolean ordered) {
+		return getVertxContext().executeBlocking(handler, ordered);
+	}
+
 	@Override
 	public long setPeriodic(long initialDelay, long delay, Consumer<Long> handler) {
 		return getVertx().setPeriodic(initialDelay, delay, handler::accept);

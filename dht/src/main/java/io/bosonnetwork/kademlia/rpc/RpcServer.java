@@ -538,122 +538,151 @@ public class RpcServer implements Measured {
 			return;
 		}
 
-		// Decrypt and parse message
-		Message message;
-		try {
+		// Decryption and parsing run on a worker, and the extra context switch is worth paying for.
+		//
+		// The event loop is the funnel for everything: it reads every datagram and runs every
+		// continuation below. So the figure that sets the ceiling is not total CPU but what the loop
+		// itself spends per packet, and measured on a 10-core machine (JDK 17, the pure-Java Bouncy
+		// Castle provider, shared key already cached) that comparison is:
+		//
+		//     inline, decrypt + parse      1.04 us for a PING, 5.19 us for a full-size response
+		//     offloaded, loop-side cost    0.27 us per packet with a deep queue
+		//
+		// So the loop does roughly 4x to 19x less work per packet, and the crypto runs in parallel
+		// across the pool instead of one packet at a time. The handoff looks expensive when measured
+		// alone at low load - 5.95 us round trip with a single request in flight - but that is latency
+		// on an idle node, not throughput, and Vert.x amortizes it once completions batch: 1.26 us at
+		// eight in flight, 0.27 us at sixty-four. Against RTTs measured in milliseconds, the idle-node
+		// latency does not matter.
+		//
+		// It also covers the case that hurts most. The shared key is cached per peer, so the numbers
+		// above are the warm path; a first contact costs about 82 us for the Ed25519-to-Curve25519
+		// conversion and the X25519 agreement. Inline, a lookup fanning out to eight unseen nodes would
+		// stall the loop for most of a millisecond.
+		//
+		// Unordered on purpose: packets are independent, UDP promises no ordering, and responses are
+		// matched by transaction id rather than by arrival. Ordered would serialize the pool behind one
+		// queue and leave this strictly worse than the inline version it replaced, since the event loop
+		// was already serial.
+		context.executeBlocking(() -> {
+			// Decrypt and parse message
 			byte[] encryptedMsg = buffer.getBytes(Id.BYTES, buffer.length());
 			byte[] decryptedMsg = identity.decrypt(remoteId, encryptedMsg);
-			message = Message.parse(decryptedMsg, remoteId);
+			Message message = Message.parse(decryptedMsg, remoteId);
 			message.setId(remoteId);
 			message.setRemote(remoteId, remoteAddress);
-		} catch (Exception e) {
-			if (e instanceof CryptoException) {
-				log.warn("Decrypt packet error from {}, ignored", remoteAddress);
-			} else if (e instanceof IllegalArgumentException) {
-				if (log.isTraceEnabled()) // log the parse error for debugging
-					log.trace("Parse message error from {}@{}, ignored", remoteId, remoteAddress, e.getCause());
+			return message;
+		}, false).andThen(ar -> {
+			if (ar.succeeded()) {
+				Message message = ar.result();
+				log.trace("Received {}:{} from {}@{} : {}", message.getMethod(), message.getType(),
+						remoteId, remoteAddress, message);
 
-				log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress);
-			} else {
-				log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress, e);
-			}
+				// Handle request messages
+				if (message.isRequest()) {
+					if (metrics != null)
+						metrics.requestReceived(message);
 
-			suspiciousNodeDetector.malformedMessage(remoteAddress);
-			if (metrics != null) {
-				metrics.bytesDropped(remoteAddress, buffer.length());
-				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.INVALID);
-			}
-			return;
-		}
-
-		log.trace("Received {}:{} from {}@{} : {}", message.getMethod(), message.getType(),
-				remoteId, remoteAddress, message);
-
-		// Handle request messages
-		if (message.isRequest()) {
-			if (metrics != null)
-				metrics.requestReceived(message);
-
-			// Incoming requests, no need to match them to pending requests
-			if (messageHandler != null)
-				messageHandler.accept(message);
-
-			return;
-		}
-
-		// Handle response or error messages
-		// check if this is a response to an outstanding request
-		RpcCall call = pendingCalls.get(message.getTxid());
-		if (call != null) {
-			// the message matches transaction ID and origin == destination
-			// we only check the IP address here. the routing table applies more strict checks to also verify a stable port
-			if (remoteAddress.equals(call.getRequest().getRemoteAddress())) {
-				if (message.getMethod() != call.getRequest().getMethod()) {
-					log.warn("Got response with wrong method {} from {}@{} for {}",
-							message.getMethod(), remoteId, remoteAddress, call.getRequest().getMethod());
-					// This is a terminal error for the call: remove it from the pending map
-					// (race-safe, mirroring the normal response path) so it is not leaked.
-					if (pendingCalls.remove(message.getTxid(), call))
-						call.respondWrongMethod(message);
-					suspiciousNodeDetector.malformedMessage(remoteAddress);
-					return;
-				}
-
-				// Remove call to prevent timeout race, defense against timeout race
-				if (pendingCalls.remove(message.getTxid(), call)) {
-					call.respond(message);
-
+					// Incoming requests, no need to match them to pending requests
 					if (messageHandler != null)
 						messageHandler.accept(message);
 
-					// Update the timeout sampler for non-known nodes to avoid skewing RTT estimates
-					if(!call.isReachableAtCreationTime())
-						timeoutSampler.updateAndRecalc(call.getRTT());
-
-					if (metrics != null) {
-						metrics.responseReceived(message);
-
-						// Update loss rate: 0f for successful response, 1f for timeout
-						if (call.isReachableAtCreationTime())
-							metrics.verifiedLossRateUpdate(0f);
-						else
-							metrics.unverifiedLossRateUpdate(0f);
-					}
+					return;
 				}
 
-				return;
+				// Handle response or error messages
+				// check if this is a response to an outstanding request
+				RpcCall call = pendingCalls.get(message.getTxid());
+				if (call != null) {
+					// the message matches transaction ID and origin == destination
+					// we only check the IP address here. the routing table applies more strict checks to also verify a stable port
+					if (remoteAddress.equals(call.getRequest().getRemoteAddress())) {
+						if (message.getMethod() != call.getRequest().getMethod()) {
+							log.warn("Got response with wrong method {} from {}@{} for {}",
+									message.getMethod(), remoteId, remoteAddress, call.getRequest().getMethod());
+							// This is a terminal error for the call: remove it from the pending map
+							// (race-safe, mirroring the normal response path) so it is not leaked.
+							if (pendingCalls.remove(message.getTxid(), call))
+								call.respondWrongMethod(message);
+							suspiciousNodeDetector.malformedMessage(remoteAddress);
+							return;
+						}
+
+						// Remove call to prevent timeout race, defense against timeout race
+						if (pendingCalls.remove(message.getTxid(), call)) {
+							call.respond(message);
+
+							if (messageHandler != null)
+								messageHandler.accept(message);
+
+							// Update the timeout sampler for non-known nodes to avoid skewing RTT estimates
+							if(!call.isReachableAtCreationTime())
+								timeoutSampler.updateAndRecalc(call.getRTT());
+
+							if (metrics != null) {
+								metrics.responseReceived(message);
+
+								// Update loss rate: 0f for successful response, 1f for timeout
+								if (call.isReachableAtCreationTime())
+									metrics.verifiedLossRateUpdate(0f);
+								else
+									metrics.unverifiedLossRateUpdate(0f);
+							}
+						}
+
+						return;
+					}
+
+					// Handle inconsistent socket (e.g., NAT issues or attack)
+					// - the message is not a request
+					// - the transaction ID matched
+					// - response source did not match request destination
+					// this happening by chance is exceedingly unlikely indicates either port-mangling NAT,
+					// a multihomed host listening on any-local address or some kind of attack
+					log.warn("Node address not consistent, ignored. request: {} <- response: {}@{}",
+							call.getTarget(), remoteId, remoteAddress);
+					suspiciousNodeDetector.inconsistent(remoteAddress, remoteId);
+
+					if (metrics != null) {
+						metrics.bytesDropped(remoteAddress, buffer.length());
+						metrics.messageDropped(remoteAddress, DHTMetrics.Reason.INCONSISTENT);
+					}
+
+					// but expect an upcoming timeout if it's really just a misbehaving node
+					call.respondInconsistentSocket(message);
+					return;
+				}
+
+				suspiciousNodeDetector.observe(remoteAddress, remoteId);
+
+				// No matched call
+				// - call already timed out
+				// - stray response, uptime is high enough that it's a stray from a restart
+				log.warn("Cannot find RPC call for {}[txid:{}]", message.getType(), message.getTxid());
+				if (metrics != null) {
+					metrics.bytesDropped(remoteAddress, buffer.length());
+					metrics.messageDropped(remoteAddress, DHTMetrics.Reason.NO_MATCHED_CALL);
+				}
+			} else {
+				Throwable e = ar.cause();
+				if (e instanceof CryptoException) {
+					log.warn("Decrypt packet error from {}, ignored", remoteAddress);
+				} else if (e instanceof IllegalArgumentException) {
+					if (log.isTraceEnabled()) // log the parse error for debugging
+						log.trace("Parse message error from {}@{}, ignored", remoteId, remoteAddress, e.getCause());
+
+					log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress);
+				} else {
+					log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress, e);
+				}
+
+				suspiciousNodeDetector.malformedMessage(remoteAddress);
+				if (metrics != null) {
+					metrics.bytesDropped(remoteAddress, buffer.length());
+					metrics.messageDropped(remoteAddress, DHTMetrics.Reason.INVALID);
+				}
 			}
-
-			// Handle inconsistent socket (e.g., NAT issues or attack)
-			// - the message is not a request
-			// - the transaction ID matched
-			// - response source did not match request destination
-			// this happening by chance is exceedingly unlikely indicates either port-mangling NAT,
-			// a multihomed host listening on any-local address or some kind of attack
-			log.warn("Node address not consistent, ignored. request: {} <- response: {}@{}",
-					call.getTarget(), remoteId, remoteAddress);
-			suspiciousNodeDetector.inconsistent(remoteAddress, remoteId);
-
-			if (metrics != null) {
-				metrics.bytesDropped(remoteAddress, buffer.length());
-				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.INCONSISTENT);
-			}
-
-			// but expect an upcoming timeout if it's really just a misbehaving node
-			call.respondInconsistentSocket(message);
-			return;
-		}
-
-		suspiciousNodeDetector.observe(remoteAddress, remoteId);
-
-		// No matched call
-		// - call already timed out
-		// - stray response, uptime is high enough that it's a stray from a restart
-		log.warn("Cannot find RPC call for {}[txid:{}]", message.getType(), message.getTxid());
-		if (metrics != null) {
-			metrics.bytesDropped(remoteAddress, buffer.length());
-			metrics.messageDropped(remoteAddress, DHTMetrics.Reason.NO_MATCHED_CALL);
-		}
+		});
 	}
 
 	/**
@@ -734,62 +763,112 @@ public class RpcServer implements Measured {
 	 * @return a Future that completes when the message is sent
 	 */
 	public Future<Void> sendMessage(Message message) {
-		Buffer buffer;
-
 		message.setId(identity.getId());
 
+		// Serialization and encryption go to a worker for the same reason the receive side does - see
+		// handlePacket for the measurements and the reasoning behind the extra context switch. The send
+		// side is cheaper than the receive side but still well above the handoff: 0.86 us inline for a
+		// PING and 2.85 us for a full-size response, against 0.27 us of loop time to offload it.
+		//
+		// Only the encoding moves. The socket write below runs on the event loop, where it belongs: the
+		// datagram socket is not ours to touch from a pool thread.
+		return context.executeBlocking(() -> encode(message), false).compose(datagram -> {
+			// Not necessarily the message that was passed in: an oversized response is replaced by an
+			// error, and everything below reports what actually went on the wire.
+			Message sent = datagram.message();
+			Buffer buffer = datagram.buffer();
+			SocketAddress remote = sent.getRemoteAddress();
+			return socket.send(buffer, remote.port(), remote.host()).andThen(ar -> {
+				if (ar.succeeded()) {
+					log.trace("Sent {}/{} to {}@{}: {}", sent.getMethod(), sent.getType(),
+							sent.getRemoteId(), remote, sent);
+
+					if (metrics != null) {
+						metrics.bytesWritten(remote, buffer.length());
+						metrics.messageSent(remote);
+						metrics.requestSent(sent);
+					}
+				} else {
+					if (log.isDebugEnabled())
+						log.error("Failed to send {}/{} to {}@{}: {}", sent.getMethod(), sent.getType(),
+								sent.getRemoteId(), remote, sent, ar.cause());
+					else
+						log.error("Failed to send {}/{} to {}@{}", sent.getMethod(), sent.getType(),
+								sent.getRemoteId(), remote, ar.cause());
+
+					if (metrics != null)
+						metrics.messageSendFailed(remote, ar.cause());
+
+					// A send failure (incl. transient socket-buffer exhaustion / ENOBUFS) drops this datagram
+					// and fails the associated RpcCall; the iterative tasks tolerate individual losses via their
+					// alpha-concurrency, so no retransmit is attempted here (UDP best-effort, matching Kademlia).
+					/*/
+					// Checking for specific errors by inspecting a generic IOException and its message is not ideal
+					if (ar.cause() != null && Objects.equals(ar.cause().getMessage(), "No buffer space available")) {
+						log.debug("Awaiting the socket available, set a timer to resend the messages.");
+						context.owner().setTimer(1000, unused -> sendMessage(message));
+					}
+					*/
+				}
+			});
+		});
+	}
+
+	/**
+	 * An encrypted message and the message it actually carries.
+	 * <p>
+	 * The two are worth keeping together because they can disagree: an oversized response is sent as an
+	 * error instead, and logging or counting the message that was handed in would then describe a
+	 * datagram that never existed.
+	 * </p>
+	 *
+	 * @param message the message this datagram carries.
+	 * @param buffer  the bytes to put on the wire.
+	 */
+	private record Datagram(Message message, Buffer buffer) { }
+
+	/**
+	 * Serializes, size-checks and encrypts a message into the datagram that will be sent.
+	 * <p>
+	 * The size check is the last line of defense on the size of a datagram: every other bound in the
+	 * module is a per-field limit or a per-entry estimate applied while a message is being built, and
+	 * none of them has seen the message as a whole. What this catches is a message whose size was
+	 * derived wrongly, or one built from a record stored before the limits that derive it existed.
+	 * </p>
+	 * <p>
+	 * It runs before encryption rather than on the finished buffer, so a message that cannot be sent
+	 * costs nothing to reject. That makes the checked size a <em>derivation</em> rather than a
+	 * measurement - sender id, nonce, MAC and the serialized message, which is exactly what
+	 * {@link Identity#encrypt} produces - so it is only as correct as that envelope is stable. The
+	 * arithmetic is pinned by a test for that reason.
+	 * </p>
+	 * <p>
+	 * Recursion is bounded at one step: what comes back from {@link #tooBigToSend} is a fixed-text
+	 * error with no payload, which cannot itself exceed the budget.
+	 * </p>
+	 *
+	 * @param message the message to encode.
+	 * @return the datagram to send, which carries the substituted error if the message did not fit.
+	 * @throws MessageTooBigException if the message does not fit and there is no one to tell.
+	 * @throws CryptoException        if the message cannot be encrypted for its recipient.
+	 */
+	private Datagram encode(Message message) throws MessageTooBigException, CryptoException {
+		byte[] plainMsg = message.toBytes();
+		// The datagram this becomes: sender id || nonce || MAC || ciphertext, per CryptoIdentity.encrypt.
+		int datagramSize = Id.BYTES + CryptoBox.Nonce.BYTES + CryptoBox.MAC_BYTES + plainMsg.length;
+		if (datagramSize > network.maxPacketSize())
+			return encode(tooBigToSend(message, datagramSize));
+
 		try {
-			byte[] encryptedMsg = identity.encrypt(message.getRemoteId(), message.toBytes());
-			buffer = Buffer.buffer(encryptedMsg.length + Id.BYTES);
+			byte[] encryptedMsg = identity.encrypt(message.getRemoteId(), plainMsg);
+			Buffer buffer = Buffer.buffer(encryptedMsg.length + Id.BYTES);
 			buffer.appendBytes(message.getId().bytesUnsafe());
 			buffer.appendBytes(encryptedMsg);
+			return new Datagram(message, buffer);
 		} catch (CryptoException e) {
 			log.error("!!!INTERNAL ERROR: Failed to encrypt message", e);
-			return Future.failedFuture(e);
+			throw e;
 		}
-
-		// The last line of defense on the size of a datagram, and the only one that measures rather
-		// than estimates: every other bound is a per-field limit or a per-entry estimate applied while
-		// a message is being built, so nothing above this point has ever seen the bytes that actually
-		// go on the wire. What it catches is a message whose size was derived wrongly, or one built
-		// from a record stored before the limits that derive it existed.
-		if (buffer.length() > network.maxPacketSize())
-			return tooBigToSend(message, buffer.length());
-
-		SocketAddress remote = message.getRemoteAddress();
-		return socket.send(buffer, remote.port(), remote.host()).andThen(ar -> {
-			if (ar.succeeded()) {
-				log.trace("Sent {}/{} to {}@{}: {}", message.getMethod(), message.getType(),
-						message.getRemoteId(), remote, message);
-
-				if (metrics != null) {
-					metrics.bytesWritten(remote, buffer.length());
-					metrics.messageSent(remote);
-					metrics.requestSent(message);
-				}
-			} else {
-				if (log.isDebugEnabled())
-					log.error("Failed to send {}/{} to {}@{}: {}", message.getMethod(), message.getType(),
-							message.getRemoteId(), remote, message, ar.cause());
-				else
-					log.error("Failed to send {}/{} to {}@{}", message.getMethod(), message.getType(),
-							message.getRemoteId(), remote, ar.cause());
-
-				if (metrics != null)
-					metrics.messageSendFailed(remote, ar.cause());
-
-				// A send failure (incl. transient socket-buffer exhaustion / ENOBUFS) drops this datagram
-				// and fails the associated RpcCall; the iterative tasks tolerate individual losses via their
-				// alpha-concurrency, so no retransmit is attempted here (UDP best-effort, matching Kademlia).
-				/*/
-				// Checking for specific errors by inspecting a generic IOException and its message is not ideal
-				if (ar.cause() != null && Objects.equals(ar.cause().getMessage(), "No buffer space available")) {
-					log.debug("Awaiting the socket available, set a timer to resend the messages.");
-					context.owner().setTimer(1000, unused -> sendMessage(message));
-				}
-				*/
-			}
-		});
 	}
 
 	/**
@@ -818,10 +897,10 @@ public class RpcServer implements Measured {
 	 *
 	 * @param message the message that does not fit.
 	 * @param size    the size of the datagram it would have produced, in bytes.
-	 * @return a future failed with the same error code the remote party is told, or the result of
-	 *         sending the substituted error response.
+	 * @return the error response to send in its place.
+	 * @throws MessageTooBigException if there is no remote party to inform.
 	 */
-	private Future<Void> tooBigToSend(Message message, int size) {
+	private Message tooBigToSend(Message message, int size) throws MessageTooBigException {
 		log.error("Message {}/{} to {}@{} needs {} bytes, more than the {}-byte {} packet budget, not sent",
 				message.getMethod(), message.getType(), message.getRemoteId(), message.getRemoteAddress(),
 				size, network.maxPacketSize(), network);
@@ -832,11 +911,12 @@ public class RpcServer implements Measured {
 			metrics.messageSendFailed(message.getRemoteAddress(), cause);
 
 		if (!message.isResponse())
-			return Future.failedFuture(cause);
+			throw cause;
 
 		Message error = Message.error(message.getMethod(), message.getTxid(), cause.getCode(), cause.getMessage());
 		error.setRemote(message.getRemoteId(), message.getRemoteAddress());
-		return sendMessage(error);
+		error.setId(identity.getId());
+		return error;
 	}
 
 	/**
