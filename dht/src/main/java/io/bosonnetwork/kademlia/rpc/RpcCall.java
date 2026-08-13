@@ -523,6 +523,28 @@ public class RpcCall {
 	}
 
 	/**
+	 * Handles a response answered by a different identity than the one the request was addressed to.
+	 * <p>
+	 * The response body is deliberately not adopted - whoever answered is not who was asked, so its contents
+	 * are not an answer to this call and must not reach the caller as one. The cause is set anyway, because
+	 * every terminal path here leaves something behind to diagnose from and an ERROR carrying neither a
+	 * response nor a cause is a dead end for whoever has to read the log.
+	 * </p>
+	 *
+	 * @param response the response message, recorded only as the cause's detail
+	 */
+	protected void respondChurningId(Message response) {
+		// Churning identity is malicious behavior; ignore response and treat as an error
+		if (state != State.SENT)
+			return;
+
+		this.cause = new ProtocolException("Got response from a different id: " + response.getId());
+		// ERROR is a terminal state; stop the pending timeout timer (as fail()/respond() do).
+		cancelTimeoutTimer();
+		updateState(State.ERROR);
+	}
+
+	/**
 	 * Handles a response received from an inconsistent socket (e.g., due to port-mangling NAT).
 	 * Transitions to STALLED state to allow retry without treating as an error.
 	 *

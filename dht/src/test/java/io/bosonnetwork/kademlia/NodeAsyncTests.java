@@ -64,7 +64,7 @@ import io.bosonnetwork.vertx.ContextualFuture;
 @Timeout(value = NodeAsyncTests.TEST_NODES + 1, timeUnit = TimeUnit.MINUTES)
 public class NodeAsyncTests {
 	static final int TEST_NODES = 32;
-	private static final int TEST_NODES_PORT_START = 39001;
+	private static final int TEST_NODES_PORT_START = 39301;
 
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "NodeAsyncTests");
 

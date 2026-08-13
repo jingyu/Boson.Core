@@ -76,7 +76,7 @@ public class SybilTests {
 		target = new KadNode(NodeConfiguration.builder()
 				.vertx(vertx)
 				.address4(localAddr)
-				.port(39001)
+				.port(39601)
 				.generateKeyPair()
 				.dataDir(testDir.resolve("nodes"  + File.separator + "node-target"))
 				.databaseUri("jdbc:sqlite:" + testDir.resolve("nodes"  + File.separator + "node-target" + File.separator + "storage.db"))
@@ -96,10 +96,31 @@ public class SybilTests {
 		FileUtils.deleteFile(testDir);
 	}
 
+	/**
+	 * One identity moving between ports on one address is served, every time.
+	 * <p>
+	 * <b>This assertion is the reverse of what it used to be, on purpose.</b> The test previously required
+	 * the target to stop answering after 8 attempts, because the detector counted each {@code ip:port} pair
+	 * as a separate address and banned the host once 8 of them presented the same id. Two things were wrong
+	 * with that. A port is not a resource anyone has to acquire, so counting ports let a sender multiply
+	 * itself for free - and the same pattern is what an ordinary NAT rebinding produces, so the rule fired
+	 * on honest peers at least as readily as on hostile ones.
+	 * </p>
+	 * <p>
+	 * Nothing is given up by tolerating it: the routing table is keyed on id and rejects an entry colliding
+	 * on id or address, so one identity occupying ten ports still occupies exactly one entry. There was no
+	 * attack here to stop.
+	 * </p>
+	 * <p>
+	 * The genuine version of this pattern - one identity answering from several addresses that each
+	 * demonstrably receive our traffic - is still caught, and is covered by
+	 * {@code SuspiciousNodeDetectorTests.testProvenObservationsTriggerTheSameIdMassBan}. It needs distinct
+	 * addresses, which this fixture cannot produce from a single host.
+	 * </p>
+	 */
 	@Test
 	void TestAddresses() throws Exception {
 		final int SYBIL_NODES = 10;
-		final int ALLOWED_ATTEMPTS = 8;
 
 		String sybilKey = Base58.encode(Signature.KeyPair.random().privateKey().bytes());
 		KadNode sybil;
@@ -108,7 +129,7 @@ public class SybilTests {
 			NodeConfiguration sybilConfig = NodeConfiguration.builder()
 					.vertx(vertx)
 					.address4(localAddr)
-					.port(39002 + i)
+					.port(39602 + i)
 					.privateKey(sybilKey)
 					.dataDir(testDir.resolve("nodes"  + File.separator + "node-" + i))
 					.developerMode(true)
@@ -148,10 +169,7 @@ public class SybilTests {
 				result.wait();
 			}
 
-			if (i < ALLOWED_ATTEMPTS)
-				assertTrue(result.get());
-			else
-				assertFalse(result.get());
+			assertTrue(result.get(), "a port change must not cost a node its answer");
 
 			sybil.stop().get();
 
@@ -159,6 +177,16 @@ public class SybilTests {
 		}
 	}
 
+	/**
+	 * A source may rotate through a bounded number of identities before it is told to slow down.
+	 * <p>
+	 * This is the Sybil ceiling, and the assertion is unchanged: ids are free to mint, so the only place to
+	 * charge them is the address they are presented from. What changed underneath is the consequence -
+	 * exceeding the budget now suppresses the source for a short, escalating interval rather than banning it
+	 * for half an hour, because a request's source address is chosen by whoever sent it and a long ban is
+	 * worth more to whoever aims it than it costs to produce.
+	 * </p>
+	 */
 	@Test
 	void TestIds() throws Exception {
 		final int SYBIL_NODES = 36;

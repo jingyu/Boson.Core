@@ -54,7 +54,7 @@ import io.bosonnetwork.vertx.ContextualFuture;
 public class NodeSyncTests {
 	private static Vertx vertx;
 	private static final int TEST_NODES = 32;
-	private static final int TEST_NODES_PORT_START = 39001;
+	private static final int TEST_NODES_PORT_START = 39401;
 
 	private static final Path testDir = Path.of(System.getProperty("java.io.tmpdir"), "boson", "NodeSyncTests");
 

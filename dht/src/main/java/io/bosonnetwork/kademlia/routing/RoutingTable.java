@@ -301,6 +301,32 @@ public class RoutingTable {
 	}
 
 	/**
+	 * Withdraws the table's confidence in an entry without removing it.
+	 * <p>
+	 * A demoted entry keeps its place - so whatever held that place cannot be displaced by whoever caused
+	 * the demotion - but stops being offered to lookups and to other nodes, and becomes retirable after two
+	 * failures rather than six. Reachability is the table's own judgement about a contact, so it is revoked
+	 * here rather than by handing the entry out to be mutated.
+	 * </p>
+	 * <p>
+	 * The return value is what makes this usable as a one-shot: it reports whether this call is the one that
+	 * changed the entry's mind, so a caller can act on the transition instead of on every repeat.
+	 * </p>
+	 *
+	 * @param id the ID of the node to demote.
+	 * @return true if the entry was reachable and is not any more, false if there is no such entry or it had
+	 *         already been demoted.
+	 */
+	public boolean markUnreachable(Id id) {
+		KBucketEntry entry = getEntry(id, true);
+		if (entry == null || !entry.isReachable())
+			return false;
+
+		entry.setReachable(false);
+		return true;
+	}
+
+	/**
 	 * Notifies the routing table that a request has been sent to the node with the given ID.
 	 * This may be used to update internal timestamps or state.
 	 *
@@ -339,7 +365,7 @@ public class RoutingTable {
 	 * <p>
 	 * A full, splittable bucket is split only when the new (reachable, not-yet-present) entry would fall
 	 * into the bucket's <em>high</em> branch. This is a deliberate Boson adaptation: unlike the original
-	 * Kademlia paper (§2.4), which splits only the bucket whose range contains the local node's own ID,
+	 * Kademlia paper (section 2.4), which splits only the bucket whose range contains the local node's own ID,
 	 * Boson lets density drive splitting and relies on {@link #mergeBuckets()} during maintenance to
 	 * coalesce any sibling pair whose combined effective size fits in a single bucket - so unproductive
 	 * splits are reclaimed rather than accumulating. The high-branch condition keeps the decision

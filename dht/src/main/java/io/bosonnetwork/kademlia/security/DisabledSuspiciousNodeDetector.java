@@ -36,16 +36,6 @@ public class DisabledSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	}
 
 	@Override
-	public boolean isSuspicious(SocketAddress addr, Id expected) {
-		return false;
-	}
-
-	@Override
-	public boolean isSuspicious(SocketAddress addr) {
-		return false;
-	}
-
-	@Override
 	public boolean isBanned(String host) {
 		return false;
 	}
@@ -56,12 +46,8 @@ public class DisabledSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	}
 
 	@Override
-	public Id lastKnownId(SocketAddress addr) {
+	public Id observed(SocketAddress addr, Id id) {
 		return null;
-	}
-
-	@Override
-	public void observe(SocketAddress addr, Id id) {
 	}
 
 	@Override
@@ -70,6 +56,10 @@ public class DisabledSuspiciousNodeDetector implements SuspiciousNodeDetector {
 
 	@Override
 	public void inconsistent(SocketAddress addr, Id id) {
+	}
+
+	@Override
+	public void misbehaved(SocketAddress addr, Id id) {
 	}
 
 	@Override
