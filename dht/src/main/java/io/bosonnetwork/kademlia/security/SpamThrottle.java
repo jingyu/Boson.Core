@@ -41,7 +41,7 @@ public interface SpamThrottle {
 	}
 
 	/**
-	 * Create a Throttle with default limits (32 requests/sec, 128 burst).
+	 * Create a Throttle with default limits (32 requests/sec, 512 burst).
 	 */
 	static SpamThrottle create() {
 		return new DefaultSpamThrottle();

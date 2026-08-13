@@ -80,12 +80,45 @@ public class RpcServer implements Measured {
 	private static final int REACHABILITY_CHECK_INTERVAL = 5_000;
 	/** Timeout for determining server unreachability (60 seconds). */
 	private static final int REACHABILITY_TIMEOUT = 60_000;
-	/** Maximum RPC calls per second (32). */
-	private static final int RPC_CALL_LIMIT_PER_SECOND = 32;
-	/** Burst capacity for RPC calls (128). */
-	private static final int RPC_CALL_BURST_CAPACITY = 128;
-	/** Maximum number of active RPC calls. */
-	private static final int MAX_ACTIVE_CALLS = 1024;
+	// The two throttles are sized separately, because they express opposite policies and one pair of
+	// numbers cannot hold both.
+	//
+	// Inbound is a local choice: how much work this node accepts from a source it has not verified. A node
+	// may raise it as far as its CPU and uplink allow, and nobody else is affected by the decision.
+	//
+	// Outbound is a promise about someone else's limit. Calls we send past a peer's inbound burst are
+	// dropped at their end, and each one comes back to us as a timeout - failed-request counts, a demoted
+	// entry, a skewed RTT sample - charged to a peer whose only offense was enforcing its own ceiling. So
+	// the outbound numbers track what a *default* node accepts, not what this one does, and they move only
+	// once the network is known to have moved.
+
+	/** Inbound packets per second accepted from one source unit (IPv4 /32, IPv6 /64). */
+	static final int INBOUND_LIMIT_PER_SECOND = 32;
+	/**
+	 * Inbound burst capacity per source unit.
+	 * <p>
+	 * Front-load only: the sustained cost to a sender is the rate above, and a saturated counter is
+	 * accepting again after a single decay tick whatever this is set to. What it buys is room for
+	 * correlated legitimate bursts - a NAT full of nodes restarting together, a lookup fanning in - which
+	 * arrive all at once or not at all. What it costs is the one-off work, and the one-off reflection
+	 * budget, that one source unit can draw before the ceiling engages.
+	 * </p>
+	 */
+	static final int INBOUND_BURST_CAPACITY = 512;
+	/** Outbound calls per second to one target unit. Held at the network default - see above. */
+	static final int OUTBOUND_LIMIT_PER_SECOND = 32;
+	/** Outbound burst capacity per target unit. Held at the network default - see above. */
+	static final int OUTBOUND_BURST_CAPACITY = 128;
+	/**
+	 * Floor for the active-call table, and its size for any ordinary node.
+	 * <p>
+	 * The table is not sized from the task budget alone: the bootstrap fan-out, the periodic random ping
+	 * and the unsolicited ping for an unknown id all take slots without being counted in it, and the last
+	 * of those is driven by inbound traffic rather than by configuration. This floor is what leaves them
+	 * room at the default settings, where the task budget is a small fraction of it.
+	 * </p>
+	 */
+	private static final int MIN_ACTIVE_CALLS = 1024;
 	/** Maximum timeout for RPC calls (10 seconds). */
 	public static final int RPC_CALL_TIMEOUT_MAX = 10_000;
 	/** Minimum baseline timeout for RPC calls (100 milliseconds). */
@@ -133,6 +166,23 @@ public class RpcServer implements Measured {
 
 	/** Map of active RPC calls, keyed by transaction ID. */
 	private final Map<Long, RpcCall> pendingCalls;
+
+	/**
+	 * Ceiling on {@link #pendingCalls}, derived from the configuration rather than fixed.
+	 * <p>
+	 * A running task holds up to {@code alpha} calls in flight and the task manager runs up to
+	 * {@code concurrentTasks} of them, so anything below that product is a ceiling the node cannot reach
+	 * its own configured concurrency under - and it does not fail politely: {@link #sendCall} rejects
+	 * rather than queues, and the rejection reaches the task as an error, so a task retires a candidate it
+	 * never asked. A super node configured for thousands of concurrent tasks would spend most of its call
+	 * attempts that way against a fixed 1024.
+	 * </p>
+	 * <p>
+	 * Package-private because the derivation is worth pinning and the enforcement is not reachable from a
+	 * test without a thousand outstanding calls.
+	 * </p>
+	 */
+	final int maxActiveCalls;
 
 	/** Total number of received packets. */
 	private long receivedPackets;
@@ -206,12 +256,18 @@ public class RpcServer implements Measured {
 
 		// Initialize throttles for spam protection
 		if (enableSpamThrottling && !context.isDeveloperMode()) {
-			this.inboundThrottle = SpamThrottle.create(RPC_CALL_LIMIT_PER_SECOND, RPC_CALL_BURST_CAPACITY);
-			this.outboundThrottle = SpamThrottle.create(RPC_CALL_LIMIT_PER_SECOND, RPC_CALL_BURST_CAPACITY);
+			this.inboundThrottle = SpamThrottle.create(INBOUND_LIMIT_PER_SECOND, INBOUND_BURST_CAPACITY);
+			this.outboundThrottle = SpamThrottle.create(OUTBOUND_LIMIT_PER_SECOND, OUTBOUND_BURST_CAPACITY);
 		} else {
 			this.inboundThrottle = SpamThrottle.disabled();
 			this.outboundThrottle = SpamThrottle.disabled();
 		}
+
+		// Read once, like TaskManager reads concurrentTasks: both values are final on the DHT, so there is
+		// nothing to keep fresh. The long is for the multiplication only - neither factor has an upper
+		// bound in the configuration, and a table sized past what an int can hold is not a table anyway.
+		long taskDemand = (long) context.getConcurrentTasks() * context.getAlpha();
+		this.maxActiveCalls = (int) Math.max(MIN_ACTIVE_CALLS, Math.min(taskDemand, Integer.MAX_VALUE));
 
 		// Initialize pending calls map
 		this.pendingCalls = new HashMap<>(DEFAULT_PENDING_CALLS_CAPACITY);
@@ -631,6 +687,28 @@ public class RpcServer implements Measured {
 					// the message matches transaction ID and origin == destination
 					// we only check the IP address here. the routing table applies more strict checks to also verify a stable port
 					if (remoteAddress.equals(call.getRequest().getRemoteAddress())) {
+						// Solicited traffic is not charged to the unsolicited budget. This packet answers a
+						// call we made, from the address we sent it to, so it is work we asked for - and how
+						// much of it we can ask for is bounded by the outbound throttle, not by this one.
+						// Refund the charge handlePacket levied on arrival: one packet, for the one packet
+						// that proved itself.
+						//
+						// A refund rather than an exemption, because the budget is spent before the packet
+						// can be identified - the throttle check runs ahead of the decrypt that reveals the
+						// transaction id. So a response arriving while its source is already at the ceiling
+						// is still dropped; what this prevents is a conversation we started from consuming
+						// that source's budget at all.
+						//
+						// All three outcomes below are refunded, including the two that are misbehavior:
+						// they are still traffic we solicited, the detector punishes them on the channel
+						// built for it, and a rate penalty is the wrong instrument for an offense that is
+						// not about rate.
+						//
+						// The call's target address rather than the packet's source: the test above has
+						// already established they are the same, and this one is an InetAddress we hold,
+						// so the hot path parses no host string.
+						inboundThrottle.decrement(call.getTarget().getIpAddress());
+
 						if (message.getMethod() != call.getRequest().getMethod()) {
 							log.warn("Got response with wrong method {} from {}@{} for {}",
 									message.getMethod(), remoteId, remoteAddress, call.getRequest().getMethod());
@@ -754,7 +832,7 @@ public class RpcServer implements Measured {
 	 * @return a Future resolving to the sent RpcCall
 	 */
 	public Future<RpcCall> sendCall(RpcCall call) {
-		if (pendingCalls.size() >= MAX_ACTIVE_CALLS) {
+		if (pendingCalls.size() >= maxActiveCalls) {
 			call.fail(new IllegalStateException("Maximum active calls exceeded"));
 			return Future.failedFuture("Maximum active calls exceeded");
 		}
@@ -808,9 +886,20 @@ public class RpcServer implements Measured {
 				if (callSentHandler != null)
 					callSentHandler.accept(call);
 
-				// Clear inbound throttle to allow responses
-				log.debug("Reset inbound throttle for {}", call.getTarget());
-				inboundThrottle.clear(call.getTarget().getIpAddress());
+				// Nothing is credited to the inbound throttle here, on purpose. Sending a call used to
+				// clear the target's inbound counter outright, which was the right intent - the answer we
+				// asked for should not be dropped by the budget for traffic we did not - carried out three
+				// ways wrong. It refunded up to a full burst for one expected response; it granted that
+				// credit when we decided to speak rather than when an answer arrived, so anything the
+				// address sent next could spend it; and since the counter is keyed per source unit rather
+				// than per node, it credited everything sharing that unit.
+				//
+				// It was also reachable from outside: an unsolicited request bearing an unknown id makes
+				// the DHT ping the sender, so a sender could clear its own counter roughly once per packet
+				// and buy the burst back each time.
+				//
+				// The exemption now lives in handlePacket, where a packet can actually be shown to be an
+				// answer to one of our calls - see the refund there.
 			} else {
 				pendingCalls.remove(call.getTxid());
 				call.fail(ar.cause());
