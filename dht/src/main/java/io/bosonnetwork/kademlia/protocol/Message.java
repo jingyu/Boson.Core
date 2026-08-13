@@ -49,6 +49,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
+import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.json.Json;
 import io.bosonnetwork.json.JsonContext;
 import io.bosonnetwork.kademlia.KadNode;
@@ -61,7 +62,7 @@ public class Message {
 	public static final int MIN_BYTES = 10;
 
 	protected static final Object ATTR_NODE_ID = new Object();
-	private static final AtomicInteger nextTxId = new AtomicInteger(1);
+	private static final AtomicInteger nextTxId = new AtomicInteger(0);
 
 	// The DHT node id of the message sender
 	private Id id;
@@ -499,12 +500,40 @@ public class Message {
 		return repr.toString();
 	}
 
-	protected static void setTxidBase(int base) {
+	static void setTxidBase(int base) {
 		nextTxId.set(base);
 	}
 
+	/**
+	 * Returns the transaction id for the next outgoing request.
+	 * <p>
+	 * The counter advances by a random step rather than by one, and the step comes from a
+	 * cryptographically secure generator. Both halves of that are load-bearing:
+	 * </p>
+	 * <ul>
+	 *   <li>A response is matched to an outstanding call by transaction id and then by source
+	 *       address. With a step of one, anyone who has seen a single packet of ours knows the
+	 *       counter, so forging a response aimed at a call we currently have in flight is
+	 *       arithmetic rather than guesswork. A random step turns it into a search.</li>
+	 *   <li>The steps are published - they are the differences between the transaction ids we
+	 *       put on the wire - so a peer we probe repeatedly observes the generator's output.
+	 *       A non-cryptographic generator whose state can be recovered from its output would
+	 *       hand the counter straight back.</li>
+	 * </ul>
+	 * <p>
+	 * Zero is skipped: the wire format treats a zero transaction id as an absent field, so a
+	 * message carrying one is rejected by the peer rather than answered.
+	 * </p>
+	 *
+	 * @return the next transaction id, as an unsigned 32-bit value
+	 */
 	private static long nextTxid() {
-		return Integer.toUnsignedLong(nextTxId.getAndIncrement());
+		int txid;
+		do {
+			txid = nextTxId.addAndGet(Random.secureRandom().nextInt(1, 512));
+		} while (txid == 0);
+
+		return Integer.toUnsignedLong(txid);
 	}
 
 	public static Message message(Type type, Method method, long txid, Object body) {
