@@ -49,7 +49,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
  * @param <S> the specific task type, enabling method chaining for fluent interfaces
  */
 public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
-	private static final AtomicInteger nextTaskId = new AtomicInteger(1);
+	private static final AtomicInteger nextTaskId = new AtomicInteger(0);
 	private static final String NONAME = "";
 
 	private static final EnumSet<State> UNSTARTED_STATES = EnumSet.of(State.INITIAL, State.QUEUED);
@@ -93,7 +93,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 
 		// Use AtomicInteger for task ID generation; tasks are short-lived, so overflow is unlikely
 		this.name = NONAME;
-		this.taskId = Integer.toUnsignedLong(nextTaskId.getAndIncrement());
+		this.taskId = Integer.toUnsignedLong(nextTaskId.incrementAndGet());
 		this.state = State.INITIAL;
 		// Initialize with small capacity for inFlight map to optimize memory
 		this.inFlight = new HashMap<>(8);
