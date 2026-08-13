@@ -31,9 +31,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A thread-safe rate limiter that restricts requests per IP address using a token bucket algorithm.
+ * A thread-safe rate limiter that restricts requests per source using a token bucket algorithm.
  * It allows a specified number of requests per second with a configurable burst capacity.
  * The throttle maintains request counts and periodically decays them based on elapsed time.
+ *
+ * <p>Counts are kept per {@link SourceKey} - IPv4 /32, IPv6 /64 - rather than per address, so that a sender
+ * holding one IPv6 allocation cannot draw a fresh budget for every one of the 1.8e19 addresses in it. The
+ * suspicious-node detector uses the same unit; if the two disagreed, a sender could sit inside one budget
+ * while exhausting the other.</p>
  */
 public class DefaultSpamThrottle implements SpamThrottle {
 	private static final int DEFAULT_LIMIT_PER_SECOND = 32;
@@ -91,7 +96,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	public boolean incrementAndCheck(InetAddress addr) {
 		decay(); // decay if needed
 
-		int count = counter.compute(addr, (a, c) -> c == null ? 1 : Math.min(c + 1, burstCapacity));
+		int count = counter.compute(SourceKey.of(addr), (a, c) -> c == null ? 1 : Math.min(c + 1, burstCapacity));
 		return count >= burstCapacity;
 	}
 
@@ -106,7 +111,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	public int incrementAndEstimateDelay(InetAddress addr) {
 		decay(); // decay if needed
 
-		int count = counter.compute(addr, (a, c) -> c == null ? 1 : c + 1);
+		int count = counter.compute(SourceKey.of(addr), (a, c) -> c == null ? 1 : c + 1);
 		if (count < burstCapacity)
 			return 0;
 
@@ -123,7 +128,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	 */
 	@Override
 	public void decrement(InetAddress addr) {
-		counter.computeIfPresent(addr, (a, c) -> c <= 1 ? null : c - 1);
+		counter.computeIfPresent(SourceKey.of(addr), (a, c) -> c <= 1 ? null : c - 1);
 	}
 
 	/**
@@ -133,7 +138,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	 */
 	@Override
 	public void clear(InetAddress addr) {
-		counter.remove(addr);
+		counter.remove(SourceKey.of(addr));
 	}
 
 	/**
@@ -154,7 +159,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	public boolean isLimitReached(InetAddress addr) {
 		decay(); // decay if needed
 
-		return counter.getOrDefault(addr, 0) >= burstCapacity;
+		return counter.getOrDefault(SourceKey.of(addr), 0) >= burstCapacity;
 	}
 
 	/**

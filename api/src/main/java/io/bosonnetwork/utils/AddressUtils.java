@@ -323,6 +323,28 @@ public final class AddressUtils {
 	}
 
 	/**
+	 * Determines if the given InetAddress represents an IPv4-mapped IPv6 address.
+	 * An IPv4-mapped IPv6 address has the first 10 bytes set to 0, the 11th and 12th
+	 * bytes set to 0xFF, and the last 4 bytes representing an IPv4 address.
+	 *
+	 * @param addr the InetAddress to check. It can be an instance of Inet6Address
+	 *             or another type of InetAddress.
+	 * @return true if the given address is an IPv4-mapped IPv6 address; false otherwise.
+	 */
+	public static boolean isIPv4Mapped(InetAddress addr) {
+		if (!(addr instanceof Inet6Address))
+			return false;
+
+		byte[] bytes = addr.getAddress();
+		for (int i = 0; i < 10; i++) {
+			if (bytes[i] != 0)
+				return false;
+		}
+
+		return bytes[10] == (byte) 0xff && bytes[11] == (byte) 0xff;
+	}
+
+	/**
 	 * If {@code addr} is an IPv4-mapped IPv6 address ({@code ::ffff:0:0/96}), returns the
 	 * embedded IPv4 address; otherwise returns {@code null}. Lets classification routines
 	 * apply IPv4 rules to the mapped form.

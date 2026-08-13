@@ -216,6 +216,17 @@ public class KBucketEntry extends NodeInfo {
 		return reachable;
 	}
 
+	/**
+	 * Sets the reachability of this entry.
+	 * <p>
+	 * Reachability is normally earned, by {@link #onResponded(long)}, and revoked only by
+	 * {@code RoutingTable.markUnreachable} - which is why this stays inside the package rather than becoming
+	 * a mutator any caller can reach. A timeout deliberately does not revoke it; only evidence that the
+	 * contact is not where we have it does.
+	 * </p>
+	 *
+	 * @param reachable the new reachability.
+	 */
 	@SuppressWarnings("SameParameterValue")
 	protected void setReachable(boolean reachable) {
 		this.reachable = reachable;

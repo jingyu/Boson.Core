@@ -149,6 +149,20 @@ public class DHT extends BosonVerticle {
 
 	private final Map<KBucket, Task<?>> maintenanceTasks = new IdentityHashMap<>();
 
+	/**
+	 * The endpoint whose identity just changed, as {@code host:port}, or null.
+	 * <p>
+	 * Armed by {@link #onChurn} and spent by the next {@link #received}. One slot rather than a set, and
+	 * cleared unconditionally on the way through rather than only on a match: the RPC server reports churn
+	 * synchronously, immediately before dispatching the message that revealed it, so nothing can interleave
+	 * - but not every churn report is followed by a dispatch. The wrong-id-in-a-response path answers the
+	 * call and returns without dispatching at all. A marker that only cleared on a match would survive that
+	 * and swallow an unrelated later message from the same endpoint; clearing on the way through makes
+	 * stranding impossible instead of merely unlikely.
+	 * </p>
+	 */
+	private String lastChurnedAddress;
+
 	private static final Logger log = LoggerFactory.getLogger(DHT.class);
 
 	// Package-private: DHTSiblingTests drives populateClosestNodes directly.
@@ -389,6 +403,7 @@ public class DHT extends BosonVerticle {
 			rpcServer.setMessageHandler(this::onMessage);
 			rpcServer.setCallSentHandler(this::onSend);
 			rpcServer.setCallTimeoutHandler(this::onTimeout);
+			rpcServer.setChurnHandler(this::onChurn);
 			return rpcServer.start();
 		}).<Void>map(v -> {
 			// Set before anything below can send. The startup bootstrap runs inside this block, and
@@ -2051,6 +2066,58 @@ public class DHT extends BosonVerticle {
 		routingTable.onRequestSent(nodeId);
 	}
 
+	/**
+	 * The identity at an endpoint changed: drop the entry that held the old binding.
+	 * <p>
+	 * The routing table exists to hold contacts that have been reachable for a long time and are therefore
+	 * likely to stay - that is the property lookups depend on. A binding that changes has failed that test,
+	 * so it is removed rather than re-verified. Whether something at that address answers a ping is a
+	 * different question and not the one being asked: a contact that churns is a poor contact even while it
+	 * is up, and there is no shortage of candidates to replace it.
+	 * </p>
+	 * <p>
+	 * The entry is only dropped if it is still the one that churned. The report is keyed on an endpoint
+	 * while the table is keyed on an id, so an id that has since moved elsewhere must not be evicted for
+	 * whatever now occupies its old address.
+	 * </p>
+	 *
+	 * <p>
+	 * No {@code isRunning()} guard, unlike the other RPC callbacks: the only caller is the receive path,
+	 * which cannot produce a message without an open socket. Leaving it out keeps this a pure function of
+	 * the routing table, which is what makes it testable without a deployment.
+	 * </p>
+	 *
+	 * @param stale the binding that is no longer there - the id that used to be at that address.
+	 */
+	void onChurn(NodeInfo stale) {
+		KBucketEntry entry = routingTable.getEntry(stale.getId(), true);
+		if (entry == null || !entry.getAddress().equals(stale.getAddress()))
+			return;
+
+		log.warn("Node {} at {} presented a different id, removing the stale routing table entry",
+				stale.getId(), stale.getAddress());
+		routingTable.remove(stale.getId());
+
+		// Tell received() to skip the message that reported this, if one reaches it. See churnedAddress.
+		lastChurnedAddress = endpointKey(stale.getIpAddress(), stale.getPort());
+	}
+
+	/**
+	 * Builds the {@link #churnedAddresses} key for an endpoint.
+	 * <p>
+	 * Both sides derive it from an {@link InetAddress} rather than from a host string, so a literal that
+	 * could be spelled more than one way - an IPv6 address above all - cannot produce two keys for one
+	 * endpoint and leave a marker stranded.
+	 * </p>
+	 *
+	 * @param address the endpoint's address.
+	 * @param port the endpoint's port.
+	 * @return the key.
+	 */
+	private static String endpointKey(InetAddress address, int port) {
+		return address.getHostAddress() + ':' + port;
+	}
+
 	private Message exceptionToError(Message.Method method, long txid, Throwable cause) {
 		int code;
 		String msg;
@@ -2066,9 +2133,36 @@ public class DHT extends BosonVerticle {
 		return Message.error(method, txid, code, msg);
 	}
 
-	private void received(Message message) {
+	void received(Message message) {
 		InetAddress remoteAddress = message.getRemoteIpAddress();
 		int remotePort = message.getRemotePort();
+
+		// The identity at this endpoint changed, and onChurn has just dropped the entry that held it. Do not
+		// learn the binding that reported the change.
+		//
+		// That refusal is the whole defence here. The source of a request is whatever the sender wrote, so
+		// anyone can produce a churn report against a live peer's address; letting the reporting id take the
+		// slot it just vacated would turn one packet into a lasting eviction, because KBucket.put refuses an
+		// entry that collides on address and the real peer could not get back in. Refusing instead costs a
+		// genuine id change one message - it is learned when the node speaks again.
+		//
+		// Spent here, at the top, rather than beside the put it guards: every return below this point is also
+		// a decision not to update the table, so reading it late would leave it set on those paths. This
+		// whole method is the routing-table update, so the earliest point is the correct one.
+		//
+		// Cleared whether or not it matches. A churn report is not always followed by a dispatch - the
+		// wrong-id-in-a-response path in RpcServer answers the call and returns - so a marker that survived
+		// a mismatch could outlive the exchange that set it and swallow an unrelated message later.
+		//
+		// The null check keeps the key off the hot path: this runs for every accepted message, and churn is
+		// rare.
+		if (lastChurnedAddress != null) {
+			String armed = lastChurnedAddress;
+			lastChurnedAddress = null;
+			if (armed.equals(endpointKey(remoteAddress, remotePort)))
+				return;
+		}
+
 		boolean allowed = kadContext.isDeveloperMode() ?
 				AddressUtils.isAnyUnicast(remoteAddress) : AddressUtils.isGlobalUnicast(remoteAddress);
 		if (!allowed) {
@@ -2077,51 +2171,36 @@ public class DHT extends BosonVerticle {
 			return;
 		}
 
-		// we only want consistent nodes in our routing table,
-		// so apply a stricter check here
-
 		RpcCall call = message.getAssociatedCall();
-		if (call != null && (call.isIdMismatched() || call.isAddressMismatched())) {
-			// this might happen if one node changes ports (broken NAT?) or IP address
-			// ignore until routing table entry times out
-			log.warn("Received a message from inconsistent node {}@{}, ignored the potential routing table update",
-					message.getId(), message.getRemoteAddress());
-			suspiciousNodeDetector.inconsistent(message.getRemoteAddress(), message.getId());
-			return;
-		}
 
+		// A response that reaches this point is already consistent with the call it answers, so there is no
+		// check to repeat here. Both halves of the old one moved to the RPC server, which is where the call
+		// and the response are matched and so where the evidence actually exists:
+		//
+		// - a response whose id is not the one the request was addressed to is caught alongside the
+		//   wrong-method check, and is *proven* churn - it matched our transaction id and came back from the
+		//   address we sent to, so the address demonstrably receives our traffic;
+		// - a response arriving from somewhere other than where the call was sent is caught by the
+		//   inconsistent-socket branch, and is *unproven* - the source address is exactly what is in doubt.
+		//
+		// Keeping a copy here was not merely redundant, it was wrong in the second case: this method saw
+		// both through one condition and reported both as proven, which is a classification an unverified
+		// sender could have exploited. The address-mismatched half never actually arrived - the RPC server
+		// answers that call and returns without dispatching - so the mistake stayed latent.
+
+		// There used to be a force-removal here, driven by a per-address record of the last id seen there:
+		// if the id at an address changed, both routing table entries were dropped and the whole bucket was
+		// swept. It is gone, and the record backing it with it.
+		//
+		// The record was written by every message that arrived, including unsolicited requests, so its
+		// contents were chosen by whoever sent them. That made the removal a primitive an attacker could
+		// aim: two packets naming a live node's address, and its entry was evicted. Nothing rate-shaped it
+		// either - no threshold, no decay, one packet per eviction - so unlike the suppression paths there
+		// was no version of it that merely cost the victim time.
+		//
+		// A genuine id change at a fixed address still resolves, just more slowly: KBucket.put rejects the
+		// new entry while the stale one holds the address, and admits it once that entry times out.
 		Id id = message.getId();
-		Id knownId = suspiciousNodeDetector.lastKnownId(message.getRemoteAddress());
-		if (knownId != null && !knownId.equals(id)) {
-			// We already know a node with that address but with a different ID.
-			// This might happen if one node changes its ID.
-			// Force remove from the routing table to prevent suspicious behavior
-			log.warn("Received a message from suspicious node {}, force-removing routing table entries because ID-change was detected; previously known ID {}, new ID {}",
-					message.getRemoteAddress(), knownId, message.getId());
-
-			if (routingTable.remove(knownId)) {
-				// Might be a pollution attack, check other entries in the same bucket too.
-				// In case the random pings can't keep up with scrubbing.
-				KBucket bucket = routingTable.bucketOf(knownId);
-				// noinspection LoggingSimilarMessage
-				log.info("Checking bucket {} after ID change was detected", bucket.prefix());
-				tryPingMaintenance(bucket, true, false, false,
-						"Checking bucket " + bucket.prefix() + " after ID change was detected");
-			}
-
-			if (routingTable.remove(id)) {
-				// Might be a pollution attack, check other entries in the same bucket too.
-				// In case the random pings can't keep up with scrubbing.
-				KBucket bucket = routingTable.bucketOf(id);
-				// noinspection LoggingSimilarMessage
-				log.info("Checking bucket {} after ID change was detected", bucket.prefix());
-				tryPingMaintenance(bucket, true, false, false,
-						"Checking bucket " + bucket.prefix() + " after ID change was detected");
-			}
-
-			suspiciousNodeDetector.inconsistent(message.getRemoteAddress(), message.getId());
-			return;
-		}
 
 		KBucketEntry existing = routingTable.getEntry(id, true);
 		if (existing != null && (!existing.getIpAddress().equals(remoteAddress) ||
@@ -2131,11 +2210,51 @@ public class DHT extends BosonVerticle {
 			log.warn("Received a message from inconsistent node {}@{}, ignored the potential routing table update",
 					message.getId(), message.getRemoteAddress());
 
-			suspiciousNodeDetector.inconsistent(message.getRemoteAddress(), message.getId());
+			// The message authenticated as this id - it decrypted under that key - so the node itself is
+			// saying it is somewhere other than where we have it. Two things follow, and they pull opposite
+			// ways.
+			//
+			// The new address is still not adopted. A packet that authenticates as a node can be *relayed*
+			// by anyone who captures it, so believing the source address would let one replayed packet move
+			// any node's entry to an address the attacker chose, or to nowhere. Keeping the entry is what
+			// makes that attack pointless.
+			//
+			// But we should not keep vouching for an address we have just been told is wrong either. So the
+			// entry is demoted rather than adopted or evicted: it stays, and stops being treated as good.
+			//
+			// Demoting does three things, and only the first is obvious:
+			//
+			// 1. It stops the stale address spreading. eligibleForNodesList() requires reachability, so from
+			//    this moment the address is no longer handed to every node that asks us who is nearby -
+			//    which, until now, we kept doing for as long as the entry had fewer than three failures.
+			//
+			// 2. It makes the report happen once. The flag is also the latch: the next message from the new
+			//    address finds the entry already unreachable and reports nothing. That matters because this
+			//    report costs the *sender* a suppression hit, and a node that has genuinely moved keeps
+			//    talking to us - without the latch, an ordinary address change would accumulate hits until
+			//    the node was suppressed for having moved.
+			//
+			// 3. It brings the recovery forward by an order of magnitude. needsReplacement() asks for
+			//    "failedRequests > 1 && !isReachable()", a clause that is dead for any node we ever verified,
+			//    because a timeout only increments the counter and never clears the flag. Clearing it here
+			//    revives that clause: two failures now retire the entry where six were needed before, or
+			//    three plus fifteen minutes of silence. The node is re-learned at its new address in minutes
+			//    instead of a quarter of an hour.
+			//
+			// The demotion is revocable by evidence, not a punishment: onResponded sets the flag back, so if
+			// the old address is in fact still live - a relay, or a brief detour - the next successful
+			// exchange undoes this. That is also the residual risk to be aware of: an on-path attacker who
+			// captures one genuine packet can demote a healthy contact this way. It cannot evict it, and it
+			// heals on the next answer, which is why demoting is the level chosen here.
+			if (routingTable.markUnreachable(id)) {
+				// Unproven source: reachable from an unsolicited request, whose source address is whatever
+				// the sender wrote. Suppression only.
+				suspiciousNodeDetector.inconsistent(message.getRemoteAddress(), message.getId());
+			}
+
 			return;
 		}
 
-		suspiciousNodeDetector.observe(message.getRemoteAddress(), message.getId());
 		KBucketEntry newEntry = new KBucketEntry(id, new InetSocketAddress(remoteAddress, remotePort));
 		newEntry.setVersion(message.getVersion());
 
@@ -2164,8 +2283,10 @@ public class DHT extends BosonVerticle {
 		// towards each address it names; naming one address repeatedly collides with the entry the first
 		// packet left behind and stops there, but the collision test covers the port, and a forged port
 		// costs a sender nothing. The rate ceiling comes from the layer below, before anything arrives
-		// here: the inbound throttle counts packets per source IP address, which a varying port does not
-		// escape, and the suspicious-node detector feeds the blacklist that drops the rest.
+		// here: the inbound throttle counts packets per source unit - one IPv4 address, one IPv6 /64 -
+		// which neither a varying port nor a fresh address out of the same allocation escapes. The
+		// suspicious-node detector adds to that only a short suppression, because a request's source is
+		// exactly the thing it cannot verify.
 		if (accepted && existing == null && !newEntry.isReachable()) {
 			Message request = Message.pingRequest();
 			RpcCall ping = new RpcCall(newEntry, request);

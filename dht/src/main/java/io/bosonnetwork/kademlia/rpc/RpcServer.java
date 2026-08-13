@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.CryptoBox;
 import io.bosonnetwork.crypto.CryptoException;
 import io.bosonnetwork.kademlia.exceptions.MessageTooBigException;
@@ -162,6 +163,9 @@ public class RpcServer implements Measured {
 
 	/** Handler for RPC call timeouts, null if not set. */
 	private Consumer<RpcCall> callTimeoutHandler;
+
+	/** Handler for identity churn at a known endpoint, null if not set. */
+	private Consumer<NodeInfo> churnHandler;
 
 	/** Server start time in milliseconds, or -1 if not started. */
 	private long startTime;
@@ -399,6 +403,22 @@ public class RpcServer implements Measured {
 	}
 
 	/**
+	 * Sets the handler for identity churn: an endpoint that presented a different node id than it presented
+	 * before.
+	 * <p>
+	 * The handler is given the <b>stale</b> binding - the id that used to be at that address, not the one
+	 * that just arrived - because that is what identifies the routing table entry the change invalidates.
+	 * It runs before the message itself is dispatched, so a listener can act on the old binding while the
+	 * new one is still unlearned.
+	 * </p>
+	 *
+	 * @param churnHandler the handler to process identity churn
+	 */
+	public void setChurnHandler(Consumer<NodeInfo> churnHandler) {
+		this.churnHandler = churnHandler;
+	}
+
+	/**
 	 * Starts the RPC server, binding to the configured host and port.
 	 *
 	 * @return a Future that completes when the server is started
@@ -511,6 +531,9 @@ public class RpcServer implements Measured {
 		// Validate packet size
 		if (buffer.length() < Id.BYTES + CryptoBox.MAC_BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
 			log.warn("Ignored invalid packet(too short) from {}", remoteAddress);
+			// Unproven source - a packet this short carries no identity at all, so the address it names is
+			// the only thing to go on, and the sender chose that. Reported as an unproven observation, which
+			// can suppress the source for a short while but can never ban it.
 			suspiciousNodeDetector.malformedMessage(remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
@@ -578,6 +601,17 @@ public class RpcServer implements Measured {
 				log.trace("Received {}:{} from {}@{} : {}", message.getMethod(), message.getType(),
 						remoteId, remoteAddress, message);
 
+				// Identity accounting, before the message is dispatched. The detector answers with the id
+				// this endpoint used to present, and a non-null answer means the binding a listener may be
+				// holding for that address is no longer the one that is there.
+				//
+				// The stale binding is what goes to the handler, not the new one: it names the entry the
+				// change invalidates, and the listener has no other way to find it - a routing table is
+				// keyed on id, not on address.
+				Id previousId = suspiciousNodeDetector.observed(remoteAddress, remoteId);
+				if (previousId != null && churnHandler != null)
+					churnHandler.accept(NodeInfo.of(previousId, remoteAddress.hostAddress(), remoteAddress.port()));
+
 				// Handle request messages
 				if (message.isRequest()) {
 					if (metrics != null)
@@ -604,7 +638,27 @@ public class RpcServer implements Measured {
 							// (race-safe, mirroring the normal response path) so it is not leaked.
 							if (pendingCalls.remove(message.getTxid(), call))
 								call.respondWrongMethod(message);
-							suspiciousNodeDetector.malformedMessage(remoteAddress);
+							// Proven source: this matched an outstanding call and came back from the address
+							// that call was sent to, so the address receives our traffic and the evidence
+							// cannot have been aimed at a bystander.
+							suspiciousNodeDetector.misbehaved(remoteAddress, remoteId);
+							return;
+						}
+
+						// Proven identity churn
+						if (!remoteId.equals(call.getTargetId())) {
+							log.warn("Got response with churning id {} -> {} from {}",
+									call.getTargetId(), remoteId, remoteAddress);
+							// This is a terminal error for the call: remove it from the pending map
+							// Still feed the response to the call to finish the call?!
+							if (pendingCalls.remove(message.getTxid(), call))
+								call.respondChurningId(message);
+
+							suspiciousNodeDetector.misbehaved(remoteAddress, remoteId);
+
+							if (churnHandler != null)
+								churnHandler.accept(NodeInfo.of(call.getTargetId(), remoteAddress.hostAddress(), remoteAddress.port()));
+
 							return;
 						}
 
@@ -641,6 +695,9 @@ public class RpcServer implements Measured {
 					// a multihomed host listening on any-local address or some kind of attack
 					log.warn("Node address not consistent, ignored. request: {} <- response: {}@{}",
 							call.getTarget(), remoteId, remoteAddress);
+					// Unproven source, and unproven for the very reason this branch exists: the packet came
+					// from somewhere other than where the call was sent, so nothing here says the sender
+					// receives traffic at the address it used.
 					suspiciousNodeDetector.inconsistent(remoteAddress, remoteId);
 
 					if (metrics != null) {
@@ -653,11 +710,13 @@ public class RpcServer implements Measured {
 					return;
 				}
 
-				suspiciousNodeDetector.observe(remoteAddress, remoteId);
-
 				// No matched call
 				// - call already timed out
 				// - stray response, uptime is high enough that it's a stray from a restart
+				//
+				// Deliberately not reported to the suspicious-node detector. Both causes above are normal
+				// operation rather than misbehavior, and the source is unproven either way, so counting it
+				// would charge an address for a race it did not cause.
 				log.warn("Cannot find RPC call for {}[txid:{}]", message.getType(), message.getTxid());
 				if (metrics != null) {
 					metrics.bytesDropped(remoteAddress, buffer.length());
@@ -676,6 +735,9 @@ public class RpcServer implements Measured {
 					log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress, e);
 				}
 
+				// Unproven source. A decryption failure says nothing about the sender at all - the id in
+				// the first 32 bytes is whatever it chose to write there - and a parse failure identifies
+				// the sender's key without saying anything about where the packet came from.
 				suspiciousNodeDetector.malformedMessage(remoteAddress);
 				if (metrics != null) {
 					metrics.bytesDropped(remoteAddress, buffer.length());

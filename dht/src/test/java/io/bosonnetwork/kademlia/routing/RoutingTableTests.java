@@ -161,6 +161,50 @@ class RoutingTableTests {
 	}
 
 	@Test
+	void testMarkUnreachable() {
+		StubEntry entry = new StubEntry(genId(6));
+		routingTable.put(entry);
+		assertTrue(routingTable.getEntry(entry.getId()).isReachable());
+
+		// The first call is the one that changes the entry's mind, and reports that it did - which is what
+		// lets a caller act once on the transition rather than on every repeat.
+		assertTrue(routingTable.markUnreachable(entry.getId()));
+		assertFalse(routingTable.getEntry(entry.getId()).isReachable());
+
+		// Demotion is not eviction: the entry keeps its place, so whatever caused the demotion cannot take
+		// the slot it emptied.
+		assertNotNull(routingTable.getEntry(entry.getId()));
+
+		// Repeats, and unknown ids, report no transition.
+		assertFalse(routingTable.markUnreachable(entry.getId()));
+		assertFalse(routingTable.markUnreachable(genId(7)));
+
+		// Reachability is earned back by evidence, so a demotion made on bad information is undone by the
+		// next successful exchange rather than standing until the entry ages out.
+		routingTable.onResponded(entry.getId(), 50);
+		assertTrue(routingTable.getEntry(entry.getId()).isReachable());
+		assertTrue(routingTable.markUnreachable(entry.getId()));
+	}
+
+	@Test
+	void testDemotionMakesAnEntryRetirableAfterTwoFailures() {
+		// needsReplacement() asks for failures *and* unreachability, and a timeout only ever increments the
+		// counter - it never clears the flag. So for any contact that was once verified that clause is dead,
+		// and retiring it otherwise takes six failures, or three plus fifteen minutes of silence. Demotion is
+		// what revives it.
+		StubEntry entry = new StubEntry(genId(8));
+		routingTable.put(entry);
+
+		routingTable.onTimeout(entry.getId());
+		routingTable.onTimeout(entry.getId());
+		assertEquals(2, entry.failedRequests());
+		assertFalse(entry.needsReplacement(), "two failures alone leave a once-verified contact in place");
+
+		assertTrue(routingTable.markUnreachable(entry.getId()));
+		assertTrue(entry.needsReplacement(), "the same two failures retire it once we stop vouching for it");
+	}
+
+	@Test
 	void testMaintenanceAndMerge() {
 		// Insert many entries to fill first two bucket
 		List<StubEntry> entries = new ArrayList<>();
