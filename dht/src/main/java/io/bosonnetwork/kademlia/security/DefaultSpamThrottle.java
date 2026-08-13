@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultSpamThrottle implements SpamThrottle {
 	private static final int DEFAULT_LIMIT_PER_SECOND = 32;
-	private static final int DEFAULT_BURST_CAPACITY = 128;
+	private static final int DEFAULT_BURST_CAPACITY = 512;
 
 	private final int limitPerSecond;
 	private final int burstCapacity;
@@ -69,7 +69,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	}
 
 	/**
-	 * Constructs a Throttle with default limits (32 requests/sec, 128 burst).
+	 * Constructs a Throttle with default limits (32 requests/sec, 512 burst).
 	 */
 	protected DefaultSpamThrottle() {
 		this(DEFAULT_LIMIT_PER_SECOND, DEFAULT_BURST_CAPACITY);

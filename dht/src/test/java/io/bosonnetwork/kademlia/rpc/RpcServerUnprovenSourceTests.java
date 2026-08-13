@@ -69,8 +69,8 @@ import io.bosonnetwork.vertx.BosonVerticle;
  */
 @ExtendWith(VertxExtension.class)
 public class RpcServerUnprovenSourceTests {
-	/** Over the 32-hit threshold, under the inbound throttle's 128-packet burst - throttled packets are
-	 *  dropped before the detector ever sees them, so a bigger burst would test less, not more. */
+	/** Over the 32-hit threshold, under the inbound throttle's burst - throttled packets are dropped
+	 *  before the detector ever sees them, so a bigger flood would test less, not more. */
 	private static final int PACKETS = 40;
 
 	private static final long OBSERVATION_PERIOD = 60 * 1000;

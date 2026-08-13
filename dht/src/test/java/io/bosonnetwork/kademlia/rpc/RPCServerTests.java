@@ -911,4 +911,35 @@ public class RPCServerTests {
 			context.completeNow();
 		}));
 	}
+
+	/**
+	 * The active-call table is sized from the configuration rather than fixed.
+	 * <p>
+	 * A running task holds up to {@code alpha} calls in flight and the manager runs up to
+	 * {@code concurrentTasks} of them, so a ceiling below that product is one the node cannot reach its own
+	 * configured concurrency under - and {@code sendCall} rejects rather than queues, so the rejection
+	 * reaches the task as an error and a candidate is retired without ever having been asked.
+	 * </p>
+	 */
+	@Test
+	void testActiveCallCeilingFollowsTheConfiguredConcurrency(Vertx vertx) {
+		Context vertxContext = vertx.getOrCreateContext();
+		Identity identity = new CryptoIdentity();
+
+		// Default settings: the task budget is a small fraction of the floor, and the floor is what leaves
+		// room for the calls no task accounts for - the bootstrap fan-out, the periodic random ping, and
+		// the unsolicited ping for an id we have not seen, which inbound traffic drives rather than
+		// configuration.
+		KadContext defaults = new TestKadContext(vertxContext, identity, Network.IPv4);
+		RpcServer ordinary = new RpcServer(defaults, "127.0.0.1", 39202,
+				Blacklist.empty(), SuspiciousNodeDetector.disabled(), false, null);
+		assertEquals(1024, ordinary.maxActiveCalls, "the floor should hold at ordinary settings");
+
+		// Super-node settings, where the product is what binds.
+		KadContext busy = new TestKadContext(vertxContext, identity, Network.IPv4)
+				.setAlpha(4).setConcurrentTasks(2048);
+		RpcServer supernode = new RpcServer(busy, "127.0.0.1", 39203,
+				Blacklist.empty(), SuspiciousNodeDetector.disabled(), false, null);
+		assertEquals(8192, supernode.maxActiveCalls, "the table should follow concurrentTasks x alpha");
+	}
 }

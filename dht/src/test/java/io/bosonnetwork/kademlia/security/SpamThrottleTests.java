@@ -54,6 +54,25 @@ public class SpamThrottleTests {
 	}
 
 	@Test
+	public void testDecrementCannotBankCredit() throws Exception {
+		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
+		var addr = InetAddress.getByName("192.168.8.1");
+
+		// The RPC receive path refunds a packet whenever one turns out to answer a call it made, and the
+		// refund is a decrement of a counter it did not itself increment. Decrementing an address with no
+		// count must therefore be a no-op rather than credit carried forward: if it accumulated, a node
+		// that answers our calls would arrive with a budget larger than the burst, which is the bypass the
+		// refund replaced, reintroduced from the other end.
+		for (var i = 0; i < BURST_CAPACITY * 4; i++)
+			throttle.decrement(addr);
+
+		for (var i = 1; i < BURST_CAPACITY; i++)
+			assertFalse(throttle.incrementAndCheck(addr), "throttled early at " + i);
+
+		assertTrue(throttle.incrementAndCheck(addr), "the burst outlasted its capacity");
+	}
+
+	@Test
 	public void testDecay() throws Exception {
 		var addr = InetAddress.getByName("192.168.8.1");
 		var throttle = SpamThrottle.create(LIMIT_PER_SECOND, BURST_CAPACITY);
