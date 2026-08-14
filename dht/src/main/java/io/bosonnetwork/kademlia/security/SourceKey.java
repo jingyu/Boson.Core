@@ -28,7 +28,7 @@ import java.net.UnknownHostException;
 import java.util.Arrays;
 
 /**
- * Reduces a source address to the unit this package holds accountable for its traffic.
+ * Reduces a source address to the unit this node holds a sender accountable in.
  * <p>
  * Every defense here - the rate throttle and the suspicious-node detector both - assumes that the thing it
  * counts against is a resource the sender had to acquire. That assumption holds for an IPv4 address and
@@ -43,16 +43,21 @@ import java.util.Arrays;
  * narrowest cut that a sender cannot widen for free.
  * </p>
  * <p>
- * The throttle and the detector share this so that "one source" means the same thing to both. If they
- * disagreed, a sender could sit under one budget while exhausting the other.
+ * The throttle, the detector and the routing table's diversity budget share this so that "one source" means
+ * the same thing to all of them. If any two disagreed, a sender could sit under one budget while exhausting
+ * the other.
+ * </p>
+ * <p>
+ * Public for that last one: the routing table lives in another package and must count in the same unit. The
+ * definition stays here, with the defenses that established it.
  * </p>
  */
-final class SourceKey {
+public final class SourceKey {
 	/**
 	 * Prefix length that defines one IPv6 source, in bits. The standard end-site allocation, so it is the
 	 * smallest block a sender cannot multiply without going back to its provider.
 	 */
-	static final int IPV6_PREFIX_BITS = 64;
+	public static final int IPV6_PREFIX_BITS = 64;
 
 	private static final int IPV6_PREFIX_BYTES = IPV6_PREFIX_BITS / 8;
 	private static final int IPV6_BYTES = 16;
@@ -71,7 +76,7 @@ final class SourceKey {
 	 * @param host the host address in literal form, as it arrives from the socket.
 	 * @return the key to count this source under; the argument itself for IPv4.
 	 */
-	static String of(String host) {
+	public static String of(String host) {
 		if (host.indexOf(':') < 0)
 			return host;
 
@@ -96,7 +101,7 @@ final class SourceKey {
 	 * @param addr the address to reduce.
 	 * @return the address itself for IPv4, or the /64 network address for IPv6.
 	 */
-	static InetAddress of(InetAddress addr) {
+	public static InetAddress of(InetAddress addr) {
 		if (!(addr instanceof Inet6Address))
 			return addr;
 
