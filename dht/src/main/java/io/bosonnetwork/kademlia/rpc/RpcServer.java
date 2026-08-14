@@ -592,7 +592,9 @@ public class RpcServer implements Measured {
 
 		// Check inbound throttle
 		if (inboundThrottle.incrementAndCheck(remoteAddress.host())) {
-			log.warn("Throttled a packet from {}", remoteAddress);
+			// DEBUG, this site above all: the throttle exists to make dropping cheap, and a WARN per
+			// dropped packet had the code meant to shed load be the load.
+			log.debug("Throttled a packet from {}", remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
 				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.THROTTLED);
@@ -602,7 +604,7 @@ public class RpcServer implements Measured {
 
 		// Validate packet size
 		if (buffer.length() < Id.BYTES + CryptoBox.MAC_BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
-			log.warn("Ignored invalid packet(too short) from {}", remoteAddress);
+			log.debug("Ignored invalid packet(too short) from {}", remoteAddress);
 			// Unproven source - a packet this short carries no identity at all, so the address it names is
 			// the only thing to go on, and the sender chose that. Reported as an unproven observation, which
 			// can suppress the source for a short while but can never ban it.
@@ -617,7 +619,7 @@ public class RpcServer implements Measured {
 		// Extract and validate remote ID
 		Id remoteId = Id.of(buffer.getBytes(0, Id.BYTES));
 		if (blacklist.isBanned(remoteId, remoteAddress.host())) {
-			log.warn("Ignored packet from blacklisted node {}@{}", remoteId, remoteAddress);
+			log.debug("Ignored packet from blacklisted node {}@{}", remoteId, remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
 				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.BANNED);
@@ -625,7 +627,7 @@ public class RpcServer implements Measured {
 			return;
 		}
 		if (suspiciousNodeDetector.isBanned(remoteAddress.host())) {
-			log.warn("Ignored packet from suspicious node {}@{}", remoteId, remoteAddress);
+			log.debug("Ignored packet from suspicious node {}@{}", remoteId, remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
 				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.SUSPICIOUS);
@@ -815,7 +817,11 @@ public class RpcServer implements Measured {
 				// Deliberately not reported to the suspicious-node detector. Both causes above are normal
 				// operation rather than misbehavior, and the source is unproven either way, so counting it
 				// would charge an address for a race it did not cause.
-				log.warn("Cannot find RPC call for {}[txid:{}]", message.getType(), message.getTxid());
+				// DEBUG: reaching this needs no call of ours, only a packet that decrypts, and anyone can
+				// encrypt to our public key - so the rate is the sender's to choose. Both causes above
+				// are normal operation anyway.
+				log.debug("Cannot find RPC call for {}[txid:{}] from {}",
+						message.getType(), message.getTxid(), remoteAddress);
 				if (metrics != null) {
 					metrics.bytesDropped(remoteAddress, buffer.length());
 					metrics.messageDropped(remoteAddress, DHTMetrics.Reason.NO_MATCHED_CALL);
@@ -823,13 +829,17 @@ public class RpcServer implements Measured {
 			} else {
 				Throwable e = ar.cause();
 				if (e instanceof CryptoException) {
-					log.warn("Decrypt packet error from {}, ignored", remoteAddress);
+					log.debug("Decrypt packet error from {}, ignored", remoteAddress);
 				} else if (e instanceof IllegalArgumentException) {
 					if (log.isTraceEnabled()) // log the parse error for debugging
 						log.trace("Parse message error from {}@{}, ignored", remoteId, remoteAddress, e.getCause());
 
-					log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress);
+					log.debug("Invalid message from {}@{}, ignored", remoteId, remoteAddress);
 				} else {
+					// The one branch here that stays a warning. A packet that fails to decrypt or to parse
+					// is the sender's doing and says nothing about us, but anything else coming out of the
+					// decode is our own parser doing something it was not written to do - and that is worth
+					// a line and a stack trace however often it arrives.
 					log.warn("Invalid message from {}@{}, ignored", remoteId, remoteAddress, e);
 				}
 
@@ -859,7 +869,10 @@ public class RpcServer implements Measured {
 
 		int delay = outboundThrottle.incrementAndEstimateDelay(call.getTarget().getIpAddress());
 		if (delay > 0) {
-			log.info("Throttled (delay {}ms) the RPC call to remote peer {}@{}, {}",
+			// DEBUG rather than INFO: a delay is routine on a busy node - the call is rescheduled, not
+			// lost - and the call re-enters this method after its delay, so a saturated target wrote one
+			// line per attempt, each serializing a message that had not been sent yet.
+			log.debug("Throttled (delay {}ms) the RPC call to remote peer {}@{}, {}",
 					delay, call.getTargetId(), call.getTarget().getHost(), call.getRequest());
 
 			context.setTimer(delay, unused -> {

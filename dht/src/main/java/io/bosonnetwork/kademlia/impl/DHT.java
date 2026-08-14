@@ -1904,7 +1904,7 @@ public class DHT extends BosonVerticle {
 
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteIpAddress(), request.getRemotePort(), value.getId())) {
-				log.warn("Received a store value request with invalid token from {}", request.getRemoteAddress());
+				log.debug("Received a store value request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidTokenException("Invalid token for STORE VALUE request");
 			}
 
@@ -1962,7 +1962,7 @@ public class DHT extends BosonVerticle {
 
 			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
 					request.getRemoteIpAddress(), request.getRemotePort(), peer.getId())) {
-				log.warn("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
+				log.debug("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
 				throw new InvalidTokenException("Invalid token for ANNOUNCE PEER request");
 			}
 
@@ -2145,7 +2145,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	/**
-	 * Builds the {@link #churnedAddresses} key for an endpoint.
+	 * Builds the {@link #lastChurnedAddress} for an endpoint.
 	 * <p>
 	 * Both sides derive it from an {@link InetAddress} rather than from a host string, so a literal that
 	 * could be spelled more than one way - an IPv6 address above all - cannot produce two keys for one
@@ -2211,7 +2211,7 @@ public class DHT extends BosonVerticle {
 		boolean allowed = kadContext.isDeveloperMode() ?
 				AddressUtils.isAnyUnicast(remoteAddress) : AddressUtils.isGlobalUnicast(remoteAddress);
 		if (!allowed) {
-			log.warn("Received a message from unsupported address {}, ignored the potential routing table update",
+			log.debug("Received a message from unsupported address {}, ignored the potential routing table update",
 					message.getRemoteAddress());
 			return;
 		}
@@ -2252,7 +2252,7 @@ public class DHT extends BosonVerticle {
 				existing.getPort() != remotePort)) {
 			// this might happen if one node changes ports (broken NAT?) or IP address
 			// ignore until routing table entry times out
-			log.warn("Received a message from inconsistent node {}@{}, ignored the potential routing table update",
+			log.debug("Received a message from inconsistent node {}@{}, ignored the potential routing table update",
 					message.getId(), message.getRemoteAddress());
 
 			// The message authenticated as this id - it decrypted under that key - so the node itself is
