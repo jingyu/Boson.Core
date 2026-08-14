@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import io.vertx.core.Future;
@@ -215,7 +216,7 @@ public class RpcServer implements Measured {
 	private Consumer<RpcCall> callTimeoutHandler;
 
 	/** Handler for identity churn at a known endpoint, null if not set. */
-	private Consumer<NodeInfo> churnHandler;
+	private BiConsumer<NodeInfo, Boolean> churnHandler;
 
 	/** Server start time in milliseconds, or -1 if not started. */
 	private long startTime;
@@ -459,18 +460,33 @@ public class RpcServer implements Measured {
 	}
 
 	/**
-	 * Sets the handler for identity churn: an endpoint that presented a different node id than it presented
-	 * before.
+	 * Sets the handler for identity churn: an endpoint presented a different node id than the last one seen
+	 * at that {@code ip:port}.
 	 * <p>
 	 * The handler is given the <b>stale</b> binding - the id that used to be at that address, not the one
 	 * that just arrived - because that is what identifies the routing table entry the change invalidates.
 	 * It runs before the message itself is dispatched, so a listener can act on the old binding while the
 	 * new one is still unlearned.
 	 * </p>
+	 * <p>
+	 * The second argument is what the report is <b>worth</b>, and a listener that ignores it is wrong in the
+	 * direction this whole area exists to prevent:
+	 * </p>
+	 * <ul>
+	 *   <li>{@code false} - the change was merely observed, on a message that decrypted. That authenticates
+	 *       the id, not the source: a UDP source address is written by its sender, so anyone able to spoof
+	 *       one reports churn at any endpoint they can name - and the endpoints we hold are what we hand out
+	 *       when asked who is nearby. Nothing done here may be worth aiming at a third party.</li>
+	 *   <li>{@code true} - a response proved it: it matched a call we had outstanding and came back from the
+	 *       address that call was sent to, carrying an id other than the one we addressed. The address
+	 *       demonstrably receives our traffic, since it answered a transaction id we chose and never
+	 *       published, so this cannot have been aimed by a bystander.</li>
+	 * </ul>
 	 *
-	 * @param churnHandler the handler to process identity churn
+	 * @param churnHandler the handler to process identity churn, taking the stale binding and whether the
+	 *        report is proven
 	 */
-	public void setChurnHandler(Consumer<NodeInfo> churnHandler) {
+	public void setChurnHandler(BiConsumer<NodeInfo, Boolean> churnHandler) {
 		this.churnHandler = churnHandler;
 	}
 
@@ -666,7 +682,9 @@ public class RpcServer implements Measured {
 				// keyed on id, not on address.
 				Id previousId = suspiciousNodeDetector.observed(remoteAddress, remoteId);
 				if (previousId != null && churnHandler != null)
-					churnHandler.accept(NodeInfo.of(previousId, remoteAddress.hostAddress(), remoteAddress.port()));
+					// Unproven: this message authenticates the id that sent it and nothing about where it
+					// came from.
+					churnHandler.accept(NodeInfo.of(previousId, remoteAddress.hostAddress(), remoteAddress.port()), false);
 
 				// Handle request messages
 				if (message.isRequest()) {
@@ -734,8 +752,10 @@ public class RpcServer implements Measured {
 
 							suspiciousNodeDetector.misbehaved(remoteAddress, remoteId);
 
+							// Proven: this arrived from the address we sent the call to, answering a
+							// transaction id we chose, so no third party could have aimed it.
 							if (churnHandler != null)
-								churnHandler.accept(NodeInfo.of(call.getTargetId(), remoteAddress.hostAddress(), remoteAddress.port()));
+								churnHandler.accept(NodeInfo.of(call.getTargetId(), remoteAddress.hostAddress(), remoteAddress.port()), true);
 
 							return;
 						}
