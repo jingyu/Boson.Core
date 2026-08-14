@@ -59,6 +59,9 @@ public class RpcCall {
 	/** Indicates whether the target was reachable at creation time, based on KBucketEntry. */
 	private boolean targetIsReachable;
 
+	/** Indicates whether an unverified inbound packet is what caused this call to be made. */
+	private boolean unsolicited;
+
 	/** Timestamp when the request was sent, in milliseconds, or -1 if not sent. */
 	private long sentTime = -1;
 
@@ -159,6 +162,33 @@ public class RpcCall {
 	 */
 	public boolean isReachableAtCreationTime() {
 		return targetIsReachable;
+	}
+
+	/**
+	 * Marks this call as one an unverified inbound packet caused us to make.
+	 * <p>
+	 * The distinction is who chooses the rate. A call a task makes is ours: the task budget bounds how many
+	 * exist, and the active-call table is sized from it. A call made in reaction to an arriving request is
+	 * not - whoever sends the requests decides how many of these we make, and its source address is exactly
+	 * the thing that cannot be verified. Marked calls draw on a sub-budget of the call table rather than on
+	 * the whole of it, so that a sender cannot spend the slots the tasks need.
+	 * </p>
+	 *
+	 * @param unsolicited true if inbound traffic caused this call
+	 * @return this RpcCall instance for method chaining
+	 */
+	public RpcCall setUnsolicited(boolean unsolicited) {
+		this.unsolicited = unsolicited;
+		return this;
+	}
+
+	/**
+	 * Checks whether an unverified inbound packet is what caused this call to be made.
+	 *
+	 * @return true if inbound traffic caused this call, false if it is one of our own
+	 */
+	public boolean isUnsolicited() {
+		return unsolicited;
 	}
 
 	/**

@@ -120,6 +120,8 @@ public class RpcServer implements Measured {
 	 * </p>
 	 */
 	private static final int MIN_ACTIVE_CALLS = 1024;
+	/** Share of the active-call table the reactive calls may hold - an eighth of it. */
+	static final int UNSOLICITED_CALL_DIVISOR = 8;
 	/** Maximum timeout for RPC calls (10 seconds). */
 	public static final int RPC_CALL_TIMEOUT_MAX = 10_000;
 	/** Minimum baseline timeout for RPC calls (100 milliseconds). */
@@ -169,6 +171,21 @@ public class RpcServer implements Measured {
 	private final Map<Long, RpcCall> pendingCalls;
 
 	/**
+	 * Calls the outbound throttle has parked, keyed by the timer that will release them.
+	 * <p>
+	 * A parked call is waiting to be sent rather than waiting to be answered, so it is in neither the socket
+	 * nor {@link #pendingCalls} - which is exactly why it is held here. It counts against
+	 * {@link #maxActiveCalls} like a call in flight, because it holds its caller's slot the same way, and
+	 * {@link #stop} settles it, because nothing else can: it has no timeout timer of its own yet, and the
+	 * timer that would release it does not survive the context being torn down.
+	 * </p>
+	 */
+	private final Map<Long, RpcCall> delayedCalls;
+
+	/** Number of calls in flight that inbound traffic, rather than this node, asked for. */
+	private int unsolicitedCalls;
+
+	/**
 	 * Ceiling on {@link #pendingCalls}, derived from the configuration rather than fixed.
 	 * <p>
 	 * A running task holds up to {@code alpha} calls in flight and the task manager runs up to
@@ -184,6 +201,23 @@ public class RpcServer implements Measured {
 	 * </p>
 	 */
 	final int maxActiveCalls;
+
+	/**
+	 * Ceiling on {@link #unsolicitedCalls}, an eighth of the table.
+	 * <p>
+	 * The calls a task makes and the calls arriving requests make us do are not the same kind of call, and
+	 * the difference is who sets the rate - see {@link RpcCall#setUnsolicited}. Sharing one ceiling between
+	 * them means a sender can hold every slot the tasks need, and mere headroom does not fix that: a
+	 * producer that arrives continuously takes whatever headroom is left. So the reactive side gets a
+	 * sub-budget instead, and the worst it can cost a task is an eighth of the table.
+	 * </p>
+	 * <p>
+	 * Derived rather than fixed, like the table itself, so that a node configured to carry more traffic also
+	 * gets more room for the pings that traffic provokes: 128 at the default settings, 1024 at the
+	 * super-node settings that raised this question.
+	 * </p>
+	 */
+	final int maxUnsolicitedCalls;
 
 	/** Total number of received packets. */
 	private long receivedPackets;
@@ -269,9 +303,11 @@ public class RpcServer implements Measured {
 		// bound in the configuration, and a table sized past what an int can hold is not a table anyway.
 		long taskDemand = (long) context.getConcurrentTasks() * context.getAlpha();
 		this.maxActiveCalls = (int) Math.max(MIN_ACTIVE_CALLS, Math.min(taskDemand, Integer.MAX_VALUE));
+		this.maxUnsolicitedCalls = maxActiveCalls / UNSOLICITED_CALL_DIVISOR;
 
 		// Initialize pending calls map
 		this.pendingCalls = new HashMap<>(DEFAULT_PENDING_CALLS_CAPACITY);
+		this.delayedCalls = new HashMap<>();
 
 		this.startTime = -1;
 		this.running = false;
@@ -404,11 +440,34 @@ public class RpcServer implements Measured {
 
 	/**
 	 * Checks if there are any pending RPC calls.
+	 * <p>
+	 * Parked calls count: the one caller of this asks it whether the node already has business of its own
+	 * with the network, and a call waiting on the outbound throttle is business with a target we are
+	 * already talking to more than it will accept.
+	 * </p>
 	 *
 	 * @return true if there are pending calls, false otherwise
 	 */
 	public boolean hasPendingCalls() {
-		return !pendingCalls.isEmpty();
+		return !pendingCalls.isEmpty() || !delayedCalls.isEmpty();
+	}
+
+	/**
+	 * The number of calls the outbound throttle is currently holding back.
+	 *
+	 * @return the number of parked calls
+	 */
+	int delayedCallCount() {
+		return delayedCalls.size();
+	}
+
+	/**
+	 * The number of calls in flight that inbound traffic asked for.
+	 *
+	 * @return the number of reactive calls charged to the sub-budget
+	 */
+	int unsolicitedCallCount() {
+		return unsolicitedCalls;
 	}
 
 	/**
@@ -566,6 +625,22 @@ public class RpcServer implements Measured {
 			pendingCalls.clear();
 			for (RpcCall call : outstanding)
 				call.cancel();
+
+			// And the same for the calls the throttle parked, for a sharper version of the same reason: a
+			// parked call has not even been sent, so nothing is waiting for it anywhere - its timeout timer
+			// is not set until it leaves the queue, and the timer that would release it into the socket goes
+			// down with the context. Cancel the release timer as well, or a stopped server can still hand a
+			// call to a socket that is gone.
+			List<Map.Entry<Long, RpcCall>> parked = new ArrayList<>(delayedCalls.entrySet());
+			delayedCalls.clear();
+			for (Map.Entry<Long, RpcCall> entry : parked) {
+				context.cancelTimer(entry.getKey());
+				entry.getValue().cancel();
+			}
+
+			// Every listener above has run by now, so the counter is settling to zero rather than being
+			// overwritten. Reset it anyway: a server that is started again starts from a clean budget.
+			unsolicitedCalls = 0;
 
 			if (ar.succeeded())
 				log.info("RPC server at {}:{} stopped", host, port);
@@ -857,17 +932,88 @@ public class RpcServer implements Measured {
 
 	/**
 	 * Sends an RPC call to a remote node, applying throttling and timeouts.
+	 * <p>
+	 * The budget for reactive calls is charged here rather than in {@link #dispatchCall}, so that a call the
+	 * outbound throttle parks and later re-dispatches is charged once for the whole of its life.
+	 * </p>
 	 *
 	 * @param call the RPC call to send
 	 * @return a Future resolving to the sent RpcCall
 	 */
 	public Future<RpcCall> sendCall(RpcCall call) {
-		if (pendingCalls.size() >= maxActiveCalls) {
-			call.fail(new IllegalStateException("Maximum active calls exceeded"));
-			return Future.failedFuture("Maximum active calls exceeded");
+		if (call.isUnsolicited()) {
+			if (unsolicitedCalls >= maxUnsolicitedCalls)
+				return reject(call, "Unsolicited call budget exceeded");
+
+			unsolicitedCalls++;
+			// Released on the first final state, whichever one it is: answered, timed out, failed to send,
+			// cancelled by stop(). Every path out of a call passes through here, which is what keeps the
+			// budget from leaking a slot per path that forgets it.
+			call.addListener(new RpcCallListener() {
+				@Override
+				public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+					if (state.isFinal())
+						unsolicitedCalls--;
+				}
+			});
 		}
 
+		return dispatchCall(call);
+	}
+
+	/**
+	 * Refuses a call that this node will not carry, failing the call and the caller's future with one
+	 * cause.
+	 * <p>
+	 * One instance for both: {@code call.getCause()} is what a task reads in {@code callError}, the future
+	 * is what a direct caller reads, and building a separate throwable for each leaves two descriptions of
+	 * one event to drift apart.
+	 * </p>
+	 *
+	 * @param call    the call being refused
+	 * @param message which limit refused it
+	 * @return a failed future carrying the same cause as the call
+	 */
+	private static Future<RpcCall> reject(RpcCall call, String message) {
+		CallRejectedException cause = new CallRejectedException(message);
+		call.fail(cause);
+		return Future.failedFuture(cause);
+	}
+
+	/**
+	 * Sends a call that has already been admitted, parking it if the outbound throttle asks for a delay.
+	 * <p>
+	 * The park path re-enters here rather than {@link #sendCall}: admission is decided once, and this may
+	 * run several times for one call.
+	 * </p>
+	 *
+	 * @param call the RPC call to send
+	 * @return a Future resolving to the sent RpcCall
+	 */
+	private Future<RpcCall> dispatchCall(RpcCall call) {
+		// Parked calls count too. They are not in flight, but they hold their caller's slot exactly as if
+		// they were - a task keeps one of its alpha requests on a call that has not been sent - and leaving
+		// them out of the ceiling is what let the queue grow without one.
+		if (pendingCalls.size() + delayedCalls.size() >= maxActiveCalls)
+			return reject(call, "Maximum active calls exceeded");
+
 		int delay = outboundThrottle.incrementAndEstimateDelay(call.getTarget().getIpAddress());
+		if (delay > RPC_CALL_TIMEOUT_MAX) {
+			// Past the horizon, do not queue it: fail it now. The throttle's estimate grows with the number
+			// of calls already waiting on this target and nothing caps it, so at a high enough concurrency a
+			// call converging on a hot node is scheduled minutes out - and a call we would not wait that long
+			// for an answer to is not one worth holding a caller's slot for that long either. Failing now
+			// reaches a task as an error it can act on, where the wait reached it as nothing at all.
+			//
+			// The estimate above already counted this call; give the count back, since we are not sending it.
+			outboundThrottle.decrement(call.getTarget().getIpAddress());
+
+			log.debug("Dropped the RPC call to remote peer {}@{}: the outbound throttle delay ({}ms) is past "
+					+ "the call horizon", call.getTargetId(), call.getTarget().getHost(), delay);
+
+			return reject(call, "Outbound throttle delay exceeds the call horizon");
+		}
+
 		if (delay > 0) {
 			// DEBUG rather than INFO: a delay is routine on a busy node - the call is rescheduled, not
 			// lost - and the call re-enters this method after its delay, so a saturated target wrote one
@@ -875,10 +1021,15 @@ public class RpcServer implements Measured {
 			log.debug("Throttled (delay {}ms) the RPC call to remote peer {}@{}, {}",
 					delay, call.getTargetId(), call.getTarget().getHost(), call.getRequest());
 
-			context.setTimer(delay, unused -> {
+			// The handler is given its own timer id, so the parked call can find itself in the map without
+			// anything being captured but the call. The put runs before the handler can: this is the event
+			// loop, and the delay is positive.
+			long timerId = context.setTimer(delay, id -> {
+				delayedCalls.remove(id);
 				outboundThrottle.decrement(call.getTarget().getIpAddress());
-				sendCall(call);
+				dispatchCall(call);
 			});
+			delayedCalls.put(timerId, call);
 
 			if (metrics != null)
 				metrics.throttledOutbound(call.getTarget().getHost(), delay);

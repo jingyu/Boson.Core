@@ -1652,10 +1652,15 @@ public class DHT extends BosonVerticle {
 	 * context corrupts them silently rather than failing.
 	 * </p>
 	 *
+	 * <p>
+	 * Overridable so a test can observe what the DHT decides to send without a socket under it, the way
+	 * {@code Task.sendCall} already is; production code has no reason to.
+	 * </p>
+	 *
 	 * @param call the RPC call to send.
 	 * @return a future that completes with the call once it is sent, or fails if it was dropped.
 	 */
-	private Future<RpcCall> sendCallInternal(RpcCall call) {
+	Future<RpcCall> sendCallInternal(RpcCall call) {
 		RpcServer server = rpcServer;
 		if (!running || server == null) {
 			//noinspection LoggingSimilarMessage
@@ -2332,9 +2337,16 @@ public class DHT extends BosonVerticle {
 		// which neither a varying port nor a fresh address out of the same allocation escapes. The
 		// suspicious-node detector adds to that only a short suppression, because a request's source is
 		// exactly the thing it cannot verify.
+		//
+		// Rate is not the whole of it, though: what a rate bounds is how fast these arrive, not how many
+		// are outstanding at once, and outstanding is what costs a slot in the active-call table that the
+		// tasks are sized against. Marking the call as unsolicited is what puts it on its own sub-budget
+		// there. A ping refused for want of budget needs nothing here - the entry stays in the table
+		// unpromoted, and the periodic maintenance pings it in due course, which is what would have
+		// happened without this optimization at all.
 		if (accepted && existing == null && !newEntry.isReachable()) {
 			Message request = Message.pingRequest();
-			RpcCall ping = new RpcCall(newEntry, request);
+			RpcCall ping = new RpcCall(newEntry, request).setUnsolicited(true);
 			sendCallInternal(ping);
 		}
 	}
