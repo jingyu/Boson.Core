@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Logging configuration for this module's tests only.
+
+  The library ships no logging configuration of its own: an application that embeds it picks
+  its own binding and its own levels, and a configuration inside a jar would silently become
+  everyone else's. Test resources are not packaged, and logback prefers logback-test.xml over
+  any logback.xml on the classpath, so this file is only ever seen by the tests here.
+
+  Without it the tests would fall back to logback's built-in default, which is DEBUG on the
+  console for every logger - including Netty's and Vert.x's.
+
+  Levels, and what each one is for:
+
+    INFO   the node's own lifecycle - started, stopped, bootstrapping, maintenance.
+    WARN   something is wrong with THIS node and someone should look.
+    ERROR  something is wrong with this node and it is not working.
+    DEBUG  what the node rejected and why - throttled, undecryptable, unparseable, a token that
+           did not verify, a message from an address we will not route to.
+
+  A node under test is therefore quiet at INFO. When diagnosing a failure, raise the package
+  that rejected the traffic and expect volume proportional to whatever the test is sending:
+
+    <logger name="io.bosonnetwork.kademlia.rpc" level="DEBUG"/>
+    <logger name="io.bosonnetwork.kademlia.impl" level="DEBUG"/>
+
+  Console only. A rolling file appender here would write a log into whatever directory the
+  test JVM happened to start in.
+-->
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{32} - %msg %ex{full}%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="io.netty" level="OFF"/>
+  <logger name="io.vertx" level="OFF"/>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT" />
+  </root>
+</configuration>
