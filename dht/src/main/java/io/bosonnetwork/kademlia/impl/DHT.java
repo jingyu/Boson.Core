@@ -2067,18 +2067,46 @@ public class DHT extends BosonVerticle {
 	}
 
 	/**
-	 * The identity at an endpoint changed: drop the entry that held the old binding.
+	 * An endpoint presented a different id than the last one seen there: retire the binding it invalidates,
+	 * as far as the evidence allows.
 	 * <p>
-	 * The routing table exists to hold contacts that have been reachable for a long time and are therefore
-	 * likely to stay - that is the property lookups depend on. A binding that changes has failed that test,
-	 * so it is removed rather than re-verified. Whether something at that address answers a ping is a
-	 * different question and not the one being asked: a contact that churns is a poor contact even while it
-	 * is up, and there is no shortage of candidates to replace it.
+	 * The routing table is worth having because it holds contacts that have been reachable a long time and
+	 * are therefore likely to stay - that is the property lookups depend on. A binding that changes has
+	 * failed that test, so it must stop being treated as good. Whether something at that address answers a
+	 * ping is a different question and not the one being asked: a contact that churns is a poor contact even
+	 * while it is up.
 	 * </p>
 	 * <p>
-	 * The entry is only dropped if it is still the one that churned. The report is keyed on an endpoint
-	 * while the table is keyed on an id, so an id that has since moved elsewhere must not be evicted for
-	 * whatever now occupies its old address.
+	 * <b>How far it is retired depends on what the report is worth</b>, and the two are not close:
+	 * </p>
+	 * <ul>
+	 *   <li><b>Proven</b> - a response matched a call we had outstanding and came back from the address we
+	 *       sent it to, carrying another id. The contact itself churned, nobody else could have aimed the
+	 *       report, and the entry is removed.</li>
+	 *   <li><b>Observed</b> - any other message. It decrypted, so it authenticates the id that sent it, but a
+	 *       UDP source address is written by its sender. Removing on this would hand a spoofer an eviction
+	 *       aimed at any endpoint it can name - and nothing bounds that, since the inbound throttle counts
+	 *       against the address on the packet, which in that attack is the victim's, while the endpoints to
+	 *       aim at are exactly what we hand out when asked who is nearby. So the entry is demoted instead.</li>
+	 * </ul>
+	 * <p>
+	 * Demotion is the instrument the same uncertainty already earned in {@code received}, where a contact
+	 * turning up at a new address is demoted rather than adopted or evicted. The two are mirror images - same
+	 * id at the wrong address there, same address under a different id here - and in both the source address
+	 * is the part carrying no proof. It stops the stale binding being handed to other nodes, wakes the
+	 * {@code needsReplacement()} clause so two failures retire it rather than six, and leaves an attacker
+	 * holding something the peer's next answer undoes rather than an eviction that resets its age and
+	 * history. {@link RoutingTable#markUnreachable} is also its own latch: an entry already unreachable
+	 * returns false, so repeating the report buys nothing further.
+	 * </p>
+	 * <p>
+	 * A genuine id change at a fixed address therefore resolves in a minute or two when only observed, since
+	 * the new binding waits for the demoted entry to retire. Nothing depends on that minute.
+	 * </p>
+	 * <p>
+	 * The entry is only touched if it is still the one that churned. The report is keyed on an endpoint while
+	 * the table is keyed on an id, so an id that has since moved elsewhere must not be retired for whatever
+	 * now occupies its old address.
 	 * </p>
 	 *
 	 * <p>
@@ -2088,17 +2116,31 @@ public class DHT extends BosonVerticle {
 	 * </p>
 	 *
 	 * @param stale the binding that is no longer there - the id that used to be at that address.
+	 * @param proven whether a response to one of our calls proved the change, as opposed to a message merely
+	 *        showing it.
 	 */
-	void onChurn(NodeInfo stale) {
+	void onChurn(NodeInfo stale, boolean proven) {
 		KBucketEntry entry = routingTable.getEntry(stale.getId(), true);
 		if (entry == null || !entry.getAddress().equals(stale.getAddress()))
 			return;
 
-		log.warn("Node {} at {} presented a different id, removing the stale routing table entry",
-				stale.getId(), stale.getAddress());
-		routingTable.remove(stale.getId());
+		if (proven) {
+			log.warn("Node {} at {} presented a different id, removing the stale routing table entry",
+					stale.getId(), stale.getAddress());
+			routingTable.remove(stale.getId());
+		} else if (routingTable.markUnreachable(stale.getId())) {
+			log.warn("Endpoint {} presented a different id, demoted the entry held for {}",
+					stale.getAddress(), stale.getId());
+		}
 
-		// Tell received() to skip the message that reported this, if one reaches it. See churnedAddress.
+		// Nothing is reported to the suspicious-node detector from here. The Sybil budget for an endpoint
+		// that rotates identities is charged where the change is seen, in the detector's own observed(),
+		// because it is a fact about the endpoint rather than about this table - the churning identity need
+		// not be a contact we hold, and where it is, the marker below stops the next one being learned, so a
+		// table-gated budget would count once and then go quiet. SybilTests.TestIds proves that: moving the
+		// charge here fails it outright.
+
+		// Tell received() to skip the message that reported this, if one reaches it. See lastChurnedAddress.
 		lastChurnedAddress = endpointKey(stale.getIpAddress(), stale.getPort());
 	}
 
@@ -2137,14 +2179,17 @@ public class DHT extends BosonVerticle {
 		InetAddress remoteAddress = message.getRemoteIpAddress();
 		int remotePort = message.getRemotePort();
 
-		// The identity at this endpoint changed, and onChurn has just dropped the entry that held it. Do not
-		// learn the binding that reported the change.
+		// The identity at this endpoint changed, and onChurn has just retired the binding that held it - by
+		// removal or by demotion, depending on what proved it. Either way, do not learn the binding that
+		// reported the change.
 		//
 		// That refusal is the whole defence here. The source of a request is whatever the sender wrote, so
-		// anyone can produce a churn report against a live peer's address; letting the reporting id take the
-		// slot it just vacated would turn one packet into a lasting eviction, because KBucket.put refuses an
-		// entry that collides on address and the real peer could not get back in. Refusing instead costs a
-		// genuine id change one message - it is learned when the node speaks again.
+		// anyone can produce a churn report against a live peer's address, and learning the reporting id
+		// from the same packet would let it install itself there. Keeping the demoted entry does not prevent
+		// that on its own: the collision check lives in KBucket.put and scans only the bucket the new id
+		// lands in, and an attacker choosing its id chooses its bucket. On the removing path it is worse
+		// still - the reporting id takes the slot just vacated and the real peer is refused on its return.
+		// Refusing instead costs a genuine id change one message: it is learned when the node speaks again.
 		//
 		// Spent here, at the top, rather than beside the put it guards: every return below this point is also
 		// a decision not to update the table, so reading it late would leave it set on those paths. This

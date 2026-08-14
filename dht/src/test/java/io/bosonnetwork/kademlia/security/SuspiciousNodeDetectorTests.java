@@ -147,6 +147,10 @@ public class SuspiciousNodeDetectorTests {
 	public void testIdentityChurnAtOneEndpointIsChargedToTheSource() {
 		// The Sybil budget. Ids are free, so the ceiling is charged to the address they arrive from - but
 		// what counts as churn is measured at the endpoint, one ip:port.
+		//
+		// Charged here, where the change is seen, and not by whoever acts on the report: the identity that
+		// churned need not be a contact the routing table holds, and gating this on the table stops it
+		// counting after the first rotation. SybilTests.TestIds is the end-to-end guard for that.
 		var endpoint = addr("192.168.15.1");
 
 		// The first id is not churn - there is nothing yet to have changed from.
@@ -165,6 +169,24 @@ public class SuspiciousNodeDetectorTests {
 
 		detector.observed(endpoint, Id.random());
 		assertTrue(detector.isBanned(endpoint.host()), "rotating identities past the budget must cost the source");
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	public void testIdentityChurnOnlySuppresses() throws Exception {
+		// Unproven tier: the address on the packet that reveals a change is written by its sender, so this
+		// charge can be aimed at the endpoint it names. It may therefore suppress a source and must never
+		// hold one for the ban duration.
+		var endpoint = addr("192.168.15.5");
+		detector.observed(endpoint, Id.random());
+		for (var i = 0; i < HITS; i++)
+			detector.observed(endpoint, Id.random());
+
+		assertTrue(detector.isBanned(endpoint.host()));
+
+		Thread.sleep(SUPPRESSION_DURATION * 3);
+		assertFalse(detector.isBanned(endpoint.host()),
+				"an unproven report must not hold a source for the ban duration");
 	}
 
 	@Test

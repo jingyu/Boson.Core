@@ -65,8 +65,10 @@ import io.bosonnetwork.Id;
  * <p><strong>What is counted, and why it is the address.</strong> Node ids are free Ed25519 keypairs, so
  * nothing can be limited by counting ids - an attacker mints more. An address is a resource somebody had to
  * acquire. So the budgets are charged to the source, including the Sybil budget itself: {@link #observed}
- * charges a source for each new identity it presents, which is the one place the free resource is
- * deliberately measured against the costly one.</p>
+ * charges a source for each new identity it presents at one of its endpoints, which is the one place the
+ * free resource is deliberately measured against the costly one. That charge belongs here, where the change
+ * is seen, rather than with whoever acts on the report - an identity that churns need not be one we hold in
+ * the routing table, and gating the budget on the table stops it counting after the first rotation.</p>
  *
  * <p><strong>Thread Safety:</strong> This class is designed for single-threaded use and is NOT thread-safe.
  * It should be used in a single-threaded environment or externally synchronized if used in a
@@ -372,6 +374,20 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 
 		log.trace("Endpoint {} changed id: {} -> {}", addr, previous, id);
 
+		// Charged here, where the change is seen, and deliberately not by whoever acts on the report.
+		//
+		// This is the Sybil budget, and what it measures is an endpoint presenting identities it did not
+		// present before - which is a fact about the endpoint, not about our routing table. Gating it on the
+		// table was tried and is wrong twice over: the churning identity need not be a contact we hold at
+		// all, and where it is, the very report suppresses the routing-table update for the message carrying
+		// the new id - so from the second rotation onwards there is nothing left to match and the budget
+		// stops counting. SybilTests.TestIds is the guard: it rotates identities at one endpoint and expects
+		// the source to be suppressed, and it fails outright when this charge moves.
+		//
+		// The cost is recorded rather than hidden: an attacker able to spoof a source address charges these
+		// hits to the address it names rather than to its own. That is inherent to unproven accounting -
+		// malformedMessage and inconsistent share it - and is why this tier only ever suppresses briefly and
+		// recovers on its own.
 		long now = System.currentTimeMillis();
 		observedNodes.compute(source, (unused, ob) -> {
 			if (ob == null)
