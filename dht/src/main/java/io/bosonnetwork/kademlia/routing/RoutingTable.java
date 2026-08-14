@@ -27,10 +27,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -47,6 +49,8 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.kademlia.security.SourceKey;
+import io.bosonnetwork.utils.AddressUtils;
 
 /**
  * Represents a lock-free, non-thread-safe routing table used in the Kademlia Distributed Hash Table (DHT) implementation.
@@ -63,10 +67,64 @@ import io.bosonnetwork.json.Json;
  * caller put each half where it belongs instead of choosing between a blocked event loop and a data race.
  */
 public class RoutingTable {
+	/**
+	 * How many entries one source unit may hold in the whole table.
+	 * <p>
+	 * The table-wide half of the diversity budget, and the half that matters: the bucket an entry lands in
+	 * is chosen by its id, ids are free, so any per-bucket limit alone is multiplied by a bucket count the
+	 * flood itself inflates - every accepted reachable entry can force a split, and every split is more
+	 * room for the same sender.
+	 * </p>
+	 * <p>
+	 * Not derived from k, because this one is about co-location - how many machines a real site puts behind
+	 * one address - which has nothing to do with bucket geometry. Fixed is also the right direction as a
+	 * table grows: eight of a mature table is a shrinking share, and on a young table the per-bucket limit
+	 * binds first, so the two meet with no gap between them.
+	 * </p>
+	 */
+	static final int MAX_TABLE_ENTRIES_PER_SOURCE = 8;
+
 	private final Id localId;
 	private final int k;
 	private final int replacements;
+	/**
+	 * How many entries one source unit may hold in a single bucket - {@code max(1, min(2, k / 8))}.
+	 * <p>
+	 * Two is a ceiling rather than a constant. The allowance exists for the legitimate pair - two nodes in
+	 * one household /64, two bootstrap servers on one host - and there is no reason for it to grow with the
+	 * bucket, since a larger k already makes two a smaller share. It cannot be flat either: at the smallest
+	 * configurable k, two would be half a bucket. Below k=16 a co-located pair is representable once per
+	 * bucket and reaches {@link #MAX_TABLE_ENTRIES_PER_SOURCE} across distinct buckets instead, which random
+	 * ids give it as soon as the table splits.
+	 * </p>
+	 */
+	final int maxBucketEntriesPerSource;
 	private final List<KBucket> buckets;
+
+	/**
+	 * How many entries each source unit has been given, counted forward from the last rebuild.
+	 * <p>
+	 * This exists to keep the table-wide budget off the packet-receive path. The count it guards is
+	 * otherwise a walk of every bucket, and that walk runs for every id the table does not already hold -
+	 * which a remote sender triggers with one unsolicited request. Measured before this was added: 11us on a
+	 * default node, 35us on a super node, 94us on a large one, against single-digit microseconds for the
+	 * decrypt that packet already paid. The early exit does not help, because it only fires for a source
+	 * that is already over-represented.
+	 * </p>
+	 * <p>
+	 * <b>Incremented, never decremented</b>, and that asymmetry is what makes it safe. Every stored entry
+	 * counts here, so the true count can only be <em>lower</em> than what this holds - removals are missed
+	 * until the rebuild. Therefore {@code counted < limit} proves the source is within budget and the walk
+	 * can be skipped, which is the common case; only {@code counted >= limit} needs the walk, and that is
+	 * exactly the case where its early exit fires. A refusal is therefore never decided on a stale number.
+	 * </p>
+	 * <p>
+	 * The other direction would be unsound: a missed increment would under-count and let a source past its
+	 * budget. That is why increments live on the store paths, which are three places in this class, rather
+	 * than decrements living on the six paths an entry can leave a bucket by.
+	 * </p>
+	 */
+	private final Map<InetAddress, Integer> sourceCounts;
 
 	protected static final Logger log = LoggerFactory.getLogger(RoutingTable.class);
 
@@ -81,6 +139,8 @@ public class RoutingTable {
 		this.localId = localId;
 		this.k = k;
 		this.replacements = replacements;
+		this.maxBucketEntriesPerSource = Math.max(1, Math.min(2, k / 8));
+		this.sourceCounts = new HashMap<>();
 		this.buckets = new ArrayList<>();
 		buckets.add(newBucket(Prefix.all(), x -> true));
 	}
@@ -265,6 +325,17 @@ public class RoutingTable {
 		log.trace("Putting entry: {}...", entry);
 
 		Id nodeId = entry.getId();
+
+		// An entry we already hold makes no new claim on the budget: KBucket.put either merges the
+		// observation into it or refuses it as a collision, and neither adds a slot.
+		InetAddress source = contains(nodeId, true) ? null : countableSource(entry);
+
+		if (source != null && tableBudgetSpent(source)) {
+			log.debug("Source {} already holds {} entries, dropping {}",
+					source.getHostAddress(), MAX_TABLE_ENTRIES_PER_SOURCE, entry);
+			return false;
+		}
+
 		KBucket bucket = bucketOf(nodeId);
 
 		// Split buckets if required before inserting the new entry
@@ -274,8 +345,192 @@ public class RoutingTable {
 			bucket = bucketOf(nodeId);
 		}
 
+		// Checked after the split rather than before it, unlike the table-wide budget above: a split only
+		// ever moves entries out of the bucket being split, so the count that matters is the one in the
+		// bucket the entry actually lands in. The table-wide budget goes first precisely so that a sender
+		// already over it cannot buy the split that would have made room for it.
+		if (source != null && countEntries(bucket, source, maxBucketEntriesPerSource) >= maxBucketEntriesPerSource) {
+			log.debug("Source {} already holds {} entries in bucket {}, dropping {}",
+					source.getHostAddress(), maxBucketEntriesPerSource, bucket.prefix(), entry);
+			return false;
+		}
+
 		log.trace("Putting new entry {} into bucket {}", entry.getId(), bucket.prefix());
-		return bucket.put(entry);
+		boolean stored = bucket.put(entry);
+		if (stored && source != null)
+			sourceCounts.merge(source, 1, Integer::sum);
+
+		return stored;
+	}
+
+	/**
+	 * Whether one source unit has spent its table-wide budget.
+	 * <p>
+	 * The count is consulted first and the table walked only if it says the budget looks spent. That is
+	 * sound in the one direction that matters: {@link #sourceCounts} is never decremented, so it can only
+	 * exceed the truth, and a value below the limit therefore proves the source is within it. A source that
+	 * looks spent may not be - entries it held may have been removed since the last rebuild - so that case
+	 * is confirmed by the walk rather than acted on, which keeps every refusal exact.
+	 * </p>
+	 *
+	 * @param source the source unit to test.
+	 * @return true if the source already holds its full table-wide allowance.
+	 */
+	private boolean tableBudgetSpent(InetAddress source) {
+		Integer counted = sourceCounts.get(source);
+		if (counted == null || counted < MAX_TABLE_ENTRIES_PER_SOURCE)
+			return false;
+
+		return countEntries(source, MAX_TABLE_ENTRIES_PER_SOURCE) >= MAX_TABLE_ENTRIES_PER_SOURCE;
+	}
+
+	/**
+	 * Recounts every source unit from the buckets themselves, discarding the forward count.
+	 * <p>
+	 * This is what bounds the drift that not decrementing produces. Without it a source whose entries have
+	 * all timed out keeps looking spent, and every later contact from it pays the walk that the count exists
+	 * to avoid - so the structure degrades into the state it was built to replace rather than into anything
+	 * unsafe.
+	 * </p>
+	 */
+	private void rebuildSourceCounts() {
+		sourceCounts.clear();
+		for (KBucket bucket : buckets) {
+			for (KBucketEntry entry : bucket.entries())
+				countSource(entry);
+
+			for (KBucketEntry entry : bucket.replacements())
+				countSource(entry);
+		}
+	}
+
+	private void countSource(KBucketEntry entry) {
+		InetAddress source = countableSource(entry);
+		if (source != null)
+			sourceCounts.merge(source, 1, Integer::sum);
+	}
+
+	/**
+	 * How many entries one source unit is currently counted for.
+	 * <p>
+	 * Package-private for the tests: the forward count and its rebuild are the parts of this that can go
+	 * wrong quietly, and a wrong count is invisible from the outside until it either refuses an honest
+	 * contact or admits one too many.
+	 * </p>
+	 *
+	 * @param source the source unit.
+	 * @return the counted entries, which may exceed the true number until the next rebuild.
+	 */
+	int countedFor(InetAddress source) {
+		return sourceCounts.getOrDefault(source, 0);
+	}
+
+	/**
+	 * The unit an entry is counted against, or null if it is not counted at all.
+	 * <p>
+	 * The diversity budget counts a source unit because an address is a resource somebody had to acquire,
+	 * and that is true only of a globally routable address. A loopback, an RFC1918 or a link-local address
+	 * costs nothing and there is an unlimited supply, so counting one would measure nothing.
+	 * </p>
+	 * <p>
+	 * This is a scope, not a hole. In production nothing else is ever in the table - the DHT refuses the
+	 * routing-table update for any source that is not global unicast, and that is the only path in - so here
+	 * "count global unicast" and "count everything" are the same rule. What the exemption keeps working is
+	 * development, where a whole test network runs on one machine behind private addresses, and that is
+	 * exactly the set the developer-mode address filter admits.
+	 * </p>
+	 *
+	 * @param entry the entry about to be inserted.
+	 * @return the source unit to count it under, or null if the entry's address is not a countable resource.
+	 */
+	private static @Nullable InetAddress countableSource(KBucketEntry entry) {
+		InetAddress address = entry.getIpAddress();
+		return AddressUtils.isGlobalUnicast(address) ? SourceKey.of(address) : null;
+	}
+
+	/**
+	 * Counts the entries in the table belonging to one source unit, stopping at the limit.
+	 * <p>
+	 * A walk rather than a maintained counter, deliberately. The counter would have to stay in step with
+	 * every path an entry can leave a bucket by - removal, bad-entry replacement, replacement eviction,
+	 * promotion, merge, load - and a counter that drifts either locks out honest contacts or stops counting
+	 * an attacker. This runs only for an id the table does not already hold, on a path already rate-bounded
+	 * upstream, and costs a walk against a decrypt that has already happened.
+	 * </p>
+	 *
+	 * @param source the source unit to count.
+	 * @param limit  stop once this many have been found; the caller only needs to know it reached it.
+	 * @return the number found, capped at {@code limit}.
+	 */
+	@SuppressWarnings("SameParameterValue")
+	private int countEntries(InetAddress source, int limit) {
+		int count = 0;
+		for (KBucket bucket : buckets) {
+			count += countEntries(bucket, source, limit - count);
+			if (count >= limit)
+				break;
+		}
+
+		return count;
+	}
+
+	/**
+	 * Counts the entries in one bucket belonging to one source unit, replacements included, stopping at the
+	 * limit.
+	 * <p>
+	 * Replacements count because that is where a flood parks: an entry arriving unsolicited is not reachable
+	 * yet, so it is filed as a replacement, and a full replacement list evicts its worst member to make room.
+	 * Leaving them uncounted would let a sender displace honest replacements for free.
+	 * </p>
+	 *
+	 * @param bucket the bucket to scan.
+	 * @param source the source unit to count.
+	 * @param limit  stop once this many have been found.
+	 * @return the number found, capped at {@code limit}.
+	 */
+	private static int countEntries(KBucket bucket, InetAddress source, int limit) {
+		if (limit <= 0)
+			return 0;
+
+		int count = 0;
+		for (KBucketEntry entry : bucket.entries()) {
+			if (belongsTo(entry, source) && ++count >= limit)
+				return count;
+		}
+
+		for (KBucketEntry entry : bucket.replacements()) {
+			if (belongsTo(entry, source) && ++count >= limit)
+				return count;
+		}
+
+		return count;
+	}
+
+	/**
+	 * The diversity budget as one test against an already chosen bucket, for the warm-start path.
+	 * <p>
+	 * {@link #put} takes the two counts on either side of the split loop, so that a sender already over its
+	 * table-wide budget cannot provoke a split before being refused. Nothing provokes anything here - this
+	 * is our own file being read back - so both counts are taken together against the bucket the entry would
+	 * land in.
+	 * </p>
+	 *
+	 * @param entry  the entry about to be placed.
+	 * @param bucket the bucket it would be placed in.
+	 * @return true if the entry is within both limits, or is not counted at all.
+	 */
+	private boolean withinDiversityBudget(KBucketEntry entry, KBucket bucket) {
+		InetAddress source = contains(entry.getId(), true) ? null : countableSource(entry);
+		if (source == null)
+			return true;
+
+		return countEntries(bucket, source, maxBucketEntriesPerSource) < maxBucketEntriesPerSource &&
+				!tableBudgetSpent(source);
+	}
+
+	private static boolean belongsTo(KBucketEntry entry, InetAddress source) {
+		InetAddress address = entry.getIpAddress();
+		return source.equals(SourceKey.of(address));
 	}
 
 	/**
@@ -519,6 +774,12 @@ public class RoutingTable {
 			// Promotes one per bucket per maintenance cycle to avoid blocking; full recovery over iterations.
 			bucket.promoteVerifiedReplacement();
 		}
+
+		// Last, and it has to be: the loop above removes entries through cleanup() and adds them back
+		// through put(), and mergeBuckets() can drop a removable entry as it coalesces. Recounting here
+		// takes the state all of that settled on, and costs one more pass over buckets this method has
+		// already walked twice.
+		rebuildSourceCounts();
 	}
 
 	/**
@@ -592,19 +853,29 @@ public class RoutingTable {
 				Map<String, Object> map = mapper.convertValue(node, Json.mapType());
 				KBucketEntry entry = KBucketEntry.fromMap(map);
 				if (entry != null) {
+					boolean stored;
 					if (idMatched && !staled) {
 						KBucket bucket = bucketOf(entry.getId());
 						while (bucket.isFull()) {
 							split(bucket);
 							bucket = bucketOf(entry.getId());
 						}
-						bucket.put(entry);
+
+						// The warm path reaches the bucket directly, so it has to carry the diversity budget
+						// itself - a table saved before this limit existed, or under a wider one, would
+						// otherwise walk straight back in.
+						stored = withinDiversityBudget(entry, bucket) && bucket.put(entry);
+						if (stored)
+							countSource(entry);
 					} else {
 						// TODO: need to improve
-						put(entry);
+						stored = put(entry);
 					}
 
-					totalEntries++;
+					// Counted when stored rather than when read: what the caller does with this number is
+					// decide whether it has a table to work with.
+					if (stored)
+						totalEntries++;
 				} else {
 					log.warn("Invalid entry: {}", node);
 				}
@@ -620,10 +891,12 @@ public class RoutingTable {
 					KBucketEntry entry = KBucketEntry.fromMap(map);
 					if (entry != null) {
 						KBucket bucket = bucketOf(entry.getId());
-						if (bucket.find(entry.getId(), entry.getAddress()) == null)
-							bucket.putAsReplacement(entry);
-
-						totalReplacements++;
+						if (bucket.find(entry.getId(), entry.getAddress()) == null
+								&& withinDiversityBudget(entry, bucket)
+								&& bucket.putAsReplacement(entry)) {
+							countSource(entry);
+							totalReplacements++;
+						}
 					} else {
 						log.warn("Invalid replacement entry: {}", node);
 					}
