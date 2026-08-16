@@ -56,7 +56,18 @@ public interface SpamThrottle {
 		return new DisabledSpamThrottle();
 	}
 
-	@Deprecated
+	/**
+	 * Increments the request count for a host address in literal form, and checks if the burst limit is
+	 * reached.
+	 * <p>
+	 * This is the form the packet-receive path uses, and the cheaper of the two: an address arrives from the
+	 * socket as a string, and {@link SourceKey#of(String)} reduces an IPv4 literal to its accountable unit
+	 * without parsing it.
+	 * </p>
+	 *
+	 * @param addr The host address, in literal form, to track.
+	 * @return true if the burst limit is reached or exceeded, false otherwise.
+	 */
 	boolean incrementAndCheck(String addr);
 
 	/**
@@ -104,8 +115,13 @@ public interface SpamThrottle {
 	boolean isLimitReached(InetAddress addr);
 
 	/**
-	 * Decays request counts for all IP addresses based on elapsed time since last decay.
-	 * Removes entries with zero or negative counts after decay.
+	 * Reclaims the entries of sources that have run out of debt.
+	 * <p>
+	 * Decay itself is not something an implementation has to be asked to do: a source's budget refills with
+	 * the passage of time, whether or not anything visits its entry. So this affects only how much the
+	 * throttle is holding, never what it allows, and an implementation is free to do a bounded amount of it
+	 * per call. Callers do not need to invoke it - every counting method already reclaims as it goes.
+	 * </p>
 	 */
 	void decay();
 }

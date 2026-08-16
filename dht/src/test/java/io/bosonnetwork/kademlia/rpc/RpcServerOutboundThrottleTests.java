@@ -195,8 +195,9 @@ public class RpcServerOutboundThrottleTests {
 		});
 
 		vertxContext.runOnContext(unused -> server.start().onSuccess(v -> {
-			// Spend the burst exactly, so the next call is the first one that has to wait.
-			for (int i = 0; i < OUTBOUND_BURST - 1; i++)
+			// Spend the burst exactly, so the next call is the first one that has to wait. The burst is
+			// what the throttle admits, so it takes all of them to spend it.
+			for (int i = 0; i < OUTBOUND_BURST; i++)
 				server.sendCall(callTo(target));
 
 			server.sendCall(parked);
@@ -234,7 +235,7 @@ public class RpcServerOutboundThrottleTests {
 		RpcCall parked = callTo(target);
 
 		vertxContext.runOnContext(unused -> server.start().onSuccess(v -> {
-			for (int i = 0; i < OUTBOUND_BURST - 1; i++)
+			for (int i = 0; i < OUTBOUND_BURST; i++)
 				server.sendCall(callTo(target));
 
 			server.sendCall(parked);
