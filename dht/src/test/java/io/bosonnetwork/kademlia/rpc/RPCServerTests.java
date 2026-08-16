@@ -26,8 +26,10 @@ package io.bosonnetwork.kademlia.rpc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -877,6 +879,62 @@ public class RPCServerTests {
 	 * bootstrap's in-progress flag set, which blocks every later bootstrap for the life of the node.
 	 * </p>
 	 */
+	/**
+	 * A peer named by hostname is still the peer we sent to.
+	 * <p>
+	 * A {@code NodeInfo} built from a name keeps the name, and a response arrives carrying a literal, so
+	 * matching the two with {@code SocketAddress.equals} - which compares the host, not the address -
+	 * answered false for one endpoint. The response was then dropped as an inconsistent source, the call ran
+	 * to timeout, and the peer was reported and demoted for answering from the address we sent to. A
+	 * bootstrap given by name is the ordinary way to configure one, so this was the ordinary case.
+	 * </p>
+	 */
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	void testResponseFromAHostNamedPeerIsMatched(Vertx vertx, VertxTestContext context) throws Exception {
+		// The name has to reach the loopback the responder is bound to, or the test proves nothing.
+		assumeTrue("127.0.0.1".equals(InetAddress.getByName("localhost").getHostAddress()),
+				"localhost does not resolve to 127.0.0.1 on this host");
+
+		Context vertxContext = vertx.getOrCreateContext();
+		CryptoIdentity responderIdentity = new CryptoIdentity();
+
+		RpcServer caller = new RpcServer(new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
+				.setDeveloperMode(false), "127.0.0.1", 39207,
+				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+		RpcServer responder = new RpcServer(new TestKadContext(vertxContext, responderIdentity, Network.IPv4)
+				.setDeveloperMode(false), "127.0.0.1", 39208,
+				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+		responder.setMessageHandler(message -> {
+			if (message.isRequest())
+				responder.sendMessage(Message.pingResponse(message.getTxid())
+						.setRemote(message.getId(), message.getRemoteAddress()));
+		});
+
+		// The peer named rather than addressed - the only difference from every other call in this file.
+		RpcCall call = new RpcCall(NodeInfo.of(responderIdentity.getId(), "localhost", 39208),
+				Message.pingRequest());
+		Promise<RpcCall.State> ended = Promise.promise();
+		call.addListener(new RpcCallListener() {
+			@Override
+			public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+				if (state.isFinal())
+					ended.tryComplete(state);
+			}
+		});
+
+		vertxContext.runOnContext(unused -> responder.start()
+				.compose(v -> caller.start())
+				.compose(v -> caller.sendCall(call))
+				.onFailure(context::failNow));
+
+		ended.future().onComplete(context.succeeding(state -> {
+			context.verify(() -> assertEquals(RpcCall.State.RESPONDED, state,
+					"the answer from a peer we named rather than addressed was not matched to its call"));
+			Future.all(caller.stop(), responder.stop()).onComplete(ar -> context.completeNow());
+		}));
+	}
+
 	@Test
 	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
 	void testStopCancelsPendingCalls(Vertx vertx, VertxTestContext context) {
