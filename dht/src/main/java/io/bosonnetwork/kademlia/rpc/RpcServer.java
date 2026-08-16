@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -471,6 +472,28 @@ public class RpcServer implements Measured {
 	}
 
 	/**
+	 * Whether two messages name the same remote endpoint.
+	 * <p>
+	 * {@code SocketAddress.equals} is not that test: Vert.x keeps both the name an address was built from
+	 * and the literal it resolved to, and compares the former. Two references to one endpoint are therefore
+	 * unequal whenever they were not built the same way - which is the normal case on the response path,
+	 * where one side came off the wire and the other came from configuration.
+	 * </p>
+	 * <p>
+	 * Compared as addresses rather than as strings: the address is a stored field, where the string form is
+	 * built on each call, and comparing bytes is also immune to one IPv6 address having two spellings.
+	 * </p>
+	 *
+	 * @param a the first message.
+	 * @param b the second message.
+	 * @return true if both name the same address and port.
+	 */
+	private static boolean sameEndpoint(Message a, Message b) {
+		return a.getRemotePort() == b.getRemotePort() &&
+				Objects.equals(a.getRemoteIpAddress(), b.getRemoteIpAddress());
+	}
+
+	/**
 	 * Checks if the server is running.
 	 *
 	 * @return true if the server is running, false otherwise
@@ -665,8 +688,17 @@ public class RpcServer implements Measured {
 			metrics.messageReceived(remoteAddress);
 		}
 
+		// The one string the three accountability checks below all count this sender under: the throttle,
+		// the blacklist and the suspicious-node detector. Derived once so they cannot disagree - a ban
+		// written under one spelling and looked up under another is a ban that does nothing.
+		//
+		// The address rather than host(), which is a name when the SocketAddress was built from one: what
+		// a sender had to acquire is the address, and SourceKey reduces a literal and has nothing to say
+		// about a name.
+		String source = remoteAddress.hostAddress();
+
 		// Check inbound throttle
-		if (inboundThrottle.incrementAndCheck(remoteAddress.host())) {
+		if (inboundThrottle.incrementAndCheck(source)) {
 			// DEBUG, this site above all: the throttle exists to make dropping cheap, and a WARN per
 			// dropped packet had the code meant to shed load be the load.
 			log.debug("Throttled a packet from {}", remoteAddress);
@@ -693,7 +725,7 @@ public class RpcServer implements Measured {
 
 		// Extract and validate remote ID
 		Id remoteId = Id.of(buffer.getBytes(0, Id.BYTES));
-		if (blacklist.isBanned(remoteId, remoteAddress.host())) {
+		if (blacklist.isBanned(remoteId, source)) {
 			log.debug("Ignored packet from blacklisted node {}@{}", remoteId, remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
@@ -701,7 +733,7 @@ public class RpcServer implements Measured {
 			}
 			return;
 		}
-		if (suspiciousNodeDetector.isBanned(remoteAddress.host())) {
+		if (suspiciousNodeDetector.isBanned(source)) {
 			log.debug("Ignored packet from suspicious node {}@{}", remoteId, remoteAddress);
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
@@ -780,8 +812,15 @@ public class RpcServer implements Measured {
 				RpcCall call = pendingCalls.get(message.getTxid());
 				if (call != null) {
 					// the message matches transaction ID and origin == destination
-					// we only check the IP address here. the routing table applies more strict checks to also verify a stable port
-					if (remoteAddress.equals(call.getRequest().getRemoteAddress())) {
+					//
+					// Compared on the address and port rather than with SocketAddress.equals, which compares
+					// the *host* - and a SocketAddress remembers the name it was built from. The response
+					// side always carries a literal, having just come off the wire; the request side carries
+					// whatever NodeInfo was given, and NodeInfo.of(id, host, port) keeps a hostname. So for
+					// any peer configured by name - a bootstrap, most obviously - equals() was false for the
+					// same endpoint, and every answer it sent fell through to the branch below: dropped,
+					// timed out, and the peer reported and demoted for answering from the address we sent to.
+					if (sameEndpoint(message, call.getRequest())) {
 						// Solicited traffic is not charged to the unsolicited budget. This packet answers a
 						// call we made, from the address we sent it to, so it is work we asked for - and how
 						// much of it we can ask for is bounded by the outbound throttle, not by this one.
