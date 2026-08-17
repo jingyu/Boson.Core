@@ -269,12 +269,10 @@ public class RpcServer implements Measured {
 	 * @param host                        the host address to bind the server
 	 * @param port                        the port to bind the server
 	 * @param blacklist                   the blacklist for banning malicious nodes
-	 * @param suspiciousNodeDetector      the suspicious node tracker
 	 * @param enableSpamThrottling        whether to enable spam throttling
 	 * @param metrics                     the metrics collector, null to disable metrics
 	 */
-	public RpcServer(KadContext context, String host, int port, Blacklist blacklist,
-					 SuspiciousNodeDetector suspiciousNodeDetector, boolean enableSpamThrottling,
+	public RpcServer(KadContext context, String host, int port, Blacklist blacklist, boolean enableSpamThrottling,
 					 DHTMetrics metrics) {
 		this.context = context;
 		this.network = context.getNetwork();
@@ -284,7 +282,7 @@ public class RpcServer implements Measured {
 		this.blacklist = blacklist;
 		this.metrics = metrics;
 
-		this.suspiciousNodeDetector = suspiciousNodeDetector;
+		this.suspiciousNodeDetector = context.getSuspiciousNodeDetector();
 
 		// Initialize timeout sampler for RTT calculations
 		this.timeoutSampler = new TimeoutSampler(RPC_CALL_TIMEOUT_BIN_SIZE,

@@ -59,7 +59,6 @@ import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Error;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;
-import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.vertx.BosonVerticle;
 
 /**
@@ -110,7 +109,7 @@ public class OversizedMessageTests {
 			super.prepare(vertx, context);
 
 			rpcServer = new RpcServer(new TestKadContext(context, identity, Network.IPv4),
-					host, port, Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+					host, port, Blacklist.empty(), true, null);
 			rpcServer.setMessageHandler(message -> {
 				if (message.isRequest()) {
 					receivedRequests++;

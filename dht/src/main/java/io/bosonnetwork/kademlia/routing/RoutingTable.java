@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.security.SourceKey;
 import io.bosonnetwork.utils.AddressUtils;
 
@@ -67,23 +68,6 @@ import io.bosonnetwork.utils.AddressUtils;
  * caller put each half where it belongs instead of choosing between a blocked event loop and a data race.
  */
 public class RoutingTable {
-	/**
-	 * How many entries one source unit may hold in the whole table.
-	 * <p>
-	 * The table-wide half of the diversity budget, and the half that matters: the bucket an entry lands in
-	 * is chosen by its id, ids are free, so any per-bucket limit alone is multiplied by a bucket count the
-	 * flood itself inflates - every accepted reachable entry can force a split, and every split is more
-	 * room for the same sender.
-	 * </p>
-	 * <p>
-	 * Not derived from k, because this one is about co-location - how many machines a real site puts behind
-	 * one address - which has nothing to do with bucket geometry. Fixed is also the right direction as a
-	 * table grows: eight of a mature table is a shrinking share, and on a young table the per-bucket limit
-	 * binds first, so the two meet with no gap between them.
-	 * </p>
-	 */
-	static final int MAX_TABLE_ENTRIES_PER_SOURCE = 8;
-
 	private final Id localId;
 	private final int k;
 	private final int replacements;
@@ -94,8 +78,8 @@ public class RoutingTable {
 	 * one household /64, two bootstrap servers on one host - and there is no reason for it to grow with the
 	 * bucket, since a larger k already makes two a smaller share. It cannot be flat either: at the smallest
 	 * configurable k, two would be half a bucket. Below k=16 a co-located pair is representable once per
-	 * bucket and reaches {@link #MAX_TABLE_ENTRIES_PER_SOURCE} across distinct buckets instead, which random
-	 * ids give it as soon as the table splits.
+	 * bucket and reaches {@link KadConstants#MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE} across distinct buckets
+	 * instead, which random ids give it as soon as the table splits.
 	 * </p>
 	 */
 	final int maxBucketEntriesPerSource;
@@ -332,7 +316,7 @@ public class RoutingTable {
 
 		if (source != null && tableBudgetSpent(source)) {
 			log.debug("Source {} already holds {} entries, dropping {}",
-					source.getHostAddress(), MAX_TABLE_ENTRIES_PER_SOURCE, entry);
+					source.getHostAddress(), KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, entry);
 			return false;
 		}
 
@@ -377,11 +361,13 @@ public class RoutingTable {
 	 * @return true if the source already holds its full table-wide allowance.
 	 */
 	private boolean tableBudgetSpent(InetAddress source) {
+		int limit = KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE;
+
 		Integer counted = sourceCounts.get(source);
-		if (counted == null || counted < MAX_TABLE_ENTRIES_PER_SOURCE)
+		if (counted == null || counted < limit)
 			return false;
 
-		return countEntries(source, MAX_TABLE_ENTRIES_PER_SOURCE) >= MAX_TABLE_ENTRIES_PER_SOURCE;
+		return countEntries(source, limit) >= limit;
 	}
 
 	/**

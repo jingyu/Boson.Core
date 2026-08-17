@@ -98,8 +98,10 @@ public class RpcServerUnprovenSourceTests {
 		protected void prepare(Vertx vertx, Context context) {
 			super.prepare(vertx, context);
 
-			kadContext = new TestKadContext(context, identity, Network.IPv4).setDeveloperMode(false);
-			rpcServer = new RpcServer(kadContext, localAddr, port, Blacklist.empty(), detector, true, null);
+			kadContext = new TestKadContext(context, identity, Network.IPv4)
+					.setDeveloperMode(false)
+					.setSuspiciousNodeDetector(detector);
+			rpcServer = new RpcServer(kadContext, localAddr, port, Blacklist.empty(), true, null);
 		}
 
 		@Override

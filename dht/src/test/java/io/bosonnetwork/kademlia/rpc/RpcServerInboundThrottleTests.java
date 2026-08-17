@@ -48,7 +48,6 @@ import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;
-import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.vertx.BosonVerticle;
 
@@ -102,8 +101,7 @@ public class RpcServerInboundThrottleTests {
 			super.prepare(vertx, context);
 
 			kadContext = new TestKadContext(context, identity, Network.IPv4).setDeveloperMode(false);
-			rpcServer = new RpcServer(kadContext, localAddr, port, Blacklist.empty(),
-					SuspiciousNodeDetector.disabled(), true, null);
+			rpcServer = new RpcServer(kadContext, localAddr, port, Blacklist.empty(), true, null);
 			rpcServer.setMessageHandler(this::onMessage);
 		}
 

@@ -350,6 +350,10 @@ public class DHT extends BosonVerticle {
 		return sibling;
 	}
 
+	SuspiciousNodeDetector getSuspiciousNodeDetector() {
+		return suspiciousNodeDetector;
+	}
+
 	public void setConnectionStatusListener(DHTConnectionStatusListener listener) {
 		this.connectionStatusListener = listener;
 	}
@@ -402,7 +406,7 @@ public class DHT extends BosonVerticle {
 		}
 
 		return loaded.compose(unused -> {
-			rpcServer = new RpcServer(kadContext, host, port, blacklist, suspiciousNodeDetector, enableSpamThrottling, metrics);
+			rpcServer = new RpcServer(kadContext, host, port, blacklist, enableSpamThrottling, metrics);
 			rpcServer.setMessageHandler(this::onMessage);
 			rpcServer.setCallSentHandler(this::onSend);
 			rpcServer.setCallTimeoutHandler(this::onTimeout);

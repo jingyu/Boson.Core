@@ -50,7 +50,6 @@ import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;
-import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 
 /**
  * What happens to a call after it is admitted: the queue the outbound throttle parks it in, and the budget
@@ -83,8 +82,7 @@ public class RpcServerOutboundThrottleTests {
 		// Developer mode disables both throttles, which is the whole subject here.
 		KadContext kadContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
 				.setDeveloperMode(false);
-		return new RpcServer(kadContext, "127.0.0.1", port,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+		return new RpcServer(kadContext, "127.0.0.1", port, Blacklist.empty(), true, null);
 	}
 
 	/**

@@ -1,14 +1,19 @@
 package io.bosonnetwork.kademlia.impl;
 
+import java.util.Objects;
+
 import io.vertx.core.Context;
 import io.vertx.core.Vertx;
+import org.jspecify.annotations.NonNull;
 
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 
 public class TestKadContext extends KadContext {
 	private final Context vertxContext;
 	private final Identity identity;
 	private final Network network;
+	private SuspiciousNodeDetector suspiciousNodeDetector;
 	private int alpha;
 	private int k;
 	private int replacements;
@@ -21,11 +26,21 @@ public class TestKadContext extends KadContext {
 		this.vertxContext = vertxContext;
 		this.identity = identity;
 		this.network = network;
+		this.suspiciousNodeDetector = SuspiciousNodeDetector.disabled();
 		this.alpha = KadConstants.ALPHA;
 		this.k = KadConstants.K;
 		this.replacements = KadConstants.REPLACEMENTS;
 		this.concurrentTasks = KadConstants.CONCURRENT_TASKS;
 		this.developerMode = true;
+	}
+
+	public SuspiciousNodeDetector getSuspiciousNodeDetector() {
+		return suspiciousNodeDetector;
+	}
+
+	public TestKadContext setSuspiciousNodeDetector(@NonNull SuspiciousNodeDetector suspiciousNodeDetector) {
+		this.suspiciousNodeDetector = Objects.requireNonNull(suspiciousNodeDetector);
+		return this;
 	}
 
 	public TestKadContext setAlpha(int alpha) {
