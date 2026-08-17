@@ -28,6 +28,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.AnnounceFailedException;
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.ConnectionStatus;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
@@ -57,6 +59,7 @@ import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.storage.DataStorage;
+import io.bosonnetwork.kademlia.tasks.AnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
 import io.bosonnetwork.kademlia.tasks.NodeLookupTask;
 import io.bosonnetwork.kademlia.tasks.PeerAnnounceTask;
@@ -2513,13 +2516,41 @@ public class DHT extends BosonVerticle {
 		return promise.future();
 	}
 
-	public Future<Void> storeValue(Value value, int expectedSequenceNumber) {
-		Promise<Void> promise = Promise.promise();
+	/**
+	 * Settles the caller's future from what the announce task actually achieved.
+	 * <p>
+	 * Every route out of an announce arrives here, including cancellation - the task is nested under the
+	 * lookup, so a lookup that is cancelled or that finds nowhere to write cancels the announce, and this
+	 * listener is the only thing that will ever settle the promise. Cancellation therefore has to be a
+	 * failure rather than a silent completion, which is what it used to be.
+	 * </p>
+	 *
+	 * @param promise the caller's promise.
+	 * @param task    the finished announce task.
+	 * @param what    the leading half of the failure message, naming the payload.
+	 */
+	private void completeAnnounce(Promise<AnnounceResult> promise, AnnounceTask<?> task, String what) {
+		AnnounceResult result = task.getResult();
+		if (!result.isFailure()) {
+			// Everything except "asked and refused everywhere" completes, with the detail attached. One
+			// node refusing is one node's claim, and letting it decide the outcome of the whole publish
+			// would be a veto worth more to an attacker than to anyone else. Finding nobody to ask is
+			// not a refusal at all - it is the ordinary state of a node that has not finished
+			// bootstrapping, and the payload is offered again at the next cycle.
+			promise.complete(result);
+			return;
+		}
+
+		promise.fail(new AnnounceFailedException(what + ": " + result, result));
+	}
+
+	public Future<AnnounceResult> storeValue(Value value, int expectedSequenceNumber) {
+		Promise<AnnounceResult> promise = Promise.promise();
 
 		runOnContext(v -> {
 			ValueAnnounceTask announceTask = new ValueAnnounceTask(kadContext, value, expectedSequenceNumber)
 					.setName("Store value: " + value.getId())
-					.addListener(t -> promise.complete());
+					.addListener(t -> completeAnnounce(promise, t, "Value " + value.getId() + " was not stored"));
 
 			NodeLookupTask lookupTask = new NodeLookupTask(kadContext, value.getId())
 					.setWantToken(true)
@@ -2531,8 +2562,12 @@ public class DHT extends BosonVerticle {
 
 						ClosestSet closest = t.getClosestSet();
 						if (closest == null || closest.isEmpty()) {
-							// this should never happen
-							log.error("!!!INTERNAL ERROR: Value announce task not started because the node lookup task got the empty closest nodes.");
+							// Routine, not an invariant violation: a node with a sparse or unreachable
+							// routing table finds nothing to write to, and it used to be told the store
+							// had succeeded. Cancelling reaches the listener above, which fails the
+							// caller.
+							log.debug("Value {} has nowhere to be stored: the lookup found no reachable nodes",
+									value.getId());
 							announceTask.cancel();
 							return;
 						}
@@ -2569,13 +2604,13 @@ public class DHT extends BosonVerticle {
 		return promise.future();
 	}
 
-	public Future<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
-		Promise<Void> promise = Promise.promise();
+	public Future<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
+		Promise<AnnounceResult> promise = Promise.promise();
 
 		runOnContext(v -> {
 			PeerAnnounceTask announceTask = new PeerAnnounceTask(kadContext, peer, expectedSequenceNumber)
 					.setName("Announce peer: " + peer.getId())
-					.addListener(t -> promise.complete());
+					.addListener(t -> completeAnnounce(promise, t, "Peer " + peer.getId() + " was not announced"));
 
 			NodeLookupTask lookupTask = new NodeLookupTask(kadContext, peer.getId())
 					.setWantToken(true)
@@ -2587,8 +2622,9 @@ public class DHT extends BosonVerticle {
 
 						ClosestSet closest = t.getClosestSet();
 						if (closest == null || closest.isEmpty()) {
-							// this should never happen
-							log.error("!!!INTERNAL ERROR: Peer announce task not started because the node lookup task got the empty closest nodes.");
+							// Routine - see storeValue.
+							log.debug("Peer {} has nowhere to be announced: the lookup found no reachable nodes",
+									peer.getId());
 							announceTask.cancel();
 							return;
 						}

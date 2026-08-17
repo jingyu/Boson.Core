@@ -222,7 +222,7 @@ public interface Node extends Identity {
 	 * @param value the {@link Value} to store.
 	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	default CompletableFuture<Void> storeValue(Value value) {
+	default CompletableFuture<AnnounceResult> storeValue(Value value) {
 		return storeValue(value, -1, false);
 	}
 
@@ -233,7 +233,7 @@ public interface Node extends Identity {
 	 * @param expectedSequenceNumber the sequence number expected for this operation
 	 * @return a {@code CompletableFuture} that completes when the operation is finished
 	 */
-	default CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber) {
+	default CompletableFuture<AnnounceResult> storeValue(Value value, int expectedSequenceNumber) {
 		return storeValue(value, expectedSequenceNumber, false);
 	}
 
@@ -244,7 +244,7 @@ public interface Node extends Identity {
 	 * @param persistent  {@code true} if the value should be stored persistently, {@code false} otherwise.
 	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	default CompletableFuture<Void> storeValue(Value value, boolean persistent) {
+	default CompletableFuture<AnnounceResult> storeValue(Value value, boolean persistent) {
 		return storeValue(value, -1, persistent);
 	}
 
@@ -257,7 +257,7 @@ public interface Node extends Identity {
 	 * @param persistent             determines whether the value should be stored persistently
 	 * @return a {@link CompletableFuture} representing the completion of the operation.
 	 */
-	CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent);
+	CompletableFuture<AnnounceResult> storeValue(Value value, int expectedSequenceNumber, boolean persistent);
 
 	/**
 	 * Finds a peer in the network by ID using the default lookup option.
@@ -328,7 +328,7 @@ public interface Node extends Identity {
 	 * @param peer the {@link PeerInfo} to announce
 	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
-	default CompletableFuture<Void> announcePeer(PeerInfo peer) {
+	default CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer) {
 		return announcePeer(peer, -1, false);
 	}
 
@@ -340,7 +340,7 @@ public interface Node extends Identity {
 	 *                               use -1 if no specific sequence number is expected
 	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
-	default CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
+	default CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber) {
 		return announcePeer(peer, expectedSequenceNumber, false);
 	}
 
@@ -351,7 +351,7 @@ public interface Node extends Identity {
 	 * @param persistent whether to announce persistently
 	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
-	default CompletableFuture<Void> announcePeer(PeerInfo peer, boolean persistent) {
+	default CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer, boolean persistent) {
 		return announcePeer(peer, -1, persistent);
 	}
 
@@ -364,7 +364,7 @@ public interface Node extends Identity {
 	 * @param persistent             whether to announce persistently
 	 * @return a {@link CompletableFuture} representing the completion of the operation
 	 */
-	CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent);
+	CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent);
 
 	/**
 	 * Gets the value associated with the given ID from the node's local storage.

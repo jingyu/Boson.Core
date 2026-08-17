@@ -30,6 +30,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.bosonnetwork.AnnounceFailedException;
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.ConnectionStatus;
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.CryptoContext;
@@ -794,11 +796,11 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
+	public ContextualFuture<AnnounceResult> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(value, "Invalid value");
 		checkRunning();
 
-		Promise<Void> promise = Promise.promise();
+		Promise<AnnounceResult> promise = Promise.promise();
 
 		// The atomic validate-and-store, not a check followed by a separate write. The checks are the
 		// same three this method used to run inline - mutability, sequence number, ownership - but run
@@ -812,15 +814,45 @@ public class KadNode extends BosonVerticle implements Node {
 		runOnContext(na -> storage.putValue(value, expectedSequenceNumber, persistent, true)
 				.onFailure(cause -> log.warn("Rejecting local store of value {}: {}", value.getId(), cause.getMessage()))
 				.compose(v -> doStoreValue(value, expectedSequenceNumber))
-				.compose(v -> storage.updateValueAnnouncedTime(value.getId()))
-				.<Void>mapEmpty()
+				.compose(result -> announced(result, "store value " + value.getId())
+						? storage.updateValueAnnouncedTime(value.getId()).map(result)
+						: Future.succeededFuture(result))
 				.onComplete(promise)
 		);
 
 		return ContextualFuture.of(promise.future());
 	}
 
-	private Future<Void> doStoreValue(Value value, int expectedSequenceNumber) {
+	/**
+	 * Whether a publish put the payload on the network, warning if it did not.
+	 * <p>
+	 * This gates the announced timestamp, and the distinction it draws is the one the re-announce cycle
+	 * runs on. {@code persistentAnnounce} selects by that timestamp, so moving it forward means "this is
+	 * published, leave it alone until the next window". A publish that found nobody to ask completes
+	 * successfully - it is the ordinary state of a node that has not finished bootstrapping - but it put
+	 * the payload nowhere, and stamping it as announced would hide it from the very cycle meant to try
+	 * again, for a full window. Success of the operation and success of the publication are different
+	 * questions, and only the second one belongs here.
+	 * </p>
+	 * <p>
+	 * A publish that reached nobody is logged at WARN even though it is not an error: on a node with
+	 * peers it should not happen, and it is invisible to a caller that only awaits the future.
+	 * </p>
+	 *
+	 * @param result the publish outcome.
+	 * @param what   the operation and payload, for the log line.
+	 * @return true if at least one node took it.
+	 */
+	private boolean announced(AnnounceResult result, String what) {
+		if (result.isAnnounced())
+			return true;
+
+		log.warn("Could not {}: no node on the network took it ({}). It is held locally and will be "
+				+ "offered again if it is persistent.", what, result.status());
+		return false;
+	}
+
+	private Future<AnnounceResult> doStoreValue(Value value, int expectedSequenceNumber) {
 		if (dht4 == null && dht6 == null)
 			return Future.failedFuture(new IllegalStateException("No DHT available"));
 
@@ -828,10 +860,53 @@ public class KadNode extends BosonVerticle implements Node {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.storeValue(value, expectedSequenceNumber);
 		} else {
-			Future<Void> future4 = dht4.storeValue(value, expectedSequenceNumber);
-			Future<Void> future6 = dht6.storeValue(value, expectedSequenceNumber);
-			return Future.all(future4, future6).mapEmpty();
+			return mergeFamilies("storeValue", value.getId(),
+					dht4.storeValue(value, expectedSequenceNumber),
+					dht6.storeValue(value, expectedSequenceNumber));
 		}
+	}
+
+	/**
+	 * Combines a publish over both address families into one result.
+	 * <p>
+	 * The families are separate networks with separate routing tables, so they reach different nodes and
+	 * the union is what the caller asked for. Recomputing the aggregate over that union is what makes
+	 * "IPv6 reached nobody" a partial success rather than a failure - which matters because a dual-stack
+	 * node whose IPv6 has no reachable peers is an ordinary deployment, not a broken one.
+	 * </p>
+	 * <p>
+	 * A family whose future failed still carries a result on its exception, and it is merged in: those
+	 * nodes were asked and their answers belong in the total. Only a failure with nothing attached - the
+	 * DHT was not running - has nothing to contribute.
+	 * </p>
+	 *
+	 * @param operation the operation name, for the log line.
+	 * @param target    the payload id, for the log line.
+	 * @param future4   the IPv4 outcome.
+	 * @param future6   the IPv6 outcome.
+	 * @return the merged result, failing only if neither family reached anybody.
+	 */
+	private static Future<AnnounceResult> mergeFamilies(String operation, Object target,
+			Future<AnnounceResult> future4, Future<AnnounceResult> future6) {
+		return Future.join(future4, future6).transform(ar -> {
+			logPartialFailure(operation, target, future4, future6);
+
+			AnnounceResult merged = AnnounceResult.merge(resultOf(future4), resultOf(future6));
+			if (!merged.isFailure())
+				return Future.succeededFuture(merged);
+
+			return Future.failedFuture(new AnnounceFailedException(
+					operation + " " + target + " reached no node: " + merged, merged));
+		});
+	}
+
+	/** The result a family produced, whether it succeeded or failed carrying one. */
+	private static AnnounceResult resultOf(Future<AnnounceResult> future) {
+		if (future.succeeded())
+			return future.result();
+
+		AnnounceResult result = future.cause() instanceof AnnounceFailedException afe ? afe.getResult() : null;
+		return result != null ? result : AnnounceResult.of(List.of());
 	}
 
 	@Override
@@ -919,25 +994,27 @@ public class KadNode extends BosonVerticle implements Node {
 	}
 
 	@Override
-	public ContextualFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
+	public ContextualFuture<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
 		Objects.requireNonNull(peer, "Invalid value");
 		checkRunning();
 
-		Promise<Void> promise = Promise.promise();
+		Promise<AnnounceResult> promise = Promise.promise();
 
 		// Atomic validate-and-store, for the reasons given on storeValue above.
 		runOnContext(na -> storage.putPeer(peer, expectedSequenceNumber, persistent, true)
 				.onFailure(cause -> log.warn("Rejecting local announce of peer {}: {}", peer.getId(), cause.getMessage()))
 				.compose(v -> doAnnouncePeer(peer, expectedSequenceNumber))
-				.compose(v -> storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint()))
-				.<Void>mapEmpty()
+				// Announced time moves only where something was published - see storeValue.
+				.compose(result -> announced(result, "announce peer " + peer.getId())
+						? storage.updatePeerAnnouncedTime(peer.getId(), peer.getFingerprint()).map(result)
+						: Future.succeededFuture(result))
 				.onComplete(promise)
 		);
 
 		return ContextualFuture.of(promise.future());
 	}
 
-	private Future<Void> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
+	private Future<AnnounceResult> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
 		if (dht4 == null && dht6 == null)
 			return Future.failedFuture(new IllegalStateException("No DHT available"));
 
@@ -945,9 +1022,9 @@ public class KadNode extends BosonVerticle implements Node {
 			DHT dht = dht4 != null ? dht4 : dht6;
 			return dht.announcePeer(peer, expectedSequenceNumber);
 		} else {
-			Future<Void> future4 = dht4.announcePeer(peer, expectedSequenceNumber);
-			Future<Void> future6 = dht6.announcePeer(peer, expectedSequenceNumber);
-			return Future.all(future4, future6).mapEmpty();
+			return mergeFamilies("announcePeer", peer.getId(),
+					dht4.announcePeer(peer, expectedSequenceNumber),
+					dht6.announcePeer(peer, expectedSequenceNumber));
 		}
 	}
 
