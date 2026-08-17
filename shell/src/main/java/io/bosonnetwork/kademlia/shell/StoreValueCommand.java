@@ -30,6 +30,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Node;
 import io.bosonnetwork.Value;
@@ -119,11 +120,22 @@ public class StoreValueCommand implements Callable<Integer> {
 			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
 					.orElseThrow(() -> new IllegalStateException("Node not running"));
 			ContextualFuture.of(storage.putValue(value, persistent)).get();
-		} else {
-			Main.getBosonNode().storeValue(value, persistent).get();
+			System.out.println("Value " + value.getId() + " stored locally.");
+			return 0;
 		}
 
-		System.out.println("Value " + value.getId() + " stored.");
+		AnnounceResult result = Main.getBosonNode().storeValue(value, persistent).get();
+		System.out.println("Value " + value.getId() + " stored on " + result.acknowledged() +
+				" of " + result.targets().size() + " nodes (" + result.status() + ").");
+
+		// Named individually rather than counted: a node that took a token and then refused is worth
+		// looking at, and what it claimed is the only clue to why.
+		for (AnnounceResult.Target t : result.targets()) {
+			if (!t.isAcknowledged())
+				System.out.println("  " + t.nodeId() + ": " + t.outcome() +
+						(t.cause() != null ? " - " + t.cause().getMessage() : ""));
+		}
+
 		return 0;
 	}
 }

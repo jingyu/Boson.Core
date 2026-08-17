@@ -45,6 +45,7 @@ import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 
 import io.bosonnetwork.ConnectionStatusListener;
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.LookupOption;
 import io.bosonnetwork.Node;
@@ -398,7 +399,7 @@ public class NodeAsyncTests {
 			peers.add(p);
 
 			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
-			return ((ContextualFuture<Void>)announcer.announcePeer(p)).thenCompose(v -> {
+			return ((ContextualFuture<AnnounceResult>)announcer.announcePeer(p)).thenCompose(v -> {
 				System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
 
 				return executeSequentially(testNodes, node -> {
@@ -420,7 +421,7 @@ public class NodeAsyncTests {
 				final PeerInfo p = peers.get(index).update().node(announcer).endpoint(faker.internet().url()).build();
 
 				System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
-				return ((ContextualFuture<Void>) announcer.announcePeer(p)).thenCompose(v -> {
+				return ((ContextualFuture<AnnounceResult>) announcer.announcePeer(p)).thenCompose(v -> {
 					System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
 
 					return executeSequentially(testNodes, node -> {
@@ -447,7 +448,7 @@ public class NodeAsyncTests {
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 
-			return ((ContextualFuture<Void>) announcer.storeValue(v)).thenCompose(na -> {
+			return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(na -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
@@ -476,7 +477,7 @@ public class NodeAsyncTests {
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
-			return ((ContextualFuture<Void>)announcer.storeValue(v)).thenCompose(na -> {
+			return ((ContextualFuture<AnnounceResult>)announcer.storeValue(v)).thenCompose(na -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
@@ -507,7 +508,7 @@ public class NodeAsyncTests {
 				}
 
 				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
-				return ((ContextualFuture<Void>) announcer.storeValue(v)).thenCompose(unused1 -> {
+				return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused1 -> {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
@@ -543,7 +544,7 @@ public class NodeAsyncTests {
 			values.add(v);
 
 			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
-			return ((ContextualFuture<Void>) announcer.storeValue(v)).thenCompose(unused -> {
+			return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused -> {
 				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
 					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
@@ -579,7 +580,7 @@ public class NodeAsyncTests {
 				}
 
 				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
-				return ((ContextualFuture<Void>) announcer.storeValue(v)).thenCompose(unused1 -> {
+				return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused1 -> {
 					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
 						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());

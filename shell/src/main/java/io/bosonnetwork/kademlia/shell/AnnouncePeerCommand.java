@@ -29,6 +29,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.json.Json;
@@ -96,16 +97,26 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 			pb.extra(extraData);
 		PeerInfo peer = pb.build();
 
+		System.out.println("Peer " + peer.getId() + " private key: " + Hex.encode(peer.getPrivateKey()));
+
 		if (localOnly) {
 			DataStorage storage = Main.getBosonNode().unwrap(DataStorage.class)
 					.orElseThrow(() -> new IllegalStateException("Node not running"));
 			ContextualFuture.of(storage.putPeer(peer)).get();
-		} else {
-			Main.getBosonNode().announcePeer(peer, persistent).get();
+			System.out.println("Peer " + peer.getId() + " announced locally.");
+			return 0;
 		}
 
-		System.out.println("Peer " + peer.getId() + " announced with private key " +
-				Hex.encode(peer.getPrivateKey()));
+		AnnounceResult result = Main.getBosonNode().announcePeer(peer, persistent).get();
+		System.out.println("Peer " + peer.getId() + " announced to " + result.acknowledged() +
+				" of " + result.targets().size() + " nodes (" + result.status() + ").");
+
+		// Named individually rather than counted - see StoreValueCommand.
+		for (AnnounceResult.Target target : result.targets()) {
+			if (!target.isAcknowledged())
+				System.out.println("  " + target.nodeId() + ": " + target.outcome() +
+						(target.cause() != null ? " - " + target.cause().getMessage() : ""));
+		}
 
 		return 0;
 	}

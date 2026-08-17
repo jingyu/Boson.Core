@@ -98,8 +98,12 @@ class DHTRegistry implements Registry {
 				.build();
 
 		log.debug("Registering card {} ...", card.getId());
-		// Store the value in the DHT node, forcing an update
-		return node.storeValue(value, true);
+		// Store the value in the DHT node, forcing an update.
+		//
+		// The per-node detail of the store is dropped rather than widening Registry's contract: which
+		// DHT nodes took a card is not something a registry caller can act on, and a store that reached
+		// nobody still fails the future, so the outcome that matters still arrives.
+		return node.storeValue(value, true).thenAccept(result -> { });
 	}
 
 	/**

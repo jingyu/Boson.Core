@@ -23,14 +23,9 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.stream.Collectors;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
@@ -39,16 +34,12 @@ import io.bosonnetwork.kademlia.protocol.Message;
  * A task for performing a Kademlia peer announcement to advertise a peer to the closest nodes
  * to a peer ID, typically used in BitTorrent-style DHTs to announce peer availability.
  * This task issues {@code ANNOUNCE_PEER} RPCs to nodes from a provided {@link ClosestSet},
- * typically obtained from a {@link NodeLookupTask} with tokens. It extends {@link Task}
- * to leverage its RPC handling in a single-threaded Vert.x event loop.
+ * typically obtained from a {@link NodeLookupTask} with tokens. It extends {@link AnnounceTask}
+ * to leverage its RPC handling and outcome accounting in a single-threaded Vert.x event loop.
  */
-public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
-	/** Queue of nodes to send ANNOUNCE_PEER RPCs to. */
-	private final Deque<CandidateNode> todo;
+public class PeerAnnounceTask extends AnnounceTask<PeerAnnounceTask> {
 	/** The peer information to announce. */
 	private final PeerInfo peer;
-	/** The expected sequence number for peer; -1 disables the check. */
-	private final int expectedSequenceNumber;
 
 	private static final Logger log = LoggerFactory.getLogger(PeerAnnounceTask.class);
 
@@ -60,77 +51,29 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 	 * @param expectedSequenceNumber the expected sequence number for the peer; -1 to disable
 	 */
 	public PeerAnnounceTask(KadContext context, PeerInfo peer, int expectedSequenceNumber) {
-		super(context);
+		super(context, expectedSequenceNumber);
 		this.peer = peer;
-		this.expectedSequenceNumber = expectedSequenceNumber;
-		this.todo = new ArrayDeque<>();
 	}
 
 	/**
-	 * Sets the closest nodes to the peer ID to announce to, typically from a {@link NodeLookupTask}.
-	 * Filters out nodes with invalid tokens or ineligible addresses.
+	 * Builds the ANNOUNCE_PEER request for one node.
 	 *
-	 * @param closest the set of closest nodes
-	 * @return this task for method chaining
-	 */
-	public PeerAnnounceTask closest(ClosestSet closest) {
-		this.todo.addAll(closest.entries());
-		log.debug("{}#{} added {} eligible nodes to announce queue", getName(), getId(), closest.size());
-		return this;
-	}
-
-	/**
-	 * Performs one iteration of the task, sending ANNOUNCE_PEER RPCs to nodes in the queue.
+	 * @param cn the node to announce to
+	 * @return the request message
 	 */
 	@Override
-	protected void iterate() {
-		log.trace("{}#{} todo.size={}", getName(), getId(), todo.size());
-		while (!todo.isEmpty() && canDoRequest()) {
-			CandidateNode cn = todo.peekFirst();
-			if (cn == null) {
-				log.warn("{}#{} unexpected null candidate in non-empty queue", getName(), getId());
-				continue;
-			}
-
-			if (!cn.hasToken()) {
-				log.warn("{}#{} skipping candidate {} due to missing token", getName(), getId(), cn.getId());
-				todo.remove(cn);
-				continue;
-			}
-
-			log.debug("{}#{} sending ANNOUNCE_PEER RPC to {}", getName(), getId(), cn.getId());
-			Message request = Message.announcePeerRequest(peer, cn.getToken(), expectedSequenceNumber);
-			sendCall(cn, request, c -> todo.remove(cn));
-		}
+	protected Message createRequest(CandidateNode cn) {
+		return Message.announcePeerRequest(peer, cn.getToken(), expectedSequenceNumber);
 	}
 
 	/**
-	 * Checks if the task is complete, based on an empty queue and no pending RPCs.
+	 * Returns the RPC name for log lines.
 	 *
-	 * @return true if the task is done, false otherwise
+	 * @return the method name
 	 */
 	@Override
-	protected boolean isDone() {
-		return todo.isEmpty() && super.isDone();
-	}
-
-	/**
-	 * Returns a detailed string representation of the task's state.
-	 *
-	 * @return the status string
-	 */
-	@Override
-	protected String getStatus() {
-		StringBuilder status = new StringBuilder();
-
-		status.append(this).append('\n');
-		status.append("todo: \n");
-		if (!todo.isEmpty())
-			status.append(todo.stream().map(NodeInfo::toString).collect(Collectors.joining("\n    ", "    ", "\n")));
-		else
-			status.append("    <empty>\n");
-
-		return status.toString();
+	protected String getMethodName() {
+		return "ANNOUNCE_PEER";
 	}
 
 	/**

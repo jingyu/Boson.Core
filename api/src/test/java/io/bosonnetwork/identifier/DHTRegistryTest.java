@@ -23,6 +23,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.CryptoContext;
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.LookupOption;
@@ -146,7 +147,7 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Void> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
+			public CompletableFuture<AnnounceResult> storeValue(Value value, int expectedSequenceNumber, boolean persistent) {
 				values.compute(value.getId(), (k, v) -> {
 					if (v != null) {
 						if (v.isMutable() && value.getSequenceNumber() < v.getSequenceNumber())
@@ -158,7 +159,9 @@ public class DHTRegistryTest {
 					}
 				});
 
-				return CompletableFuture.completedFuture(null);
+				// One acknowledgement: this stub is standing in for a network that took the value.
+				return CompletableFuture.completedFuture(AnnounceResult.of(List.of(
+						new AnnounceResult.Target(Id.random(), AnnounceResult.Outcome.ACKNOWLEDGED, null))));
 			}
 
 			@Override
@@ -167,7 +170,7 @@ public class DHTRegistryTest {
 			}
 
 			@Override
-			public CompletableFuture<Void> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
+			public CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent) {
 				return ContextualFuture.failedFuture(new UnsupportedOperationException());
 			}
 
