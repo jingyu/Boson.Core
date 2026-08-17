@@ -33,7 +33,6 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
-import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.routing.KClosestNodes;
@@ -222,11 +221,9 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 		// Known limitation (not a correctness issue): nodes of the sibling protocol that a dual-stack peer
 		// may also return are not cross-forwarded to the sibling DHT instance. Cross-pollinating v4/v6
 		// discovery between sibling instances is a future efficiency optimization.
-		List<NodeInfo> nodes = response.<FindNodeResponse>getBody().getNodes(getContext().getNetwork());
-		if (nodes.isEmpty()) {
-			log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
+		List<NodeInfo> nodes = acceptResponse(response);
+		if (nodes.isEmpty())
 			return;
-		}
 
 		log.debug("{}#{} adding {} candidates from response by {}", getName(), getId(), nodes.size(), call.getTargetId());
 		addCandidates(nodes);

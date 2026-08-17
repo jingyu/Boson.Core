@@ -36,6 +36,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
+import io.bosonnetwork.kademlia.protocol.LookupResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.utils.AddressUtils;
@@ -220,6 +221,80 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	}
 
 	/**
+	 * Reads the nodes a lookup response offers, taking at most as many as one answer is allowed to
+	 * contribute.
+	 * <p>
+	 * <b>What this is for.</b> Nothing on the receive side used to bound this. The sender chose how many
+	 * nodes to send and every one of them went into the candidate queue, so a single answer whose ids
+	 * were all closer to the target than the incumbents evicted the entire queue - {@link
+	 * ClosestCandidates} prunes to the closest {@code capacity}, and "closest" was whatever the answer
+	 * said it was. One datagram was enough to decide where a lookup went.
+	 * </p>
+	 * <p>
+	 * <b>The quota is the tighter of two ceilings.</b> {@link KadConstants#MAX_NODES_PER_RESPONSE} is
+	 * what a response can carry; half the candidate queue is what one answer may claim of it. Which one
+	 * binds depends on k: above k=10 the transport ceiling is already less than half the queue and the
+	 * share never applies, and below it the share does - at the minimum k=4 the queue holds 12 and the
+	 * transport ceiling alone would let one answer take all of them. Reserving half is what keeps an
+	 * answer from displacing everything already queued.
+	 * </p>
+	 * <p>
+	 * <b>Trimming keeps the closest, which is neutral rather than generous.</b> {@code
+	 * ClosestCandidates} prunes to the closest anyway, so these are exactly the nodes that would have
+	 * survived insertion. The quota changes how many of them there are, not which - which is the point:
+	 * an attacker grinds ids closer than any honest node, so any rule that tried to be clever about
+	 * <em>which</em> to keep would be choosing between nodes it cannot tell apart.
+	 * </p>
+	 * <p>
+	 * <b>Why an over-ceiling response is dropped whole and its sender is not charged.</b> Dropping is a
+	 * decision about our own cost, not a verdict on the sender: past the ceiling there is no point
+	 * sorting a list this large to keep a handful of it, so the cheap exit comes first. It is
+	 * deliberately not reported to {@link
+	 * io.bosonnetwork.kademlia.security.SuspiciousNodeDetector#misbehaved}, even though the sender is
+	 * provably the node we asked. That entry point is the one that can earn a full ban, and it is
+	 * reserved for things no correct implementation can do - answering with the wrong method, or with a
+	 * different id than the call was addressed to. A large node count is not one of them: the ceiling is
+	 * this implementation's own send-side policy for staying inside a datagram, not a protocol rule, so
+	 * a peer that ships a larger one is interoperating correctly and banning it would partition us from
+	 * that implementation. Bounding what we accept is the right response to a number we did not choose;
+	 * punishing it is not.
+	 * </p>
+	 * <p>
+	 * <b>This does not bound one sender across a lookup.</b> It limits a single answer. A node that
+	 * answers repeatedly gets the quota each time, and the nodes it supplies are queried first precisely
+	 * because they are closest - so the reserved half refills from a head that sender already owns.
+	 * Closing that needs per-source accounting over the whole lookup, which this is not.
+	 * </p>
+	 *
+	 * @param response the lookup response to read.
+	 * @return the nodes to offer {@link #addCandidates}, empty if there are none to take.
+	 */
+	protected List<NodeInfo> acceptResponse(Message response) {
+		List<NodeInfo> nodes = response.<LookupResponse>getBody().getNodes(getContext().getNetwork());
+		if (nodes.isEmpty()) {
+			getLogger().debug("{}#{} empty node list in response from {}", getName(), getId(), response.getId());
+			return List.of();
+		}
+
+		if (nodes.size() > KadConstants.MAX_NODES_PER_RESPONSE) {
+			getLogger().debug("{}#{} dropping response carrying {} nodes from {}, over the {} we are willing to read",
+					getName(), getId(), nodes.size(), response.getId(), KadConstants.MAX_NODES_PER_RESPONSE);
+			return List.of();
+		}
+
+		int maxAccepted = Math.min(KadConstants.MAX_NODES_PER_RESPONSE, candidateCapacity(getContext().getK()) / 2);
+		if (nodes.size() <= maxAccepted)
+			return nodes;
+
+		getLogger().debug("{}#{} taking the {} closest of {} nodes offered by {}",
+				getName(), getId(), maxAccepted, nodes.size(), response.getId());
+		return nodes.stream()
+				.sorted((a, b) -> getTarget().threeWayCompare(a.getId(), b.getId()))
+				.limit(maxAccepted)
+				.toList();
+	}
+
+	/**
 	 * Removes a candidate node from the queue by its ID.
 	 *
 	 * @param id the node ID
@@ -396,7 +471,7 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	}
 
 	/**
-	 * Returns a detailed string representation of the task’s state, including the closest nodes and candidates.
+	 * Returns a detailed string representation of the task's state, including the closest nodes and candidates.
 	 *
 	 * @return the status string
 	 */

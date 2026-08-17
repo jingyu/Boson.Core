@@ -139,11 +139,9 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 				}
 			}
 		} else {
-			List<NodeInfo> nodes = response.<FindValueResponse>getBody().getNodes(getContext().getNetwork());
-			if (nodes.isEmpty()) {
-				log.debug("{}#{} empty node list in response from {}", getName(), getId(), call.getTargetId());
+			List<NodeInfo> nodes = acceptResponse(response);
+			if (nodes.isEmpty())
 				return;
-			}
 
 			// TODO: Check for sibling DHT4 (IPv4) or DHT6 (IPv6) network and forward nodes matching the sibling's protocol
 			/*/
