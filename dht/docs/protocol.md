@@ -129,6 +129,64 @@ Tokens can be acquired from:
 
 ---
 
+## Message Limits
+
+The limits in this section are **normative**. Each one is decidable from a single message, using nothing but the bytes just parsed - no knowledge of the sender's routing table, configuration, or history. That is what makes them enforceable: a receiver can conclude that a sender violated one, rather than guess.
+
+A sender **MUST NOT** emit a message that exceeds any of them. A receiver **MAY** treat a violation as misbehavior by the sender, because no conforming implementation can produce one.
+
+| Limit | Value | Applies to |
+| :--- | :--- | :--- |
+| Maximum UDP payload | 1400 bytes (IPv4) / 1200 bytes (IPv6) | Every message |
+| Minimum message size | 10 bytes | Every message |
+| Node entries per address family | 16 | `n4`, `n6` in any response |
+| Node entries per source unit | 8 | `n4`, `n6` in any response |
+| Peer entries per response | 8 | `p` in a `FIND_PEER` response |
+
+### Source units
+
+Several limits count *sources* rather than addresses, because an address is only a meaningful unit of accountability if the sender had to acquire it. A single IPv4 address is such a unit. A single IPv6 address is not: the smallest allocation an IPv6 subscriber or VPS tenant receives is a routed `/64`, which is 1.8x10^19 addresses the holder genuinely receives at, so counting per 128-bit address would give one sender an unlimited supply of fresh budgets.
+
+A **source unit** is therefore:
+
+- **IPv4**: the full 32-bit address.
+- **IPv6**: the `/64` prefix - the leading 64 bits, with the remainder zeroed.
+- **IPv4-mapped IPv6** (`::ffff:0:0/96`): treated as the IPv4 address it carries, never masked to a `/64`.
+
+This definition is part of the protocol and not an implementation detail. Two implementations that grouped IPv6 differently - one per address, one per `/64` - would each read conforming responses from the other as violations.
+
+### Node entries
+
+A response carrying node entries **MUST NOT** include more than **16** entries per address family, and **MUST NOT** include more than **8** entries whose addresses fall in one source unit.
+
+The count limit bounds the datagram. The source limit bounds something the count cannot: node IDs are free to generate, so sixteen distinct IDs may all sit behind one machine, and without this a single sender could supply an entire lookup's worth of candidates.
+
+A receiver **MUST NOT** use any node entry from a response that violates either limit. Rejecting the message whole rather than trimming it to the limit is required so that violation is not a cheap way to have some part of an oversized list accepted.
+
+Only globally routable unicast addresses are counted against the source limit. Loopback, link-local and private-range addresses are free to obtain and so measure nothing; a receiver ignores them for this purpose (they are subject to its own admission policy instead).
+
+### Peer entries
+
+A `FIND_PEER` response **MUST NOT** carry more than **8** peer entries, whatever count the request asked for in `e`. Unlike node entries, a peer entry is variable-length - the endpoint URI and `ex` are unbounded in principle - so this count alone does not bound the response size; the datagram limit above governs, and a responder returns fewer entries when they would not fit.
+
+A receiver **MAY** discard entries beyond the limit rather than rejecting the message.
+
+### What is not protocol
+
+Receivers apply their own acceptance policies on top of these limits, and senders **MUST NOT** infer anything from them:
+
+- **A receiver may use fewer entries than it was sent.** It is free to accept only a share of any one response - for example to stop a single answer from displacing everything it already knows. Being within the limits does not mean every entry is used.
+- **`k` is a local parameter.** It is not negotiated, not carried on the wire, and a sender cannot know the receiver's value.
+- **Routing table admission is local and unobservable.** How a node decides what to keep, including any diversity budget it enforces on its own table, is its own affair. Only what a node *says* is constrained here.
+
+These are deliberately excluded: a rule a receiver cannot verify from the message is a rule that cannot be enforced without accusing honest peers.
+
+### Applicability
+
+These limits are stated as of Boson 3.1. Implementations predating this document may exceed them while otherwise interoperating correctly. A receiver that acts on violations **SHOULD** do so through a mechanism that tolerates them occasionally - rate-limited, time-bounded suppression - rather than permanent exclusion.
+
+---
+
 ## RPC Methods
 
 ### PING (1)
@@ -153,8 +211,8 @@ Iterative lookup returning the K closest nodes to a target ID.
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | No | Up to K closest IPv4 nodes. Omitted if empty. |
-| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | No | Up to K closest IPv6 nodes. Omitted if empty. |
+| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | No | Closest IPv4 nodes, bounded by [Message Limits](#message-limits). Omitted if empty. |
+| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | No | Closest IPv6 nodes, bounded by [Message Limits](#message-limits). Omitted if empty. |
 | `tok` | Token | `Number` | No | Write token. Included only when `w` bit 2 was set. |
 
 ---
@@ -176,8 +234,8 @@ When the value is **found**, the response contains value fields. When the value 
 
 | Key | Name | Type | Condition | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | Value not found | Closest IPv4 nodes. |
-| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | Value not found | Closest IPv6 nodes. |
+| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | Value not found | Closest IPv4 nodes, bounded by [Message Limits](#message-limits). |
+| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | Value not found | Closest IPv6 nodes, bounded by [Message Limits](#message-limits). |
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
 | `n` | Nonce | `Binary` | Encrypted | 24-byte CryptoBox nonce. |
@@ -220,15 +278,15 @@ Discovers service endpoints registered under a service ID. Returns matching peer
 | `t` | Target | `Id` | Yes | Service identifier. |
 | `w` | Want | `Number` | Yes | Same bitmask as `FIND_NODE`. |
 | `cas` | Expected Seq | `Number` | No | If present, only return peers if their stored `seq` is greater than this number. |
-| `e` | Count | `Number` | No | Desired number of peer results. |
+| `e` | Count | `Number` | No | Desired number of peer results. The responder returns at most 8 whatever this asks for. |
 
 **Response (`r`):**
 
 | Key | Name | Type | Condition | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | Peers not found | Closest IPv4 nodes. |
-| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | Peers not found | Closest IPv6 nodes. |
-| `p` | Peers | `Array<PeerInfo>` | Peers found | List of matching service peer records. |
+| `n4` | Nodes (IPv4) | `Array<NodeInfo>` | Peers not found | Closest IPv4 nodes, bounded by [Message Limits](#message-limits). |
+| `n6` | Nodes (IPv6) | `Array<NodeInfo>` | Peers not found | Closest IPv6 nodes, bounded by [Message Limits](#message-limits). |
+| `p` | Peers | `Array<PeerInfo>` | Peers found | Matching service peer records, at most 8; see [Message Limits](#message-limits). |
 
 ---
 
