@@ -261,7 +261,7 @@ public class SuspiciousNodeDetectorTests {
 	@Test
 	@Timeout(value = 30, unit = TimeUnit.SECONDS)
 	public void testProvenObservationsTriggerTheSameIdMassBan() {
-		// DefaultSuspiciousNodeDetector.SUSPICIOUS_OBSERVATION_HITS == 8
+		// DefaultSuspiciousNodeDetector.SAME_ID_SOURCE_THRESHOLD == 8
 		Id id = Id.random();
 		for (var i = 0; i < 8; i++)
 			detector.misbehaved(addr("192.168.11." + i), id);

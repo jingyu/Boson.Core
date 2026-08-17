@@ -79,8 +79,18 @@ import io.bosonnetwork.Id;
  * already-expired entries; calling it roughly every minute is sufficient.</p>
  */
 public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
-	private static final int SUSPICIOUS_OBSERVATION_HITS = 8;
-	private static final int SUSPICIOUS_HITS_THRESHOLD = 32;
+	/**
+	 * How many <em>distinct proven sources</em> must be holding one id before all of them are banned.
+	 * <p>
+	 * A count of sources, not of hits, and not a default: unlike the four below it this one is fixed, because
+	 * it does not describe a tolerance an operator has any basis to set. Eight addresses that all demonstrably
+	 * receive our traffic, all answering as one identity, is a fleet - there is no accidental way to arrive at
+	 * it, at any deployment size, so there is nothing here to tune.
+	 * </p>
+	 */
+	private static final int SAME_ID_SOURCE_THRESHOLD = 8;
+	/** Default hits charged to one source before it is acted on. */
+	private static final int DEFAULT_OBSERVATION_HIT_THRESHOLD = 32;
 	private static final long DEFAULT_OBSERVATION_PERIOD = 15 * 60 * 1000;
 	private static final long DEFAULT_BAN_DURATION = 30 * 60 * 1000;
 	private static final long DEFAULT_SUPPRESSION_DURATION = 60 * 1000;
@@ -171,10 +181,17 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	static class ObservationRecord {
 		/**
 		 * The last id this source presented in a <em>proven</em> observation. Only the same-id scan reads
-		 * this, and it is kept separate from {@link DefaultSuspiciousNodeDetector#endpointIds} for exactly that reason: a field an unverified
-		 * sender can write is a field it can use to point the scan at somebody else.
+		 * this, and it is kept separate from {@link DefaultSuspiciousNodeDetector#endpointIds} for exactly
+		 * that reason: a field an unverified sender can write is a field it can use to point the scan at
+		 * somebody else.
 		 */
 		private Id lastId;
+		/**
+		 * The most recent activity charged to this source. Diagnostic: read only by
+		 * {@link DefaultSuspiciousNodeDetector#toString()}, which is what one looks at to find out why a
+		 * source is being held. Kept as a field rather than derived because by the time anyone asks, the
+		 * packet that caused it is long gone.
+		 */
 		private SuspiciousActivity lastActivity;
 		private int hits;
 		private int escalation;
@@ -215,7 +232,9 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	/**
 	 * Constructs a detector with custom observation and ban parameters.
 	 *
-	 * @param observationPeriod Duration (in milliseconds) to observe a node before resetting or banning.
+	 * @param observationPeriod Duration (in milliseconds) a source's accumulated hits and escalation level
+	 *        survive without further activity. Reaching the end of a quiet period forgives a source
+	 *        completely; it is not itself a deadline at which anything is banned.
 	 * @param observationHitThreshold Number of suspicious events required to act on a source.
 	 * @param banDuration Duration (in milliseconds) a node remains banned after proven misbehavior.
 	 * @param suppressionDuration Base duration (in milliseconds) an unproven source is suppressed for,
@@ -242,7 +261,8 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 * for proven misbehavior and a 1-minute base suppression for unproven sources.
 	 */
 	protected DefaultSuspiciousNodeDetector() {
-		this(DEFAULT_OBSERVATION_PERIOD, SUSPICIOUS_HITS_THRESHOLD, DEFAULT_BAN_DURATION, DEFAULT_SUPPRESSION_DURATION);
+		this(DEFAULT_OBSERVATION_PERIOD, DEFAULT_OBSERVATION_HIT_THRESHOLD, DEFAULT_BAN_DURATION,
+				DEFAULT_SUPPRESSION_DURATION);
 	}
 
 	/**
@@ -347,8 +367,9 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 * how many identities one source can rotate through before it is told to slow down.
 	 * </p>
 	 * <p>
-	 * Detection is per endpoint, the charge is per source - see {@link DefaultSuspiciousNodeDetector#endpointIds} for why the two must
-	 * differ. Unproven, so it can only suppress: the address a request arrives from is chosen by whoever
+	 * Detection is per endpoint, the charge is per source - see
+	 * {@link DefaultSuspiciousNodeDetector#endpointIds} for why the two must differ.
+	 * Unproven, so it can only suppress: the address a request arrives from is chosen by whoever
 	 * sent it, and this is reachable from unsolicited requests. Note the churn id is deliberately not the id
 	 * the same-id scan reads - see {@link ObservationRecord#lastId}.
 	 * </p>
@@ -416,7 +437,9 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 			return;
 
 		if (proven) {
-			log.info("Node at {} marked suspicious: activity={}, hits={}", source, activity, ob.hits);
+			// Source, not node: what reached the threshold is an address range, and it may well be several
+			// nodes. Naming it a node in the log invites the reader to go looking for the one that did it.
+			log.info("Source {} banned for {}ms: activity={}, hits={}", source, banDuration, activity, ob.hits);
 			banSource(source, now + banDuration);
 		} else {
 			// Escalate before use so the first suppression is one base duration, not two.
@@ -446,17 +469,19 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 * @param now the current time in milliseconds.
 	 */
 	private void banSourcesClaiming(Id id, long now) {
-		List<String> sources = new ArrayList<>(SUSPICIOUS_OBSERVATION_HITS);
+		List<String> sources = new ArrayList<>(SAME_ID_SOURCE_THRESHOLD);
 		for (Map.Entry<String, ObservationRecord> entry : observedNodes.entrySet()) {
 			if (id.equals(entry.getValue().lastId))
 				sources.add(entry.getKey());
 		}
 
-		if (sources.size() < SUSPICIOUS_OBSERVATION_HITS)
+		if (sources.size() < SAME_ID_SOURCE_THRESHOLD)
 			return;
 
+		log.info("Id {} answered from {} proven sources, banning all of them for {}ms", id, sources.size(),
+				banDuration);
 		for (String source : sources) {
-			log.info("Id {} marked suspicious, ban related source {}", id, source);
+			log.debug("Source {} banned for presenting id {}", source, id);
 			observedNodes.remove(source);
 			banSource(source, now + banDuration);
 		}
@@ -469,20 +494,31 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 
 	private void banSource(String source, long expirationTime) {
 		bannedNodes.compute(source, (h, exp) -> {
+			// Each caller has already reported what it decided and why, at the tier it decided it for. What
+			// is left to record here is the table transition, and only where there actually is one.
 			if (exp == null) {
-				log.info("Promote the marked node {} to suspicious node", source);
+				log.debug("Source {} added to the ban list", source);
 				return expirationTime;
 			}
 
-			log.debug("Extended suspicious for source {}", source);
 			// Never shorten. A brief suppression of an unproven source must not cut short a ban that proven
 			// misbehavior earned, and the two tiers reach this method from independent paths.
-			return Math.max(exp, expirationTime);
+			if (expirationTime <= exp) {
+				log.debug("Source {} is already held for longer, keeping its deadline", source);
+				return exp;
+			}
+
+			log.debug("Extended the hold on source {}", source);
+			return expirationTime;
 		});
 	}
 
 	/**
 	 * Returns the number of sources currently under observation.
+	 *
+	 * <p>Table size, not live-record count: an observation whose period has elapsed is still counted until
+	 * {@link #purge()} drops it. That is deliberate - what these accessors exist to expose is the size of
+	 * the thing a sender can grow, and the caps that bound it.</p>
 	 *
 	 * @return the count of observed sources
 	 */
@@ -494,6 +530,9 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	/**
 	 * Returns the number of sources currently banned or suppressed.
 	 *
+	 * <p>The same caveat as {@link #getObservedSize()}: entries expire lazily, so this can exceed the
+	 * number of sources {@link #isBanned(String)} would actually turn away.</p>
+	 *
 	 * @return the count of banned sources
 	 */
 	@Override
@@ -502,12 +541,15 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	}
 
 	/**
-	 * Removes expired entries.
+	 * Removes already-expired entries.
 	 *
-	 * <p><strong>Important:</strong> This method should be called periodically (recommended: every minute)
-	 * to reclaim memory. It is <em>not</em> required for ban/observation accuracy - those expire lazily on
-	 * read - so the exact interval only trades memory footprint against scan frequency. It is also not what
-	 * bounds either table; the capacity caps do that.</p>
+	 * <p>Memory reclamation, and nothing else. Bans and observations expire lazily on read, so enforcement
+	 * is exact regardless of when this runs, and the tables are bounded by their capacity caps rather than
+	 * by it. What the interval trades is footprint against scan cost; the node calls it every minute.</p>
+	 *
+	 * <p>It follows that skipping a purge is harmless and that purging more often buys nothing but a
+	 * smaller resident set - which is why the scan is a plain sweep here, with no attempt to bound its
+	 * cost. Both tables are hard-capped, so the sweep is bounded by construction.</p>
 	 */
 	@Override
 	public void purge() {
@@ -521,11 +563,11 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 			return expired;
 		});
 
-		// Remove expired suspicious nodes
+		// Remove expired bans and suppressions
 		bannedNodes.entrySet().removeIf(entry -> {
 			boolean expired = now > entry.getValue();
 			if (expired)
-				log.debug("Removed expired suspicious node {}", entry.getKey());
+				log.debug("Removed expired hold on source {}", entry.getKey());
 			return expired;
 		});
 	}
@@ -547,7 +589,10 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 */
 	@Override
 	public String toString() {
-		StringBuilder repr = new StringBuilder(96 + observedNodes.size() + 64 * bannedNodes.size() + 32);
+		// Per-line estimates: an observed line carries a source, an activity name, a hit count and a
+		// duration; a banned line carries a source and a duration. The two were the wrong way round before -
+		// one byte per observed entry against 64 per banned one, where the observed line is the longer.
+		StringBuilder repr = new StringBuilder(64 * observedNodes.size() + 48 * bannedNodes.size() + 64);
 		long now = System.currentTimeMillis();
 
 		if (!observedNodes.isEmpty()) {

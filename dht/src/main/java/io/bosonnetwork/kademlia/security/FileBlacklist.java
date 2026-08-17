@@ -31,12 +31,10 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -47,12 +45,18 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.json.Json;
 
 /**
- * A thread-safe file based blacklist for managing banned hosts and IDs using a copy-on-write strategy.
+ * A thread-safe file-based blacklist for managing banned hosts and IDs using a copy-on-write strategy.
  * Optimized for frequent reads with synchronized writes to ensure thread safety.
+ *
+ * <p>Reads go to a volatile immutable set and take no lock at all; a write builds a whole new set under a
+ * monitor and publishes it. That trade is right here because bans are configured rarely and consulted per
+ * packet, and it is what lets the read path stay a plain field access.</p>
+ *
+ * @see Blacklist
  */
 public class FileBlacklist implements Blacklist {
-	private volatile Map<String, Boolean> hosts;
-	private volatile Map<Id, Boolean> ids;
+	private volatile Set<String> hosts;
+	private volatile Set<Id> ids;
 
 	/**
 	 * Constructs a FileBlacklist with the specified hosts and IDs.
@@ -62,15 +66,8 @@ public class FileBlacklist implements Blacklist {
 	 */
 	@JsonCreator
 	protected FileBlacklist(@JsonProperty("hosts") List<String> hosts, @JsonProperty("ids") List<Id> ids) {
-		if (hosts == null || hosts.isEmpty())
-			this.hosts = Collections.emptyMap();
-		else
-			this.hosts = Collections.unmodifiableMap(hosts.stream().collect(Collectors.toMap(host -> host, host -> Boolean.TRUE)));
-
-		if (ids == null || ids.isEmpty())
-			this.ids = Collections.emptyMap();
-		else
-			this.ids = Collections.unmodifiableMap(ids.stream().collect(Collectors.toMap(id -> id, id -> Boolean.TRUE)));
+		this.hosts = hosts == null || hosts.isEmpty() ? Set.of() : Set.copyOf(hosts);
+		this.ids = ids == null || ids.isEmpty() ? Set.of() : Set.copyOf(ids);
 	}
 
 	/**
@@ -81,7 +78,7 @@ public class FileBlacklist implements Blacklist {
 	 */
 	@Override
 	public boolean isBanned(String host) {
-		return hosts.containsKey(host);
+		return hosts.contains(host);
 	}
 
 	/**
@@ -92,11 +89,11 @@ public class FileBlacklist implements Blacklist {
 	 */
 	@Override
 	public boolean isBanned(Id id) {
-		return ids.containsKey(id);
+		return ids.contains(id);
 	}
 
 	/**
-	 * Adds an host to the blacklist.
+	 * Adds a host to the blacklist.
 	 *
 	 * @param host The IP host or hostname to ban.
 	 */
@@ -104,13 +101,13 @@ public class FileBlacklist implements Blacklist {
 	public void ban(String host) {
 		Objects.requireNonNull(host, "host");
 
-		if (hosts.containsKey(host))
+		if (hosts.contains(host))
 			return;
 
 		synchronized (this) {
-			Map<String, Boolean> newHosts = new HashMap<>(hosts);
-			newHosts.put(host, Boolean.TRUE);
-			this.hosts = Collections.unmodifiableMap(newHosts);
+			Set<String> newHosts = new HashSet<>(hosts);
+			newHosts.add(host);
+			this.hosts = Collections.unmodifiableSet(newHosts);
 		}
 	}
 
@@ -123,18 +120,18 @@ public class FileBlacklist implements Blacklist {
 	public void ban(Id id) {
 		Objects.requireNonNull(id, "id");
 
-		if (ids.containsKey(id))
+		if (ids.contains(id))
 			return;
 
 		synchronized (this) {
-			Map<Id, Boolean> newIds = new HashMap<>(ids);
-			newIds.put(id, Boolean.TRUE);
-			this.ids = Collections.unmodifiableMap(newIds);
+			Set<Id> newIds = new HashSet<>(ids);
+			newIds.add(id);
+			this.ids = Collections.unmodifiableSet(newIds);
 		}
 	}
 
 	/**
-	 * Removes an host from the blacklist.
+	 * Removes a host from the blacklist.
 	 *
 	 * @param host The IP host or hostname to unban.
 	 */
@@ -142,13 +139,13 @@ public class FileBlacklist implements Blacklist {
 	public void unban(String host) {
 		Objects.requireNonNull(host, "host");
 
-		if (!hosts.containsKey(host))
+		if (!hosts.contains(host))
 			return;
 
 		synchronized (this) {
-			Map<String, Boolean> newHosts = new HashMap<>(hosts);
+			Set<String> newHosts = new HashSet<>(hosts);
 			newHosts.remove(host);
-			this.hosts = Collections.unmodifiableMap(newHosts);
+			this.hosts = Collections.unmodifiableSet(newHosts);
 		}
 	}
 
@@ -161,13 +158,13 @@ public class FileBlacklist implements Blacklist {
 	public void unban(Id id) {
 		Objects.requireNonNull(id, "id");
 
-		if (!ids.containsKey(id))
+		if (!ids.contains(id))
 			return;
 
 		synchronized (this) {
-			Map<Id, Boolean> newIds = new HashMap<>(ids);
+			Set<Id> newIds = new HashSet<>(ids);
 			newIds.remove(id);
-			this.ids = Collections.unmodifiableMap(newIds);
+			this.ids = Collections.unmodifiableSet(newIds);
 		}
 	}
 
@@ -199,27 +196,29 @@ public class FileBlacklist implements Blacklist {
 		return false;
 	}
 
+	// Serialization only. The constructor takes lists because that is the shape the file holds; these hand
+	// back the live sets, which is why nothing may mutate one in place.
 	@JsonProperty("hosts")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private Set<String> getHosts() {
-		return hosts.keySet();
+		return hosts;
 	}
 
 	@JsonProperty("ids")
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
 	private Set<Id> getIds() {
-		return ids.keySet();
-	};
+		return ids;
+	}
 
 	/**
 	 * Persists this blacklist instance to the given path.
-	 * <p/>
+	 * <p>
 	 * The chosen format follows the file extension: {@code .json} for JSON,
 	 * anything else for YAML.
 	 *
-	 * @param file the destination path. If the file exists it must be a regular file.
+	 * @param file the destination path. It need not exist; if it does, it must be a regular file.
 	 * @throws NullPointerException if {@code file} is {@code null}.
-	 * @throws IllegalArgumentException if {@code file} does not exist or is not a regular file.
+	 * @throws IllegalArgumentException if {@code file} exists and is not a regular file.
 	 * @throws IOException              if an I/O error occurs while writing.
 	 */
 	public void save(Path file) throws IOException {
@@ -237,7 +236,7 @@ public class FileBlacklist implements Blacklist {
 
 	/**
 	 * Reads a {@code Blacklist} definition from disk.
-	 * <p/>
+	 * <p>
 	 * The file format is chosen automatically based on the extension:
 	 * files ending in {@code .json} are parsed as JSON, all others as YAML.
 	 *
