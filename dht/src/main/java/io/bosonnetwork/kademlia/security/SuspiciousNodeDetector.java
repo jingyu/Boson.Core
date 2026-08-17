@@ -27,9 +27,14 @@ import io.vertx.core.net.SocketAddress;
 import io.bosonnetwork.Id;
 
 /**
- * Detect and manages suspicious nodes in a Kademlia DHT network by monitoring inconsistent node IDs
+ * Detects and manages suspicious nodes in a Kademlia DHT network by monitoring inconsistent node IDs
  * and malformed messages. Sources are observed for a specified period and acted on when they exceed a
  * configurable hit threshold.
+ *
+ * <p><strong>Accounting unit.</strong> Every method here takes an address but counts a <em>source</em>: an
+ * IPv4 /32 or an IPv6 /64. A port is free to change and an IPv6 allocation hands out addresses by the
+ * billion, so neither can be allowed to buy a fresh budget. One consequence is worth stating outright: a
+ * ban earned by one address applies to every address in its /64.</p>
  *
  * <p>Callers must choose an entry point by <strong>what the packet proved about its source</strong>, not by
  * how bad the behavior looked. A UDP source address is chosen by the sender, so a counter keyed on it can
@@ -43,14 +48,17 @@ import io.bosonnetwork.Id;
  *       and only this entry point can produce a full ban.</li>
  * </ul>
  *
- * <p>Usage note: The {@link #purge()} method should be called periodically (e.g., every 2 minutes) to
- * remove expired entries.</p>
+ * <p>Usage note: {@link #purge()} should be called periodically - the node schedules it every minute - to
+ * reclaim memory. Nothing about enforcement depends on it; see the method for what it does and does not
+ * do.</p>
  */
 public interface SuspiciousNodeDetector {
 	/**
 	 * Constructs a detector with custom observation, ban and suppression parameters.
 	 *
-	 * @param observationPeriod Duration (in milliseconds) to observe a node before resetting or banning.
+	 * @param observationPeriod Duration (in milliseconds) a source's accumulated hits and escalation level
+	 *        survive without further activity. Reaching the end of a quiet period forgives a source
+	 *        completely; it is not itself a deadline at which anything is banned.
 	 * @param observationHitThreshold Number of suspicious events required to act on a source.
 	 * @param banDuration Duration (in milliseconds) a node remains banned after proven misbehavior.
 	 * @param suppressionDuration Base duration (in milliseconds) an unproven source is suppressed for,
@@ -66,29 +74,45 @@ public interface SuspiciousNodeDetector {
 	/**
 	 * Constructs a detector with default parameters: 32 hits, 15-minute observation period, 30-minute ban
 	 * for proven misbehavior and a 1-minute base suppression for unproven sources.
+	 *
+	 * @see #create(long, int, long, long)
 	 */
 	static SuspiciousNodeDetector create() {
 		return new DefaultSuspiciousNodeDetector();
 	}
 
+	/**
+	 * Returns a detector that observes nothing and bans nobody.
+	 *
+	 * <p>For deployments that police their own membership some other way, and for tests that would
+	 * otherwise have to keep their traffic under the thresholds.</p>
+	 */
 	static SuspiciousNodeDetector disabled() {
 		return new DisabledSuspiciousNodeDetector();
 	}
 
 	/**
-	 * Checks if a host is currently suppressed or banned.
+	 * Checks whether a source is currently banned or suppressed.
+	 *
+	 * <p>One answer covers both tiers: a caller deciding whether to drop a packet has no use for the
+	 * difference between a proven ban and an unproven suppression, only for whether this source is
+	 * currently held. The host is reduced to its accounting unit first, so an address that has never
+	 * been seen reads as banned when its /64 is.</p>
 	 *
 	 * @param host The host address to check (must not be null).
-	 * @return true if the host is banned, false otherwise.
+	 * @return true if the source is currently banned or suppressed, false otherwise.
 	 * @throws NullPointerException if host is null.
 	 */
 	boolean isBanned(String host);
 
 	/**
-	 * Checks if a address is currently banned.
+	 * Checks whether an address's source is currently banned or suppressed.
+	 *
+	 * <p>The overload to prefer where an address is already at hand: it settles once, here, which of the
+	 * accessors names the source, so that callers cannot disagree about it.</p>
 	 *
 	 * @param addr The socket address to check (must not be null).
-	 * @return true if the host is banned, false otherwise.
+	 * @return true if the source is currently banned or suppressed, false otherwise.
 	 * @throws NullPointerException if addr is null.
 	 */
 	default boolean isBanned(SocketAddress addr) {
@@ -110,8 +134,8 @@ public interface SuspiciousNodeDetector {
 	 *
 	 * @param addr The node's socket address (must not be null).
 	 * @param id The node ID observed.
-	 * @return the id this endpoint presented before, or null if it is unchanged or newly seen. A non-null
-	 *         result names a binding the caller has reason to stop trusting.
+	 * @return the id this endpoint presented before, or null if it is unchanged, newly seen, or the source
+	 *         is already banned. A non-null result names a binding the caller has reason to stop trusting.
 	 * @throws NullPointerException if address is null.
 	 */
 	Id observed(SocketAddress addr, Id id);
@@ -160,22 +184,32 @@ public interface SuspiciousNodeDetector {
 	/**
 	 * Returns the number of sources currently under observation.
 	 *
-	 * @return the count of observed sources
+	 * <p>Diagnostics and tests only - no decision is taken on these counts. They are the only way to
+	 * observe that the tables are bounded, which is a property no behavioural assertion can reach.</p>
+	 *
+	 * @return the count of observed sources, including any whose observation period has elapsed but that
+	 *         {@link #purge()} has not yet reclaimed.
 	 */
 	long getObservedSize();
 
 	/**
 	 * Returns the number of sources currently banned or suppressed.
 	 *
-	 * @return the count of banned sources
+	 * <p>Diagnostics and tests only, as with {@link #getObservedSize()}. Note that this counts table
+	 * entries rather than sources being held: expiry is lazy, so an entry outlives the ban it records
+	 * until the next purge, and this count can exceed the number of sources {@link #isBanned(String)}
+	 * would turn away.</p>
+	 *
+	 * @return the count of banned entries.
 	 */
 	long getBannedSize();
 
 	/**
-	 * Removes expired entries.
+	 * Removes already-expired entries.
 	 *
-	 * <p><strong>Important:</strong> This method should be called periodically (recommended: every 2 minutes)
-	 * to reclaim memory. Ban accuracy does not depend on it - entries expire lazily on read.</p>
+	 * <p>Memory only. Bans and observations expire lazily on read, so enforcement is exact whatever the
+	 * purge interval is - and the tables are bounded by their capacity caps rather than by this. What the
+	 * interval actually trades is footprint against scan cost; the node calls it every minute.</p>
 	 */
 	void purge();
 

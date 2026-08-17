@@ -30,6 +30,18 @@ import java.util.Objects;
 
 import io.bosonnetwork.Id;
 
+/**
+ * An operator's list of hosts and node ids this node refuses to talk to.
+ *
+ * <p>Membership is stated, never inferred: entries arrive from configuration or from an explicit
+ * {@link #ban(Id)} call, and nothing here observes traffic or expires an entry. That is the whole
+ * difference between this and {@link SuspiciousNodeDetector}, which decides for itself, on evidence, and
+ * always for a bounded time. A host named here stays named until somebody removes it.</p>
+ *
+ * <p>The unit is also different, and deliberately so: a literal host string as configured, not the
+ * {@link SourceKey} the detector and the throttle count in. An operator banning an address means that
+ * address, and widening it to a /64 would ban neighbours they did not name.</p>
+ */
 public interface Blacklist {
 	/**
 	 * Checks if the specified host is banned.
@@ -37,7 +49,7 @@ public interface Blacklist {
 	 * @param host The IP host or hostname to check.
 	 * @return true if the host is banned, false otherwise.
 	 */
-	public boolean isBanned(String host);
+	boolean isBanned(String host);
 
 	/**
 	 * Checks if the specified ID is banned.
@@ -59,7 +71,7 @@ public interface Blacklist {
 	}
 
 	/**
-	 * Adds an host to the blacklist.
+	 * Adds a host to the blacklist.
 	 *
 	 * @param host The IP host or hostname to ban.
 	 */
@@ -73,7 +85,7 @@ public interface Blacklist {
 	void ban(Id id);
 
 	/**
-	 * Removes an host from the blacklist.
+	 * Removes a host from the blacklist.
 	 *
 	 * @param host The IP host or hostname to unban.
 	 */
@@ -95,20 +107,54 @@ public interface Blacklist {
 		return new EmptyBlacklist();
 	}
 
+	/**
+	 * Creates an empty, mutable blacklist that can be populated through {@link #ban(Id)} and saved to disk.
+	 *
+	 * @return a new empty blacklist.
+	 */
 	static Blacklist create() {
 		return new FileBlacklist(null, null);
 	}
 
+	/**
+	 * Loads a blacklist from a file, parsed as JSON if the name ends in {@code .json} and as YAML otherwise.
+	 *
+	 * @param file the path to load from.
+	 * @return the loaded blacklist.
+	 * @throws NullPointerException if {@code file} is {@code null}.
+	 * @throws IllegalArgumentException if {@code file} does not exist or is not a regular file.
+	 * @throws IOException if an I/O error occurs while reading or parsing.
+	 */
 	static Blacklist load(String file) throws IOException {
 		Objects.requireNonNull(file, "path");
 		return FileBlacklist.load(Path.of(file));
 	}
 
+	/**
+	 * Loads a blacklist from a file.
+	 *
+	 * @param file the file to load from.
+	 * @return the loaded blacklist.
+	 * @throws NullPointerException if {@code file} is {@code null}.
+	 * @throws IllegalArgumentException if {@code file} does not exist or is not a regular file.
+	 * @throws IOException if an I/O error occurs while reading or parsing.
+	 * @see #load(String)
+	 */
 	static Blacklist load(File file) throws IOException {
 		Objects.requireNonNull(file, "path");
 		return FileBlacklist.load(file.toPath());
 	}
 
+	/**
+	 * Loads a blacklist from a file.
+	 *
+	 * @param path the path to load from.
+	 * @return the loaded blacklist.
+	 * @throws NullPointerException if {@code path} is {@code null}.
+	 * @throws IllegalArgumentException if {@code path} does not exist or is not a regular file.
+	 * @throws IOException if an I/O error occurs while reading or parsing.
+	 * @see #load(String)
+	 */
 	static Blacklist load(Path path) throws IOException {
 		Objects.requireNonNull(path, "path");
 		return FileBlacklist.load(path);

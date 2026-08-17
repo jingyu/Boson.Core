@@ -25,6 +25,15 @@ package io.bosonnetwork.kademlia.security;
 
 import io.bosonnetwork.Id;
 
+/**
+ * A blacklist that bans nobody and forgets every ban asked of it.
+ *
+ * <p>The default a node runs with: an operator who has named no one has a list with no one on it, and the
+ * checks on the receive path are then a constant {@code false} rather than a branch that has to be
+ * configured away.</p>
+ *
+ * @see Blacklist
+ */
 public class EmptyBlacklist implements Blacklist {
 	protected EmptyBlacklist() {
 	}
