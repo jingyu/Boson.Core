@@ -207,6 +207,86 @@ class LookupTaskTests {
 		assertNull(task.getCandidate(node.getId()));
 	}
 
+	private List<NodeInfo> randomNodes(int count) {
+		List<NodeInfo> nodes = new ArrayList<>(count);
+		for (int i = 0; i < count; i++)
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
+
+		return nodes;
+	}
+
+	@Test
+	void testEveryLookupResponseTypeCanBeRead() {
+		// FindNodeResponse, FindValueResponse and FindPeerResponse are siblings under LookupResponse,
+		// not subclasses of one another, so a reader that names any one of them concretely throws
+		// ClassCastException on the other two - and it throws inside callResponded, where nothing
+		// catches it and no timer exists to iterate the task again.
+		List<NodeInfo> nodes = randomNodes(4);
+
+		assertEquals(4, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).size());
+		assertEquals(4, task.acceptResponse(Message.findValueResponse(2, nodes, List.of())).size());
+		assertEquals(4, task.acceptResponse(Message.findPeerResponse(3, nodes, List.of())).size());
+	}
+
+	@Test
+	void testResponseAtTheCeilingIsTakenWhole() {
+		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
+		assertEquals(nodes, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)));
+	}
+
+	@Test
+	void testResponseOverTheCeilingIsDropped() {
+		// Dropped whole rather than trimmed: past the ceiling the cheap exit comes first.
+		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE + 1);
+		assertTrue(task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).isEmpty());
+	}
+
+	@Test
+	void testOneResponseCanNotClaimMoreThanHalfTheCandidateQueue() {
+		// The finding this guards: at the minimum k the queue holds 3k = 12, while the transport
+		// ceiling alone would let a single answer supply 16 - every one of them closer to the target
+		// than anything already queued, so the prune would evict the whole queue in favour of one
+		// sender's list.
+		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4)
+				.setK(4);
+		TestLookupTask t = new TestLookupTask(context, Id.random());
+
+		int capacity = LookupTask.candidateCapacity(4);
+		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
+		List<NodeInfo> accepted = t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0));
+
+		assertEquals(capacity / 2, accepted.size());
+		assertTrue(accepted.size() < capacity, "one response must not be able to fill the queue by itself");
+
+		// And what it keeps is the closest, which is what insertion would have kept anyway.
+		List<NodeInfo> closest = new ArrayList<>(nodes);
+		closest.sort((a, b) -> t.getTarget().threeWayCompare(a.getId(), b.getId()));
+		assertEquals(closest.subList(0, capacity / 2), accepted);
+	}
+
+	@Test
+	void testTheQuotaIsTheTighterOfTheTwoCeilings() {
+		// Pinned directly, because which of the two binds flips with k and neither is obvious at a
+		// glance: the transport ceiling is flat while the queue share grows as 3k/2, so the share is
+		// the tighter one up to k=10 and never again after it.
+		for (int k : new int[] { 4, 8, 10, 11, 16, 64 }) {
+			KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4)
+					.setK(k);
+			TestLookupTask t = new TestLookupTask(context, Id.random());
+
+			int expected = Math.min(KadConstants.MAX_NODES_PER_RESPONSE, LookupTask.candidateCapacity(k) / 2);
+			List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
+			assertEquals(expected, t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).size(),
+					"quota at k=" + k);
+			assertTrue(expected <= LookupTask.candidateCapacity(k) / 2, "never more than half the queue at k=" + k);
+		}
+	}
+
+	@Test
+	void testEmptyResponseIsTakenAsNothingToAdd() {
+		assertTrue(task.acceptResponse(Message.findNodeResponse(1, List.of(), List.of(), 0)).isEmpty());
+	}
+
 	@Test
 	void testIsDoneConditions() {
 		task.lookupDone = true;
