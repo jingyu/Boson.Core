@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.utils.Timer;
 
 /**
@@ -121,6 +122,19 @@ public class KadContext implements Timer, Executor {
 		// Always read through the owning DHT, the sibling can be wired and unwired during deployment.
 		// Null-tolerant on purpose: a DHT-less context simply has no sibling.
 		return dht != null ? dht.getSibling() : null;
+	}
+
+	/**
+	 * Returns the detector that records misbehavior by nodes we have talked to.
+	 * <p>
+	 * Reached through the context so that everything holding one - tasks as well as the RPC server - reports
+	 * to the same instance without being handed it separately.
+	 * </p>
+	 *
+	 * @return the owning DHT's suspicious node detector.
+	 */
+	public SuspiciousNodeDetector getSuspiciousNodeDetector() {
+		return requireDht().getSuspiciousNodeDetector();
 	}
 
 	/**

@@ -37,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 
 /**
  * One source may hold only so much of the routing table.
@@ -153,7 +154,7 @@ class RoutingTableDiversityTests {
 				accepted++;
 		}
 
-		assertEquals(RoutingTable.MAX_TABLE_ENTRIES_PER_SOURCE, accepted,
+		assertEquals(KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, accepted,
 				"a source spread further across the table than its budget");
 	}
 
@@ -185,13 +186,13 @@ class RoutingTableDiversityTests {
 		}
 
 		InetAddress unit = InetAddress.getByName(ONE_HOST);
-		assertEquals(RoutingTable.MAX_TABLE_ENTRIES_PER_SOURCE, admitted.size());
-		assertEquals(RoutingTable.MAX_TABLE_ENTRIES_PER_SOURCE, routingTable.countedFor(unit));
+		assertEquals(KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, admitted.size());
+		assertEquals(KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, routingTable.countedFor(unit));
 		assertFalse(refused.isEmpty(), "precondition: some buckets must hold nothing from this source");
 
 		// One contact goes away, as a contact does. The count does not follow it down.
 		routingTable.remove(admitted.get(0));
-		assertEquals(RoutingTable.MAX_TABLE_ENTRIES_PER_SOURCE, routingTable.countedFor(unit),
+		assertEquals(KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, routingTable.countedFor(unit),
 				"precondition: the count is now above the truth, which is the case under test");
 
 		assertTrue(routingTable.put(entryAt(refused.get(0).createRandomId(), ONE_HOST, 39100)),

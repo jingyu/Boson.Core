@@ -26,7 +26,9 @@ package io.bosonnetwork.kademlia.tasks;
 import java.net.InetAddress;
 import java.net.StandardProtocolFamily;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -39,6 +41,7 @@ import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.LookupResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.kademlia.security.SourceKey;
 import io.bosonnetwork.utils.AddressUtils;
 
 /**
@@ -246,18 +249,50 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 * <em>which</em> to keep would be choosing between nodes it cannot tell apart.
 	 * </p>
 	 * <p>
-	 * <b>Why an over-ceiling response is dropped whole and its sender is not charged.</b> Dropping is a
-	 * decision about our own cost, not a verdict on the sender: past the ceiling there is no point
-	 * sorting a list this large to keep a handful of it, so the cheap exit comes first. It is
-	 * deliberately not reported to {@link
-	 * io.bosonnetwork.kademlia.security.SuspiciousNodeDetector#misbehaved}, even though the sender is
-	 * provably the node we asked. That entry point is the one that can earn a full ban, and it is
-	 * reserved for things no correct implementation can do - answering with the wrong method, or with a
-	 * different id than the call was addressed to. A large node count is not one of them: the ceiling is
-	 * this implementation's own send-side policy for staying inside a datagram, not a protocol rule, so
-	 * a peer that ships a larger one is interoperating correctly and banning it would partition us from
-	 * that implementation. Bounding what we accept is the right response to a number we did not choose;
-	 * punishing it is not.
+	 * <b>One answer may not be mostly one address either.</b> A quota on count alone still lets a single
+	 * machine supply every candidate we take: ids are free, so the addresses behind sixteen distinct ids
+	 * need not differ at all. A response offering more than {@link
+	 * KadConstants#MAX_NODES_PER_SOURCE_PER_RESPONSE} nodes from one source unit - an IPv4 address or an
+	 * IPv6 /64, per {@link SourceKey} - is therefore refused as well. Both of these are limits the
+	 * protocol states, so a response over either is a violation rather than a difference of opinion, and
+	 * the check needs nothing but the message it just parsed to reach that conclusion.
+	 * </p>
+	 * <p>
+	 * Only global unicast addresses are counted - as {@code RoutingTable.countableSource} counts them, and
+	 * deliberately not as {@code isAddressEligible} does. The budget measures a resource its holder had to
+	 * acquire, and a loopback or RFC1918 address is free in every mode; eligibility asks the different
+	 * question of whether a candidate may be queried, which developer mode widens on purpose. Counting
+	 * what eligibility admits would make a lab network on one host refuse every answer it received.
+	 * </p>
+	 * <p>
+	 * <b>What the diversity limit does and does not cost an attacker.</b> The addresses in a response are
+	 * claims, so a sender willing to name sixteen addresses it does not hold passes this for free. What it
+	 * cannot fake is a reply: a fabricated candidate is queried once and times out, and an eclipse needs
+	 * its nodes to answer. Against the attack that matters the addresses have to be real, and this halves
+	 * what one of them buys per response. It does not make ids cost anything, which is where the leverage
+	 * actually is.
+	 * </p>
+	 * <p>
+	 * <b>Both violations drop the response whole and report the sender.</b> Dropping whole rather than
+	 * trimming is a decision about our own cost: past either limit there is no point sorting a list that
+	 * large to keep a handful of it, so the cheap exit comes first. The report to {@link
+	 * io.bosonnetwork.kademlia.security.SuspiciousNodeDetector#misbehaved} is attributable - the message
+	 * matched a call we made and came back from the address we sent it to, so the evidence cannot have
+	 * been aimed at a bystander by a sender forging its source.
+	 * </p>
+	 * <p>
+	 * <b>What makes that report defensible.</b> {@code misbehaved} is the one entry point that can earn a
+	 * full ban, so it has to be reserved for things a conforming node cannot do - and both of these now
+	 * are, because the protocol fixes the numbers rather than leaving them to the implementation. That is
+	 * the whole reason they are written down: enforcing a limit we invented would ban peers for
+	 * disagreeing with us, which is a way to partition the network rather than defend it.
+	 * </p>
+	 * <p>
+	 * The residual is a node built before the limits were stated, which violates them honestly. What
+	 * bounds that is how the detector spends the report rather than anything decided here: a source is
+	 * held only once its hits reach the observation threshold, the hold is time-bounded, and a source
+	 * that goes quiet for one observation period is forgiven outright. Such a node is throttled in
+	 * bursts, not cut off.
 	 * </p>
 	 * <p>
 	 * <b>This does not bound one sender across a lookup.</b> It limits a single answer. A node that
@@ -277,12 +312,29 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		}
 
 		if (nodes.size() > KadConstants.MAX_NODES_PER_RESPONSE) {
+			getContext().getSuspiciousNodeDetector().misbehaved(response.getRemoteAddress(), response.getId());
 			getLogger().debug("{}#{} dropping response carrying {} nodes from {}, over the {} we are willing to read",
 					getName(), getId(), nodes.size(), response.getId(), KadConstants.MAX_NODES_PER_RESPONSE);
 			return List.of();
 		}
 
 		int maxAccepted = Math.min(KadConstants.MAX_NODES_PER_RESPONSE, candidateCapacity(getContext().getK()) / 2);
+
+		// Nothing below can change the answer for a list this short, so skip the counting map entirely.
+		// The diversity check needs one source to reach the budget plus one before it refuses, and the
+		// trim needs more nodes than the quota. Clamping to maxAccepted is what makes the early return
+		// safe: without it a short list would come back whole at a k where the quota is tighter than the
+		// budget - at k=4 the quota is 6 - and returning eight of them here would undo the quota.
+		if (nodes.size() <= Math.min(KadConstants.MAX_NODES_PER_SOURCE_PER_RESPONSE, maxAccepted))
+			return nodes;
+
+		if (!sourceGroupCountCheck(nodes)) {
+			getContext().getSuspiciousNodeDetector().misbehaved(response.getRemoteAddress(), response.getId());
+			getLogger().debug("{}#{} dropping response from {} carrying too many nodes from same source",
+					getName(), getId(), response.getId());
+			return List.of();
+		}
+
 		if (nodes.size() <= maxAccepted)
 			return nodes;
 
@@ -292,6 +344,41 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 				.sorted((a, b) -> getTarget().threeWayCompare(a.getId(), b.getId()))
 				.limit(maxAccepted)
 				.toList();
+	}
+
+	/**
+	 * Whether a response spreads its nodes over enough source units to be one a conforming peer could
+	 * have sent.
+	 * <p>
+	 * See {@link #acceptResponse} for where the limit comes from and what it is worth. Counted over the
+	 * response as received rather than over what the quota would keep: trimming first would let a sender
+	 * hide concentration behind nodes we were going to discard anyway, and the stricter reading costs a
+	 * conforming peer nothing.
+	 * </p>
+	 *
+	 * @param nodes the nodes the response offered, at most {@link KadConstants#MAX_NODES_PER_RESPONSE}.
+	 * @return true if no source unit is over budget, false if one of them is.
+	 */
+	private boolean sourceGroupCountCheck(List<NodeInfo> nodes) {
+		Map<InetAddress, Integer> sourceGroupCount = new HashMap<>();
+		StandardProtocolFamily family = getContext().getNetwork().protocolFamily();
+
+		for (NodeInfo node : nodes) {
+			InetAddress address = node.getIpAddress(family);
+			// Global unicast, not isAddressEligible: the two differ in developer mode, and counting what
+			// eligibility admits there would refuse every answer on a lab network. See acceptResponse.
+			// A node with no address in this family is skipped rather than counted - addCandidates drops
+			// it anyway, so it competes for nothing.
+			if (address == null || !AddressUtils.isGlobalUnicast(address))
+				continue;
+
+			InetAddress source = SourceKey.of(address);
+			int count = sourceGroupCount.merge(source, 1, Integer::sum);
+			if (count > KadConstants.MAX_NODES_PER_SOURCE_PER_RESPONSE)
+				return false;
+		}
+
+		return true;
 	}
 
 	/**

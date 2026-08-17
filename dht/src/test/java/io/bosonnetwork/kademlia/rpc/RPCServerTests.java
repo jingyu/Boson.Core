@@ -68,7 +68,6 @@ import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
 import io.bosonnetwork.kademlia.protocol.FindValueRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.security.Blacklist;
-import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.utils.AddressUtils;
 import io.bosonnetwork.vertx.BosonVerticle;
 
@@ -134,7 +133,7 @@ public class RPCServerTests {
 			super.prepare(vertx, context);
 
 			kadContext = new TestKadContext(context, identity, Network.IPv4).setDeveloperMode(false);
-			rpcServer = new RpcServer(kadContext, host, port, Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+			rpcServer = new RpcServer(kadContext, host, port, Blacklist.empty(), true, null);
 			rpcServer.setMessageHandler(this::onMessage);
 			rpcServer.setCallTimeoutHandler(this::callTimeout);
 		}
@@ -901,10 +900,10 @@ public class RPCServerTests {
 
 		RpcServer caller = new RpcServer(new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
 				.setDeveloperMode(false), "127.0.0.1", 39207,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+				Blacklist.empty(), true, null);
 		RpcServer responder = new RpcServer(new TestKadContext(vertxContext, responderIdentity, Network.IPv4)
 				.setDeveloperMode(false), "127.0.0.1", 39208,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+				Blacklist.empty(), true, null);
 		responder.setMessageHandler(message -> {
 			if (message.isRequest())
 				responder.sendMessage(Message.pingResponse(message.getTxid())
@@ -941,8 +940,7 @@ public class RPCServerTests {
 		Context vertxContext = vertx.getOrCreateContext();
 		KadContext kadContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
 				.setDeveloperMode(false);
-		RpcServer server = new RpcServer(kadContext, "127.0.0.1", 39201,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), true, null);
+		RpcServer server = new RpcServer(kadContext, "127.0.0.1", 39201, Blacklist.empty(), true, null);
 
 		// A real key, not Id.random(): the request is encrypted to the target id, so random bytes are
 		// only sometimes a decodable public key and the test would fail at random.
@@ -989,15 +987,13 @@ public class RPCServerTests {
 		// the unsolicited ping for an id we have not seen, which inbound traffic drives rather than
 		// configuration.
 		KadContext defaults = new TestKadContext(vertxContext, identity, Network.IPv4);
-		RpcServer ordinary = new RpcServer(defaults, "127.0.0.1", 39202,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), false, null);
+		RpcServer ordinary = new RpcServer(defaults, "127.0.0.1", 39202, Blacklist.empty(), false, null);
 		assertEquals(1024, ordinary.maxActiveCalls, "the floor should hold at ordinary settings");
 
 		// Super-node settings, where the product is what binds.
 		KadContext busy = new TestKadContext(vertxContext, identity, Network.IPv4)
 				.setAlpha(4).setConcurrentTasks(2048);
-		RpcServer supernode = new RpcServer(busy, "127.0.0.1", 39203,
-				Blacklist.empty(), SuspiciousNodeDetector.disabled(), false, null);
+		RpcServer supernode = new RpcServer(busy, "127.0.0.1", 39203, Blacklist.empty(), false, null);
 		assertEquals(8192, supernode.maxActiveCalls, "the table should follow concurrentTasks x alpha");
 	}
 }

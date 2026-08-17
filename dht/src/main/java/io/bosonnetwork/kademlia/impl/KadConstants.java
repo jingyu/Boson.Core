@@ -334,6 +334,40 @@ public final class KadConstants {
 	public static final int MAX_NODES_PER_RESPONSE = 16;
 
 	/**
+	 * The declared ceiling on how many nodes one response may carry from a single source unit - an IPv4
+	 * address, or an IPv6 /64.
+	 * <p>
+	 * A ceiling on the count alone does not stop one machine from supplying every node in an answer: ids
+	 * are free, so sixteen distinct ids can sit behind one address. This bounds that, and it is the half
+	 * that costs an attacker something, because an address is a resource somebody had to acquire and an
+	 * id is not.
+	 * </p>
+	 * <p>
+	 * <b>A wire limit, checkable from the message alone.</b> A receiver decides it by grouping the
+	 * addresses in the response it just parsed, with no knowledge of the sender's state - which is what
+	 * makes exceeding it attributable to the sender rather than a guess about it. The source unit has to
+	 * be part of the rule, not left to the reader: two implementations that group IPv6 differently, one
+	 * per address and one per /64, would each read the other as violating. See {@code SourceKey} for the
+	 * definition and why /64 is the narrowest cut a sender cannot widen for free.
+	 * </p>
+	 * <p>
+	 * <b>Not the same statement as {@link #MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE}</b>, which is about what
+	 * a node keeps rather than what it says. That one is unobservable - no peer can audit another's
+	 * routing table - so it could never carry a rule a receiver enforces. It is derived from this one so
+	 * that a node answering out of its own table satisfies this by construction; the dependency runs that
+	 * way and not the other, because this is the number the protocol states.
+	 * </p>
+	 * <p>
+	 * <b>Why 8.</b> Half the per-response ceiling, so no single source can be most of an answer, and
+	 * generous against real co-location: a household /64, a pair of bootstrap servers on one host, or a
+	 * small operator running a handful of nodes at one site all fit well inside it. Not derived from k -
+	 * this is about how many machines sit behind one address, which has nothing to do with bucket
+	 * geometry.
+	 * </p>
+	 */
+	public static final int MAX_NODES_PER_SOURCE_PER_RESPONSE = 8;
+
+	/**
 	 * Estimated wire cost, in bytes, of one IPv4 node entry in a response.
 	 * <p>
 	 * Derived from the golden vectors in {@code FindNodeTests}: a FIND_NODE response with 8 IPv4 nodes
@@ -904,6 +938,36 @@ public final class KadConstants {
 	 * </p>
 	 */
 	public static final int MAX_BUCKET_FILLS_PER_BOOTSTRAP = 8;
+
+	/**
+	 * How many entries one source unit may hold in the whole table.
+	 * <p>
+	 * The table-wide half of the diversity budget, and the half that matters: the bucket an entry lands in
+	 * is chosen by its id, ids are free, so any per-bucket limit alone is multiplied by a bucket count the
+	 * flood itself inflates - every accepted reachable entry can force a split, and every split is more
+	 * room for the same sender.
+	 * </p>
+	 * <p>
+	 * Not derived from k, because this one is about co-location - how many machines a real site puts behind
+	 * one address - which has nothing to do with bucket geometry. Fixed is also the right direction as a
+	 * table grows: eight of a mature table is a shrinking share, and on a young table the per-bucket limit
+	 * binds first, so the two meet with no gap between them.
+	 * </p>
+	 * <p>
+	 * <b>Set from {@link #MAX_NODES_PER_SOURCE_PER_RESPONSE} rather than written out, and the direction
+	 * is deliberate.</b> A node answers a lookup out of this table, so keeping the table budget at or
+	 * below the wire limit is what makes its own responses conformant without the response path having to
+	 * check them. Equality is simply the largest value that achieves it. Written as its own number the
+	 * two could drift, and the drift is silent in the dangerous direction: a table budget raised past the
+	 * wire limit produces responses that other nodes are entitled to reject, and to report us for.
+	 * </p>
+	 * <p>
+	 * Local policy either way, unlike the constant it derives from. What a node keeps is its own affair
+	 * and no peer can observe it, so a node may tighten this freely; what it may <em>say</em> is the part
+	 * the protocol fixes.
+	 * </p>
+	 */
+	public static final int MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE = MAX_NODES_PER_SOURCE_PER_RESPONSE;
 
 	private KadConstants() {
 	}
