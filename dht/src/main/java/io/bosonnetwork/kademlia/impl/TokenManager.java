@@ -108,11 +108,22 @@ public class TokenManager {
 		sha256.update(Bytes.fromLong(timestamp));
 		sha256.update(sessionSecret);
 		byte[] digest = sha256.digest();
-		int pos = (digest[0] & 0xff) & 0x1f; // mod 32
-		return ((digest[pos] & 0xff) << 24) |
-				((digest[(pos + 1) & 0x1f] & 0xff) << 16) |
-				((digest[(pos + 2) & 0x1f] & 0xff) << 8) |
-				(digest[(pos + 3) & 0x1f] & 0xff);
+		// The leading four bytes, flat.
+		//
+		// This used to pick a starting offset out of digest[0] and read four bytes from there, wrapping at
+		// the end of the digest, which cost entropy rather than adding any. For four of the 32 offsets the
+		// wrap brought digest[0] back inside the token itself, and in those branches digest[0] is pinned by
+		// the token value instead of ranging freely - so a token whose bytes fit all four of those patterns
+		// turned up about five times more often than a uniform draw, and guessing one of those is the best
+		// blind guess there is. Roughly 30 bits of the 32, given away for nothing.
+		//
+		// Nothing rested on the offset being hard to predict, either. The digest is keyed on the session
+		// secret, and that is the whole of the token's strength; where in the digest it was cut from was
+		// never a secret and never needed to be.
+		return ((digest[0] & 0xff) << 24) |
+				((digest[1] & 0xff) << 16) |
+				((digest[2] & 0xff) << 8) |
+				(digest[3] & 0xff);
 	}
 
 	public int generateToken(Id nodeId, InetSocketAddress address, Id targetId) {

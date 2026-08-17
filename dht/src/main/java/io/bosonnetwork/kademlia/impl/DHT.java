@@ -1901,26 +1901,62 @@ public class DHT extends BosonVerticle {
 		});
 	}
 
+	/**
+	 * Verifies the anti-spoofing token on a write request, answering with an error and charging the sender
+	 * if it does not hold.
+	 *
+	 * @param request the request carrying the token.
+	 * @param token   the token presented.
+	 * @param target  the id the token should have been issued for.
+	 * @param method  the method name, for the log line and the error text.
+	 * @return true if the caller should go on to process the request.
+	 */
+	private boolean verifyToken(Message request, int token, Id target, String method) {
+		if (tokenManager.verifyToken(token, request.getId(), request.getRemoteIpAddress(),
+				request.getRemotePort(), target))
+			return true;
+
+		log.debug("Received a {} request with invalid token from {}", method, request.getRemoteAddress());
+
+		// A token names the id, address and port it was issued to, so one that does not verify says the
+		// sender is not the party it was issued to - which is the whole point of the token, and the only
+		// thing that makes a wrong one worth counting. Charging it is what puts a second bound on guessing
+		// the token: the throttle limits how fast a source may guess, this limits how long it may keep
+		// guessing before the source is refused outright.
+		//
+		// Unproven, and it has to be: an unsolicited request's source address is whatever the sender wrote,
+		// so a spoofer could aim a stream of bad tokens at any address it likes. The unproven tier can
+		// suppress that source briefly and can never ban it, which is the difference between raising an
+		// attacker's cost and handing them a way to have someone else banned.
+		suspiciousNodeDetector.inconsistent(request.getRemoteAddress(), request.getId());
+
+		Message error = exceptionToError(request.getMethod(), request.getTxid(),
+				new InvalidTokenException("Invalid token for " + method + " request"));
+		error.setRemote(request.getId(), request.getRemoteAddress());
+		sendResponse(error);
+		return false;
+	}
+
 	private void onStoreValue(Message request) {
 		StoreValueRequest body = request.getBody();
+		Value value = body.getValue();
+
+		// Checked here rather than inside the blocking section below. Two hashes decide whether a signature
+		// verification and a worker-pool dispatch happen at all, so the cheap test has to come first to be
+		// worth anything against a sender guessing tokens; and the detector it reports to is single-threaded
+		// state owned by this event loop, which a worker thread must not touch.
+		if (!verifyToken(request, body.getToken(), value.getId(), "STORE VALUE"))
+			return;
 
 		kadContext.executeBlocking(() -> {
-			Value value = body.getValue();
-
-			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
-					request.getRemoteIpAddress(), request.getRemotePort(), value.getId())) {
-				log.debug("Received a store value request with invalid token from {}", request.getRemoteAddress());
-				throw new InvalidTokenException("Invalid token for STORE VALUE request");
-			}
-
 			if (!value.isValid())
 				throw new InvalidValueException("Invalid value for STORE VALUE request");
 
 			return value;
-		}, false).compose(value ->
+		}, false).compose(validated ->
 			// Atomic validate-and-store: existence check + immutable/CAS/owner validation + write in one
 			// transaction (see DataStorage#putValue). failIfNotOwner=false: keep our own value on conflict.
-			storage.putValue(value, body.getExpectedSequenceNumber(), false, false)
+			storage.putValue(validated, body.getExpectedSequenceNumber(), false, false)
 		).transform(ar -> {
 			Message response = ar.succeeded() ? Message.storeValueResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());
@@ -1962,22 +1998,20 @@ public class DHT extends BosonVerticle {
 			return;
 		}
 
+		PeerInfo peer = body.getPeer();
+
+		// On the event loop, ahead of the signature check and the dispatch it gates - see onStoreValue.
+		if (!verifyToken(request, body.getToken(), peer.getId(), "ANNOUNCE PEER"))
+			return;
+
 		kadContext.executeBlocking(() -> {
-			PeerInfo peer = body.getPeer();
-
-			if (!tokenManager.verifyToken(body.getToken(), request.getId(),
-					request.getRemoteIpAddress(), request.getRemotePort(), peer.getId())) {
-				log.debug("Received a announce peer request with invalid token from {}", request.getRemoteAddress());
-				throw new InvalidTokenException("Invalid token for ANNOUNCE PEER request");
-			}
-
 			if (!peer.isValid())
 				throw new InvalidPeerException("Invalid value for ANNOUNCE PEER request");
 
 			return peer;
-		}, false).compose(peer ->
+		}, false).compose(validated ->
 			// Atomic validate-and-store (see DataStorage#putPeer). failIfNotOwner=false: keep our own peer on conflict.
-			storage.putPeer(peer, body.getExpectedSequenceNumber(), false, false)
+			storage.putPeer(validated, body.getExpectedSequenceNumber(), false, false)
 		).transform(ar -> {
 			Message response = ar.succeeded() ? Message.announcePeerResponse(request.getTxid()) :
 					exceptionToError(request.getMethod(), request.getTxid(), ar.cause());

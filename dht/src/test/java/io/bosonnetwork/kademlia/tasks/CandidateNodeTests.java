@@ -57,6 +57,22 @@ class CandidateNodeTest {
 	}
 
 	@Test
+	void testTokenPresenceIsNotReadOffTheValue() {
+		assertFalse(candidate.hasToken());
+		assertEquals(0, candidate.getToken());
+
+		// Zero is a token like any other - the issuer derives it from a digest and verifies what it
+		// derived - so receiving one must not read as having received none.
+		candidate.setToken(0);
+		assertTrue(candidate.hasToken());
+		assertEquals(0, candidate.getToken());
+
+		candidate.setToken(0x1234abcd);
+		assertTrue(candidate.hasToken());
+		assertEquals(0x1234abcd, candidate.getToken());
+	}
+
+	@Test
 	void testEligibility() {
 		assertTrue(candidate.isEligible());
 		candidate.setSent();

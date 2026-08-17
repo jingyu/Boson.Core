@@ -92,7 +92,7 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 				continue;
 			}
 
-			if (cn.getToken() == 0) {
+			if (!cn.hasToken()) {
 				log.warn("{}#{} skipping candidate {} due to missing token", getName(), getId(), cn.getId());
 				todo.remove(cn);
 				continue;
@@ -115,7 +115,7 @@ public class PeerAnnounceTask extends Task<PeerAnnounceTask> {
 	}
 
 	/**
-	 * Returns a detailed string representation of the task’s state.
+	 * Returns a detailed string representation of the task's state.
 	 *
 	 * @return the status string
 	 */
