@@ -46,6 +46,16 @@ public class CandidateNode extends NodeInfo {
 	private boolean reachable;
 	/** Token for ANNOUNCE_PEER or STORE_VALUE RPCs */
 	private int token;
+	/**
+	 * Whether a token has been received for this candidate.
+	 * <p>
+	 * Tracked separately because every {@code int} is a valid token, zero included: the issuer derives it
+	 * from a digest and verifies whatever it derived, so a token that happens to be zero is one this
+	 * candidate will accept. Reading "not set" off the value itself would therefore drop roughly one
+	 * announce in four billion, and report it as a missing token that was never missing.
+	 * </p>
+	 */
+	private boolean hasToken;
 
 	// /** Timeout for considering a request stale (5 seconds in nanoseconds). */
 	// private static final long TIMEOUT = 5_000_000_000L; // 5 seconds
@@ -64,6 +74,7 @@ public class CandidateNode extends NodeInfo {
 		this.lastSent = 0;
 		this.lastReply = 0;
 		this.token = 0;
+		this.hasToken = false;
 		this.reachable = ni instanceof KBucketEntry entry && entry.isReachable();
 	}
 
@@ -119,16 +130,33 @@ public class CandidateNode extends NodeInfo {
 	/**
 	 * Sets the token for ANNOUNCE_PEER or STORE_VALUE RPCs.
 	 *
+	 * <p>Call this only with a token that arrived in a response from this candidate. Any value is a valid
+	 * token, so the call itself is what records that one was received - see {@link #hasToken()}.</p>
+	 *
 	 * @param token the token
 	 */
 	public void setToken(int token) {
 		this.token = token;
+		this.hasToken = true;
+	}
+
+	/**
+	 * Returns whether this candidate has supplied a token.
+	 *
+	 * <p>The test an announce task should make before sending. A candidate has one when it answered a
+	 * lookup that asked for one, which is what the announce tasks are fed from.</p>
+	 *
+	 * @return true if a token has been received, false otherwise
+	 */
+	public boolean hasToken() {
+		return hasToken;
 	}
 
 	/**
 	 * Returns the token for ANNOUNCE_PEER or STORE_VALUE RPCs.
 	 *
-	 * @return the token, or null if not set
+	 * @return the token, or 0 if none has been received - a value indistinguishable from a token that is
+	 *         itself 0, so test {@link #hasToken()} rather than this
 	 */
 	public int getToken() {
 		return token;
