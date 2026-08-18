@@ -61,6 +61,7 @@ import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.storage.DataStorage;
 import io.bosonnetwork.kademlia.tasks.AnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
+import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.NodeLookupTask;
 import io.bosonnetwork.kademlia.tasks.PeerAnnounceTask;
 import io.bosonnetwork.kademlia.tasks.PeerLookupTask;
@@ -2595,8 +2596,14 @@ public class DHT extends BosonVerticle {
 	public Future<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
 		Promise<List<PeerInfo>> promise = Promise.promise();
 
+		// Resolved here rather than taken as given: this entry point is public and, unlike KadNode's, had
+		// no guard, so a caller asking for zero peers got a lookup that ended on its first response and
+		// then discarded everything it had found. Zero means unspecified, the same as it does on the
+		// receive side in peersPerResponse.
+		final int peers = EligiblePeers.resolveExpectedCount(expectedCount);
+
 		runOnContext(v -> {
-			PeerLookupTask task = new PeerLookupTask(kadContext, id, expectedSequenceNumber, expectedCount,
+			PeerLookupTask task = new PeerLookupTask(kadContext, id, expectedSequenceNumber, peers,
 					option != LookupOption.CONSERVATIVE)
 					.setName("Lookup peer: " + id)
 					.addListener(t -> promise.complete(t.getResult().getPeers()));

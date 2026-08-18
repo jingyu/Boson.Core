@@ -60,7 +60,8 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 	 * @param context the Kademlia context, must not be null
 	 * @param target  the target ID (e.g., content hash) to look up
 	 * @param expectedSequenceNumber the minimum sequence number for valid peers; -1 to disable
-	 * @param expectedCount the expected number of peers; 0 to disable filtering
+	 * @param expectedCount the expected number of peers, at least one; see
+	 *                      {@link EligiblePeers#resolveExpectedCount(int)} for what a caller's 0 means
 	 * @param doneOnEligibleResult true if the lookup is complete when a result is eligible, false continue
 	 */
 	public PeerLookupTask(KadContext context, Id target, int expectedSequenceNumber, int expectedCount, boolean doneOnEligibleResult) {
