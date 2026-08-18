@@ -10,6 +10,8 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
@@ -557,5 +559,197 @@ class TaskManagerTests {
 			Thread.sleep(20);
 		}
 		return false;
+	}
+
+	/**
+	 * Captures what a logger emitted, with that logger forced to DEBUG.
+	 * <p>
+	 * Forced on purpose: the module's test configuration is INFO, so a message downgraded to DEBUG would
+	 * be indistinguishable from a message deleted. Raising the level lets these tests assert both halves -
+	 * that the report is still made, and that it is no longer made at a level that says the node is broken.
+	 * </p>
+	 */
+	private static final class CapturedLog implements AutoCloseable {
+		private final ch.qos.logback.classic.Logger logger;
+		private final ch.qos.logback.classic.Level previousLevel;
+		private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+
+		CapturedLog(Class<?> owner) {
+			logger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(owner);
+			previousLevel = logger.getLevel();
+			logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+			appender.start();
+			logger.addAppender(appender);
+		}
+
+		List<ILoggingEvent> atOrAbove(ch.qos.logback.classic.Level level) {
+			return appender.list.stream().filter(e -> e.getLevel().isGreaterOrEqual(level)).toList();
+		}
+
+		boolean hasDebug() {
+			return appender.list.stream().anyMatch(e -> e.getLevel() == ch.qos.logback.classic.Level.DEBUG);
+		}
+
+		@Override
+		public void close() {
+			logger.detachAppender(appender);
+			appender.stop();
+			logger.setLevel(previousLevel);
+		}
+	}
+
+	private static String render(List<ILoggingEvent> events) {
+		return events.stream().map(e -> e.getLevel() + " " + e.getFormattedMessage()).toList().toString();
+	}
+
+	/**
+	 * Cancelling a task that has already ended must not read as a defect.
+	 * <p>
+	 * It is reachable from three ordinary places - {@code add}'s rejection recovery, {@code cancelAll}
+	 * reaching a task a nested cascade already cancelled, and a publish cancelling an announce whose
+	 * lookup cancelled it first - and in every one of them the caller is written to expect it.
+	 * </p>
+	 */
+	@Test
+	void testCancellingAnEndedTaskIsNotAnAlarm(VertxTestContext context) {
+		TestTask task = new TestTask(kadContext).setName("AlreadyGone");
+		task.cancel();
+
+		try (CapturedLog log = new CapturedLog(TestTask.class)) {
+			task.cancel();
+
+			context.verify(() -> {
+				assertTrue(log.atOrAbove(ch.qos.logback.classic.Level.WARN).isEmpty(),
+						"a routine double cancel was announced as a problem: "
+								+ render(log.atOrAbove(ch.qos.logback.classic.Level.WARN)));
+				assertTrue(log.hasDebug(), "the refusal must still be reported, only quietly");
+			});
+		}
+		context.completeNow();
+	}
+
+	/**
+	 * The same for a task that was cancelled while queued and then reached {@code start}, which is the
+	 * race the finding was filed for. One benign outcome used to produce three lines, one of them ERROR.
+	 */
+	/**
+	 * The race the finding was filed for, collapsed to the point where it shows.
+	 * <p>
+	 * A queued task is started by {@code dequeue} scheduling {@code start} on the event loop, so anything
+	 * that cancels it in between - {@code cancelAll}, a caller dropping the work - leaves {@code start}
+	 * running against a task that has already ended. Nothing is wrong when that happens, and it used to
+	 * be announced as an invalid state transition.
+	 * </p>
+	 * <p>
+	 * Driven directly rather than through the manager: the two-step is what makes the race, and
+	 * {@code TaskManager.add} asserts its input is not already ended, so the manager cannot be used to
+	 * stage it under test.
+	 * </p>
+	 */
+	@Test
+	void testStartingACancelledTaskIsNotAnAlarm(VertxTestContext context) {
+		TestTask task = new TestTask(kadContext).setName("CancelledWhileQueued");
+		task.cancel();
+
+		try (CapturedLog log = new CapturedLog(TestTask.class)) {
+			task.start();
+
+			context.verify(() -> {
+				assertTrue(log.atOrAbove(ch.qos.logback.classic.Level.WARN).isEmpty(),
+						"a task overtaken by its own cancellation was reported as a defect: "
+								+ render(log.atOrAbove(ch.qos.logback.classic.Level.WARN)));
+				assertTrue(log.hasDebug(), "the refusal must still be reported, only quietly");
+				assertEquals(Task.State.CANCELED, task.getState(), "start must not revive an ended task");
+			});
+		}
+		context.completeNow();
+	}
+
+	/**
+	 * The rule has two halves, and this is the half that keeps it from being a blanket mute: a task found
+	 * in a live but unexpected state has been overtaken by nothing, so it is still a defect. Starting a
+	 * task that is already running is the plainest example.
+	 */
+	@Test
+	void testAnUnexpectedLiveStateIsStillAnAlarm(VertxTestContext context) {
+		TestTask task = new TestTask(kadContext).setName("StartedTwice");
+		task.start();
+
+		try (CapturedLog log = new CapturedLog(TestTask.class)) {
+			task.start();
+
+			context.verify(() -> assertFalse(log.atOrAbove(ch.qos.logback.classic.Level.WARN).isEmpty(),
+					"a task in a live but wrong state must still be a warning"));
+		}
+		context.completeNow();
+	}
+
+	/**
+	 * And the counterpart that keeps this from being a blanket mute: a task added twice while it is alive
+	 * has been overtaken by nothing, so it is a caller bug and still says so.
+	 */
+	@Test
+	void testAddingTheSameLiveTaskTwiceIsStillAnAlarm(VertxTestContext context) {
+		TestTask task = new TestTask(kadContext).setName("AddedTwice");
+
+		CapturedLog managerLog = new CapturedLog(TaskManager.class);
+		CapturedLog taskLog = new CapturedLog(TestTask.class);
+
+		kadContext.runOnContext(() -> {
+			try {
+				// The first add leaves the task QUEUED, so the second finds it alive and already ours.
+				manager.add(task);
+				manager.add(task);
+
+				context.verify(() -> {
+					assertFalse(managerLog.atOrAbove(ch.qos.logback.classic.Level.ERROR).isEmpty(),
+							"a double add is a caller bug and must still be reported as one");
+					assertFalse(taskLog.atOrAbove(ch.qos.logback.classic.Level.WARN).isEmpty(),
+							"an unexpected live state must still be a warning");
+				});
+				context.completeNow();
+			} finally {
+				taskLog.close();
+				managerLog.close();
+			}
+		});
+	}
+
+	/**
+	 * The running set iterates in the order tasks were admitted.
+	 * <p>
+	 * It did so before as well, but only because {@code Task.hashCode} was its sequential id, so a
+	 * {@code HashSet} happened to bucket them in creation order. That is not a property, and leaning on it
+	 * cost the {@code cancelAll} tests above their meaning once already. The order is now the collection's
+	 * doing and can be asserted.
+	 * </p>
+	 */
+	@Test
+	void testTheRunningSetKeepsAdmissionOrder(VertxTestContext context) {
+		List<TestTask> tasks = new ArrayList<>();
+		for (int i = 0; i < 6; i++)
+			tasks.add(new TestTask(kadContext).setName("Ordered" + i));
+
+		kadContext.runOnContext(() -> tasks.forEach(manager::add));
+
+		try {
+			if (!waitFor(() -> manager.getRunningTasks() == tasks.size()))
+				context.failNow("the tasks never started");
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		String rendered = manager.toString();
+		int previous = -1;
+		for (TestTask task : tasks) {
+			int at = rendered.indexOf(task.getName());
+			int found = at;
+			int before = previous;
+			context.verify(() -> {
+				assertTrue(found > before, "the running set lost its admission order");
+			});
+			previous = at;
+		}
+		context.completeNow();
 	}
 }

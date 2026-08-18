@@ -2,11 +2,15 @@ package io.bosonnetwork.kademlia.tasks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
@@ -328,5 +332,115 @@ public class TaskTests {
 		assertEquals(0, failing.getInFlightCalls());
 		assertEquals(Task.State.CANCELED, failing.getState());
 		assertTrue(ended.get(), "the end handler must fire, or the task's slot is never reclaimed");
+	}
+
+	/**
+	 * An unstarted task has no age, which is what its contract has always said.
+	 * <p>
+	 * Without the guard it answered with the time since the epoch - some 57 years - and every caller was
+	 * shielded from that by a check of its own: {@code isOverdue()} by {@code isRunning()}, {@code
+	 * toString()} by the start time being set. A contract that only holds because nobody exercises it is
+	 * one deletion of a guard away from being false.
+	 * </p>
+	 */
+	@Test
+	void testAnUnstartedTaskHasNoAge() {
+		assertEquals(Duration.ZERO, task.age());
+	}
+
+	/**
+	 * And the reading that would have mattered: the bogus age was far past any deadline, so an unstarted
+	 * task looked overdue to everything except the guard that happened to be in the way.
+	 */
+	@Test
+	void testAnUnstartedTaskIsNotPastItsDeadline() {
+		assertTrue(task.age().compareTo(task.deadline()) <= 0,
+				"an unstarted task must not read as older than its own deadline");
+		assertFalse(task.isOverdue());
+	}
+
+	@Test
+	void testAStartedTaskAges() throws InterruptedException {
+		task.start();
+		Thread.sleep(5);
+
+		assertTrue(task.age().toMillis() > 0);
+	}
+
+	/**
+	 * The tie-break the ordering rests on, over the gap that used to invert it.
+	 * <p>
+	 * The old form read a difference above 2^31 as evidence the id counter had wrapped and returned "less
+	 * than" for it, so for three tasks sharing a creation time and spread across that gap the comparator
+	 * was not transitive: it ordered a below b and b below c while ordering c below a. Nothing sorted
+	 * tasks, so nothing ever saw it.
+	 * </p>
+	 */
+	@Test
+	void testTheIdTieBreakIsTransitiveAcrossTheWholeIdRange() {
+		long createTime = System.currentTimeMillis();
+		Task<?> low = taskWith(createTime, 1L);
+		Task<?> mid = taskWith(createTime, 1L + Integer.MAX_VALUE);
+		Task<?> high = taskWith(createTime, 0xFFFFFFFFL);
+
+		assertTrue(compare(low, mid) < 0);
+		assertTrue(compare(mid, high) < 0);
+		assertTrue(compare(low, high) < 0, "the comparator ordered the pair it had already ordered the other way");
+
+		assertTrue(compare(mid, low) > 0);
+		assertTrue(compare(high, low) > 0);
+		assertEquals(0, compare(mid, mid));
+	}
+
+	@Test
+	void testCreationTimeOutranksTheId() {
+		Task<?> earlyWithHighId = taskWith(1_000L, 0xFFFFFFFFL);
+		Task<?> lateWithLowId = taskWith(2_000L, 1L);
+
+		assertTrue(compare(earlyWithHighId, lateWithLowId) < 0);
+		assertTrue(compare(lateWithLowId, earlyWithHighId) > 0);
+	}
+
+	/**
+	 * Tasks are identity objects: two of them are never the same task, whatever their fields say.
+	 * <p>
+	 * This is why {@code hashCode} is no longer overridden. The override was legal - equality is identity,
+	 * so the contract held vacuously - but it made a {@code HashSet} of tasks iterate in creation order,
+	 * which reads as a guarantee and is not one. {@code TaskManager} now asks for that order explicitly.
+	 * </p>
+	 */
+	@Test
+	void testTwoTasksAreNeverTheSameTask() {
+		Task<?> a = taskWith(1_000L, 42L);
+		Task<?> b = taskWith(1_000L, 42L);
+
+		assertNotEquals(a, b);
+		Set<Task<?>> set = new HashSet<>();
+		set.add(a);
+		set.add(b);
+		assertEquals(2, set.size(), "two distinct tasks collapsed into one set entry");
+	}
+
+	/** Forces the two fields the comparator reads, which are otherwise assigned by the constructor. */
+	private Task<?> taskWith(long createTime, long taskId) {
+		TestTask t = new TestTask(context);
+		set(t, "createTime", createTime);
+		set(t, "taskId", taskId);
+		return t;
+	}
+
+	private static void set(Task<?> task, String field, long value) {
+		try {
+			java.lang.reflect.Field f = Task.class.getDeclaredField(field);
+			f.setAccessible(true);
+			f.setLong(task, value);
+		} catch (ReflectiveOperationException e) {
+			throw new AssertionError("could not seed " + field, e);
+		}
+	}
+
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private static int compare(Task<?> a, Task<?> b) {
+		return ((Comparable) a).compareTo(b);
 	}
 }

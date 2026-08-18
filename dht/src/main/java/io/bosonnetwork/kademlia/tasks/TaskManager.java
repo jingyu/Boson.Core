@@ -25,7 +25,7 @@ package io.bosonnetwork.kademlia.tasks;
 
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -67,7 +67,12 @@ public class TaskManager {
 		this.maxActiveTasks = context.getConcurrentTasks();
 
 		queuedTasks = new LinkedList<>();
-		runningTasks = new HashSet<>();
+		// Insertion-ordered on purpose. A plain HashSet iterated in creation order anyway, because Task
+		// overrode hashCode with its sequential id - so anything reading this set, tests included, was
+		// resting on the hash function rather than on a property. Dropping that override left the order
+		// genuinely arbitrary, and the order is worth having: it keeps cancelAll, the deadline sweep and
+		// toString reporting tasks oldest-first, which is the order an operator reads them in.
+		runningTasks = new LinkedHashSet<>();
 
 		// One sweep for every task rather than a timer each: the running set is bounded by
 		// concurrentTasks, so the scan is cheaper than the timers it replaces, and on an idle node it
@@ -147,7 +152,13 @@ public class TaskManager {
 		}
 
 		if (!task.setState(Task.State.INITIAL, Task.State.QUEUED)) {
-			log.error("!!!INTERNAL ERROR: task is not in INITIAL state: {}", task);
+			// setState has already reported this at the severity it deserves, so nothing is repeated here.
+			// What is left is the one reading this method can name and the state machine cannot: a task
+			// that is alive and already registered was handed to us a second time. The RUNNING case is
+			// taken above, so a live task reaching here is QUEUED, which is a double add and a caller bug.
+			if (!task.isEnd())
+				log.error("!!!INTERNAL ERROR: task is already queued, added twice: {}", task);
+
 			task.endHandler(null);
 			// Cancel rather than drop silently. Callers wait on this task through a listener, so a task
 			// that leaves here without ever reaching a terminal state leaves them waiting forever - and
