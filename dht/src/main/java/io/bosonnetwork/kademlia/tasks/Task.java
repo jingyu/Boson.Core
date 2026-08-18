@@ -163,8 +163,35 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
+	 * Reports a transition this task refused, at a severity that says whether anything is actually wrong.
+	 * <p>
+	 * <b>Losing a race to a terminal state is how this layer normally works, and it used to be announced
+	 * as a defect.</b> A task that is already CANCELED or COMPLETED when something tries to move it has
+	 * simply been overtaken - by {@code TaskManager.cancelAll}, by the deadline sweep, by a caller
+	 * cancelling work it no longer wants - and every caller here is written to expect that and carry on.
+	 * A task found in a live but unexpected state has been overtaken by nothing, and that is a real
+	 * invariant violation worth the warning.
+	 * </p>
+	 * <p>
+	 * The RPC layer already draws this line - {@code RpcCall.cancel()} and {@code RpcCall.fail()} open by
+	 * returning silently when the call is already final - so this makes the two layers agree.
+	 * </p>
+	 *
+	 * @param expected the state, or states, the caller required.
+	 * @param newState the transition that was refused.
+	 */
+	private void reportRefusedTransition(Object expected, State newState) {
+		if (isEnd())
+			getLogger().debug("{}#{} ignoring the transition to {}: the task already ended as {}",
+					name, taskId, newState, state);
+		else
+			getLogger().warn("{}#{} invalid state transition to {}: expected {}, but was {}",
+					name, taskId, newState, expected, state);
+	}
+
+	/**
 	 * Attempts to transition the task from an expected state to a new state.
-	 * Logs a warning if the transition is invalid.
+	 * Reports a refused transition through {@link #reportRefusedTransition}.
 	 *
 	 * @param expected the expected current state
 	 * @param newState the new state to set
@@ -172,14 +199,11 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 */
 	@SuppressWarnings("SameParameterValue")
 	protected boolean setState(State expected, State newState) {
-		if (expected != state) {
-			getLogger().warn("{}#{} invalid state transition: expected {}, but was {}",
-					name, taskId, expected, state);
-			return false;
-		}
-
-		if (isEnd()) {
-			getLogger().warn("{}#{} invalid state transition: task already ended: {}", name, taskId, state);
+		// The two refusals report as one. They were separate messages for what a reader cannot act on
+		// separately, and the second was unreachable for the only caller anyway: it passes INITIAL, which
+		// is not a terminal state, so matching it rules the ended case out.
+		if (expected != state || isEnd()) {
+			reportRefusedTransition(expected, newState);
 			return false;
 		}
 
@@ -199,8 +223,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 		assert (newState != null) : "Invalid new state";
 
 		if (!expected.contains(state)) {
-			getLogger().warn("{}#{} invalid state transition: expected one of {}, but was {}",
-					name, taskId, expected, state);
+			reportRefusedTransition(expected, newState);
 			return false;
 		}
 
@@ -580,11 +603,21 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 
 	/**
 	 * Returns the duration since the task started.
+	 * <p>
+	 * An unstarted task has no age. Without the guard below it reported the time since the epoch - some
+	 * 57 years - which every caller happens to be shielded from today: {@link #isOverdue()} is gated on
+	 * {@link #isRunning()} and {@code toString()} on the start time being set.
+	 * </p>
+	 * <p>
+	 * This keeps counting after the task ends, on purpose. {@link #getLeadTime()} is the start-to-end
+	 * measure and {@code toString()} prefers it once the task has finished, so stopping the clock here
+	 * would be a second name for that.
+	 * </p>
 	 *
 	 * @return the age, or Duration.ZERO if not started
 	 */
 	public Duration age() {
-		return Duration.ofMillis(System.currentTimeMillis() - startTime);
+		return startTime == 0 ? Duration.ZERO : Duration.ofMillis(System.currentTimeMillis() - startTime);
 	}
 
 	/**
@@ -888,33 +921,29 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	protected abstract Logger getLogger();
 
 	/**
-	 * Compares tasks for ordering, first by creation time and then by task ID with wraparound handling.
+	 * Compares tasks for ordering: earlier creation time first, and task id to break a tie.
+	 * <p>
+	 * <b>The tie-break needs no wraparound handling, and used not to be transitive because it had some.</b>
+	 * The id counter does wrap over the life of a node - it is an {@code AtomicInteger} widened by
+	 * {@link Integer#toUnsignedLong}, so it ascends through {@code [0, 2^32)} and restarts - and the
+	 * previous form treated a gap above {@code 2^31} as evidence of that wrap, inverting the order for
+	 * such a pair. What makes the wrap unreachable here is the line above it: creation time is compared
+	 * first, so ids are only consulted for two tasks created in the same millisecond, and reaching a gap
+	 * that size inside one millisecond would take 2^31 tasks constructed in it.
+	 * </p>
 	 *
 	 * @param t the task to compare with
 	 * @return a negative integer, zero, or a positive integer as this task is less than, equal to,
 	 *         or greater than the specified task
 	 */
 	@Override
-	public int compareTo(Task t) {
+	public int compareTo(Task<S> t) {
 		// Compare createTime first (earlier tasks come first)
-		if (this.createTime != t.createTime) {
+		if (this.createTime != t.createTime)
 			return Long.compare(this.createTime, t.createTime);
-		}
 
-		// If createTime is equal, compare taskId with wraparound logic
-		long diff = this.taskId - t.taskId;
-		return (diff > Integer.MAX_VALUE) ? -1 :
-				(diff < Integer.MIN_VALUE) ? 1 : Long.compareUnsigned(this.taskId, t.taskId);
-	}
-
-	/**
-	 * Returns the hash code of the task based on its ID.
-	 *
-	 * @return the hash code
-	 */
-	@Override
-	public int hashCode() {
-		return (int) (taskId & 0xFFFFFFFFL);
+		// Already non-negative, so a signed comparison is the unsigned one.
+		return Long.compare(this.taskId, t.taskId);
 	}
 
 	/**
