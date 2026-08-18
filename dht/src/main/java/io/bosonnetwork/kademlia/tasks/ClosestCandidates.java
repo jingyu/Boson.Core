@@ -70,6 +70,13 @@ public class ClosestCandidates {
 		this.capacity = capacity;
 		this.developerMode = developerMode;
 
+		// Distance is the whole ordering, and a ping-count tiebreak would have nothing to break: this map
+		// is keyed by node id, and threeWayCompare returns 0 only for byte-identical ids, so no two
+		// entries can ever compare equal. Nor is anything lost by that. What such a tiebreak would want -
+		// stop favoring a node that keeps not answering - is decided one level up and decided harder,
+		// by CandidateNode.isEligible: a candidate with three unanswered sends is excluded from selection
+		// outright rather than merely ranked below its peers. The ping count governs membership here,
+		// never order.
 		closest = new TreeMap<>(target::threeWayCompare);
 		dedup = new HashSet<>(capacity * 2);
 	}
@@ -122,19 +129,6 @@ public class ClosestCandidates {
 	}
 
 	/**
-	 * Compares two candidate nodes for prioritization, favoring closer distance then fewer pings.
-	 *
-	 * @param cn1 the first candidate node
-	 * @param cn2 the second candidate node
-	 * @return negative if cn1 is preferred, positive if cn2, zero if equal
-	 */
-	private int candidateOrder(CandidateNode cn1, CandidateNode cn2) {
-		// Kademlia typically prioritizes distance, with ping counts as a tiebreaker.
-		int diff = target.threeWayCompare(cn1.getId(), cn2.getId());
-		return diff != 0 ? diff : Integer.compare(cn1.getPinged(), cn2.getPinged());
-	}
-
-	/**
 	 * Adds nodes to the queue, deduplicating by ID and address, and prunes excess nodes to retain closer ones.
 	 * <p>
 	 * <b>The first claim on an address wins.</b> When a new id arrives at an address already held, the
@@ -173,9 +167,11 @@ public class ClosestCandidates {
 		}
 
 		if (reachedCapacity()) {
+			// No sort: closest is already ordered by distance and filtering preserves that, so sorting
+			// here only re-imposed the order the map is built on. See the constructor for why distance
+			// is the whole rule.
 			List<CandidateNode> toRemove = closest.values().stream()
 					.filter(cn -> !cn.isInFlight())
-					.sorted(this::candidateOrder)
 					.skip(capacity)
 					.toList();
 
@@ -216,14 +212,18 @@ public class ClosestCandidates {
 	}
 
 	/**
-	 * Retrieves the next candidate node to query, prioritizing eligible nodes by distance and ping count.
+	 * Retrieves the next candidate node to query: the eligible one closest to the target.
 	 *
 	 * @return the next candidate node, or null if none eligible
 	 */
 	public CandidateNode next() {
+		// The closest eligible candidate is the first one the map yields, since closest is ordered by
+		// distance - so this stops at it rather than scanning the whole queue to take a minimum under an
+		// order the queue already has. That matters more here than in the prune branch: this runs once
+		// per call sent, and the answer is usually near the front.
 		return closest.values().stream()
 				.filter(CandidateNode::isEligible)
-				.min(this::candidateOrder)
+				.findFirst()
 				.orElse(null);
 	}
 

@@ -102,8 +102,8 @@ public final class KadConstants {
 	 * proportion: filling the closest set takes k responses, but the stability margin on top of it is
 	 * capped at {@link #LOOKUP_STABILITY_ATTEMPTS} rather than being k as well - which is what it was
 	 * until that cap was introduced, and it doubled the cost of every lookup at k=16. The candidate
-	 * queue would grow as 3k and
-	 * is re-sorted per insertion, hence {@link #MAX_LOOKUP_CANDIDATES}. Response size would grow as k
+	 * queue would grow as 3k, and every prune walks all of it, hence
+	 * {@link #MAX_LOOKUP_CANDIDATES}. Response size would grow as k
 	 * and overrun the MTU, hence {@link #MAX_NODES_PER_RESPONSE}. A super node raising k gets the
 	 * routing robustness it wants without those consequences only because those caps are in place.
 	 * </p>
@@ -263,9 +263,10 @@ public final class KadConstants {
 	 * </p>
 	 * <p>
 	 * <b>Why bound it at all, and why the cost is smaller than it looks.</b> Pruning is not free but
-	 * it is not quadratic either: {@code ClosestCandidates.add} sorts once per call, and
-	 * {@code LookupTask} calls it once per response with the whole batch of nodes - not once per node.
-	 * So a response costs one O(n log n) pass, about 900 comparisons at n=128. Memory is similarly
+	 * it is not quadratic either, and it no longer sorts: the candidate map is already ordered by
+	 * distance, so a prune is one linear walk over it. {@code LookupTask} calls
+	 * {@code ClosestCandidates.add} once per response with the whole batch of nodes - not once per
+	 * node - and only an overfilled queue prunes at all. Memory is similarly
 	 * modest: 128 entries across {@link #CONCURRENT_TASKS} concurrent lookups is well under a
 	 * megabyte. Neither number justifies a tight cap; what the ceiling really buys is a predictable
 	 * worst case at large k, which matters on constrained devices.
@@ -279,10 +280,11 @@ public final class KadConstants {
 	 * the standards of the field, and there is no case for lowering it.
 	 * </p>
 	 * <p>
-	 * <b>What it does not bound.</b> Only the candidate map. {@code ClosestCandidates.dedup} also
-	 * retains the id of any node whose id was accepted but whose address then collided, and those are
-	 * reclaimed only for nodes that reached the candidate map - so the structure that can actually
-	 * grow unchecked during a lookup is not the one this caps.
+	 * <b>What it does not bound.</b> Only the candidate map. {@code ClosestCandidates.dedup} keeps the
+	 * id and address of a node removed by either {@code remove} overload, deliberately, so that a node
+	 * already dealt with cannot be offered back into the queue - and pruning is the only path that
+	 * reclaims a dedup entry. So the structure that can actually grow during a lookup is not the one
+	 * this caps.
 	 * </p>
 	 * <p>
 	 * Implementation limit, not protocol: purely this node's resource budget.
