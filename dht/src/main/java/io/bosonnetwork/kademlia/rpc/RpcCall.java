@@ -33,7 +33,6 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.exceptions.ProtocolException;
 import io.bosonnetwork.kademlia.protocol.Error;
 import io.bosonnetwork.kademlia.protocol.Message;
-import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.utils.Timer;
 
 /**
@@ -56,7 +55,7 @@ public class RpcCall {
 	/** The cause of an error if the RPC call fails, null otherwise. */
 	private Throwable cause;
 
-	/** Indicates whether the target was reachable at creation time, based on KBucketEntry. */
+	/** Indicates whether the target had answered us before this call was created. */
 	private boolean targetIsReachable;
 
 	/** Indicates whether an unverified inbound packet is what caused this call to be made. */
@@ -119,10 +118,12 @@ public class RpcCall {
 		request.setRemote(target.getId(), target.getAddress());
 		request.setAssociatedCall(this);
 
-		// Initialize reachability and RTT from KBucketEntry if applicable
-		if (target instanceof KBucketEntry entry) {
-			targetIsReachable = entry.isReachable();
-			expectedRTT = entry.getRTT();
+		// Take whatever this node has established about the target itself. A target that carries none -
+		// a plain NodeInfo somebody described to us - leaves both at their defaults, and an absent RTT is
+		// what tells dispatchCall to supply the timeout sampler's estimate instead.
+		if (target instanceof CallTarget known) {
+			targetIsReachable = known.isReachable();
+			expectedRTT = known.getRTT();
 		}
 	}
 

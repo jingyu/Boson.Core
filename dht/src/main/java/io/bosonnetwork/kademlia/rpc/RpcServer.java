@@ -560,7 +560,10 @@ public class RpcServer implements Measured {
 	 *   <li>{@code true} - a response proved it: it matched a call we had outstanding and came back from the
 	 *       address that call was sent to, carrying an id other than the one we addressed. The address
 	 *       demonstrably receives our traffic, since it answered a transaction id we chose and never
-	 *       published, so this cannot have been aimed by a bystander.</li>
+	 *       published, so this cannot have been aimed by a bystander. Stronger still, and the reason this
+	 *       tier is safe to act on: answering at all required the private key of the id we addressed, and
+	 *       replying under another id required that one too, so the sender holds both. An id invented for
+	 *       an honest node buys nothing, because that node cannot decrypt a request addressed to it.</li>
 	 * </ul>
 	 *
 	 * @param churnHandler the handler to process identity churn, taking the stale binding and whether the
@@ -864,6 +867,13 @@ public class RpcServer implements Measured {
 							if (pendingCalls.remove(message.getTxid(), call))
 								call.respondChurningId(message);
 
+							// Reaching this branch proves more than the address receiving our traffic, and the
+							// stronger fact is the one to rely on: the responder decrypted a request
+							// encrypted to call.getTargetId(), so it holds that key, and it encrypted this
+							// reply under a different id, so it holds that one too. One party is answering
+							// under a second identity it also controls. Nobody can arrange this for a
+							// bystander: naming an honest node under an id it does not hold produces a
+							// request that node cannot decrypt, so it never answers and is never charged.
 							suspiciousNodeDetector.misbehaved(remoteAddress, remoteId);
 
 							// Proven: this arrived from the address we sent the call to, answering a

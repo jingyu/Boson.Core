@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.tasks;
 
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
+import io.bosonnetwork.kademlia.rpc.CallTarget;
 
 /**
  * A class representing a candidate node in Kademlia lookup tasks, extending {@link NodeInfo}
@@ -33,7 +34,7 @@ import io.bosonnetwork.kademlia.routing.KBucketEntry;
  * ({@link PeerAnnounceTask}, {@link ValueAnnounceTask}) to send RPCs. Designed for
  * single-threaded use in a Vert.x event loop; not thread-safe.
  */
-public class CandidateNode extends NodeInfo {
+public class CandidateNode extends NodeInfo implements CallTarget {
 	/** Time of the last unanswered request. */
 	private long lastSent;
 	/** Time of the last reply. */
@@ -44,6 +45,8 @@ public class CandidateNode extends NodeInfo {
 	private int pinged;
 	/** Whether the node is considered reachable. */
 	private boolean reachable;
+	/** Expected round-trip time for the node, non-positive when we have never timed it ourselves. */
+	private final int rtt;
 	/** Token for ANNOUNCE_PEER or STORE_VALUE RPCs */
 	private int token;
 	/**
@@ -76,6 +79,10 @@ public class CandidateNode extends NodeInfo {
 		this.token = 0;
 		this.hasToken = false;
 		this.reachable = ni instanceof KBucketEntry entry && entry.isReachable();
+		// Unknown stays unknown. A candidate we were merely told about has never been timed by us, and
+		// naming a constant here would look like knowledge and suppress the RPC layer's adaptive estimate
+		// - which is precisely the estimate meant for nodes in this position.
+		this.rtt = ni instanceof KBucketEntry entry ? entry.getRTT() : -1;
 	}
 
 	/**
@@ -183,8 +190,20 @@ public class CandidateNode extends NodeInfo {
 	 *
 	 * @return true if reachable, false otherwise
 	 */
+	@Override
 	public boolean isReachable() {
 		return reachable;
+	}
+
+	/**
+	 * Retrieves the round-trip time to expect from this node, inherited from the routing table entry it
+	 * was seeded from.
+	 *
+	 * @return the expected RTT in milliseconds, or -1 if this node was only ever described to us.
+	 */
+	@Override
+	public int getRTT() {
+		return rtt;
 	}
 
 	/**
