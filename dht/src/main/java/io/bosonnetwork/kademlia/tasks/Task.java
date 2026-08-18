@@ -70,6 +70,8 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	private Task<?> nested;
 
 	private final Map<Long, RpcCall> inFlight;
+	/** How many calls this task has put on the wire, for telling a productive iteration from an empty one. */
+	private long callsSent;
 	private TaskListener<S> listener;
 	// Shortcut to the task manager for efficiency and to ensure the task manager is
 	// notified first when the task ends
@@ -238,6 +240,21 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 */
 	public int getInFlightCalls() {
 		return inFlight.size();
+	}
+
+	/**
+	 * Returns how many calls this task has sent since it started.
+	 * <p>
+	 * Counts every call handed to the transport, including one whose send then failed, and never
+	 * decreases - so a subclass can compare it across a region to ask whether anything was attempted
+	 * there. That is a different question from {@link #getInFlightCalls()}, which answers how many are
+	 * outstanding right now.
+	 * </p>
+	 *
+	 * @return the number of calls sent
+	 */
+	protected long getCallsSent() {
+		return callsSent;
 	}
 
 	/**
@@ -670,6 +687,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 		}
 
 		inFlight.put(call.getTxid(), call);
+		callsSent++;
 
 		getLogger().trace("{}#{} sending {} call to {}...", name, taskId, call.getRequest().getMethod(), target);
 		try {

@@ -2577,6 +2577,16 @@ public class DHT extends BosonVerticle {
 							return;
 						}
 
+						// A short target list means one of two things, and only the lookup knew which. Not
+						// an error either way - the publish goes ahead, since writing to the nodes we did
+						// find is better than writing to none - but a store that lands on fewer than k
+						// nodes because we ran out of budget is under-replicated for a reason on our side,
+						// and its own per-target result cannot say so: every target it was given may well
+						// acknowledge.
+						if (!closest.isConverged())
+							log.warn("Value {} is being stored to {} node(s) from a lookup that did not converge ({})",
+									value.getId(), closest.size(), t.getCompletionReason());
+
 						announceTask.closest(closest);
 						// Cancelled rather than dropped, as in the branch above: the promise is completed
 						// by this task's listener, so a task that never reaches a terminal state leaves
@@ -2639,6 +2649,11 @@ public class DHT extends BosonVerticle {
 							announceTask.cancel();
 							return;
 						}
+
+						// See storeValue: the target list is short for a reason the publish cannot report.
+						if (!closest.isConverged())
+							log.warn("Peer {} is being announced to {} node(s) from a lookup that did not converge ({})",
+									peer.getId(), closest.size(), t.getCompletionReason());
 
 						announceTask.closest(closest);
 						// Cancelled rather than dropped, for the reason given in storeValue.

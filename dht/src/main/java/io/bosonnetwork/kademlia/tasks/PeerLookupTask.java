@@ -90,8 +90,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 	 * Performs one iteration of the lookup, sending FIND_PEER RPCs to candidate nodes.
 	 */
 	@Override
-	protected void iterate() {
-		super.iterate();
+	protected void sendRequests() {
 		log.trace("{}#{} candidates.size={}", getName(), getId(), getCandidateSize());
 		while (!isCandidatesEmpty() && canDoRequest()) {
 			CandidateNode cn = getNextCandidate();
