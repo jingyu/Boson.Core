@@ -196,7 +196,7 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 					network.isIPv4(), network.isIPv6(), doesWantToken());
 
 			log.debug("{}#{} sending FIND_NODE RPC to candidate {}", getName(), getId(), cn.getId());
-			sendCall(cn, request, (c) -> cn.setSent());
+			sendCall(cn, request, c -> cn.setSent(), (c, e) -> removeCandidate(cn.getId()));
 		}
 	}
 

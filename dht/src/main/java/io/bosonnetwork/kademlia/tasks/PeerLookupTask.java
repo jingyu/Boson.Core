@@ -103,7 +103,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 			log.debug("{}#{} sending FIND_PEER RPC to {}", getName(), getId(), cn.getId());
 			Network network = getContext().getNetwork();
 			Message request = Message.findPeerRequest(getTarget(), network.isIPv4(), network.isIPv6(), expectedSequenceNumber, expectedCount);
-			sendCall(cn, request, c -> cn.setSent());
+			sendCall(cn, request, c -> cn.setSent(), (c, e) -> removeCandidate(cn.getId()));
 		}
 	}
 

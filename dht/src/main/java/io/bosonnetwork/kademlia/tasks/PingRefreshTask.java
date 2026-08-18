@@ -223,7 +223,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 
 			log.debug("{}#{} sending PING RPC to {}", getName(), getId(), entry.getId());
 			Message request = Message.pingRequest();
-			sendCall(entry, request, unused -> todo.removeFirst());
+			sendCall(entry, request, unused -> todo.removeFirst(), null);
 		}
 	}
 

@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import io.vertx.core.Context;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
@@ -46,8 +47,8 @@ class TaskManagerTests {
 		}
 
 		@Override
-		protected void sendCall(RpcCall call) {
-			// do nothing
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			return Future.succeededFuture(call);
 		}
 
 		@Override

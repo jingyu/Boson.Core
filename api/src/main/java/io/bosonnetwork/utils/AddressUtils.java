@@ -234,7 +234,7 @@ public final class AddressUtils {
 	 * A Bogon address is an IP address that should not appear in public Internet routing tables.
 	 *
 	 * @param addr the socket address to check
-	 * @return true if the address is a Bogon address or the port is invalid (<= 0 or > 65535), false otherwise
+	 * @return true if the address is a Bogon address or the port is invalid (&lt;= 0 or &gt; 65535), false otherwise
 	 * @throws NullPointerException if addr is null
 	 */
 	public static boolean isBogon(InetSocketAddress addr) {
@@ -246,7 +246,7 @@ public final class AddressUtils {
 	 * Checks if the Vert.x socket address is a Bogon address or has an invalid port.
 	 *
 	 * @param addr the Vert.x socket address to check
-	 * @return true if the address is a Bogon address or the port is invalid (<= 0 or > 65535), false otherwise
+	 * @return true if the address is a Bogon address or the port is invalid (&lt;= 0 or &gt; 65535), false otherwise
 	 * @throws IllegalArgumentException if the address is invalid
 	 * @throws NullPointerException     if addr is null
 	 */

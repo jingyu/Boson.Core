@@ -7,10 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import net.datafaker.Faker;
 
@@ -59,8 +61,28 @@ class AnnounceTaskTests {
 		}
 
 		@Override
-		protected void sendCall(RpcCall call) {
+		protected Future<RpcCall> sendCall(RpcCall call) {
 			sent.add(call);
+			return Future.succeededFuture(call);
+		}
+	}
+
+	/**
+	 * Fails every send the way the RPC layer does when the socket refuses it: the call itself is failed
+	 * <em>and</em> the returned future fails, with one cause. Both reporters therefore fire for the same
+	 * node, which is the case the outcome has to survive.
+	 */
+	class SendFailingValueAnnounceTask extends TestValueAnnounceTask {
+		SendFailingValueAnnounceTask(KadContext context, Value value, int expectedSequenceNumber) {
+			super(context, value, expectedSequenceNumber);
+		}
+
+		@Override
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			sent.add(call);
+			Throwable cause = new IOException("no route to host");
+			failCall(call, cause);
+			return Future.failedFuture(cause);
 		}
 	}
 
@@ -70,8 +92,9 @@ class AnnounceTaskTests {
 		}
 
 		@Override
-		protected void sendCall(RpcCall call) {
+		protected Future<RpcCall> sendCall(RpcCall call) {
 			sent.add(call);
+			return Future.succeededFuture(call);
 		}
 	}
 
@@ -253,6 +276,28 @@ class AnnounceTaskTests {
 		assertTrue(result.isFailure());
 		assertEquals(3, result.targets().size(), "a node we never asked still belongs in the account");
 		result.targets().forEach(t -> assertEquals(AnnounceResult.Outcome.NOT_SENT, t.outcome()));
+	}
+
+	@Test
+	void testASendThatFailedIsNotSentRatherThanRefused() {
+		// Two reporters fire for one node here, and they disagree: failing the send also fails the call,
+		// so the state machine reaches callError first and would otherwise call this a refusal. The node
+		// refused nothing - it was never asked - and a caller reading this result cannot tell our own
+		// socket giving up from a peer saying no unless the outcome does.
+		Value value = Value.of(Id.random(), Random.randomBytes(64));
+		SendFailingValueAnnounceTask task = new SendFailingValueAnnounceTask(context, value, -1);
+		task.closest(closestWithTokens(3));
+		task.start();
+
+		assertEquals(3, sent.size(), "every node was attempted");
+
+		AnnounceResult result = task.getResult();
+		assertEquals(AnnounceResult.Status.FAILED, result.status());
+		assertEquals(3, result.targets().size());
+		result.targets().forEach(t -> {
+			assertEquals(AnnounceResult.Outcome.NOT_SENT, t.outcome());
+			assertInstanceOf(IOException.class, t.cause(), "the reason the send failed is kept");
+		});
 	}
 
 	@Test

@@ -117,7 +117,10 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 		while (!todo.isEmpty() && canDoRequest()) {
 			CandidateNode cn = todo.peekFirst();
 			if (cn == null) {
+				// Unreachable while todo is an ArrayDeque, which returns null from peekFirst only when
+				// empty. Kept as a guard, but the queue has to shrink before continuing or this spins.
 				getLogger().warn("{}#{} unexpected null candidate in non-empty queue", getName(), getId());
+				todo.removeFirst();
 				continue;
 			}
 
@@ -129,7 +132,13 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 			}
 
 			getLogger().debug("{}#{} sending {} RPC to {}", getName(), getId(), getMethodName(), cn.getId());
-			sendCall(cn, createRequest(cn), c -> todo.remove(cn));
+			// The removal is repeated in the failure handler rather than left to the callback above,
+			// because a callback that threw is logged and the send goes ahead anyway - this is the one
+			// place that can still take the node off the queue.
+			sendCall(cn, createRequest(cn), c -> todo.remove(cn), (c, e) -> {
+				recordNotSent(cn.getId(), e);
+				todo.remove(cn);
+			});
 		}
 	}
 
@@ -146,6 +155,24 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 	 */
 	private void record(Id nodeId, AnnounceResult.Outcome outcome, Throwable cause) {
 		outcomes.putIfAbsent(nodeId, new AnnounceResult.Target(nodeId, outcome, cause));
+	}
+
+	/**
+	 * Records a node the write never reached, overriding whatever the call state machine concluded.
+	 * <p>
+	 * The one case where two reports for one node are legitimate rather than a bug, so the one case that
+	 * overwrites. A send that reaches the socket and fails there also fails the call, and
+	 * {@link #callError} sees that first and calls it a refusal - but the node refused nothing, it was
+	 * never asked, and telling those apart is what a per-target result is for. This report is the one with
+	 * the information: it knows the send is what failed. Nothing can arrive after it either, since a call
+	 * that was never sent has no answer coming.
+	 * </p>
+	 *
+	 * @param nodeId the node the write could not be sent to.
+	 * @param cause  why the send failed.
+	 */
+	private void recordNotSent(Id nodeId, Throwable cause) {
+		outcomes.put(nodeId, new AnnounceResult.Target(nodeId, AnnounceResult.Outcome.NOT_SENT, cause));
 	}
 
 	/**
