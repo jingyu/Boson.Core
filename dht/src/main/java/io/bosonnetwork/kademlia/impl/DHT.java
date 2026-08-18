@@ -1875,8 +1875,10 @@ public class DHT extends BosonVerticle {
 		int want6 = body.doesWant6() ? want : 0;
 
 		populateClosestNodes(target, want4, want6).onSuccess(closest -> {
-			int token = body.doesWantToken() ? tokenManager.generateToken(request.getId(),
-					request.getRemoteIpAddress(), request.getRemotePort(), target) : 0;
+			// Null rather than zero when none was asked for: zero is a token the issuer would accept, so
+			// sending it says a token was granted, and the asking side has no way to read it otherwise.
+			Integer token = body.doesWantToken() ? tokenManager.generateToken(request.getId(),
+					request.getRemoteIpAddress(), request.getRemotePort(), target) : null;
 
 			Message response = Message.findNodeResponse(request.getTxid(), closest.nodes4, closest.nodes6, token)
 					.setRemote(request.getId(), request.getRemoteAddress());

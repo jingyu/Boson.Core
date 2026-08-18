@@ -108,18 +108,21 @@ public class FindNodeTests extends MessageTests {
 		var token = 0x87654321;
 
 		return Stream.of(
-				Arguments.of("v4", nodes4, null, 0, 380),
+				Arguments.of("v4", nodes4, null, null, 380),
 				Arguments.of("v4+token", nodes4, null, token, 389),
-				Arguments.of("v6", null, nodes6, 0, 476),
+				// Zero is a token like any other and has to reach the wire: the issuer cut it from a
+				// digest and will verify it back. The five bytes are the field a primitive would omit.
+				Arguments.of("v4+zero token", nodes4, null, 0, 385),
+				Arguments.of("v6", null, nodes6, null, 476),
 				Arguments.of("v6+token", null, nodes6, token, 485),
-				Arguments.of("v4+v6", nodes4, nodes6, 0, 832),
+				Arguments.of("v4+v6", nodes4, nodes6, null, 832),
 				Arguments.of("v4+v6+token", nodes4, nodes6, token, 841)
 		);
 	}
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("responseParameters")
-	void testResponse(String name, List<NodeInfo> nodes4, List<NodeInfo> nodes6, int token, int expectedSize) throws Exception {
+	void testResponse(String name, List<NodeInfo> nodes4, List<NodeInfo> nodes6, Integer token, int expectedSize) throws Exception {
 		var nodeId = Id.random();
 		var txid = 0x76543210;
 
@@ -153,6 +156,11 @@ public class FindNodeTests extends MessageTests {
 		msg2.setId(nodeId);
 		assertEquals(msg, msg2);
 		assertArrayEquals(bin, msg2.toBytes());
+
+		// The point of the boxed token: what came off the wire says whether a token was there at all,
+		// not merely what value it had.
+		assertEquals(token != null, msg2.<FindNodeResponse>getBody().hasToken());
+		assertEquals(token, msg2.<FindNodeResponse>getBody().getToken());
 	}
 
 	@Test
