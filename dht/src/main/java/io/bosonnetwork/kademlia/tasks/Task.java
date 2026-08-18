@@ -72,6 +72,10 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	private final Map<Long, RpcCall> inFlight;
 	/** How many calls this task has put on the wire, for telling a productive iteration from an empty one. */
 	private long callsSent;
+	/** True while an iteration is running, so a call that fails on this stack cannot start another. */
+	private boolean iterating;
+	/** Set when an iteration was asked for while one was running, and is owed once it finishes. */
+	private boolean iterationPending;
 	private TaskListener<S> listener;
 	// Shortcut to the task manager for efficiency and to ensure the task manager is
 	// notified first when the task ends
@@ -346,7 +350,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 				// it back.
 				//
 				// A listener.started() that throws leaves the task RUNNING having sent nothing, so the
-				// same rule applies here as inside tryIterate: with nothing in flight, nothing can bring
+				// same rule applies here as inside the iteration: with nothing in flight, nothing can bring
 				// this task back.
 				getLogger().error("{}#{} start failed", name, taskId, e);
 				if (inFlight.isEmpty() && !isDone())
@@ -356,7 +360,45 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
-	 * Attempts to perform one iteration of the task, completing it if done.
+	 * Drives the task, running one iteration at a time and never one inside another.
+	 * <p>
+	 * Iteration is what the whole task is: it decides whether the task is finished and, if not, sends the
+	 * next round of requests. Every path that can advance a task comes through here.
+	 * </p>
+	 */
+	private void tryIterate() {
+		// Reached re-entrantly on an ordinary path, not only under overload. A call can fail on the stack
+		// that sent it - our own outbound throttle refuses a call rather than parking it past the RPC
+		// timeout, and two admission limits do the same - which fails the call, which delivers a state
+		// change, which arrives here while the iteration that sent it is still inside its send loop.
+		//
+		// Running an iteration there is not a smaller version of the same thing. The nested run can decide
+		// the task is done and complete it while the outer loop is still sending, so calls go out after
+		// the listener has already been told the task is over and the second completion is rejected as an
+		// invalid transition; and since each nested send can be refused the same way, the nesting is
+		// bounded by nothing but the queue being drained.
+		//
+		// The request is deferred rather than dropped, because the state change that brought us here may
+		// be the last event this task will ever get - dropping it is the stall that the task deadline
+		// exists to catch, and there is no reason to need catching.
+		if (iterating) {
+			iterationPending = true;
+			return;
+		}
+
+		iterating = true;
+		try {
+			do {
+				iterationPending = false;
+				iterateOnce();
+			} while (iterationPending && !isEnd());
+		} finally {
+			iterating = false;
+		}
+	}
+
+	/**
+	 * Runs one iteration: completes the task if it is done, otherwise sends what it can and checks again.
 	 * <p>
 	 * A failing iteration is contained here rather than allowed to escape. It reaches this class through
 	 * {@code RpcCall.updateState}, so a throw would unwind the RPC receive path and skip the bookkeeping
@@ -364,7 +406,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 * has nothing to do with this task.
 	 * </p>
 	 */
-	private void tryIterate() {
+	private void iterateOnce() {
 		getLogger().debug("{}#{} iterate...", name, taskId);
 		getLogger().trace(getStatus());
 
