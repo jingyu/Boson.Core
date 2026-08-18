@@ -321,7 +321,7 @@ public class SignedCwtTests {
 	public void testCriticalHeadersRejected() throws Exception {
 		CryptoIdentity identity = new CryptoIdentity();
 
-		// A token that marks an (unknown) header as critical must be rejected per RFC 8152 §3.1
+		// A token that marks an (unknown) header as critical must be rejected per RFC 8152 section 3.1
 		byte[] token = SignedCwt.builder(identity)
 				.subject(Id.random())
 				.protectedHeader(Header.CRIT.getValue(), java.util.List.of(99))

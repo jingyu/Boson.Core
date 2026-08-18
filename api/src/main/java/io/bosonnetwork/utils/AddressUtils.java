@@ -79,7 +79,7 @@ public final class AddressUtils {
 
 	// IPv6 Bogon ranges. Some entries overlap with InetAddress.isLinkLocalAddress() /
 	// isSiteLocalAddress() / isMulticastAddress(), and some are subsets of broader entries in this
-	// table (e.g. ::ffff:0:0/96 ⊂ ::/8; Teredo / Benchmarking / ORCHID ⊂ 2001::/23) - kept here
+	// table (e.g. ::ffff:0:0/96 within ::/8; Teredo / Benchmarking / ORCHID within 2001::/23) - kept here
 	// explicitly so the table reads as a self-contained list of RFC-classified non-routable ranges.
 	// Reference: RFC 4291, RFC 6890
 	private static final String[] IPV6_BOGON_RANGES = {
@@ -172,7 +172,7 @@ public final class AddressUtils {
 		 * Creates a Subnet from a network address and mask bits.
 		 *
 		 * @param network  the network address
-		 * @param maskBits the number of mask bits (0–32 for IPv4, 0–128 for IPv6)
+		 * @param maskBits the number of mask bits (0-32 for IPv4, 0-128 for IPv6)
 		 * @return a Subnet object representing the network and mask bits
 		 * @throws IllegalArgumentException if the address or mask is invalid
 		 */
@@ -234,7 +234,7 @@ public final class AddressUtils {
 	 * A Bogon address is an IP address that should not appear in public Internet routing tables.
 	 *
 	 * @param addr the socket address to check
-	 * @return true if the address is a Bogon address or the port is invalid (≤ 0 or > 65535), false otherwise
+	 * @return true if the address is a Bogon address or the port is invalid (<= 0 or > 65535), false otherwise
 	 * @throws NullPointerException if addr is null
 	 */
 	public static boolean isBogon(InetSocketAddress addr) {
@@ -246,7 +246,7 @@ public final class AddressUtils {
 	 * Checks if the Vert.x socket address is a Bogon address or has an invalid port.
 	 *
 	 * @param addr the Vert.x socket address to check
-	 * @return true if the address is a Bogon address or the port is invalid (≤ 0 or > 65535), false otherwise
+	 * @return true if the address is a Bogon address or the port is invalid (<= 0 or > 65535), false otherwise
 	 * @throws IllegalArgumentException if the address is invalid
 	 * @throws NullPointerException     if addr is null
 	 */

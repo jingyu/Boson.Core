@@ -30,12 +30,12 @@
  *   <li>{@link io.bosonnetwork.crypto.CryptoBox} - Curve25519 authenticated encryption
  *       ({@code crypto_box}), with nonce handling;</li>
  *   <li>{@link io.bosonnetwork.crypto.CryptoIdentity} and
- *       {@link io.bosonnetwork.crypto.CachedCryptoIdentity} - an {@link io.bosonnetwork.Identity}
+ *       {@link io.bosonnetwork.crypto.CachedCryptoIdentity} - an {@link io.bosonnetwork.Identity}
  *       backed by an Ed25519 key pair, with a derived encryption context;</li>
  *   <li>{@link io.bosonnetwork.crypto.Hash} - hashing helpers (SHA-256/512; MD5 is provided only as
  *       a non-cryptographic legacy checksum);</li>
- *   <li>{@link io.bosonnetwork.crypto.PasswordHash} - password hashing / key derivation;</li>
- *   <li>{@link io.bosonnetwork.crypto.Random} - a cryptographically secure random source.</li>
+ *   <li>{@link io.bosonnetwork.crypto.PasswordHash} - password hashing / key derivation;</li>
+ *   <li>{@link io.bosonnetwork.crypto.Random} - a cryptographically secure random source.</li>
  * </ul>
  *
  * <p>Boson uses libsodium-style 64-byte private keys (32-byte seed concatenated with the 32-byte

@@ -55,7 +55,7 @@ public interface DHTMetrics extends Metrics {
 	default void responseSent(Message response) {
 	}
 
-	// requestSent - wanting for response - responseReceived ｜ responseTimeout
+	// requestSent - wanting for response - responseReceived | responseTimeout
 	default void requestSent(Message request) {
 	}
 

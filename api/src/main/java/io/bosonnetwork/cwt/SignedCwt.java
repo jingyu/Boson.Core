@@ -564,7 +564,7 @@ public class SignedCwt {
 			if (alg != Algorithm.EDDSA.getValue())
 				throw new InvalidAlgorithmException("Unsupported algorithm: " + value);
 
-			// RFC 8152/9052 §3.1: a recipient that does not understand a header listed in "crit"
+			// RFC 8152/9052 section 3.1: a recipient that does not understand a header listed in "crit"
 			// MUST reject the token. This implementation understands no critical extensions, so the
 			// mere presence of a (non-empty) "crit" header is a rejection.
 			Object crit = protectedHeaders.get(Header.CRIT.getValue());

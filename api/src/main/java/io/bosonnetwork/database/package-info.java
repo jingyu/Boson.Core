@@ -33,8 +33,8 @@
  *   <li>{@link io.bosonnetwork.database.Filter} - {@code WHERE} clauses (eq/ne/lt/gt/like/in, plus
  *       {@code AND}/{@code OR} composition) with named bind parameters;</li>
  *   <li>{@link io.bosonnetwork.database.Ordering} - {@code ORDER BY} clauses;</li>
- *   <li>{@link io.bosonnetwork.database.Pagination} - {@code LIMIT}/{@code OFFSET} clauses;</li>
- *   <li>{@link io.bosonnetwork.database.CollectionParameter} - expands a collection into the
+ *   <li>{@link io.bosonnetwork.database.Pagination} - {@code LIMIT}/{@code OFFSET} clauses;</li>
+ *   <li>{@link io.bosonnetwork.database.CollectionParameter} - expands a collection into the
  *       placeholder tuple needed for an {@code IN (...)} predicate.</li>
  * </ul>
  *

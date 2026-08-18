@@ -1028,7 +1028,7 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 		 * <p>Equivalent to {@code crypto_secretstream_xchacha20poly1305_init_push}.
 		 *
 		 * @param header output buffer of length {@link #SECRET_STREAM_HEADER_BYTES}; receives the header that must
-		 *               be transmitted to the receiver (it is random — that is what makes each
+		 *               be transmitted to the receiver (it is random - that is what makes each
 		 *               stream unique).
 		 * @param key    the master key ({@link #SECRET_STREAM_KEY_BYTES} bytes)
 		 * @throws IllegalArgumentException if header or key length is invalid
@@ -1039,7 +1039,7 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 			}
 			requireKey(key);
 
-			// randombytes_buf(out, HEADERBYTES) — header = HChaCha20-input(16) || inonce(8)
+			// randombytes_buf(out, HEADERBYTES) - header = HChaCha20-input(16) || inonce(8)
 			RNG.nextBytes(header);
 
 			// crypto_core_hchacha20(state->k, out, k, NULL)
@@ -1307,7 +1307,7 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 		 * <p>BC's {@link ChaCha7539Engine} expects a 12-byte IV (counter=0 prefix + 8-byte nonce
 		 * in word 14/15 layout). libsodium's layout splits the 12 bytes the same way: word 12 is
 		 * the counter (advanced by {@code ic}), words 13-15 carry iv. BC's {@code seekTo(bytePos)}
-		 * lets us jump straight to block {@code ic} by passing {@code ic * 64} — verified against
+		 * lets us jump straight to block {@code ic} by passing {@code ic * 64} - verified against
 		 * RFC 8439 and sequential reads.
 		 *
 		 * @param out          output byte array for XOR result
@@ -1351,7 +1351,7 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 	 * permutation on the standard initial state and returns words 0-3 and 12-15 (no final
 	 * addition, unlike full ChaCha20 keystream blocks).
 	 *
-	 * <p>Verified against the test vector in draft-irtf-cfrg-xchacha §2.2.1. We implement
+	 * <p>Verified against the test vector in draft-irtf-cfrg-xchacha section 2.2.1. We implement
 	 * this directly rather than reusing BC's {@code ChaChaEngine.chachaCore}, because that
 	 * helper performs the final state addition (it targets keystream generation) and so does
 	 * not yield the correct HChaCha20 output.

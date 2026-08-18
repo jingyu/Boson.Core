@@ -31,7 +31,7 @@
  * <h2>Authoring a service: {@link io.bosonnetwork.service.BosonService} +
  * {@link io.bosonnetwork.service.BosonServiceFactory}</h2>
  * A service implements {@link io.bosonnetwork.service.BosonService} (identity, public endpoint,
- * lifecycle: {@code init} -> {@code start} -> {@code stop}) and ships a
+ * lifecycle: {@code init} -> {@code start} -> {@code stop}) and ships a
  * {@link io.bosonnetwork.service.BosonServiceFactory} discovered via Java
  * {@link java.util.ServiceLoader} (a {@code META-INF/services/} entry, or a {@code provides}
  * declaration on the module path). The hosting super node loads factories by
@@ -67,7 +67,7 @@
  *       identity.</li>
  * </ul>
  * Both authenticator interfaces share a "nonce/signature contract" (see their interface Javadoc):
- * non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null => caller bug.
+ * non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null => caller bug.
  *
  * <h2>Identity and access scopes</h2>
  * Principal entitlements are exposed through {@link io.bosonnetwork.service.Role} (server-derived

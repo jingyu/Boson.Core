@@ -56,7 +56,7 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * The Vert.x lifecycle methods {@code init}, {@code start}, and {@code stop} are reserved
  * for Vert.x itself and mapped internally to your implementation via {@link #deploy()} and
- * {@link #undeploy()}. This ensures forward compatibility with Vert.x 5’s {@code VerticleBase}.
+ * {@link #undeploy()}. This ensures forward compatibility with Vert.x 5's {@code VerticleBase}.
  * </p>
  */
 public abstract class BosonVerticle implements Deployable {

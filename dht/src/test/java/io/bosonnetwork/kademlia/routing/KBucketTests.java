@@ -128,7 +128,7 @@ public class KBucketTests {
 		assertEquals(1, bucket.size());
 		assertEquals(0, bucket.replacementSize());
 
-		// put again with same id → merge should not increase size
+		// put again with same id -> merge should not increase size
 		bucket.put(new KBucketEntry(entry.getId(), entry.getAddress()));
 		assertEquals(1, bucket.size());
 
@@ -137,7 +137,7 @@ public class KBucketTests {
 		assertEquals(1, bucket.size());
 		assertEquals(1, bucket.replacementSize());
 
-		// put again with same id → merge should not increase size
+		// put again with same id -> merge should not increase size
 		bucket.put(new KBucketEntry(entry.getId(), entry.getAddress()));
 		assertEquals(1, bucket.size());
 		assertEquals(1, bucket.replacementSize());
