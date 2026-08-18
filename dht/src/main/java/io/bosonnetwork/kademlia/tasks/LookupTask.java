@@ -25,6 +25,7 @@ package io.bosonnetwork.kademlia.tasks;
 
 import java.net.InetAddress;
 import java.net.StandardProtocolFamily;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -41,6 +42,7 @@ import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.LookupResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.security.SourceKey;
 import io.bosonnetwork.utils.AddressUtils;
 
@@ -398,6 +400,37 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 */
 	protected CandidateNode getNextCandidate() {
 		return candidates.next();
+	}
+
+	/**
+	 * A lookup is bounded by its iteration budget rather than by a queue, so its deadline is read from
+	 * that: every iteration spending the longest an RPC may take before it is declared dead.
+	 * <p>
+	 * Deliberately loose. Iterations run {@code alpha} at a time and a call that stalls costs two of
+	 * them, so the real worst case is several times under this - which is what an outer bound is for.
+	 * </p>
+	 *
+	 * @return the maximum running time for this lookup.
+	 */
+	@Override
+	protected Duration deadline() {
+		return Duration.ofMillis((long) maxIterations * RpcServer.RPC_CALL_TIMEOUT_MAX);
+	}
+
+	/**
+	 * Drops a candidate whose call was cancelled.
+	 * <p>
+	 * The candidate was marked sent when the call went out, so leaving it here would keep the queue
+	 * non-empty with nothing in it eligible to be asked - a lookup that can neither finish nor progress.
+	 * It is not retried: calls are cancelled when the RPC server is stopping, and there is nothing left
+	 * to retry on.
+	 * </p>
+	 *
+	 * @param call the cancelled call.
+	 */
+	@Override
+	protected void callCanceled(RpcCall call) {
+		removeCandidate(call.getTargetId());
 	}
 
 	/**

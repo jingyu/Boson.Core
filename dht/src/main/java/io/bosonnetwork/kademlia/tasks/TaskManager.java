@@ -23,15 +23,18 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.kademlia.impl.KadContext;
+import io.bosonnetwork.kademlia.rpc.RpcServer;
 
 /**
  * A class for managing Kademlia tasks, handling queuing, execution, removal, and cancellation.
@@ -45,6 +48,7 @@ public class TaskManager {
 	private final Deque<Task<?>> queuedTasks;
 	private final Set<Task<?>> runningTasks;
 	private boolean canceling;
+	private final long deadlineTimer;
 
 	private static final Logger log = LoggerFactory.getLogger(TaskManager.class);
 
@@ -64,6 +68,49 @@ public class TaskManager {
 
 		queuedTasks = new LinkedList<>();
 		runningTasks = new HashSet<>();
+
+		// One sweep for every task rather than a timer each: the running set is bounded by
+		// concurrentTasks, so the scan is cheaper than the timers it replaces, and on an idle node it
+		// walks an empty set. The period is one RPC timeout, which bounds how late a stalled task is
+		// noticed - negligible against deadlines measured in whole task lifetimes.
+		this.deadlineTimer = context.setPeriodic(RpcServer.RPC_CALL_TIMEOUT_MAX, unused -> checkDeadlines());
+	}
+
+	/**
+	 * Cancels every running task that has outlived its deadline.
+	 * <p>
+	 * The safety net under the whole layer: iteration is driven only by RPC call state changes, so a task
+	 * that stops receiving them stops forever, holding one of the {@code concurrentTasks} slots and
+	 * leaving whoever waits on its listener waiting for the life of the node. Individual causes get fixed
+	 * as they are found; this bounds the ones that have not been.
+	 * </p>
+	 * <p>
+	 * Logged at WARN with the task's own status, because reaching a deadline is a defect rather than a
+	 * slow network - see {@link Task#deadline()} for why it is sized so that no healthy task can.
+	 * </p>
+	 */
+	void checkDeadlines() {
+		if (canceling || runningTasks.isEmpty())
+			return;
+
+		// Collected before cancelling: cancel() reaches the end handler, which removes from this set.
+		List<Task<?>> overdue = null;
+		for (Task<?> task : runningTasks) {
+			if (task.isOverdue()) {
+				if (overdue == null)
+					overdue = new ArrayList<>();
+				overdue.add(task);
+			}
+		}
+
+		if (overdue == null)
+			return;
+
+		for (Task<?> task : overdue) {
+			log.warn("Task exceeded its deadline of {} and is being canceled: {}\n{}",
+					task.deadline(), task, task.getStatus());
+			task.cancel();
+		}
 	}
 
 	public int getMaxActiveTasks() {
@@ -211,6 +258,7 @@ public class TaskManager {
 	 */
 	public void cancelAll() {
 		canceling = true;
+		context.cancelTimer(deadlineTimer);
 
 		log.info("Canceling all tasks: running={}, queued={}", runningTasks.size(), queuedTasks.size());
 		for (Task<?> task : queuedTasks) {

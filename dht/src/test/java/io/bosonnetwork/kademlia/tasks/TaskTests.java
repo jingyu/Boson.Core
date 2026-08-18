@@ -146,6 +146,16 @@ public class TaskTests {
 		assertTrue(ended.get());
 	}
 
+	private void cancelCall(RpcCall call) {
+		try {
+			Method cancel = RpcCall.class.getDeclaredMethod("cancel");
+			cancel.setAccessible(true);
+			cancel.invoke(call);
+		} catch (Exception e) {
+			throw new RuntimeException("cancelCall failed", e);
+		}
+	}
+
 	private void setCallResponse(RpcCall call, Message response) {
 		try {
 			Class<RpcCall> clazz = RpcCall.class;
@@ -267,5 +277,56 @@ public class TaskTests {
 
 		assertEquals(1, failing.getInFlightCalls());
 		assertEquals(Task.State.RUNNING, failing.getState());
+	}
+
+	/**
+	 * A cancelled call has to leave the in-flight set like any other terminal state.
+	 * <p>
+	 * It is never going to be answered, and {@code isDone()} is {@code inFlight.isEmpty()}, so a call left
+	 * behind means the task can never finish - it holds a manager slot and its caller's future for the
+	 * life of the node. This was survivable only while the sole caller of {@code RpcCall.cancel()} ran
+	 * after every task had already been cancelled itself, which is an ordering nothing states or enforces.
+	 * </p>
+	 */
+	@Test
+	void testACanceledCallLeavesTheInFlightSet() {
+		task.start();
+
+		List<RpcCall> calls = new ArrayList<>();
+		NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", 39001);
+		task.sendCall(node, Message.pingRequest(), calls::add, null);
+		assertEquals(1, task.getInFlightCalls());
+
+		cancelCall(calls.get(0));
+
+		assertEquals(0, task.getInFlightCalls(), "a canceled call must not hold the task open");
+		assertTrue(task.canDoRequest(), "and its concurrency slot must come back");
+	}
+
+	/**
+	 * A listener that throws out of {@code started()} leaves the task running having sent nothing, which
+	 * is the same dead end as an iteration that throws before its first call.
+	 */
+	@Test
+	void testAThrowingStartListenerEndsTheTask() {
+		Variable<Boolean> ended = Variable.of(false);
+		TestTask failing = new TestTask(context);
+		failing.addListener(new TaskListener<>() {
+			@Override
+			public void started(TestTask task) {
+				throw new IllegalStateException("cannot start");
+			}
+
+			@Override
+			public void ended(TestTask task) {
+			}
+		});
+		failing.endHandler(t -> ended.set(true));
+
+		failing.start();
+
+		assertEquals(0, failing.getInFlightCalls());
+		assertEquals(Task.State.CANCELED, failing.getState());
+		assertTrue(ended.get(), "the end handler must fire, or the task's slot is never reclaimed");
 	}
 }

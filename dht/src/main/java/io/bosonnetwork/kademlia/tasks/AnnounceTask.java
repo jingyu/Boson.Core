@@ -176,6 +176,21 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 	}
 
 	/**
+	 * Records a node whose write was cancelled before it could be answered.
+	 * <p>
+	 * Not sent, in the sense the caller cares about: the write may have reached the wire, but nothing
+	 * acknowledged it and nothing ever will, so it cannot be reported as delivered.
+	 * </p>
+	 *
+	 * @param call the cancelled call.
+	 */
+	@Override
+	protected void callCanceled(RpcCall call) {
+		recordNotSent(call.getTargetId(), null);
+		getLogger().debug("{}#{} {} to {} was canceled", getName(), getId(), getMethodName(), call.getTargetId());
+	}
+
+	/**
 	 * Records a node that accepted the write.
 	 *
 	 * @param call the acknowledged call.
