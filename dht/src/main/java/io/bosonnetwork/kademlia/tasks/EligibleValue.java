@@ -73,9 +73,19 @@ public class EligibleValue {
 	 * Validation rules:
 	 * <ul>
 	 *   <li>The value's ID must match the target ID.</li>
-	 *   <li>If expectedSequenceNumber is non-negative, the value's sequence number must be at least that number.</li>
+	 *   <li>If the value is mutable and expectedSequenceNumber is non-negative, the value's sequence number
+	 *       must be at least that number. An immutable value is exempt - see below.</li>
 	 *   <li>The value must be valid (as per {@link Value#isValid()}).</li>
 	 * </ul>
+	 * <p>
+	 * <b>The sequence check applies to mutable values only, and has to.</b> An immutable value has no
+	 * publisher key and so no version history for a sequence number to select between; its constructor
+	 * fixes the number at zero. The responding side reads the rule that way already - {@code DHT.onFindValue}
+	 * serves an immutable value whatever sequence number was asked for - so any other reading here has this
+	 * node reject an answer that every conforming node is right to give. That mattered twice over: the
+	 * caller cannot avoid it, since whether an id is mutable is what the lookup is for, and a rejection
+	 * here is reported to the suspicious node detector as proven misbehavior, which would earn each of the
+	 * closest nodes a ban for obeying the protocol.
 	 * <p>
 	 * Update semantics:
 	 * <ul>
@@ -89,7 +99,7 @@ public class EligibleValue {
 	 */
 	public boolean update(Value v) {
 		if (!v.getId().equals(target) ||
-				(expectedSequenceNumber >=0 && v.getSequenceNumber() < expectedSequenceNumber) ||
+				(v.isMutable() && expectedSequenceNumber >= 0 && v.getSequenceNumber() < expectedSequenceNumber) ||
 				!v.isValid())
 			return false;
 

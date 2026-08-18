@@ -174,9 +174,6 @@ public class EligiblePeers {
 		}
 
 		peers.forEach(p -> {
-			if (!p.getId().equals(target) || p.getSequenceNumber() < expectedSequenceNumber)
-				return;
-
 			String key = p.getId().toString() + ":" + p.getFingerprint();
 			eligible.compute(key, (k, v) ->
 					v == null || v.getSequenceNumber() < p.getSequenceNumber() ? p : v);

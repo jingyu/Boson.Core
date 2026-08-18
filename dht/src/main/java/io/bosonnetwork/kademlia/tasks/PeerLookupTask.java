@@ -123,6 +123,7 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 			if (!result.add(peers)) {
 				log.warn("{}#{} Dropping response from {} due to ineligible peer(id | sequenceNumber | signature mismatch)",
 						getName(), getId(), call.getTargetId());
+				getContext().getSuspiciousNodeDetector().misbehaved(response.getRemoteAddress(), response.getId());
 				return;
 			}
 
