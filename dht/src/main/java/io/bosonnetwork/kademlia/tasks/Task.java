@@ -41,6 +41,7 @@ import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.kademlia.rpc.RpcServer;
 
 /**
  * Abstract base class for Kademlia tasks executed in a single-threaded Vert.x event loop.
@@ -324,13 +325,15 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 			} catch (Exception e) {
 				// Not the iteration failing: tryIterate handles that itself, ending the task when nothing
 				// is left to drive it. What reaches here is the listener callback or the completion checks
-				// around it, and the task is deliberately left running - by this point it may hold calls
-				// in flight, and those still bring it back.
+				// around it, and a task holding calls in flight is left running, because those still bring
+				// it back.
 				//
-				// Residual, stated rather than hidden: a listener.started() that throws leaves the task
-				// RUNNING having sent nothing, which is the same hang through a door this catch does not
-				// close.
+				// A listener.started() that throws leaves the task RUNNING having sent nothing, so the
+				// same rule applies here as inside tryIterate: with nothing in flight, nothing can bring
+				// this task back.
 				getLogger().error("{}#{} start failed", name, taskId, e);
+				if (inFlight.isEmpty() && !isDone())
+					cancel();
 			}
 		}
 	}
@@ -509,6 +512,39 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
+	 * How long this task may run before the manager gives up on it.
+	 * <p>
+	 * <b>An outer bound, not a service level.</b> Reaching it means something is wrong with this node -
+	 * a task that cannot be driven any more, holding one of the manager's slots and a caller's future
+	 * forever - so it is sized so that no healthy task can reach it, and a task that does is cancelled
+	 * and logged rather than quietly retried. Sizing it as a quality-of-service timer instead would
+	 * truncate slow but progressing work on a bad network, which is worse than the stall it prevents.
+	 * </p>
+	 * <p>
+	 * The default is the serial worst case for a task that drains a queue of nodes: one bucket's worth
+	 * of contacts and replacements, each taking the longest an RPC may take before it is declared dead.
+	 * Real tasks run {@code alpha} calls at a time and time out well below the maximum, so this leaves a
+	 * wide margin on purpose. {@link LookupTask} overrides it, being bounded by its iteration budget
+	 * rather than by a queue.
+	 * </p>
+	 *
+	 * @return the maximum running time for this task.
+	 */
+	protected Duration deadline() {
+		return Duration.ofMillis((long) (getContext().getK() + getContext().getReplacements())
+				* RpcServer.RPC_CALL_TIMEOUT_MAX);
+	}
+
+	/**
+	 * Whether this task has been running longer than its deadline allows.
+	 *
+	 * @return true if the task is running and overdue, false otherwise.
+	 */
+	boolean isOverdue() {
+		return isRunning() && age().compareTo(deadline()) > 0;
+	}
+
+	/**
 	 * Checks if the task can issue additional RPC requests based on concurrency limits.
 	 *
 	 * @return true if requests can be sent, false otherwise
@@ -544,6 +580,14 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 			case TIMEOUT:
 				inFlight.remove(call.getTxid());
 				callTimeout(call);
+				break;
+			case CANCELED:
+				// A cancelled call is never going to be answered, so it has to leave the in-flight set
+				// like any other terminal state. Without this the set never empties, isDone() is
+				// inFlight.isEmpty(), and the task cannot finish - it was harmless only while the one
+				// caller of RpcCall.cancel() ran after every task had already been cancelled itself.
+				inFlight.remove(call.getTxid());
+				callCanceled(call);
 				break;
 		}
 
@@ -711,6 +755,21 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 */
 	@SuppressWarnings("unused")
 	protected void callError(RpcCall call) {
+	}
+
+	/**
+	 * Called when an RPC call was cancelled before it could be answered.
+	 * <p>
+	 * Distinct from {@link #callTimeout(RpcCall)} rather than folded into it, because the two mean
+	 * opposite things about the node: a timeout is evidence the node did not answer, and a cancellation is
+	 * evidence about us. Treating one as the other would have a shutting-down RPC server charge every
+	 * outstanding node with a failure it never earned.
+	 * </p>
+	 *
+	 * @param call the RPC call
+	 */
+	@SuppressWarnings("unused")
+	protected void callCanceled(RpcCall call) {
 	}
 
 	/**

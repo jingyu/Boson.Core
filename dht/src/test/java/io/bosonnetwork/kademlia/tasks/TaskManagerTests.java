@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -313,5 +314,99 @@ class TaskManagerTests {
 
 		context.verify(() -> assertTrue(task.isEnd(), "a rejected task must be in a terminal state"));
 		context.completeNow();
+	}
+
+	/** A task that reports itself overdue; the sweep is driven directly rather than waited for. */
+	static class OverdueTask extends TestTask {
+		OverdueTask(KadContext context) {
+			super(context);
+		}
+
+		@Override
+		protected Duration deadline() {
+			// Negative rather than ZERO, so the task is overdue at every age including zero. With ZERO
+			// this test depended on at least one millisecond passing between the task starting and the
+			// sweep running - isOverdue() is age > deadline, and both land in the same millisecond often
+			// enough to fail under load.
+			return Duration.ofMillis(-1);
+		}
+	}
+
+	/**
+	 * The safety net: a running task that outlives its deadline is cancelled, so its slot and its
+	 * caller's listener come back.
+	 * <p>
+	 * {@code TestTask.isDone()} is permanently false and its {@code iterate()} sends nothing, which is
+	 * exactly the shape of the stall this exists for - iteration is driven only by call state changes, so
+	 * nothing will ever drive it again.
+	 * </p>
+	 */
+	@Test
+	void testAnOverdueTaskIsCanceled(VertxTestContext context) {
+		CountDownLatch endedSignal = new CountDownLatch(1);
+		OverdueTask task = new OverdueTask(kadContext);
+		task.addListener(new TaskListener<>() {
+			@Override
+			public void ended(TestTask t) {
+				endedSignal.countDown();
+			}
+		});
+
+		kadContext.runOnContext(() -> manager.add(task));
+
+		try {
+			if (!waitFor(() -> task.getState() == Task.State.RUNNING))
+				context.failNow("the task never started");
+
+			kadContext.runOnContext(manager::checkDeadlines);
+
+			if (!endedSignal.await(5, TimeUnit.SECONDS))
+				context.failNow("an overdue task was left running, holding its slot forever");
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		context.verify(() -> {
+			assertEquals(Task.State.CANCELED, task.getState());
+			assertEquals(0, manager.getRunningTasks(), "the slot must be reclaimed");
+		});
+		context.completeNow();
+	}
+
+	/**
+	 * The counterpart, and the one that matters more: a task inside its deadline is left alone. A sweep
+	 * that cancelled healthy work would truncate slow lookups on a bad network, which is worse than the
+	 * stall it exists to bound.
+	 */
+	@Test
+	void testATaskWithinItsDeadlineIsLeftAlone(VertxTestContext context) {
+		TestTask task = new TestTask(kadContext);
+
+		kadContext.runOnContext(() -> manager.add(task));
+
+		try {
+			if (!waitFor(() -> task.getState() == Task.State.RUNNING))
+				context.failNow("the task never started");
+
+			kadContext.runOnContext(manager::checkDeadlines);
+			Thread.sleep(200);
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		context.verify(() -> {
+			assertEquals(Task.State.RUNNING, task.getState());
+			assertEquals(1, manager.getRunningTasks());
+		});
+		context.completeNow();
+	}
+
+	private boolean waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {
+		for (int i = 0; i < 100; i++) {
+			if (condition.getAsBoolean())
+				return true;
+			Thread.sleep(20);
+		}
+		return false;
 	}
 }
