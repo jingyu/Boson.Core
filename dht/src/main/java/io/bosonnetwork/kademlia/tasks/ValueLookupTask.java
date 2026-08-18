@@ -120,6 +120,7 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 			if (!result.update(value)) {
 				log.warn("{}#{} dropping response from {} due to ineligible value(id | sequenceNumber | signature mismatch)",
 						getName(), getId(), call.getTargetId());
+				getContext().getSuspiciousNodeDetector().misbehaved(response.getRemoteAddress(), response.getId());
 				return;
 			}
 
