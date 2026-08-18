@@ -978,37 +978,6 @@ public class RpcServer implements Measured {
 	}
 
 	/**
-	 * Sends an RPC call to a remote node, applying throttling and timeouts.
-	 * <p>
-	 * The budget for reactive calls is charged here rather than in {@link #dispatchCall}, so that a call the
-	 * outbound throttle parks and later re-dispatches is charged once for the whole of its life.
-	 * </p>
-	 *
-	 * @param call the RPC call to send
-	 * @return a Future resolving to the sent RpcCall
-	 */
-	public Future<RpcCall> sendCall(RpcCall call) {
-		if (call.isUnsolicited()) {
-			if (unsolicitedCalls >= maxUnsolicitedCalls)
-				return reject(call, "Unsolicited call budget exceeded");
-
-			unsolicitedCalls++;
-			// Released on the first final state, whichever one it is: answered, timed out, failed to send,
-			// cancelled by stop(). Every path out of a call passes through here, which is what keeps the
-			// budget from leaking a slot per path that forgets it.
-			call.addListener(new RpcCallListener() {
-				@Override
-				public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
-					if (state.isFinal())
-						unsolicitedCalls--;
-				}
-			});
-		}
-
-		return dispatchCall(call);
-	}
-
-	/**
 	 * Refuses a call that this node will not carry, failing the call and the caller's future with one
 	 * cause.
 	 * <p>
@@ -1025,6 +994,71 @@ public class RpcServer implements Measured {
 		CallRejectedException cause = new CallRejectedException(message);
 		call.fail(cause);
 		return Future.failedFuture(cause);
+	}
+
+	/**
+	 * Admits an RPC call and hands it to the dispatcher, applying throttling and timeouts.
+	 * <p>
+	 * Everything decided once per call lives here rather than in {@link #dispatchCall}: the reactive
+	 * budget, and the one listener that unwinds this server's bookkeeping when the call settles. A call
+	 * the outbound throttle parks re-enters the dispatcher, not this method, so it is charged once for
+	 * the whole of its life and carries one listener rather than one per attempt.
+	 * </p>
+	 *
+	 * @param call the RPC call to send
+	 * @return a Future resolving to the sent RpcCall
+	 */
+	public Future<RpcCall> sendCall(RpcCall call) {
+		if (call.isUnsolicited()) {
+			if (unsolicitedCalls >= maxUnsolicitedCalls)
+				return reject(call, "Unsolicited call budget exceeded");
+
+			// Charged before the call reaches the throttle, so a parked call holds its slot while it
+			// waits. Parking is not admission: a reactive call the throttle delays is still one this node
+			// has committed to make, and leaving it uncharged would let a sender hold more of the budget
+			// than the budget holds.
+			unsolicitedCalls++;
+		}
+
+		// One listener for everything this server has to give back when a call reaches a final state:
+		// answered, timed out, refused, cancelled by stop(). Every path out of a call passes through
+		// here, which is what keeps a slot from leaking per path that forgets it.
+		call.addListener(new RpcCallListener() {
+			@Override
+			public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+				if (!state.isFinal() || previous.isFinal())
+					return;
+
+				if (c.isUnsolicited())
+					unsolicitedCalls--;
+
+				// Whoever removes the call from the pending map owns what follows. The inbound paths
+				// remove before they drive the call to its final state, and so does the send-failure
+				// path, so a call that was answered - or answered wrongly, or refused before it was ever
+				// pending - is already gone from here and must not be charged as a loss.
+				if (!pendingCalls.remove(c.getTxid(), c))
+					return;
+
+				// A timeout is the only final state that says anything about the node. A cancellation
+				// says something about us - stop(), or a task giving up - and charging it to the routing
+				// table would demote every peer an abandoned task happened to be waiting on.
+				if (state != RpcCall.State.TIMEOUT)
+					return;
+
+				if (callTimeoutHandler != null)
+					callTimeoutHandler.accept(c);
+
+				if (metrics != null) {
+					// Update loss rate: 0f for successful response, 1f for timeout
+					if (c.isReachableAtCreationTime())
+						metrics.verifiedLossRateUpdate(1f);
+					else
+						metrics.unverifiedLossRateUpdate(1f);
+				}
+			}
+		});
+
+		return dispatchCall(call);
 	}
 
 	/**
@@ -1086,25 +1120,7 @@ public class RpcServer implements Measured {
 
 		// setup call
 		call.setExpectedRttIfAbsent(timeoutSampler::getStallTimeout)
-				.setTimer(context)
-				.setTimeoutHandler(c -> {
-					// Remove call and skip if already processed
-					boolean exists = pendingCalls.remove(call.getTxid(), call);
-					if (!exists)
-						return;
-
-					// Notify timeout handler
-					if (callTimeoutHandler != null)
-						callTimeoutHandler.accept(c);
-
-					if (metrics != null) {
-						// Update loss rate: 0f for successful response, 1f for timeout
-						if (call.isReachableAtCreationTime())
-							metrics.verifiedLossRateUpdate(1f);
-						else
-							metrics.unverifiedLossRateUpdate(1f);
-					}
-				});
+				.setTimer(context);
 
 		pendingCalls.put(call.getTxid(), call);
 		return sendMessage(call.getRequest()).andThen(ar -> {

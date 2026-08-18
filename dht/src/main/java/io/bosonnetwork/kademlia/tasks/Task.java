@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -456,6 +457,22 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 				nested.cancel();
 
 			getLogger().debug("{}#{} canceled", name, taskId);
+
+			// A cancelled task is not going to read any of its answers, and every call still outstanding
+			// holds this::onCallStateChange - so leaving them to time out keeps the task, its candidate
+			// set and everything they reach alive for the length of a call timeout after the task is gone.
+			// Cancelling them also releases the slot each one holds in the RPC server.
+			//
+			// Snapshot first, and clear before cancelling: cancelling notifies listeners, and one of them
+			// is this task's own, which reaches back into this map. It happens to return early here
+			// because the state above is already terminal, but walking a map that a callback may write to
+			// is not something to leave resting on that.
+			if (!inFlight.isEmpty()) {
+				List<RpcCall> outstanding = new ArrayList<>(inFlight.values());
+				inFlight.clear();
+				for (RpcCall call : outstanding)
+					call.cancel();
+			}
 
 			if (endHandler != null)
 				endHandler.accept(this);

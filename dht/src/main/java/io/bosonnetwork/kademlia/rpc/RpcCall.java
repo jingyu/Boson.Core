@@ -25,8 +25,10 @@ package io.bosonnetwork.kademlia.rpc;
 
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
@@ -73,17 +75,14 @@ public class RpcCall {
 	/** Current state of the RPC call, initialized to UNSENT. */
 	private State state = State.UNSENT;
 
-	/** Listener for state changes and events, null if no listeners are attached. */
-	private RpcCallListener listener;
+	/** Listeners for state changes and events, empty until one is attached. */
+	private final ListenerArray listener;
 
 	/** Timer for scheduling timeouts, set by RpcServer. */
 	private Timer timer;
 
 	/** Identifier for the timeout timer, or -1 if not scheduled. */
 	private long timeoutTimer = -1;
-
-	/** Handler for timeout events, used internally by RpcServer. */
-	private Consumer<RpcCall> timeoutHandler;
 
 	/**
 	 * Enumerates the possible states of an RPC call.
@@ -112,7 +111,7 @@ public class RpcCall {
 	public RpcCall(NodeInfo target, Message request) {
 		this.target = target;
 		this.request = request;
-		this.listener = null;
+		this.listener = new ListenerArray();
 
 		// Set remote ID and address on the request
 		request.setRemote(target.getId(), target.getAddress());
@@ -398,19 +397,7 @@ public class RpcCall {
 		if(state != State.UNSENT)
 			throw new IllegalStateException("Cannot attach listeners after the call is started");
 
-		if (this.listener == null) {
-			this.listener = listener;
-		} else {
-			if (this.listener instanceof ListenerArray listeners) {
-				listeners.add(listener);
-			} else {
-				ListenerArray listeners = new ListenerArray();
-				listeners.add(this.listener);
-				listeners.add(listener);
-				this.listener = listeners;
-			}
-		}
-
+		this.listener.add(listener);
 		return this;
 	}
 
@@ -423,25 +410,14 @@ public class RpcCall {
 		State prev = this.state;
 		this.state = state;
 
-		// Notify RpcServer first for timeout handling
-		if (state == State.TIMEOUT && timeoutHandler != null)
-			timeoutHandler.accept(this);
-
-		if (listener == null)
-			return;
-
 		listener.onStateChange(this, prev, state);
+
 		switch (state) {
-			case TIMEOUT -> {
-				/*/
-				// Notify RpcServer first for timeout handling
-				if (timeoutHandler != null)
-					timeoutHandler.accept(this);
-				*/
-				listener.onTimeout(this);
-			}
-			case STALLED -> listener.onStall(this);
 			case RESPONDED -> listener.onResponse(this);
+			case STALLED -> listener.onStall(this);
+			case TIMEOUT -> listener.onTimeout(this);
+			case CANCELED -> listener.onCancel(this);
+			case ERROR -> listener.onError(this);
 		}
 	}
 
@@ -453,17 +429,6 @@ public class RpcCall {
 	 */
 	protected RpcCall setTimer(Timer timer) {
 		this.timer = timer;
-		return this;
-	}
-
-	/**
-	 * Sets the timeout handler for internal use by RpcServer.
-	 *
-	 * @param handler the timeout handler
-	 * @return this RpcCall instance for method chaining
-	 */
-	RpcCall setTimeoutHandler(Consumer<RpcCall> handler) {
-		this.timeoutHandler = handler;
 		return this;
 	}
 
@@ -620,7 +585,7 @@ public class RpcCall {
 	/**
 	 * Cancels the RPC call, stopping further processing.
 	 */
-	protected void cancel() {
+	public void cancel() {
 		if (state.ordinal() >= State.TIMEOUT.ordinal())
 			return;
 
@@ -635,32 +600,95 @@ public class RpcCall {
 	private static class ListenerArray extends ArrayList<RpcCallListener> implements RpcCallListener {
 		private static final long serialVersionUID = -434539791944886141L;
 
+		private static final Logger log = LoggerFactory.getLogger(ListenerArray.class);
+
 		public ListenerArray() {
 			super(4);
 		}
 
+		/**
+		 * Reports a listener that threw, so the remaining listeners can still be notified.
+		 * <p>
+		 * One misbehaving listener must not cost the others their notification: the server's own
+		 * bookkeeping listener is one of these, and skipping it leaks a pending call and a slot of the
+		 * reactive budget. Logged rather than swallowed, because a listener that throws is a defect in
+		 * this node and silence is how it survives.
+		 * </p>
+		 *
+		 * @param event    the callback that threw, for the log
+		 * @param call     the call being reported on
+		 * @param listener the listener that threw
+		 * @param cause    what it threw
+		 */
+		private static void failed(String event, RpcCall call, RpcCallListener listener, Exception cause) {
+			log.error("RPC call listener {} failed on {} for the call to {}",
+					listener.getClass().getName(), event, call.getTargetId(), cause);
+		}
+
 		@Override
 		public void onStateChange(RpcCall call, RpcCall.State previous, RpcCall.State current) {
-			for (RpcCallListener listener : this)
-				listener.onStateChange(call, previous, current);
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onStateChange(call, previous, current);
+				} catch (Exception e) {
+					failed("onStateChange", call, listener, e);
+				}
+			}
 		}
 
 		@Override
 		public void onResponse(RpcCall call) {
-			for (RpcCallListener listener : this)
-				listener.onResponse(call);
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onResponse(call);
+				} catch (Exception e) {
+					failed("onResponse", call, listener, e);
+				}
+			}
 		}
 
 		@Override
 		public void onStall(RpcCall call) {
-			for (RpcCallListener listener : this)
-				listener.onStall(call);
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onStall(call);
+				} catch (Exception e) {
+					failed("onStall", call, listener, e);
+				}
+			}
 		}
 
 		@Override
 		public void onTimeout(RpcCall call) {
-			for (RpcCallListener listener : this)
-				listener.onTimeout(call);
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onTimeout(call);
+				} catch (Exception e) {
+					failed("onTimeout", call, listener, e);
+				}
+			}
+		}
+
+		@Override
+		public void onCancel(RpcCall call) {
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onCancel(call);
+				} catch (Exception e) {
+					failed("onCancel", call, listener, e);
+				}
+			}
+		}
+
+		@Override
+		public void onError(RpcCall call) {
+			for (RpcCallListener listener : this) {
+				try {
+					listener.onError(call);
+				} catch (Exception e) {
+					failed("onError", call, listener, e);
+				}
+			}
 		}
 	}
 }
