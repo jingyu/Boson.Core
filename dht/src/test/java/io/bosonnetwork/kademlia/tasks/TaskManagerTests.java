@@ -401,6 +401,155 @@ class TaskManagerTests {
 		context.completeNow();
 	}
 
+	/**
+	 * Builds {@code pairs} parent tasks, each with a nested task, and returns both halves in the order
+	 * they were created so the caller can register every one of them.
+	 * <p>
+	 * <b>Half the pairs are built parent-first and half nested-first, and that is what makes the tests
+	 * using this mean anything.</b> {@code cancelAll} clears each task's end handler as it reaches it, so
+	 * a parent reached <em>after</em> its own nested task cascades into a task that can no longer route
+	 * itself back into the manager - the hazard simply does not arise. Whether a parent is reached first
+	 * is down to iteration order, and neither collection's is arbitrary: {@code Task.hashCode()} is the
+	 * sequential task id, so the running set walks in creation order, and the queue is a list that walks
+	 * in insertion order. Building every pair the same way therefore fixes the answer for all of them at
+	 * once. Alternating fixes it the other way for half, so no single iteration order can defuse them all.
+	 * </p>
+	 *
+	 * @param context the context the tasks belong to
+	 * @param pairs   how many parent/nested pairs to build
+	 * @return every task built, parents and nested alike
+	 */
+	private static List<TestTask> nestedPairs(KadContext context, int pairs) {
+		List<TestTask> tasks = new ArrayList<>();
+		for (int i = 0; i < pairs; i++) {
+			TestTask parent;
+			TestTask nested;
+			if (i % 2 == 0) {
+				parent = new TestTask(context).setName("Parent" + i);
+				nested = new TestTask(context).setName("Nested" + i);
+			} else {
+				nested = new TestTask(context).setName("Nested" + i);
+				parent = new TestTask(context).setName("Parent" + i);
+			}
+			parent.setNestedTask(nested);
+
+			// Added in creation order, so the queue's insertion order matches the running set's.
+			if (i % 2 == 0) {
+				tasks.add(parent);
+				tasks.add(nested);
+			} else {
+				tasks.add(nested);
+				tasks.add(parent);
+			}
+		}
+		return tasks;
+	}
+
+	/**
+	 * Runs {@code cancelAll} on the event loop and reports what it threw, if anything.
+	 * <p>
+	 * Left to throw inside a plain {@code runOnContext} block, the cause would be swallowed by the
+	 * context's exception handler and the test would fail as a timeout, naming nothing. This carries it
+	 * out to the assertion.
+	 * </p>
+	 */
+	private static Future<Void> cancelAllReportingThrows(KadContext context, TaskManager manager) {
+		Promise<Void> promise = Promise.promise();
+		context.runOnContext(() -> {
+			try {
+				manager.cancelAll();
+				promise.complete();
+			} catch (Throwable t) {
+				promise.fail(t);
+			}
+		});
+		return promise.future();
+	}
+
+	/**
+	 * Cancelling everything must survive a nested task that is itself registered with the manager.
+	 * <p>
+	 * {@code cancelAll} clears the end handler of each task before cancelling it, which stops that task
+	 * routing itself back into the manager - but {@code Task.cancel()} cascades to the task's nested task,
+	 * and the nested task's handler is not the one that was cleared. A registered nested task therefore
+	 * removes itself from the set the parent is being iterated out of, which is a
+	 * {@code ConcurrentModificationException} on the running set.
+	 * </p>
+	 * <p>
+	 * Six pairs rather than one, and built in alternating order - see {@link #nestedPairs}. A
+	 * {@code HashMap} iterator checks the modification count in {@code next()} and not in
+	 * {@code hasNext()}, so a lone parent that landed last would let the loop finish and the test would
+	 * pass on luck; and a parent reached after its own nested task cannot trigger the hazard at all.
+	 * </p>
+	 */
+	@Test
+	void testCancelAllSurvivesARegisteredNestedTask(VertxTestContext context) {
+		List<TestTask> tasks = nestedPairs(kadContext, 6);
+
+		kadContext.runOnContext(() -> tasks.forEach(manager::add));
+
+		try {
+			if (!waitFor(() -> manager.getRunningTasks() == tasks.size()))
+				context.failNow("the tasks never started");
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		cancelAllReportingThrows(kadContext, manager).onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertEquals(0, manager.getRunningTasks());
+				assertEquals(0, manager.getQueuedTasks());
+				for (TestTask task : tasks)
+					assertTrue(task.isCanceled(), task.getName() + " was left uncancelled");
+			});
+			context.completeNow();
+		}));
+	}
+
+	/**
+	 * The same hazard on the queue, where it does not announce itself.
+	 * <p>
+	 * {@code queuedTasks} is a {@code LinkedList}, whose iterator answers {@code hasNext()} from the
+	 * current size. A nested task removing itself mid-walk shortens that list, so the loop can end an
+	 * element early instead of throwing - leaving a task uncancelled, still registered, and still holding
+	 * the handler that was supposed to be cleared. Whoever waits on that task waits for good, which is why
+	 * this asserts on every task rather than only on the absence of an exception.
+	 * </p>
+	 */
+	@Test
+	void testCancelAllSurvivesARegisteredNestedQueuedTask(VertxTestContext context) {
+		// One slot, so the first task admitted runs and everything after it stays queued.
+		KadContext limitedContext = new TestKadContext(vertxContext, new CryptoIdentity(), Network.IPv4)
+				.setConcurrentTasks(1);
+		TaskManager limited = new TaskManager(limitedContext);
+
+		TestTask filler = new TestTask(limitedContext).setName("Filler");
+		List<TestTask> queued = nestedPairs(limitedContext, 6);
+
+		limitedContext.runOnContext(() -> {
+			limited.add(filler);
+			queued.forEach(limited::add);
+		});
+
+		try {
+			if (!waitFor(() -> limited.getQueuedTasks() == queued.size()))
+				context.failNow("the tasks never queued: queued=" + limited.getQueuedTasks());
+		} catch (InterruptedException e) {
+			context.failNow(e);
+		}
+
+		cancelAllReportingThrows(limitedContext, limited).onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertEquals(0, limited.getRunningTasks());
+				assertEquals(0, limited.getQueuedTasks());
+				assertTrue(filler.isCanceled(), "the running task was left uncancelled");
+				for (TestTask task : queued)
+					assertTrue(task.isCanceled(), task.getName() + " was left uncancelled");
+			});
+			context.completeNow();
+		}));
+	}
+
 	private boolean waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {
 		for (int i = 0; i < 100; i++) {
 			if (condition.getAsBoolean())
