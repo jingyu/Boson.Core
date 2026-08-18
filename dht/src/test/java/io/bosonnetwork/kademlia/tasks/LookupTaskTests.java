@@ -68,6 +68,50 @@ class LookupTaskTests {
 		}
 	}
 
+	// Reproduces a synchronous reject: RpcServer.reject fails the call on the stack that sent it and
+	// returns a failed future, so both channels fire before sendCall has returned. Records how deeply
+	// sendRequests ever nested, which is the whole question.
+	static class RejectingLookupTask extends LookupTask<Object, RejectingLookupTask> {
+		private static final Logger log = LoggerFactory.getLogger(RejectingLookupTask.class);
+
+		int depth;
+		int maxDepth;
+		int iterations;
+
+		RejectingLookupTask(KadContext context, Id target) {
+			super(context, target, false);
+		}
+
+		@Override
+		protected void sendRequests() {
+			depth++;
+			maxDepth = Math.max(maxDepth, depth);
+			iterations++;
+
+			while (!isCandidatesEmpty() && canDoRequest()) {
+				CandidateNode cn = getNextCandidate();
+				if (cn == null)
+					break;
+
+				sendCall(cn, Message.pingRequest(), c -> cn.setSent(), (c, e) -> removeCandidate(cn.getId()));
+			}
+
+			depth--;
+		}
+
+		@Override
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			Throwable cause = new IllegalStateException("call rejected before it was sent");
+			failCall(call, cause);
+			return Future.failedFuture(cause);
+		}
+
+		@Override
+		protected Logger getLogger() {
+			return log;
+		}
+	}
+
 	static class TestLookupTask extends LookupTask<Object, TestLookupTask> {
 		private static final Logger log = LoggerFactory.getLogger(TestLookupTask.class);
 
@@ -149,10 +193,45 @@ class LookupTaskTests {
 		}
 	}
 
+	private static void failCall(RpcCall call, Throwable cause) {
+		try {
+			java.lang.reflect.Method fail = RpcCall.class.getDeclaredMethod("fail", Throwable.class);
+			fail.setAccessible(true);
+			fail.invoke(call, cause);
+		} catch (Exception e) {
+			throw new RuntimeException("failCall failed", e);
+		}
+	}
+
 	@BeforeEach
 	void setUp() {
 		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
 		task = new TestLookupTask(context, Id.random());
+	}
+
+	@Test
+	void testASynchronousRejectDoesNotIterateInsideAnIteration() {
+		// Every send here fails on the calling stack, which is what our own outbound throttle does to a
+		// call it will not park. Each failure delivers a state change, and that used to start a fresh
+		// iteration underneath the one still running: the queue was drained by recursion, the innermost
+		// run completed the task while eight send loops were still unwinding above it, and each of those
+		// then tried to complete it again and was refused as an invalid transition.
+		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
+		RejectingLookupTask rejecting = new RejectingLookupTask(context, Id.random());
+
+		List<NodeInfo> nodes = new ArrayList<>();
+		for (int i = 0; i < 8; i++)
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
+		rejecting.addCandidates(nodes);
+
+		rejecting.start();
+
+		assertEquals(1, rejecting.maxDepth);
+		// The deferred request is honored, and honoring it is what ends the task: the run that finds the
+		// candidate queue empty is the one owed from inside the send loop.
+		assertEquals(1, rejecting.iterations);
+		assertEquals(Task.State.COMPLETED, rejecting.getState());
+		assertEquals(LookupTask.CompletionReason.NO_CANDIDATES, rejecting.getCompletionReason());
 	}
 
 	@Test
