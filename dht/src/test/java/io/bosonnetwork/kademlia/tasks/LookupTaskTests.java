@@ -40,6 +40,34 @@ class LookupTaskTests {
 
 	private TestLookupTask task;
 
+	// Sends one call per iteration, and every send fails at the transport - so the call is retired at
+	// once and each iteration starts from an empty in-flight set, without the test having to answer
+	// anything. The candidate is never marked sent or removed, so it stays eligible indefinitely.
+	static class SendingLookupTask extends LookupTask<Object, SendingLookupTask> {
+		private static final Logger log = LoggerFactory.getLogger(SendingLookupTask.class);
+
+		SendingLookupTask(KadContext context, Id target) {
+			super(context, target, false);
+		}
+
+		@Override
+		protected void sendRequests() {
+			CandidateNode cn = getNextCandidate();
+			if (cn != null)
+				sendCall(cn, Message.pingRequest(), c -> { }, (c, e) -> { });
+		}
+
+		@Override
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			return Future.failedFuture(new IllegalStateException("send failed"));
+		}
+
+		@Override
+		protected Logger getLogger() {
+			return log;
+		}
+	}
+
 	static class TestLookupTask extends LookupTask<Object, TestLookupTask> {
 		private static final Logger log = LoggerFactory.getLogger(TestLookupTask.class);
 
@@ -48,7 +76,7 @@ class LookupTaskTests {
 		}
 
 		@Override
-		protected void iterate() { super.iterate(); }
+		protected void sendRequests() { }
 
 		@Override
 		protected Future<RpcCall> sendCall(RpcCall call) {
@@ -79,8 +107,7 @@ class LookupTaskTests {
 		}
 
 		@Override
-		protected void iterate() {
-			super.iterate();
+		protected void sendRequests() {
 			while (!isCandidatesEmpty() && canDoRequest()) {
 				CandidateNode cn = getNextCandidate();
 				if (cn == null)
@@ -129,14 +156,81 @@ class LookupTaskTests {
 	}
 
 	@Test
-	void testIterationCount() {
+	void testIterationsThatSendNothingDoNotSpendTheBudget() {
+		// This task's sendRequests does nothing, which is not a contrivance: a stalled call drives the
+		// task without leaving the in-flight set, so an iteration that runs with a free slot and no
+		// eligible candidate is ordinary. Charging those against the budget spent a lookup on the network
+		// being slow, and could end it holding a short result that reads as convergence.
 		task.addCandidates(List.of(NodeInfo.of(Id.random(), "100.1.1.8", 39001)));
 		task.start();
 
-		for (int i = 0; i < task.maxIterations; i++)
+		for (int i = 0; i < task.maxIterations * 2; i++)
 			task.iterate();
 
+		assertFalse(task.isDone());
+		assertNull(task.getCompletionReason());
+	}
+
+	@Test
+	void testIterationsThatSendDoSpendTheBudget() {
+		// The other half: the budget still bounds a lookup that is doing something, and says so when it
+		// runs out. A send that fails counts too - the attempt was made and the round happened.
+		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
+		SendingLookupTask sending = new SendingLookupTask(context, Id.random());
+		sending.addCandidates(List.of(NodeInfo.of(Id.random(), "100.1.1.9", 39002)));
+		sending.start();
+
+		for (int i = 0; i < sending.maxIterations; i++)
+			sending.iterate();
+
+		assertTrue(sending.isDone());
+		assertEquals(LookupTask.CompletionReason.ITERATION_LIMIT, sending.getCompletionReason());
+	}
+
+	@Test
+	void testAConvergedLookupStampsItsClosestSet() {
+		// Built by hand because convergence is expensive to reach through responses: fill the closest set,
+		// then keep offering it nodes farther than its tail until it has stopped improving for longer than
+		// the stability margin, and leave the only unqueried candidate farther still. That is exactly
+		// Kademlia's rule - nothing left to ask can enter the set.
+		int k = KadConstants.K;
+		List<NodeInfo> nodes = new ArrayList<>();
+		for (int i = 0; i < k + ClosestSet.stabilityMargin(k) + 2; i++)
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
+		nodes.sort((n1, n2) -> task.getTarget().threeWayCompare(n1.getId(), n2.getId()));
+
+		// The farthest node is the candidate, so the queue is not empty - otherwise the lookup would
+		// terminate on "no candidates" and never reach the convergence rule.
+		task.addCandidates(List.of(nodes.get(nodes.size() - 1)));
+		task.start();
+
+		ClosestSet closest = task.getClosestSet();
+		assertFalse(closest.isConverged());
+		for (int i = 0; i < nodes.size() - 1; i++)
+			closest.add(new CandidateNode(nodes.get(i)));
+
 		assertTrue(task.isDone());
+		assertEquals(LookupTask.CompletionReason.CONVERGED, task.getCompletionReason());
+
+		task.complete();
+		assertTrue(closest.isConverged());
+	}
+
+	@Test
+	void testAnExhaustedLookupLeavesItsClosestSetUnconverged() {
+		// The distinction the stamp exists for: this set is short because we ran out of candidates, not
+		// because the network has nothing else - and a publish handed it writes to fewer nodes than it
+		// should while every one of them may acknowledge.
+		NodeInfo only = NodeInfo.of(Id.random(), "100.1.1.10", 39003);
+		task.addCandidates(List.of(only));
+		task.start();
+		task.removeCandidate(only.getId());
+
+		assertTrue(task.isDone());
+		assertEquals(LookupTask.CompletionReason.NO_CANDIDATES, task.getCompletionReason());
+
+		task.complete();
+		assertFalse(task.getClosestSet().isConverged());
 	}
 
 	@Test

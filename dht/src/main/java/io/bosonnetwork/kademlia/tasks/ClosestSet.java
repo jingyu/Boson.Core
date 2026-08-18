@@ -56,6 +56,8 @@ public class ClosestSet {
 	private int insertAttemptsSinceTailModification = 0;
 	/** Number of insertion attempts since the closest node was modified. */
 	private int insertAttemptsSinceHeadModification = 0;
+	/** Whether the lookup that produced this set ended by converging. */
+	private boolean converged;
 
 	private static final Logger log = LoggerFactory.getLogger(ClosestSet.class);
 
@@ -231,6 +233,35 @@ public class ClosestSet {
 	 */
 	static int stabilityMargin(int capacity) {
 		return Math.min(capacity, KadConstants.LOOKUP_STABILITY_ATTEMPTS);
+	}
+
+	/**
+	 * Whether the lookup that produced this set ran to Kademlia's termination rule.
+	 * <p>
+	 * <b>Read this before concluding anything from {@link #size()}.</b> A set holding fewer than
+	 * {@code k} nodes means one of two very different things: converged, and this is what the network
+	 * has to offer for the target; not converged, and the lookup stopped for a reason of ours - it ran
+	 * out of candidates it could reach, or out of iterations - so nodes that should be here may simply
+	 * never have been found. A publish that writes to such a set is under-replicated whatever its own
+	 * per-target result says, because the targets it was given were already short.
+	 * </p>
+	 * <p>
+	 * False until the lookup completes, including for a set read from a task that was cancelled.
+	 * </p>
+	 *
+	 * @return true if the lookup converged, false otherwise.
+	 */
+	public boolean isConverged() {
+		return converged;
+	}
+
+	/**
+	 * Records whether the lookup converged. Called once, by the task that owns this set, as it completes.
+	 *
+	 * @param converged true if the lookup ended on Kademlia's termination rule.
+	 */
+	void setConverged(boolean converged) {
+		this.converged = converged;
 	}
 
 	/**

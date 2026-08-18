@@ -109,6 +109,28 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	protected boolean doneOnEligibleResult;
 	/** Flag indicating if the lookup is complete (e.g., value found). */
 	protected boolean lookupDone = false;
+	/** Which termination rule ended the lookup; null while it is still running. */
+	private CompletionReason completionReason;
+
+	/**
+	 * Why a lookup stopped.
+	 * <p>
+	 * Only {@link #CONVERGED} is Kademlia's termination rule - the set is full, has stopped improving,
+	 * and nothing left to ask is closer than its tail, so the result is as good as this node can make it.
+	 * The other three can all end a lookup holding fewer than {@code k} nodes, and a caller reading a
+	 * short result cannot otherwise tell "this is what the network has" from "we stopped early".
+	 * </p>
+	 */
+	public enum CompletionReason {
+		/** A subclass had what it came for - the value, or enough peers - and said so. */
+		SIGNALED,
+		/** Kademlia's rule: nothing unqueried is closer than the set's tail. */
+		CONVERGED,
+		/** Every candidate was queried, removed or found unreachable. The network had no more to offer. */
+		NO_CANDIDATES,
+		/** The iteration budget ran out first. The only reason that says more about us than the network. */
+		ITERATION_LIMIT
+	}
 
 	/**
 	 * Constructs a new lookup task for the given target ID.
@@ -461,6 +483,30 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	}
 
 	/**
+	 * Returns which termination rule ended this lookup.
+	 *
+	 * @return the reason, or null if the lookup has not finished deciding.
+	 */
+	public CompletionReason getCompletionReason() {
+		return completionReason;
+	}
+
+	/**
+	 * Marks the closest set with whether the lookup that produced it converged, then completes.
+	 * <p>
+	 * The set outlives the task that built it - an announce is handed the set alone and writes to every
+	 * node in it - so the one fact its holder cannot recover on its own travels with it. A short set from
+	 * a converged lookup is the network's answer; a short set from an exhausted budget is ours, and only
+	 * the task knew which.
+	 * </p>
+	 */
+	@Override
+	protected void complete() {
+		closest.setConverged(completionReason == CompletionReason.CONVERGED);
+		super.complete();
+	}
+
+	/**
 	 * Sets the result of the lookup.
 	 *
 	 * @param result the lookup result
@@ -479,12 +525,38 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	}
 
 	/**
-	 * Performs one iteration of the lookup, sending RPCs to the closest candidates.
+	 * Performs one iteration of the lookup, and charges the iteration budget only if it did something.
+	 * <p>
+	 * An iteration that sent no request has advanced nothing, and there are ordinary ways to reach one:
+	 * a call that stalls drives the task without leaving the in-flight set, so if a concurrency slot is
+	 * free and no candidate is currently eligible, this runs and finds nothing to do. Counting those
+	 * against {@code maxIterations} spent a lookup's budget on the network being slow rather than on
+	 * work, and could end it early with a short result that looks like convergence.
+	 * </p>
+	 * <p>
+	 * Nothing is lost by not counting them. The budget is not what bounds a task's runtime - the
+	 * deadline is - and iterations are driven only by call state changes, of which a finite set of calls
+	 * can produce only finitely many.
+	 * </p>
 	 */
 	@Override
-	protected void iterate() {
-		iterationCount++;
+	protected final void iterate() {
+		long sentBefore = getCallsSent();
+
+		sendRequests();
+
+		if (getCallsSent() > sentBefore)
+			iterationCount++;
 	}
+
+	/**
+	 * Sends requests to as many eligible candidates as the concurrency limit allows.
+	 * <p>
+	 * Called once per iteration. Whether this counts as an iteration is decided by whether it sends
+	 * anything, so an implementation that finds nothing to do may simply return.
+	 * </p>
+	 */
+	protected abstract void sendRequests();
 
 	/**
 	 * Checks if the lookup is complete, based on explicit completion, no remaining candidates,
@@ -505,10 +577,12 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		Logger log = getLogger();
 		if (lookupDone) {
 			log.debug("{}#{} terminating lookup: explicit completion signaled (lookupDone)", getName(), getId());
+			completionReason = CompletionReason.SIGNALED;
 			return true;
 		}
 		if (iterationCount >= maxIterations) {
 			log.debug("{}#{} terminating lookup: reached maximum iterations ({})", getName(), getId(), maxIterations);
+			completionReason = CompletionReason.ITERATION_LIMIT;
 			return true;
 		}
 		if (!super.isDone()) {
@@ -517,12 +591,14 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		}
 		if (getCandidateSize() == 0) {
 			log.debug("{}#{} terminating lookup: no candidates remain", getName(), getId());
+			completionReason = CompletionReason.NO_CANDIDATES;
 			return true;
 		}
 		if (closest.isEligible() && (candidates.head() == null ||
 				target.threeWayCompare(closest.tail(), candidates.head()) <= 0)) {
 			log.debug("{}#{} terminating lookup: closest set eligible and no closer candidates (tail={}, candidate head={})",
 					getName(), getId(), closest.tail(), candidates.head());
+			completionReason = CompletionReason.CONVERGED;
 			return true;
 		}
 		log.trace("{}#{} lookup not done: continuing iteration", getName(), getId());
@@ -633,6 +709,9 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		StringBuilder status = new StringBuilder();
 
 		status.append(this).append('\n');
+		status.append("Iterations: ").append(iterationCount).append('/').append(maxIterations)
+				.append(", completion: ").append(completionReason == null ? "<running>" : completionReason)
+				.append('\n');
 		status.append("Closest: \n");
 		if (!closest.isEmpty())
 			status.append(closest.stream().map(NodeInfo::toString).collect(Collectors.joining("\n    ", "    ", "\n")));

@@ -180,8 +180,7 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 	 * Performs one iteration of the lookup, sending FIND_NODE RPCs to candidate nodes.
 	 */
 	@Override
-	protected void iterate() {
-		super.iterate();
+	protected void sendRequests() {
 		while (!isCandidatesEmpty() && canDoRequest()) {
 			CandidateNode cn = getNextCandidate();
 			if (cn == null) {
