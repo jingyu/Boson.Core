@@ -446,7 +446,7 @@ class LookupTaskTests {
 		// catches it and no timer exists to iterate the task again.
 		List<NodeInfo> nodes = randomNodes(4);
 
-		assertEquals(4, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).size());
+		assertEquals(4, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), null)).size());
 		assertEquals(4, task.acceptResponse(Message.findValueResponse(2, nodes, List.of())).size());
 		assertEquals(4, task.acceptResponse(Message.findPeerResponse(3, nodes, List.of())).size());
 	}
@@ -454,14 +454,14 @@ class LookupTaskTests {
 	@Test
 	void testResponseAtTheCeilingIsTakenWhole() {
 		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
-		assertEquals(nodes, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)));
+		assertEquals(nodes, task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), null)));
 	}
 
 	@Test
 	void testResponseOverTheCeilingIsDropped() {
 		// Dropped whole rather than trimmed: past the ceiling the cheap exit comes first.
 		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE + 1);
-		assertTrue(task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).isEmpty());
+		assertTrue(task.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), null)).isEmpty());
 	}
 
 	@Test
@@ -476,7 +476,7 @@ class LookupTaskTests {
 
 		int capacity = LookupTask.candidateCapacity(4);
 		List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
-		List<NodeInfo> accepted = t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0));
+		List<NodeInfo> accepted = t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), null));
 
 		assertEquals(capacity / 2, accepted.size());
 		assertTrue(accepted.size() < capacity, "one response must not be able to fill the queue by itself");
@@ -499,7 +499,7 @@ class LookupTaskTests {
 
 			int expected = Math.min(KadConstants.MAX_NODES_PER_RESPONSE, LookupTask.candidateCapacity(k) / 2);
 			List<NodeInfo> nodes = randomNodes(KadConstants.MAX_NODES_PER_RESPONSE);
-			assertEquals(expected, t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), 0)).size(),
+			assertEquals(expected, t.acceptResponse(Message.findNodeResponse(1, nodes, List.of(), null)).size(),
 					"quota at k=" + k);
 			assertTrue(expected <= LookupTask.candidateCapacity(k) / 2, "never more than half the queue at k=" + k);
 		}
@@ -507,7 +507,7 @@ class LookupTaskTests {
 
 	@Test
 	void testEmptyResponseIsTakenAsNothingToAdd() {
-		assertTrue(task.acceptResponse(Message.findNodeResponse(1, List.of(), List.of(), 0)).isEmpty());
+		assertTrue(task.acceptResponse(Message.findNodeResponse(1, List.of(), List.of(), null)).isEmpty());
 	}
 
 	/**
@@ -560,7 +560,7 @@ class LookupTaskTests {
 		assertNotNull(cn);
 
 		RpcCall call = new RpcCall(cn, Message.pingRequest());
-		Message response = Message.findNodeResponse(call.getTxid(), List.of(), List.of(), 0);
+		Message response = Message.findNodeResponse(call.getTxid(), List.of(), List.of(), null);
 		response.setId(Id.random());
 		respondCall(call, response);
 
@@ -569,6 +569,57 @@ class LookupTaskTests {
 
 		assertEquals(0, task.getClosestSet().size(), "a stranger must not enter the lookup's result");
 		assertEquals(0, task.getCandidateSize(), "and must not stay in the queue to be asked again");
+	}
+
+	/**
+	 * A response that carries no token must leave the candidate without one.
+	 * <p>
+	 * Only a peer that was asked for a write token and answered with one has agreed to accept a write, and
+	 * the announce tasks read that agreement off {@link CandidateNode#hasToken()}. Every int is a valid
+	 * token, so a response with no token field used to arrive as a token of zero and be recorded as
+	 * received: the announce then spent an RPC on a node that never issued one, and its missing-token
+	 * branch was unreachable for anything a node lookup produced.
+	 * </p>
+	 */
+	@Test
+	void testACandidateTakesNoTokenFromAResponseThatCarriesNone() {
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
+		task.addCandidates(List.of(node));
+		CandidateNode cn = task.getCandidate(node.getId());
+		assertNotNull(cn);
+
+		RpcCall call = new RpcCall(cn, Message.pingRequest());
+		Message response = Message.findNodeResponse(call.getTxid(), List.of(), List.of(), null);
+		response.setId(node.getId());
+		respondCall(call, response);
+		task.callResponded(call);
+
+		CandidateNode promoted = task.getClosestSet().get(node.getId());
+		assertNotNull(promoted);
+		assertFalse(promoted.hasToken(), "a response with no token must not look like one that carried a token");
+	}
+
+	/**
+	 * A token of zero is a token like any other: the issuer cut it from a digest and will verify it, so
+	 * dropping it would refuse a write the peer had agreed to accept.
+	 */
+	@Test
+	void testACandidateTakesAZeroTokenLikeAnyOther() {
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
+		task.addCandidates(List.of(node));
+		CandidateNode cn = task.getCandidate(node.getId());
+		assertNotNull(cn);
+
+		RpcCall call = new RpcCall(cn, Message.pingRequest());
+		Message response = Message.findNodeResponse(call.getTxid(), List.of(), List.of(), 0);
+		response.setId(node.getId());
+		respondCall(call, response);
+		task.callResponded(call);
+
+		CandidateNode promoted = task.getClosestSet().get(node.getId());
+		assertNotNull(promoted);
+		assertTrue(promoted.hasToken(), "zero is a token the issuer will accept back");
+		assertEquals(0, promoted.getToken());
 	}
 
 	@Test

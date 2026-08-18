@@ -677,7 +677,10 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 			cn.setReplied();
 			Message response = call.getResponse();
 			getLogger().debug("{}#{} received response for candidate {}, add it to closest", getName(), getId(), cn.getId());
-			if (response.getBody() instanceof FindNodeResponse fnr)
+			// Only when one actually arrived. A response with no token is what a peer sends when it was
+			// not asked for one, and recording an absent token as a received zero would have an announce
+			// spend an RPC being refused by a node that never claimed it would accept the write.
+			if (response.getBody() instanceof FindNodeResponse fnr && fnr.hasToken())
 				cn.setToken(fnr.getToken());
 			addClosest(cn);
 		}

@@ -34,19 +34,43 @@ import io.bosonnetwork.NodeInfo;
 
 @JsonPropertyOrder({"n4", "n6", "tok"})
 public class FindNodeResponse extends LookupResponse {
+	/**
+	 * The write token this response carries, or null if it carries none.
+	 * <p>
+	 * Boxed so that absence has a representation of its own. Every {@code int} is a valid token - the
+	 * issuer cuts it from a digest and later verifies whatever it cut - so no value is free to stand for
+	 * "no token", and a primitive field has to spend one anyway. It cost twice over: {@code NON_DEFAULT}
+	 * on a primitive dropped a token that is genuinely zero from the wire, and an absent field arrived as
+	 * a zero the reader could not tell from a real one. Null is absent, and any present value is sent.
+	 * </p>
+	 */
 	@JsonProperty("tok")
-	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
-	private final int token;
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private final Integer token;
 
 	@JsonCreator
 	public FindNodeResponse(@JsonProperty("n4") List<? extends NodeInfo> nodes4,
 							@JsonProperty("n6") List<? extends NodeInfo> nodes6,
-							@JsonProperty("tok") int token) {
+							@JsonProperty("tok") Integer token) {
 		super(nodes4, nodes6);
 		this.token = token;
 	}
 
-	public int getToken() {
+	/**
+	 * Returns whether the responder supplied a write token.
+	 *
+	 * @return true if a token was received, false otherwise
+	 */
+	public boolean hasToken() {
+		return token != null;
+	}
+
+	/**
+	 * Returns the write token, if the responder supplied one.
+	 *
+	 * @return the token, or null if the response carries none - test {@link #hasToken()} before unboxing
+	 */
+	public Integer getToken() {
 		return token;
 	}
 
@@ -63,7 +87,7 @@ public class FindNodeResponse extends LookupResponse {
 		if (obj instanceof FindNodeResponse that)
 			return Objects.equals(nodes4, that.nodes4) &&
 					Objects.equals(nodes6, that.nodes6) &&
-					token == that.token;
+					Objects.equals(token, that.token);
 
 		return false;
 	}

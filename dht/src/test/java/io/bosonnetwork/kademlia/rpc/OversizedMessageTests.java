@@ -146,7 +146,7 @@ public class OversizedMessageTests {
 		for (int i = 0; i < TOO_MANY_NODES; i++)
 			nodes.add(NodeInfo.of(Id.random(), "203.0.113.10", 39001 + i));
 
-		return Message.findNodeResponse(txid, nodes, null, 0);
+		return Message.findNodeResponse(txid, nodes, null, null);
 	}
 
 	/** Completes when the call reaches a final state, whichever one it is. */

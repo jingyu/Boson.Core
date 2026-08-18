@@ -556,7 +556,17 @@ public class Message {
 		return new Message(Type.REQUEST, Method.FIND_NODE, nextTxid(), new FindNodeRequest(target, want4, want6, wantToken));
 	}
 
-	public static Message findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, int token) {
+	/**
+	 * Builds a FIND_NODE response.
+	 *
+	 * @param txid the transaction id of the request being answered
+	 * @param n4 the closest IPv4 nodes, may be null
+	 * @param n6 the closest IPv6 nodes, may be null
+	 * @param token the write token to issue, or null if the request did not ask for one - null is the only
+	 *              way to say "no token", since every int value is one a peer may legitimately be given
+	 * @return the response message
+	 */
+	public static Message findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, Integer token) {
 		return new Message(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 
