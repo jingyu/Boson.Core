@@ -1,6 +1,7 @@
 package io.bosonnetwork.kademlia.tasks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -67,6 +68,29 @@ public class ClosestCandidatesTests {
 
 		nodes.sort((n1, n2) -> target.threeWayCompare(n1.getId(), n2.getId()));
 		assertEquals(nodes, candidates.entries().toList());
+	}
+
+	@Test
+	void testAddressCollisionKeepsTheIncumbentAndDoesNotConsumeTheId() {
+		NodeInfo incumbent = NodeInfo.of(Id.random(), randomAddress());
+		candidates.add(List.of(incumbent));
+		assertEquals(1, candidates.size());
+
+		// A different id at an address already held is refused, and the entry we already had is the one kept.
+		NodeInfo collided = NodeInfo.of(Id.random(), incumbent.getAddress());
+		candidates.add(List.of(collided));
+		assertEquals(1, candidates.size());
+		assertNull(candidates.get(collided.getId()));
+		assertEquals(incumbent, candidates.get(incumbent.getId()));
+
+		// The refusal was about the address, so the id must not have been spent: the same node offered at an
+		// address of its own is admitted. This is the half a size assertion cannot see - the id used to be
+		// committed to the dedup set before the address was checked, and nothing but pruning removes a dedup
+		// entry while pruning only walks the entries that made it into the queue.
+		NodeInfo readdressed = NodeInfo.of(collided.getId(), randomAddress());
+		candidates.add(List.of(readdressed));
+		assertEquals(2, candidates.size());
+		assertEquals(readdressed, candidates.get(readdressed.getId()));
 	}
 
 	@Test
