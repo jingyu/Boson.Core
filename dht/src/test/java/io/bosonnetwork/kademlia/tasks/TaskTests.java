@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,8 +44,8 @@ public class TaskTests {
 		}
 
 		@Override
-		protected void sendCall(RpcCall call) {
-			// do nothing
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			return Future.succeededFuture(call);
 		}
 
 		@Override
@@ -165,7 +166,7 @@ public class TaskTests {
 		for (int i = 0; i < context.getAlpha(); i++) {
 			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
-			task.sendCall(node, message, calls::add);
+			task.sendCall(node, message, calls::add, null);
 			assertEquals(i + 1, task.getInFlightCalls());
 		}
 		assertFalse(task.canDoRequest());
@@ -185,7 +186,7 @@ public class TaskTests {
 		for (int i = 0; i < context.getLowPriorityAlpha(); i++) {
 			NodeInfo node = NodeInfo.of(Id.random(), "192.168.1.8", Random.random().nextInt(1024, 65536));
 			Message message = Message.pingRequest();
-			task.sendCall(node, message, calls::add);
+			task.sendCall(node, message, calls::add, null);
 			assertEquals(i + 1, task.getInFlightCalls());
 		}
 		assertFalse(task.canDoRequest());
@@ -226,20 +227,45 @@ public class TaskTests {
 	}
 
 	/**
-	 * The counterpart: a failure once the task is under way leaves it running, because its in-flight
-	 * calls will drive it again.
+	 * An iteration that throws having sent nothing is in the same position as a failed prepare: no call
+	 * exists to bring the task back, so it has to end rather than hold a slot for the life of the node.
 	 */
 	@Test
-	void testIterationFailureLeavesTheTaskRunning() {
+	void testIterationFailureWithNothingInFlightEndsTheTask() {
+		Variable<Boolean> ended = Variable.of(false);
 		TestTask failing = new TestTask(context) {
 			@Override
 			protected void iterate() {
 				throw new IllegalStateException("cannot iterate");
 			}
 		};
+		failing.endHandler(t -> ended.set(true));
 
 		failing.start();
 
+		assertEquals(0, failing.getInFlightCalls());
+		assertEquals(Task.State.CANCELED, failing.getState());
+		assertTrue(ended.get(), "the end handler must fire, or the task's slot is never reclaimed");
+	}
+
+	/**
+	 * The counterpart, and the reason the check is on the in-flight set rather than on the failure: a
+	 * task that got a call out before it threw is still reachable, because that call will respond or time
+	 * out and drive the next iteration. Ending it there would abandon a lookup over one bad iteration.
+	 */
+	@Test
+	void testIterationFailureWithACallInFlightLeavesTheTaskRunning() {
+		TestTask failing = new TestTask(context) {
+			@Override
+			protected void iterate() {
+				sendCall(NodeInfo.of(Id.random(), "192.168.1.8", 39001), Message.pingRequest());
+				throw new IllegalStateException("cannot iterate");
+			}
+		};
+
+		failing.start();
+
+		assertEquals(1, failing.getInFlightCalls());
 		assertEquals(Task.State.RUNNING, failing.getState());
 	}
 }

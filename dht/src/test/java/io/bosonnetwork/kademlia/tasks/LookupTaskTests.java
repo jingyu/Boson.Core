@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import net.datafaker.Faker;
 import org.slf4j.Logger;
@@ -49,13 +50,51 @@ class LookupTaskTests {
 		protected void iterate() { super.iterate(); }
 
 		@Override
-		protected void sendCall(RpcCall call) {
-			// do nothing
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			return Future.succeededFuture(call);
 		}
 
 		@Override
 		protected Logger getLogger() {
 			return log;
+		}
+	}
+
+	/**
+	 * A lookup that queries its candidates, and whose transport refuses one of them.
+	 * <p>
+	 * The failure is injected at the transport hook, as a failed future, because that is the shape the
+	 * real one has: the DHT fails a call immediately when it is not running. It therefore arrives before
+	 * {@code sendCall} returns, inside the loop that is still iterating - which is what the lookup has to
+	 * survive.
+	 * </p>
+	 */
+	static class UnsendableCandidateTask extends TestLookupTask {
+		private final Id unsendable;
+
+		UnsendableCandidateTask(KadContext context, Id target, Id unsendable) {
+			super(context, target);
+			this.unsendable = unsendable;
+		}
+
+		@Override
+		protected void iterate() {
+			super.iterate();
+			while (!isCandidatesEmpty() && canDoRequest()) {
+				CandidateNode cn = getNextCandidate();
+				if (cn == null)
+					break;
+
+				sendCall(cn, Message.pingRequest(), c -> cn.setSent(), (c, e) -> removeCandidate(cn.getId()));
+			}
+		}
+
+		@Override
+		protected Future<RpcCall> sendCall(RpcCall call) {
+			if (call.getTargetId().equals(unsendable))
+				return Future.failedFuture(new IllegalStateException("cannot send to this candidate"));
+
+			return super.sendCall(call);
 		}
 	}
 
@@ -294,5 +333,32 @@ class LookupTaskTests {
 		task.lookupDone = false;
 		assertEquals(0, task.getCandidateSize());
 		assertTrue(task.isDone());
+	}
+
+	/**
+	 * A candidate that cannot be sent to is dropped and the lookup carries on with the rest.
+	 * <p>
+	 * Dropping it is what makes the iteration terminate: the candidate becomes ineligible in the
+	 * {@code beforeSend} callback, which never runs when the send throws ahead of it, so a candidate left
+	 * in the queue would be picked again by the very next pass. And the lookup has to survive it - one
+	 * unreachable candidate is not a reason to abandon a search that still has others to ask.
+	 * </p>
+	 */
+	@Test
+	void testAnUnsendableCandidateIsDroppedAndTheLookupContinues() {
+		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
+		List<NodeInfo> nodes = new ArrayList<>();
+		for (int i = 0; i < 3; i++)
+			nodes.add(NodeInfo.of(Id.random(), randomAddress()));
+
+		Id unsendable = nodes.get(1).getId();
+		UnsendableCandidateTask lookup = new UnsendableCandidateTask(context, Id.random(), unsendable);
+		lookup.addCandidates(nodes);
+
+		lookup.start();
+
+		assertNull(lookup.getCandidate(unsendable), "the candidate we could not send to must not remain queued");
+		assertEquals(2, lookup.getInFlightCalls(), "the other candidates must still have been asked");
+		assertEquals(Task.State.RUNNING, lookup.getState());
 	}
 }

@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
+import java.net.StandardProtocolFamily;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -30,8 +31,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import io.vertx.core.Future;
 import org.slf4j.Logger;
 
 import io.bosonnetwork.NodeInfo;
@@ -287,8 +290,11 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	}
 
 	/**
-	 * Starts the task, transitioning it to the RUNNING state and initiating iteration.
-	 * If an error occurs during iteration, the task continues to allow subsequent iterations.
+	 * Starts the task, transitioning it to the RUNNING state and running the first iteration.
+	 * <p>
+	 * Neither failure here leaves the task running with nothing to drive it: a task that fails to prepare
+	 * is cancelled, and an iteration that throws ends the task when no call went out to bring it back.
+	 * </p>
 	 */
 	@SuppressWarnings("unchecked")
 	public void start() {
@@ -316,7 +322,14 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 
 				tryIterate();
 			} catch (Exception e) {
-				// Log error but do not cancel task to allow future iterations
+				// Not the iteration failing: tryIterate handles that itself, ending the task when nothing
+				// is left to drive it. What reaches here is the listener callback or the completion checks
+				// around it, and the task is deliberately left running - by this point it may hold calls
+				// in flight, and those still bring it back.
+				//
+				// Residual, stated rather than hidden: a listener.started() that throws leaves the task
+				// RUNNING having sent nothing, which is the same hang through a door this catch does not
+				// close.
 				getLogger().error("{}#{} start failed", name, taskId, e);
 			}
 		}
@@ -324,6 +337,12 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 
 	/**
 	 * Attempts to perform one iteration of the task, completing it if done.
+	 * <p>
+	 * A failing iteration is contained here rather than allowed to escape. It reaches this class through
+	 * {@code RpcCall.updateState}, so a throw would unwind the RPC receive path and skip the bookkeeping
+	 * that follows a response - the routing-table update, the RTT sample, the metrics - for a packet that
+	 * has nothing to do with this task.
+	 * </p>
 	 */
 	private void tryIterate() {
 		getLogger().debug("{}#{} iterate...", name, taskId);
@@ -335,7 +354,27 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 		}
 
 		if (canDoRequest() && !isEnd()) {
-			iterate();
+			try {
+				iterate();
+			} catch (Exception e) {
+				getLogger().error("{}#{} iterate failed", name, taskId, e);
+
+				// The backstop, and it should stay unreachable. A send that fails for one queued node does
+				// not come through here at all - sendCall reports it to that node's own handler - so what
+				// arrives is a failure of the iteration itself, which consumed nothing and would repeat if
+				// iterated again. Iteration is driven only by call state changes, so with nothing in
+				// flight there is no event left that can ever bring this task back. Left in RUNNING it
+				// would hold one of the manager's slots for the life of the node and never notify its
+				// listener, which is how a caller learns the task is over. Same reasoning as the failed
+				// prepare() in start().
+				//
+				// Where a call did go out before the throw the task is still reachable, so it keeps
+				// running: that call responds or times out, and the iteration is attempted again.
+				if (inFlight.isEmpty() && !isDone()) {
+					cancel();
+					return;
+				}
+			}
 
 			// Check again in case todo-queue has been drained by update()
 			if (isDone())
@@ -517,39 +556,110 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 *
 	 * @param node    the target node
 	 * @param request the RPC request message
-	 * @return true if the call was sent, false if concurrency limits prevent it
+	 * @return true if the call was accepted for sending, false if concurrency limits prevent it
 	 */
 	protected boolean sendCall(NodeInfo node, Message request) {
-		return sendCall(node, request, null);
+		return sendCall(node, request, null, null);
 	}
 
 	/**
-	 * Sends an RPC call to a specified node with an optional pre-send callback.
+	 * Sends an RPC call to a specified node, with optional callbacks around the send.
+	 * <p>
+	 * <b>Nothing the network can do makes this throw.</b> A send that fails is reported through
+	 * {@code sendFailed} instead, which is what lets a queue-draining {@code iterate()} treat one
+	 * unreachable node as one lost node rather than as a failed iteration. The two statements that could
+	 * still raise - narrowing the address and building the call - are guarded rather than caught:
+	 * {@code narrowDown} is reached only when the node is known to hold an address of this family, and
+	 * the constructor rejects only null arguments, which is a programming error and belongs at the
+	 * backstop in {@link #tryIterate()}.
+	 * </p>
+	 * <p>
+	 * <b>{@code beforeSend} owns the caller's bookkeeping</b> - taking the node off a todo queue, marking
+	 * a candidate as sent - and runs before the send is attempted, so a failed send can never leave the
+	 * node at the head of the queue for the next iteration to pick again. A handler that throws is logged
+	 * and the send proceeds, which costs at most a duplicate request; it cannot cost progress.
+	 * </p>
+	 * <p>
+	 * <b>{@code sendFailed} reports, it does not repair.</b> It may run synchronously, before this method
+	 * returns - the DHT fails a call immediately when it is not running - so it must not re-enter the
+	 * task. It may also run <em>in addition to</em> {@link #callError(RpcCall)}: a send that reaches the
+	 * socket and fails there also fails the call, and both report the same node. First report wins where
+	 * a subclass records outcomes.
+	 * </p>
+	 * <p>
+	 * One thing the failure path deliberately does not do is drive the task. It removes the call from the
+	 * in-flight set and returns, leaving the surrounding {@code iterate()} loop to carry on to the next
+	 * node and {@link #tryIterate()} to run the completion check once the loop ends. That holds because
+	 * the DHT's own refusal is synchronous; a failure delivered later is answered by the call's state
+	 * change, which does drive the task.
+	 * </p>
 	 *
 	 * @param node       the target node
 	 * @param request    the RPC request message
-	 * @param beforeSend optional callback to execute before sending the call
-	 * @return true if the call was sent, false if concurrency limits prevent it
+	 * @param beforeSend optional callback run before the send is attempted, on the calling thread
+	 * @param sendFailed optional callback run when the call could not be sent, possibly before this
+	 *                   method returns
+	 * @return true if the call was accepted for sending, false if concurrency limits prevent it
 	 */
-	protected boolean sendCall(NodeInfo node, Message request, Consumer<RpcCall> beforeSend) {
+	protected boolean sendCall(NodeInfo node, Message request,
+							   Consumer<RpcCall> beforeSend, BiConsumer<RpcCall, Throwable> sendFailed) {
 		if (!canDoRequest())
 			return false;
 
 		// Ensure the target node only use a single address compatible with current network family.
-		if (node.hasMultiAddresses())
-			node = node.narrowDown(getContext().getNetwork().protocolFamily());
+		// Narrowing is asked for only when the family is present, so it cannot fail here: hasMultiAddresses
+		// alone was an argument that it cannot, and this is the same statement the method itself tests. A
+		// node holding addresses but not this one is passed through and fails at the socket instead, which
+		// is a per-node failure and already has a channel.
+		StandardProtocolFamily family = getContext().getNetwork().protocolFamily();
+		final NodeInfo target = node.hasMultiAddresses() && node.hasAddress(family) ? node.narrowDown(family) : node;
 
-		RpcCall call = new RpcCall(node, request)
+		RpcCall call = new RpcCall(target, request)
 				.addListener(this::onCallStateChange);
 
-		if (beforeSend != null)
-			beforeSend.accept(call);
+		if (beforeSend != null) {
+			try {
+				beforeSend.accept(call);
+			} catch (Exception ie) {
+				getLogger().error("{}#{} invoke before send handler failed", name, taskId, ie);
+			}
+		}
 
 		inFlight.put(call.getTxid(), call);
 
-		getLogger().trace("{}#{} sending call to {}...", name, taskId, node);
-		sendCall(call);
+		getLogger().trace("{}#{} sending {} call to {}...", name, taskId, call.getRequest().getMethod(), target);
+		try {
+			sendCall(call).onFailure(e -> sendFailed(call, target, e, sendFailed));
+		} catch (Exception e) {
+			// The transport hook is overridable, so a throw is possible where a failed future is expected.
+			// Same outcome either way, which is why both paths land in one place.
+			sendFailed(call, target, e, sendFailed);
+		}
 		return true;
+	}
+
+	/**
+	 * Retires a call that never left this node, and tells the caller which node it lost.
+	 *
+	 * @param call    the call that could not be sent
+	 * @param target  the node it was addressed to, for the log
+	 * @param cause   why the send failed
+	 * @param handler the caller's handler, may be null
+	 */
+	private void sendFailed(RpcCall call, NodeInfo target, Throwable cause,
+							BiConsumer<RpcCall, Throwable> handler) {
+		getLogger().debug("{}#{} send {} call to {} failed", name, taskId,
+				call.getRequest().getMethod(), target, cause);
+		inFlight.remove(call.getTxid(), call);
+
+		if (handler == null)
+			return;
+
+		try {
+			handler.accept(call, cause);
+		} catch (Exception ie) {
+			getLogger().error("{}#{} invoke send failed handler failed", name, taskId, ie);
+		}
 	}
 
 	/**
@@ -566,8 +676,8 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 *
 	 * @param call the RPC request message
 	 */
-	protected void sendCall(RpcCall call) {
-		context.getDHT().sendCall(call);
+	protected Future<RpcCall> sendCall(RpcCall call) {
+		return context.getDHT().sendCall(call);
 	}
 
 	/**

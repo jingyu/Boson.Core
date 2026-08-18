@@ -100,7 +100,7 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 			Network network = getContext().getNetwork();
 			Message request = Message.findValueRequest(getTarget(),
 					network.isIPv4(), network.isIPv6(), expectedSequenceNumber);
-			sendCall(cn, request, c -> cn.setSent());
+			sendCall(cn, request, c -> cn.setSent(), (c, e) -> removeCandidate(cn.getId()));
 		}
 	}
 
