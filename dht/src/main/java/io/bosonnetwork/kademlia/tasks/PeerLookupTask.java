@@ -109,20 +109,13 @@ public class PeerLookupTask extends LookupTask<EligiblePeers, PeerLookupTask> {
 
 	/**
 	 * Handles a FIND_PEER response, processing peers or nodes and updating the result.
-	 * Assumes the RPC server provides a valid response. Drops the entire response if any peer is invalid,
-	 * as the node is considered unqualified.
+	 * Reached only for a response from the node the call was sent to; see {@link LookupTask#handleResponse}.
+	 * Drops the entire response if any peer is invalid, as the node is considered unqualified.
 	 *
 	 * @param call the RPC call with a response
 	 */
 	@Override
-	protected void callResponded(RpcCall call) {
-		super.callResponded(call);
-
-		if (call.isIdMismatched()) {
-			log.debug("{}#{} ignoring mismatched ID response from {}", getName(), getId(), call.getTargetId());
-			return;
-		}
-
+	protected void handleResponse(RpcCall call) {
 		Message response = call.getResponse();
 		FindPeerResponse body = response.getBody();
 		if (body.hasPeers()) {
