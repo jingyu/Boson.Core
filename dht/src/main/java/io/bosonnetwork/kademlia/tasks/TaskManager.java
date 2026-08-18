@@ -261,16 +261,33 @@ public class TaskManager {
 		context.cancelTimer(deadlineTimer);
 
 		log.info("Canceling all tasks: running={}, queued={}", runningTasks.size(), queuedTasks.size());
-		for (Task<?> task : queuedTasks) {
-			task.endHandler(null);
-			task.cancel();
-		}
+
+		// Emptied before anything is cancelled, rather than walked while cancelling. Clearing the end
+		// handler of the task being cancelled is not enough on its own: cancel() cascades to the task's
+		// nested task, and a nested task that is registered here carries its own end handler - the one
+		// that removes from these very collections - so cancelling a parent could write to the collection
+		// this method was iterating. On the running set that is a ConcurrentModificationException; on the
+		// queue it is quieter and worse, since a shortened LinkedList can end the loop an element early
+		// and leave a task uncancelled, still registered, with its handler still attached.
+		//
+		// Not reachable as the code stands - the only nested tasks in it enter the manager at the moment
+		// their parent leaves it, because complete() runs the end handler before the listener that
+		// registers the child - but that is an ordering coincidence rather than anything setNestedTask
+		// promises. checkDeadlines collects before it cancels for the same reason.
+		List<Task<?>> canceled = new ArrayList<>(queuedTasks.size() + runningTasks.size());
+		canceled.addAll(queuedTasks);
+		canceled.addAll(runningTasks);
 		queuedTasks.clear();
-		for (Task<?> task : runningTasks) {
-			task.endHandler(null);
-			task.cancel();
-		}
 		runningTasks.clear();
+
+		// Every handler detached before any task is cancelled, not one task at a time: a cascade can reach
+		// a task this loop has not got to yet, and the point is that no cancellation finds a live route
+		// back into a manager that is being torn down.
+		for (Task<?> task : canceled)
+			task.endHandler(null);
+
+		for (Task<?> task : canceled)
+			task.cancel();
 
 		canceling = false;
 	}
