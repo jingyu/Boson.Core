@@ -70,14 +70,6 @@ public class KadNode extends BosonVerticle implements Node {
 	public static final int VERSION_NUMBER = 1;
 	public static final int VERSION = Version.build(SHORT_NAME, VERSION_NUMBER);
 
-	// How many peers findPeer collects when the caller does not say. A default for this API only - it
-	// bounds one call's result set and has no effect on routing, storage or maintenance.
-	//
-	// Tracks what a remote node will actually put in one response: asking each of them for more than
-	// that is asking for something no answer can contain, so the extra only shows up as more lookup
-	// rounds. A caller who names a larger count still gets it - this is the default, not a cap.
-	private static final int DEFAULT_EXPECTED_PEER_COUNT = KadConstants.MAX_PEERS_PER_RESPONSE;
-
 	private final NodeConfiguration config;
 
 	private final CachedCryptoIdentity identity;
@@ -914,12 +906,10 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(id, "Invalid peer id");
 		if (expectedSequenceNumber < -1)
 			throw new IllegalArgumentException("Invalid sequence number");
-		if (expectedCount < 0)
-			throw new IllegalArgumentException("Invalid expected number of peers");
 		if (!running)
 			throw new IllegalStateException("Node is not running");
 
-		final int expectedPeerCount = expectedCount == 0 ? DEFAULT_EXPECTED_PEER_COUNT : expectedCount;
+		final int expectedPeerCount = EligiblePeers.resolveExpectedCount(expectedCount);
 
 		final LookupOption lookupOption = option == null ? defaultLookupOption : option;
 		Promise<List<PeerInfo>> promise = Promise.promise();

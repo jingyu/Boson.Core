@@ -30,6 +30,7 @@ import java.util.Map;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.kademlia.impl.KadConstants;
 
 /**
  * This class maintains a bounded, prioritized set of peers eligible for a Kademlia task.
@@ -68,10 +69,45 @@ public class EligiblePeers {
 	 * @param expectedCount the maximum number of peers to retain
 	 */
 	public EligiblePeers(Id target, int expectedSequenceNumber, int expectedCount) {
+		// Rejected rather than normalized here, so that a caller which skipped resolveExpectedCount cannot
+		// quietly build the one state this class cannot represent: at zero, reachedCapacity() is true from
+		// the start and prune() skips nothing, so the first response would end the lookup and then discard
+		// every peer it found. An empty result is indistinguishable from "this peer is not published", and
+		// that is a bad way to learn about an argument mistake.
+		if (expectedCount < 1)
+			throw new IllegalArgumentException("Invalid expected number of peers: " + expectedCount);
+
 		this.target = target;
 		this.expectedSequenceNumber = expectedSequenceNumber;
 		this.expectedCount = expectedCount;
 		this.eligible = new HashMap<>();
+	}
+
+	/**
+	 * Resolves how many peers a caller asking for {@code requested} should get.
+	 * <p>
+	 * Zero means unspecified, and an unspecified count gets {@link KadConstants#MAX_PEERS_PER_RESPONSE} -
+	 * the same reading the receive side already applies to the number a peer puts on the wire, in
+	 * {@code DHT.peersPerResponse}. It deliberately does <em>not</em> mean unbounded: nothing on the
+	 * receive path caps how many peers a response may carry, so an unbounded lookup would accumulate
+	 * whatever the network chose to send it, across every response of every iteration.
+	 * </p>
+	 * <p>
+	 * The default tracks what one remote node will actually put in a single response, because asking any
+	 * of them for more than that is asking for something no answer can contain - the excess shows up only
+	 * as further lookup rounds. It is a default and not a cap: a caller that names a larger count is given
+	 * it, and the count bounds one call's result set with no effect on routing, storage or maintenance.
+	 * </p>
+	 *
+	 * @param requested the count the caller asked for; 0 for unspecified.
+	 * @return the count to collect, at least one.
+	 * @throws IllegalArgumentException if the requested count is negative.
+	 */
+	public static int resolveExpectedCount(int requested) {
+		if (requested < 0)
+			throw new IllegalArgumentException("Invalid expected number of peers: " + requested);
+
+		return requested == 0 ? KadConstants.MAX_PEERS_PER_RESPONSE : requested;
 	}
 
 	/**
