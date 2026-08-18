@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.StandardProtocolFamily;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -324,6 +325,36 @@ class LookupTaskTests {
 	@Test
 	void testEmptyResponseIsTakenAsNothingToAdd() {
 		assertTrue(task.acceptResponse(Message.findNodeResponse(1, List.of(), List.of(), 0)).isEmpty());
+	}
+
+	/**
+	 * A dual-stack candidate is retried on its first timeout, like any other.
+	 * <p>
+	 * {@code Task.sendCall} narrows a node holding both families to one address before building the call,
+	 * and narrowing yields a plain {@code NodeInfo} - so the call carries something that is no longer the
+	 * queue's {@code CandidateNode}. Reading the candidate off the call therefore missed every dual-stack
+	 * node and removed it on the first timeout instead of clearing it for retry. Bootstrap nodes are the
+	 * likeliest to publish both families and the likeliest to be worth a second attempt.
+	 * </p>
+	 */
+	@Test
+	void testADualStackCandidateIsRetriedOnTimeout() {
+		NodeInfo dualStack = NodeInfo.of(Id.random(), "100.1.1.8", 39001, "2001:db8::8", 39001);
+		assertTrue(dualStack.hasMultiAddresses());
+		task.addCandidates(List.of(dualStack));
+
+		CandidateNode cn = task.getCandidate(dualStack.getId());
+		assertNotNull(cn);
+		cn.setSent();
+
+		// What sendCall hands to the RPC layer for a node with both families: narrowed, and no longer a
+		// CandidateNode.
+		NodeInfo narrowed = dualStack.narrowDown(StandardProtocolFamily.INET);
+		assertFalse(narrowed instanceof CandidateNode);
+		task.callTimeout(new RpcCall(narrowed, Message.pingRequest()));
+
+		assertEquals(1, task.getCandidateSize(), "one timeout must not discard a dual-stack candidate");
+		assertFalse(cn.isSent(), "it must be eligible again, not merely present");
 	}
 
 	@Test
