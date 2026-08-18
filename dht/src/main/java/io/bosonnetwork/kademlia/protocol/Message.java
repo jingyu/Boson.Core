@@ -172,7 +172,7 @@ public class Message {
 	}
 
 	// Jackson polymorphic deserialization implementation.
-	// Benchmark results show it is approximately 1.5x–2x slower than the dedicated Message deserializer.
+	// Benchmark results show it is approximately 1.5x-2x slower than the dedicated Message deserializer.
 	// Therefore, the custom deserializer remains the default implementation.
 	/*/
 	static class MessageTypeResolver extends TypeIdResolverBase {

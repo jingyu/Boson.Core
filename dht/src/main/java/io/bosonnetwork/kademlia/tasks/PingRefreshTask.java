@@ -41,7 +41,7 @@ import io.bosonnetwork.kademlia.rpc.RpcCall;
 /**
  * A task for refreshing Kademlia routing table buckets by sending PING RPCs to nodes.
  * This task supports refreshing all nodes in a bucket, removing nodes that timeout, or probing
- * replacement nodes in the bucket’s cache. It extends the {@link Task} class to leverage its
+ * replacement nodes in the bucket's cache. It extends the {@link Task} class to leverage its
  * RPC management and lifecycle handling in a single-threaded Vert.x event loop.
  */
 public class PingRefreshTask extends Task<PingRefreshTask> {
@@ -54,7 +54,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	private boolean checkAll;
 	/** Whether to remove nodes from the routing table if their PING RPC times out. */
 	private boolean removeOnTimeout;
-	/** Whether to ping a replacement node from the bucket’s cache. */
+	/** Whether to ping a replacement node from the bucket's cache. */
 	private boolean probeReplacement;
 	/** Notified once, on the first PING that is answered. Null when nobody asked. */
 	private Runnable onFirstResponse;
@@ -100,7 +100,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 	}
 
 	/**
-	 * Configures the task to ping a replacement node from the bucket’s cache.
+	 * Configures the task to ping a replacement node from the bucket's cache.
 	 *
 	 * @param probeReplacement true to probe a replacement node, false otherwise
 	 * @return this task for method chaining
@@ -239,7 +239,7 @@ public class PingRefreshTask extends Task<PingRefreshTask> {
 
 
 	/**
-	 * Returns a detailed string representation of the task’s state.
+	 * Returns a detailed string representation of the task's state.
 	 *
 	 * @return the status string
 	 */

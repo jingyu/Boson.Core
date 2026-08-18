@@ -29,8 +29,8 @@ import org.jspecify.annotations.Nullable;
  * ({@code put}, {@code get}, {@code evictExpired}, {@code clear}, or construction) cannot be
  * completed - typically due to I/O failures or (de)serialization errors.
  * <p>
- * Part of the resolver exception hierarchy ({@link io.bosonnetwork.BosonException} →
- * {@link RegistryException} → {@link ResolverException} → {@code ResolutionCacheException}),
+ * Part of the resolver exception hierarchy ({@link io.bosonnetwork.BosonException} ->
+ * {@link RegistryException} -> {@link ResolverException} -> {@code ResolutionCacheException}),
  * so it is a checked exception. {@link CachedResolver} treats it as recoverable: a cache failure is logged and the
  * call falls through to the underlying resolver rather than propagating to the caller.
  */

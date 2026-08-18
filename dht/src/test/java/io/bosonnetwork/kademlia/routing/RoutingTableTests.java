@@ -667,7 +667,7 @@ class RoutingTableTests {
 
 			// Every 100 operations, check invariants
 			if (op % 100 == 0) {
-				// Total entries ≤ max possible entries
+				// Total entries <= max possible entries
 				int totalEntries = 0;
 				Set<Id> seen = new HashSet<>();
 				for (int i = 0; i < routingTable.size(); i++) {

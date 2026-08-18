@@ -27,10 +27,10 @@
  * authentication/authorization model so that super-node HTTP services can authenticate clients and
  * federation peers from a bearer token.
  * <ul>
- *   <li>{@link io.bosonnetwork.web.CwtAuth} - a Vert.x {@code AuthenticationProvider} that parses
+ *   <li>{@link io.bosonnetwork.web.CwtAuth} - a Vert.x {@code AuthenticationProvider} that parses
  *       and verifies a CWT, validates the issuer against the accepted set (this node, the subject
  *       for self-issued tokens, or the client), and resolves the principal;</li>
- *   <li>{@link io.bosonnetwork.web.CwtAuthHandler} - the Vert.x Web handler that extracts the bearer
+ *   <li>{@link io.bosonnetwork.web.CwtAuthHandler} - the Vert.x Web handler that extracts the bearer
  *       token, drives {@code CwtAuth}, and enforces required scopes;</li>
  *   <li>{@link io.bosonnetwork.web.CwtAuthOptions} - configuration (issuing identity, expected
  *       audience, clock-skew leeway, default scope/TTL, client provider);</li>

@@ -55,11 +55,11 @@ import io.bosonnetwork.json.Json;
  * A Card encapsulates the essential identity information of a DID subject in a
  * more compact JSON/CBOR serialization format than a full DID Document.
  * <ul>
- *   <li>{@code id} – the DID identifier</li>
- *   <li>{@code c} – a list of credentials</li>
- *   <li>{@code s} – a list of services</li>
- *   <li>{@code sat} – the timestamp when the card was signed</li>
- *   <li>{@code sig} – the digital signature over the card contents</li>
+ *   <li>{@code id} - the DID identifier</li>
+ *   <li>{@code c} - a list of credentials</li>
+ *   <li>{@code s} - a list of services</li>
+ *   <li>{@code sat} - the timestamp when the card was signed</li>
+ *   <li>{@code sig} - the digital signature over the card contents</li>
  * </ul>
  * Cards are signed and can be verified using {@link #isGenuine()} and {@link #validate()}.
  */
