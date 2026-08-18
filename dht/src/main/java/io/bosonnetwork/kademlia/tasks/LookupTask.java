@@ -536,38 +536,38 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 */
 	@Override
 	protected void callError(RpcCall call) {
-		NodeInfo target = call.getTarget();
-		if (target instanceof CandidateNode cn) {
-			getLogger().debug("{}#{} RPC error for candidate {}", getName(), getId(), cn.getId());
-			candidates.remove(cn.getId());
-		} else {
-			candidates.remove(target.getId()); // fail-safe
-			//noinspection LoggingSimilarMessage
-			getLogger().warn("{}#{} unexpected target type for call: {}", getName(), getId(), target);
-		}
+		getLogger().debug("{}#{} RPC error for candidate {}", getName(), getId(), call.getTargetId());
+		removeCandidate(call.getTargetId());
 	}
 
 	/**
 	 * Handles an RPC timeout, removing the candidate if unreachable or clearing it for retry.
+	 * <p>
+	 * The candidate is looked up by id rather than read off the call. {@code Task.sendCall} narrows a
+	 * dual-stack node to one address family before building the call, and narrowing produces a plain
+	 * {@link NodeInfo} - so the object that comes back is not the queue's {@link CandidateNode} whenever
+	 * the node had both families. Reading the call's target meant every dual-stack node fell through to a
+	 * fail-safe that removed it on its <em>first</em> timeout instead of clearing it for retry, and logged
+	 * a warning about an unexpected type for something entirely ordinary. Bootstrap nodes are the ones
+	 * most likely to publish both families, and they are the ones a struggling node most needs to retry.
+	 * </p>
 	 *
 	 * @param call the RPC call that timed out
 	 */
 	@Override
 	protected void callTimeout(RpcCall call) {
-		NodeInfo target = call.getTarget();
-		if (target instanceof CandidateNode cn) {
-			if (cn.isUnreachable()) {
-				getLogger().debug("{}#{} removing unreachable candidate {}", getName(), getId(), cn.getId());
-				candidates.remove(cn.getId());
-			} else {
-				getLogger().debug("{}#{} candidate {} timeout, mark it as unsent to retry in next iteration",
-						getName(), getId(), cn.getId());
-				cn.clearSent();
-			}
+		CandidateNode cn = getCandidate(call.getTargetId());
+		if (cn == null)
+			// Already gone: pruned to make room, or dropped by whatever else reached it first.
+			return;
+
+		if (cn.isUnreachable()) {
+			getLogger().debug("{}#{} removing unreachable candidate {}", getName(), getId(), cn.getId());
+			removeCandidate(cn.getId());
 		} else {
-			candidates.remove(target.getId()); // fail-safe
-			//noinspection LoggingSimilarMessage
-			getLogger().warn("{}#{} unexpected target type for call: {}", getName(), getId(), target);
+			getLogger().debug("{}#{} candidate {} timeout, mark it as unsent to retry in next iteration",
+					getName(), getId(), cn.getId());
+			cn.clearSent();
 		}
 	}
 
