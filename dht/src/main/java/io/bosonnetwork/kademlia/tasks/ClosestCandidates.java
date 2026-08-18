@@ -136,21 +136,37 @@ public class ClosestCandidates {
 
 	/**
 	 * Adds nodes to the queue, deduplicating by ID and address, and prunes excess nodes to retain closer ones.
+	 * <p>
+	 * <b>The first claim on an address wins.</b> When a new id arrives at an address already held, the
+	 * incumbent stays and the newcomer is dropped. One address presenting two ids looks like identity churn,
+	 * but nothing reaching this method is evidence of that: in production the key is the bare IP, so nodes
+	 * sharing a host and everything behind one NAT collide by design, and both entries are claims made by some
+	 * remote peer - this queue has spoken to neither and cannot tell which one was fabricated. Evicting the
+	 * incumbent would also hand any peer able to name an honest node's address a way to remove it from the
+	 * queue, the seeds taken from our own routing table included, and those are the only bindings here we
+	 * established ourselves. Churn is judged where a call meets its response, which is the one place the
+	 * binding has been tested.
+	 * </p>
 	 *
 	 * @param nodes the nodes to add
 	 */
 	public void add(Collection<? extends NodeInfo> nodes) {
 		for (NodeInfo node : nodes) {
-			// Check existing node id
-			if (!dedup.add(node.getId()))
-				continue;
-
-			// Check existing:
+			// Dedup key for the address:
 			// - production mode: ip address
 			// - developer mode: socket address(ip:port)
 			Object addr = developerMode ? node.getAddress() : node.getAddress().getAddress();
-			if (!dedup.add(addr))
+
+			// Both keys are tested before either is committed. Committing the id first and only then finding
+			// the address taken leaves the id in dedup with nothing in closest to reach it from, and pruning
+			// is the only path that removes dedup entries while it walks closest.values() - so the id would
+			// be unreclaimable for the life of the task, and the node locked out of it even when a later
+			// response offers the same node at an address of its own.
+			if (dedup.contains(node.getId()) || dedup.contains(addr))
 				continue;
+
+			dedup.add(node.getId());
+			dedup.add(addr);
 
 			CandidateNode cn = new CandidateNode(node);
 			closest.put(cn.getId(), cn);
