@@ -35,6 +35,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.Version;
 import io.bosonnetwork.kademlia.impl.KadConstants;
+import io.bosonnetwork.kademlia.rpc.CallTarget;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
 
@@ -61,7 +62,7 @@ import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
  * and serialization/deserialization for routing table persistence.
  * </p>
  */
-public class KBucketEntry extends NodeInfo {
+public class KBucketEntry extends NodeInfo implements CallTarget {
 	// 5 failures or timeouts, used for exponential back-off as per Kademlia paper
 	public static final	int MAX_FAILURES = 5;
 	public static final int OLD_AND_STALE_FAILURES = 2;
