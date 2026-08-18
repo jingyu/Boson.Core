@@ -26,7 +26,8 @@ package io.bosonnetwork.kademlia.rpc;
 /**
  * Defines a listener interface for handling events in the lifecycle of an {@link RpcCall}
  * within a Kademlia Distributed Hash Table (DHT) system. Implementations of this interface
- * receive notifications when an RPC call changes state, receives a response, stalls, or times out.
+ * receive notifications when an RPC call changes state, receives a response, stalls, times out, is
+ * canceled, or fails.
  * This interface is designed for internal use within the DHT system and operates in a single-threaded
  * environment, ensuring thread safety without synchronization. All methods provide default empty
  * implementations, allowing implementers to override only the events of interest.
@@ -35,7 +36,8 @@ package io.bosonnetwork.kademlia.rpc;
  * <ol>
  *   <li>{@link #onStateChange(RpcCall, RpcCall.State, RpcCall.State)} for any state transition.</li>
  *   <li>Specific event methods ({@link #onResponse(RpcCall)}, {@link #onStall(RpcCall)},
- *       {@link #onTimeout(RpcCall)}) for corresponding states, if applicable.</li>
+ *       {@link #onTimeout(RpcCall)}, {@link #onCancel(RpcCall)}, {@link #onError(RpcCall)}) for
+ *       corresponding states, if applicable.</li>
  * </ol>
  *
  * @see RpcCall
@@ -62,7 +64,7 @@ public interface RpcCallListener {
 	 *
 	 * @param call the RPC call that received a response
 	 */
-	public default void onResponse(RpcCall call) {}
+	default void onResponse(RpcCall call) {}
 
 	/**
 	 * Called when an {@link RpcCall} is estimated to be unlikely to succeed but has not yet
@@ -72,7 +74,7 @@ public interface RpcCallListener {
 	 *
 	 * @param call the RPC call that has stalled
 	 */
-	public default void onStall(RpcCall call) {}
+	default void onStall(RpcCall call) {}
 
 	/**
 	 * Called when an {@link RpcCall} times out without receiving a response, corresponding
@@ -82,5 +84,25 @@ public interface RpcCallListener {
 	 *
 	 * @param call the RPC call that timed out
 	 */
-	public default void onTimeout(RpcCall call) {}
+	default void onTimeout(RpcCall call) {}
+
+	/**
+	 * Called when an {@link RpcCall} is canceled, corresponding to the
+	 * {@link RpcCall.State#CANCELED} state. This method is invoked after
+	 * {@link #onStateChange(RpcCall, RpcCall.State, RpcCall.State)} and signifies that
+	 * the call is no longer active and will not receive further processing.
+	 *
+	 * @param call the RPC call that was canceled
+	 */
+	default void onCancel(RpcCall call) {}
+
+	/**
+	 * Called when an {@link RpcCall} encounters an error, corresponding to the
+	 * {@link RpcCall.State#ERROR} state. This method is invoked after
+	 * {@link #onStateChange(RpcCall, RpcCall.State, RpcCall.State)} and indicates that the
+	 * call has entered an error condition.
+	 *
+	 * @param call the RPC call that encountered an error
+	 */
+	default void onError(RpcCall call) {}
 }
