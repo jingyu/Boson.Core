@@ -112,6 +112,16 @@ class LookupTaskTests {
 		}
 	}
 
+	private void respondCall(RpcCall call, Message response) {
+		try {
+			java.lang.reflect.Method respond = RpcCall.class.getDeclaredMethod("respond", Message.class);
+			respond.setAccessible(true);
+			respond.invoke(call, response);
+		} catch (Exception e) {
+			throw new RuntimeException("respondCall failed", e);
+		}
+	}
+
 	@BeforeEach
 	void setUp() {
 		KadContext context = new TestKadContext(vertx.getOrCreateContext(), new CryptoIdentity(), Network.IPv4);
@@ -355,6 +365,37 @@ class LookupTaskTests {
 
 		assertEquals(1, task.getCandidateSize(), "one timeout must not discard a dual-stack candidate");
 		assertFalse(cn.isSent(), "it must be eligible again, not merely present");
+	}
+
+	/**
+	 * A response from somebody other than the node we asked is not an answer, and must not reach the
+	 * closest set.
+	 * <p>
+	 * The closest set is the lookup's result and the target list a publish then writes to, so a stranger
+	 * promoted into it is a stranger the caller stores to. The check used to run in each subclass
+	 * <em>after</em> the base class had already promoted the responder, and only to skip harvesting the
+	 * nodes it offered. Unreachable through the RPC server, which fails a call whose response carries a
+	 * different id before it can be answered - which is the reason to get the ordering right here rather
+	 * than to rely on that.
+	 * </p>
+	 */
+	@Test
+	void testAResponseFromADifferentIdIsNotPromoted() {
+		NodeInfo node = NodeInfo.of(Id.random(), "100.1.1.8", 39001);
+		task.addCandidates(List.of(node));
+		CandidateNode cn = task.getCandidate(node.getId());
+		assertNotNull(cn);
+
+		RpcCall call = new RpcCall(cn, Message.pingRequest());
+		Message response = Message.findNodeResponse(call.getTxid(), List.of(), List.of(), 0);
+		response.setId(Id.random());
+		respondCall(call, response);
+
+		assertTrue(call.isIdMismatched());
+		task.callResponded(call);
+
+		assertEquals(0, task.getClosestSet().size(), "a stranger must not enter the lookup's result");
+		assertEquals(0, task.getCandidateSize(), "and must not stay in the queue to be asked again");
 	}
 
 	@Test

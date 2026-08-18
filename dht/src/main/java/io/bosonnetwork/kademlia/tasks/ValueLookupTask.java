@@ -107,19 +107,13 @@ public class ValueLookupTask extends LookupTask<EligibleValue, ValueLookupTask> 
 	/**
 	 * Handles a FIND_VALUE response, processing a value or nodes and updating the result.
 	 * Drops the entire response if the value has a mismatched ID, invalid signature, or outdated
-	 * sequence number, as the node is considered unqualified. Assumes the RPC server provides a valid response.
+	 * sequence number, as the node is considered unqualified. Reached only for a response from the node the
+	 * call was sent to; see {@link LookupTask#handleResponse}.
 	 *
 	 * @param call the RPC call with a response
 	 */
 	@Override
-	protected void callResponded(RpcCall call) {
-		super.callResponded(call);
-
-		if (call.isIdMismatched()) {
-			log.debug("{}#{} ignoring mismatched ID response from {}", getName(), getId(), call.getTargetId());
-			return;
-		}
-
+	protected void handleResponse(RpcCall call) {
 		Message response = call.getResponse();
 		FindValueResponse body = response.getBody();
 		if (body.hasValue()) {

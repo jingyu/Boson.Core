@@ -202,19 +202,12 @@ public class NodeLookupTask extends LookupTask<NodeInfo, NodeLookupTask> {
 
 	/**
 	 * Handles a FIND_NODE response, adding returned nodes to candidates and filtering exact matches.
-	 * Assumes the RPC server provides a valid response.
+	 * Reached only for a response from the node the call was sent to; see {@link LookupTask#handleResponse}.
 	 *
 	 * @param call the RPC call with a response
 	 */
 	@Override
-	protected void callResponded(RpcCall call) {
-		super.callResponded(call);
-
-		if (call.isIdMismatched()) {
-			log.debug("{}#{} ignoring mismatched ID response from {}", getName(), getId(), call.getTargetId());
-			return;
-		}
-
+	protected void handleResponse(RpcCall call) {
 		Message response = call.getResponse();
 		// This task runs on a single-protocol DHT instance, so it only requested and only consumes nodes
 		// for its own network (n4 for IPv4, n6 for IPv6) - the lookup is correct per stack.

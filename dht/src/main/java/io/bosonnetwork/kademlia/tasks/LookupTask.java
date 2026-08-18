@@ -578,7 +578,24 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 	 * @param call the RPC call with a response
 	 */
 	@Override
-	protected void callResponded(RpcCall call) {
+	protected final void callResponded(RpcCall call) {
+		// Checked before anything is believed, not after. A response whose sender is not the node we
+		// addressed tells us nothing about that node, so promoting it into the closest set - which is the
+		// lookup's answer, and what an announce then writes to - has to be gated on this rather than
+		// corrected afterwards. The candidate goes either way: whatever holds that address answered as
+		// somebody else, so there is nothing there worth asking again.
+		//
+		// Unreachable through RpcServer, which fails a call whose response carries a different id before
+		// it can ever be answered (see its churning-id branch). That is exactly why the check belongs
+		// here and belongs first: it is a property of one caller today, and the cost of assuming it is a
+		// stranger in the result set.
+		if (call.isIdMismatched()) {
+			getLogger().debug("{}#{} ignoring response from {} that answered as {}",
+					getName(), getId(), call.getTargetId(), call.getResponse().getId());
+			removeCandidate(call.getTargetId());
+			return;
+		}
+
 		CandidateNode cn = removeCandidate(call.getTargetId());
 		if (cn != null) {
 			cn.setReplied();
@@ -588,6 +605,22 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 				cn.setToken(fnr.getToken());
 			addClosest(cn);
 		}
+
+		handleResponse(call);
+	}
+
+	/**
+	 * Reads what the response carried, once it is known to have come from the node that was asked.
+	 * <p>
+	 * The subclass hook, replacing an override of {@link #callResponded}: the identity check and the
+	 * promotion into the closest set are the same for all three lookups, and had been copied into each of
+	 * them - after the promotion rather than before it, so every subclass got the ordering wrong in the
+	 * same way. A hook that only runs for a verified response cannot be forgotten by the next one.
+	 * </p>
+	 *
+	 * @param call the answered call, whose response came from the node it was sent to.
+	 */
+	protected void handleResponse(RpcCall call) {
 	}
 
 	/**
