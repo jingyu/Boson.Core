@@ -47,18 +47,16 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 	private boolean reachable;
 	/** Expected round-trip time for the node, non-positive when we have never timed it ourselves. */
 	private final int rtt;
-	/** Token for ANNOUNCE_PEER or STORE_VALUE RPCs */
-	private int token;
 	/**
-	 * Whether a token has been received for this candidate.
+	 * Token for ANNOUNCE_PEER or STORE_VALUE RPCs, 0 when none has been received.
 	 * <p>
-	 * Tracked separately because every {@code int} is a valid token, zero included: the issuer derives it
-	 * from a digest and verifies whatever it derived, so a token that happens to be zero is one this
-	 * candidate will accept. Reading "not set" off the value itself would therefore drop roughly one
-	 * announce in four billion, and report it as a missing token that was never missing.
+	 * The value carries the presence: 0 is reserved to mean "no token" and is never one an issuer grants,
+	 * so no candidate can have supplied it. This once needed a companion flag, because a token was any
+	 * {@code int} at all and reading "not set" off the value would have dropped roughly one announce in
+	 * four billion. Reserving the value instead settles it in one place for every holder of a token.
 	 * </p>
 	 */
-	private boolean hasToken;
+	private int token;
 
 	// /** Timeout for considering a request stale (5 seconds in nanoseconds). */
 	// private static final long TIMEOUT = 5_000_000_000L; // 5 seconds
@@ -77,7 +75,6 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 		this.lastSent = 0;
 		this.lastReply = 0;
 		this.token = 0;
-		this.hasToken = false;
 		this.reachable = ni instanceof KBucketEntry entry && entry.isReachable();
 		// Unknown stays unknown. A candidate we were merely told about has never been timed by us, and
 		// naming a constant here would look like knowledge and suppress the RPC layer's adaptive estimate
@@ -137,14 +134,13 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 	/**
 	 * Sets the token for ANNOUNCE_PEER or STORE_VALUE RPCs.
 	 *
-	 * <p>Call this only with a token that arrived in a response from this candidate. Any value is a valid
-	 * token, so the call itself is what records that one was received - see {@link #hasToken()}.</p>
+	 * <p>Call this only with a token that arrived in a response from this candidate. Setting 0 leaves the
+	 * candidate with no token, which is what 0 means wherever a token travels.</p>
 	 *
 	 * @param token the token
 	 */
 	public void setToken(int token) {
 		this.token = token;
-		this.hasToken = true;
 	}
 
 	/**
@@ -156,14 +152,13 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 	 * @return true if a token has been received, false otherwise
 	 */
 	public boolean hasToken() {
-		return hasToken;
+		return token != 0;
 	}
 
 	/**
 	 * Returns the token for ANNOUNCE_PEER or STORE_VALUE RPCs.
 	 *
-	 * @return the token, or 0 if none has been received - a value indistinguishable from a token that is
-	 *         itself 0, so test {@link #hasToken()} rather than this
+	 * @return the token, or 0 if none has been received
 	 */
 	public int getToken() {
 		return token;

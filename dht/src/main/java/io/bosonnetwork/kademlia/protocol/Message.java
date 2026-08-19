@@ -562,11 +562,11 @@ public class Message {
 	 * @param txid the transaction id of the request being answered
 	 * @param n4 the closest IPv4 nodes, may be null
 	 * @param n6 the closest IPv6 nodes, may be null
-	 * @param token the write token to issue, or null if the request did not ask for one - null is the only
-	 *              way to say "no token", since every int value is one a peer may legitimately be given
+	 * @param token the write token to issue, or 0 if the request did not ask for one - 0 is reserved to
+	 *              mean "no token" and is never a token the issuer grants
 	 * @return the response message
 	 */
-	public static Message findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, Integer token) {
+	public static Message findNodeResponse(long txid, List<? extends NodeInfo> n4, List<? extends NodeInfo> n6, int token) {
 		return new Message(Type.RESPONSE, Method.FIND_NODE, txid, new FindNodeResponse(n4, n6, token));
 	}
 

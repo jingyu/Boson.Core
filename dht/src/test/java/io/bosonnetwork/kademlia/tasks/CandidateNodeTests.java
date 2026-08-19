@@ -13,12 +13,30 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 
-class CandidateNodeTest {
+class CandidateNodeTests {
 	private CandidateNode candidate;
 
 	@BeforeEach
 	void setUp() throws Exception {
 		candidate = new CandidateNode(NodeInfo.of(Id.random(), "100.1.1.8", 39001));
+	}
+
+	/**
+	 * The candidate reads "has a token" off the value, which it can only do because zero is reserved to
+	 * mean "no token" and is never one an issuer grants. This is the single place that rule is applied on
+	 * the announce path, so it is pinned here as well as end to end.
+	 */
+	@Test
+	void testTokenPresenceIsReadFromTheValue() {
+		assertFalse(candidate.hasToken(), "a fresh candidate has been given nothing");
+		assertEquals(0, candidate.getToken());
+
+		candidate.setToken(0x87654321);
+		assertTrue(candidate.hasToken());
+		assertEquals(0x87654321, candidate.getToken());
+
+		candidate.setToken(0);
+		assertFalse(candidate.hasToken(), "zero is the absence, not a token that happens to be zero");
 	}
 
 	@Test
@@ -54,22 +72,6 @@ class CandidateNodeTest {
 		candidate.setSent();
 		candidate.setSent();
 		assertTrue(candidate.isUnreachable());
-	}
-
-	@Test
-	void testTokenPresenceIsNotReadOffTheValue() {
-		assertFalse(candidate.hasToken());
-		assertEquals(0, candidate.getToken());
-
-		// Zero is a token like any other - the issuer derives it from a digest and verifies what it
-		// derived - so receiving one must not read as having received none.
-		candidate.setToken(0);
-		assertTrue(candidate.hasToken());
-		assertEquals(0, candidate.getToken());
-
-		candidate.setToken(0x1234abcd);
-		assertTrue(candidate.hasToken());
-		assertEquals(0x1234abcd, candidate.getToken());
 	}
 
 	@Test

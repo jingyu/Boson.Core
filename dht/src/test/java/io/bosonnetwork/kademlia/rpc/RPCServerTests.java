@@ -237,7 +237,7 @@ public class RPCServerTests {
 
 			response = switch (message.getMethod()) {
 				case PING -> Message.pingResponse(message.getTxid());
-				case FIND_NODE -> Message.findNodeResponse(message.getTxid(), createRandomNodes(8), null, null);
+				case FIND_NODE -> Message.findNodeResponse(message.getTxid(), createRandomNodes(8), null, 0);
 				case FIND_VALUE -> {
 					FindValueRequest body = message.getBody();
 					if (values.containsKey(body.getTarget()))

@@ -216,6 +216,25 @@ public class TokenManagerTests {
 	}
 
 	@Test
+	@DisplayName("zero is never issued as a token")
+	void zeroIsNeverIssued() {
+		// The branch itself is not reachable from any input a caller can choose - producing it would mean
+		// finding an all-zero digest - so the fold is pinned where the decision is rather than through it.
+		assertNotEquals(0, tokenManager.nonZero(0), "zero is reserved to mean \"no token\" and must not be issued");
+		assertEquals(1, tokenManager.nonZero(1), "and a token of one is a token, not the fold");
+		assertEquals(0x87654321, tokenManager.nonZero(0x87654321));
+		assertEquals(-1, tokenManager.nonZero(-1), "the token is 32 bits of digest, sign included");
+	}
+
+	@Test
+	@DisplayName("a token of zero is refused")
+	void zeroIsRefused() {
+		// A request carrying zero is one carrying no token at all. Refused for that reason rather than
+		// left to fail the comparison, which is a distinction only a broken or hostile peer will notice.
+		assertFalse(verify(0));
+	}
+
+	@Test
 	@DisplayName("rotation keeps the binding to the four inputs")
 	void rotationKeepsBinding() {
 		int token = generate();
