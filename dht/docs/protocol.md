@@ -144,11 +144,21 @@ A sender **MUST NOT** emit a message that exceeds any of them. A receiver **MAY*
 
 | Limit | Value | Applies to |
 | :--- | :--- | :--- |
-| Maximum UDP payload | 1400 bytes (IPv4) / 1200 bytes (IPv6) | Every message |
+| Maximum UDP payload | 1400 bytes (IPv4) / 1200 bytes (IPv6) | The whole datagram - see below |
 | Minimum message size | 10 bytes | Every message |
 | Node entries per address family | 16 | `n4`, `n6` in any response |
 | Node entries per source unit | 8 | `n4`, `n6` in any response |
 | Peer entries per response | 8 | `p` in a `FIND_PEER` response |
+
+### Maximum UDP payload
+
+The limit is on the **datagram**, not on the CBOR message inside it. A datagram is
+`sender id || nonce || MAC || ciphertext`, so the envelope around the message costs **72 bytes**
+(32 + 24 + 16), and a message must be sized to `limit - 72` for the datagram to conform.
+
+This is worth stating because the two readings differ by exactly that envelope, and a sender using the
+wrong one is over the limit while believing it conforms. A receiver **SHOULD** allow some slack above the
+limit before dropping a datagram unread, for that reason and for the one in [Applicability](#applicability).
 
 ### Source units
 
