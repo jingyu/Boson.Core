@@ -129,10 +129,10 @@ may hold it in a plain fixed-width field rather than an optional. An issuer whos
 produce zero must map it onto some other value, not send it. A responder that sends zero anyway is read as
 having sent no token, and the requester will not attempt the write.
 
-Tokens can be acquired from:
-- A `FIND_NODE` response, when the request has bit 2 (`wantToken`) set in `w`.
-- A `FIND_VALUE` response.
-- A `FIND_PEER` response.
+A token is acquired from a `FIND_NODE` response, and only from there: set bit 2 (`wantToken`) in the
+request's `w`, and the responder returns `tok` alongside the closest nodes. `FIND_VALUE` and `FIND_PEER`
+responses carry no token. A client that intends to write therefore issues `FIND_NODE` with `wantToken` for
+the target before `STORE_VALUE` or `ANNOUNCE_PEER`, whatever lookup it used to find the target.
 
 ---
 
@@ -237,7 +237,7 @@ Retrieves a stored value by its ID. Returns the value when found, or the closest
 
 **Response (`r`):**
 
-When the value is **found**, the response contains value fields. When the value is **not found**, it contains closest nodes instead. A write token is always included.
+When the value is **found**, the response contains value fields. When the value is **not found**, it contains closest nodes instead. No write token is carried either way - see [Write Tokens](#write-tokens).
 
 | Key | Name | Type | Condition | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -249,20 +249,17 @@ When the value is **found**, the response contains value fields. When the value 
 | `seq` | Sequence | `Number` | Mutable/encrypted | Version number. Omitted when zero. |
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Value found | The value payload. |
-| `tok` | Token | `Number` | Always | Write token for subsequent `STORE_VALUE`. |
-
-> The `tok` field in `FIND_VALUE` responses is serialized as part of the response body (unlike `FIND_NODE` where it is optional). It is always present when the responder holds a valid token for the requester.
 
 ---
 
 ### STORE_VALUE (5)
-Publishes a value to a node. Requires a write token from a prior `FIND_VALUE` or `FIND_NODE`.
+Publishes a value to a node. Requires a write token from a prior `FIND_NODE` that asked for one.
 
 **Request (`q`):**
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `tok` | Token | `Number` | Yes | Write token from a prior lookup. |
+| `tok` | Token | `Number` | Yes | Write token from a prior `FIND_NODE` that set `wantToken`. |
 | `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
@@ -298,13 +295,13 @@ Discovers service endpoints registered under a service ID. Returns matching peer
 ---
 
 ### ANNOUNCE_PEER (3)
-Registers a service endpoint with a node. Requires a write token from a prior `FIND_PEER` or `FIND_NODE`.
+Registers a service endpoint with a node. Requires a write token from a prior `FIND_NODE` that asked for one.
 
 **Request (`q`)** - field order on wire: `tok`, `cas`, `k`, `n`, `seq`, `o`, `os`, `sig`, `f`, `e`, `ex`:
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `tok` | Token | `Number` | Yes | Write token from a prior lookup. |
+| `tok` | Token | `Number` | Yes | Write token from a prior `FIND_NODE` that set `wantToken`. |
 | `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Peer ID | `Id` | Yes | Public key of the service peer (the peer owner's key). |
 | `seq` | Sequence | `Number` | No | Current sequence number. Omitted when zero. |
