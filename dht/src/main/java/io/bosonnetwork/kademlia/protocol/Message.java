@@ -34,6 +34,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +42,7 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.net.impl.SocketAddressImpl;
 
@@ -425,7 +427,52 @@ public class Message {
 		return false;
 	}
 
-	private static final ObjectReader cborReader = Json.cborMapper().readerFor(Message.class);
+	/**
+	 * Parser limits for the wire decoder, tighter than the floor {@code Json} applies to every Boson
+	 * decoder.
+	 * <p>
+	 * This decoder reads exactly one thing: a datagram from an unauthenticated stranger, bounded by the
+	 * path MTU. So the limits can be sized to what a message actually is rather than to what the codec
+	 * could express. A Boson message nests about four levels, its keys are one to three characters, its
+	 * numbers are integers, and no string in it can exceed the datagram that carried it. Everything
+	 * beyond those figures is room an attacker can use and a sender cannot.
+	 * </p>
+	 * <p>
+	 * None of this closes a hole that is open today - a length prefix claiming gigabytes fails on the
+	 * bytes that never arrive rather than on an allocation, because the decoder grows its buffer from
+	 * what it reads. That behavior is a property of the codec rather than of this protocol, which is the
+	 * reason to state a bound here instead of continuing to inherit one.
+	 * </p>
+	 */
+	private static final StreamReadConstraints WIRE_CONSTRAINTS = StreamReadConstraints.builder()
+			.maxNestingDepth(16)
+			.maxNameLength(32)
+			.maxStringLength(4096)
+			.maxNumberLength(32)
+			.build();
+
+	/**
+	 * The wire decoder's factory, carrying {@link #WIRE_CONSTRAINTS}.
+	 * <p>
+	 * Package-private so a test can drive the limits directly. Through {@link #parse(byte[], Id)} they
+	 * are unreachable: the message deserializer refuses anything that is not an object at the root, so
+	 * the shape gate answers first for every input that would otherwise reach them. That ordering is
+	 * worth having and is the reason these limits are a second line rather than the first.
+	 * </p>
+	 *
+	 * @return a CBOR factory constrained to what a message can be
+	 */
+	static CBORFactory wireCborFactory() {
+		CBORFactory factory = CBORFactory.builder()
+				.streamReadConstraints(WIRE_CONSTRAINTS)
+				.build();
+		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+		return factory;
+	}
+
+	private static final ObjectReader cborReader = Json.cborMapper()
+			.copyWith(wireCborFactory())
+			.readerFor(Message.class);
 	private static final ObjectWriter cborWriter = Json.cborMapper().writerFor(Message.class);
 	private static final ObjectReader jsonReader = Json.objectMapper().readerFor(Message.class);
 	private static final ObjectWriter jsonWriter = Json.objectMapper().writerFor(Message.class);
