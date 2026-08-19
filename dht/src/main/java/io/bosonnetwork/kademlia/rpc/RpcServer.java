@@ -78,6 +78,23 @@ public class RpcServer implements Measured {
 	private static final int SOCKET_SEND_BUFFER_SIZE = 1024 * 1024;
 	/** Socket receive buffer size (1 MB). */
 	private static final int SOCKET_RECEIVE_BUFFER_SIZE = 1024 * 1024;
+
+	/**
+	 * Slack allowed above {@link Network#maxPacketSize()} before an inbound datagram is dropped unread.
+	 * <p>
+	 * The limit is enforced strictly on the way out and loosely on the way in, and the slack is why.
+	 * The documented limit is a UDP payload - the whole datagram, sender id and encryption envelope
+	 * included - and that envelope is 72 bytes. A sender that read the limit as bounding the message
+	 * inside the envelope rather than the datagram around it emits something 72 bytes over while
+	 * believing it conforms, and dropping that is indistinguishable from a timeout at the far end.
+	 * </p>
+	 * <p>
+	 * 512 covers that misreading several times over, and covers nothing that matters: this check exists
+	 * to bound what the decoder is handed, and the difference between 1400 bytes and 1912 is not a
+	 * difference in exposure. What would matter is having no bound at all.
+	 * </p>
+	 */
+	private static final int INBOUND_PACKET_SLACK = 512;
 	/** Interval for checking server reachability (5 seconds). */
 	private static final int REACHABILITY_CHECK_INTERVAL = 5_000;
 	/** Timeout for determining server unreachability (60 seconds). */
@@ -706,6 +723,26 @@ public class RpcServer implements Measured {
 			if (metrics != null) {
 				metrics.bytesDropped(remoteAddress, buffer.length());
 				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.THROTTLED);
+			}
+			return;
+		}
+
+		// The other end of the size check below, and the reason it is here rather than left to the codec:
+		// everything downstream - the decrypt, the parse, the buffers the parse grows - is sized by how
+		// many bytes were delivered, so this is the one place that bounds all of them at once. The
+		// protocol states this limit as the maximum UDP payload; the sending side has always respected
+		// it, and until now the receiving side took whatever arrived.
+		//
+		// Deliberately looser than what this node will send - see INBOUND_PACKET_SLACK. Dropped rather
+		// than charged as misbehavior, and reported as an unproven observation exactly as the too-short
+		// case is: an implementation predating the published limits may exceed them while otherwise
+		// interoperating correctly, so this can suppress a source briefly and must never ban it.
+		if (buffer.length() > context.getNetwork().maxPacketSize() + INBOUND_PACKET_SLACK) {
+			log.debug("Ignored invalid packet(too large, {} bytes) from {}", buffer.length(), remoteAddress);
+			suspiciousNodeDetector.malformedMessage(remoteAddress);
+			if (metrics != null) {
+				metrics.bytesDropped(remoteAddress, buffer.length());
+				metrics.messageDropped(remoteAddress, DHTMetrics.Reason.INVALID);
 			}
 			return;
 		}

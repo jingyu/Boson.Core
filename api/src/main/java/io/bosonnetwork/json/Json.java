@@ -35,6 +35,7 @@ import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
@@ -153,15 +154,41 @@ public final class Json {
 		return module;
 	}
 
+	/**
+	 * Parser limits applied to every Boson decoder, rather than left at Jackson's defaults.
+	 * <p>
+	 * These are a floor for all callers, deliberately loose: this factory decodes tokens, stored
+	 * records and application payloads as well as wire messages, and a limit tight enough to be
+	 * interesting for one of those would break another. What they remove is the part of Jackson's
+	 * default envelope that no Boson structure has any use for. Nesting is the one that matters -
+	 * the deepest thing encoded here is a handful of levels, and the default allows 1000, which is
+	 * a recursion depth an attacker chooses rather than one any encoder produces. Number length is
+	 * bounded for the same reason: every number Boson writes is an integer, and a 1000-digit one is
+	 * a decoder cost with nothing behind it.
+	 * </p>
+	 * <p>
+	 * A caller decoding something genuinely exposed should not rely on this floor. It should set
+	 * its own, sized to what it actually accepts.
+	 * </p>
+	 */
+	private static final StreamReadConstraints CONSTRAINTS = StreamReadConstraints.builder()
+			.maxNestingDepth(64)
+			.maxNumberLength(128)
+			.build();
+
 	private static JsonFactory buildJsonFactory() {
-		JsonFactory factory = new JsonFactory();
+		JsonFactory factory = JsonFactory.builder()
+				.streamReadConstraints(CONSTRAINTS)
+				.build();
 		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
 		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
 		return factory;
 	}
 
 	private static CBORFactory buildCborFactory() {
-		CBORFactory factory = new CBORFactory();
+		CBORFactory factory = CBORFactory.builder()
+				.streamReadConstraints(CONSTRAINTS)
+				.build();
 		factory.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
 		factory.disable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
 		return factory;
