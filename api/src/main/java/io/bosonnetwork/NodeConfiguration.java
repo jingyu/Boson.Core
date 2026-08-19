@@ -73,13 +73,60 @@ public record NodeConfiguration(Vertx vertx, NodeListenOptions listen, Signature
 	 */
 	public static final int DEFAULT_DHT_PORT = 39001;
 
+	/**
+	 * The default Kademlia concurrency parameter: how many nodes a lookup queries in parallel.
+	 *
+	 * @see KademliaOptions#alpha()
+	 */
 	public static final int DEFAULT_ALPHA = 3;
+
+	/**
+	 * The default Kademlia bucket size, which is also the size of the closest set a lookup converges
+	 * on and therefore how many nodes a value or peer announcement is published to.
+	 *
+	 * @see KademliaOptions#k()
+	 */
 	public static final int DEFAULT_K = 16;
+
+	/**
+	 * The default number of replacement entries each routing table bucket keeps.
+	 *
+	 * @see KademliaOptions#replacements()
+	 */
 	public static final int DEFAULT_REPLACEMENTS = 8;
+
+	/**
+	 * The default ceiling on concurrently running DHT tasks; further tasks are queued.
+	 *
+	 * @see KademliaOptions#concurrentTasks()
+	 */
 	public static final int DEFAULT_CONCURRENT_TASKS = 32;
 
+	/**
+	 * Whether high-frequency requests from a single peer are throttled by default.
+	 *
+	 * @see SecurityOptions#spamThrottling()
+	 */
 	public static final boolean DEFAULT_SPAM_THROTTLING = true;
+
+	/**
+	 * Whether peers behaving abnormally are identified and isolated by default.
+	 *
+	 * @see SecurityOptions#suspiciousNodeDetector()
+	 */
 	public static final boolean DEFAULT_SUSPICIOUS_NODE_DETECTOR = true;
+
+	/**
+	 * Whether developer mode is enabled by default, which it is not.
+	 * <p>
+	 * Developer mode exists so that a whole network can be run on one host: the node accepts any
+	 * unicast address rather than only globally routable ones, tells candidates apart by address and
+	 * port rather than by address alone, and does not throttle spam. A node on the public network
+	 * must leave it off - every one of those relaxations is a protection given up.
+	 * </p>
+	 *
+	 * @see SecurityOptions#developerMode()
+	 */
 	public static final boolean DEFAULT_DEVELOPER_MODE = false;
 
 	private static final String DEFAULT_DATABASE_URI = "jdbc:sqlite:node.db";
