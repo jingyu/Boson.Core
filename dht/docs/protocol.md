@@ -344,3 +344,91 @@ Error messages use `y` type bits = `0x00`. The body is carried in the `e` envelo
 | **400** | Invalid Token | The write token is missing, incorrect, or expired. |
 | **401** | Invalid Value | The value is malformed or fails validation. |
 | **402** | Invalid Peer | The peer record is malformed or fails validation. |
+
+---
+
+## Security Considerations
+
+### Trust model
+
+The DHT is trustless. A node does not trust another node, and nothing in this protocol asks it to.
+Security is layered, and each layer is written on the assumption that the ones before it have already
+failed for some peer.
+
+**1. Identity and transport.** Every node is an Ed25519 keypair, and its node id *is* the public key.
+Every request and response is sealed with authenticated encryption, keyed by the X25519 conversion of
+that keypair. Two properties follow, and most of what comes after rests on them:
+
+- A message that decrypts is from the node it claims to be from. An attacker can spoof an *address*; it
+  cannot spoof an *identity* whose private key it does not hold.
+- A request can only be read by the node it was addressed to, so its transaction id is unknown to anyone
+  else. An off-path attacker cannot answer a request it cannot read.
+
+**2. Content.** A receiver validates what a response carries before acting on it. Values and peer records
+are self-certifying - signed by their publisher and verifiable by anyone - so a responder may withhold a
+record but cannot substitute one. A response carrying a record that fails validation is discarded whole,
+not repaired.
+
+**3. Contacts.** Node entries are different in kind from values: a contact is a claim about a third party
+that the receiver has no way to verify. They are never fully trusted. In particular, no single response
+may fill a routing table or dominate the direction of a lookup.
+
+**4. Table composition.** Beyond any single response, a node bounds how much of its routing table one
+source unit may occupy, so that holding many addresses does not by itself mean holding many table slots.
+
+**5. Behaviour.** Abusive rates are throttled, and a peer that does what no correct implementation could
+do is suppressed. That bar is deliberately high: suppression is for provable misbehavior, not for a peer
+that merely answers differently than expected. See [Applicability](#applicability).
+
+### What this protocol guarantees
+
+- **Sender authenticity.** A received message is from the identity it names, or it does not decrypt.
+- **Integrity and confidentiality in transit.** Neither an on-path nor an off-path party can read or
+  alter a message, or forge a response to a request it did not carry.
+- **Content authenticity.** A value or peer record that validates was published by the key it names,
+  whatever route it arrived by and whichever node served it.
+- **Write locality.** A write token is issued to one requester at one address for one target, and is
+  short-lived, so a write must be preceded by a round trip that the writer actually received.
+
+### What it does not guarantee
+
+**Node identity is free, and this is deliberate.** A node id is an Ed25519 public key and nothing more,
+so generating identities costs only key generation. An adversary willing to spend offline CPU can
+therefore produce identities that land arbitrarily close to a chosen target, and Kademlia stores at and
+reads from the nodes closest to a key by construction. An adversary who can *choose* to be closest to a
+key can keep that key from being found - a targeted eclipse.
+
+This protocol imposes no cost on identity generation, and the omission is a decision rather than an
+oversight. Node identity is self-sovereign: a node chooses its own identity and needs no permission from
+anyone to exist. A puzzle on id generation would tax every honest node, permanently, to raise a determined
+adversary's cost by a bounded factor - and that factor is capped by what the weakest honest device can
+afford to pay once, which is not enough to deter an adversary who has chosen a target and is willing to
+rent hardware.
+
+Implementers should understand exactly how far the consequences run:
+
+- **An eclipse censors; it never forges.** Because content is self-certifying, an adversary in the closest
+  set can withhold a record but cannot substitute a different one. This is an availability property, not
+  an integrity one.
+- **Silence is a valid answer.** "I do not have it" is exactly what an honest node closest to a key it has
+  never been told about says. No validation rule separates the two cases, which is why the layers above do
+  not cover this one: the adversary need never do anything a correct implementation could not do.
+- **A writer can tell, and should look.** A publisher learns the outcome per target rather than in
+  aggregate, so a write that reached nobody, or only some, is reported rather than silently assumed. An
+  application that needs certainty of publication should check that outcome instead of treating the
+  absence of an error as success.
+- **The exposure is per target.** The work is spent against one key and buys nothing against any other, so
+  this is a way to attack a chosen key, not a way to attack the network.
+
+**Contact lists cannot be verified.** A node list is what the responder chose to say. Nothing here lets a
+receiver distinguish an adversary's list from a well-connected honest node's, because near a target the
+two are the same list. Bounding one response's influence limits the damage; it does not detect the case.
+
+**Address claims are only as good as the round trip.** An address in a contact list is a claim.
+A write token is the only thing in this protocol that demonstrates a peer receives at the address it
+gave, and it demonstrates that only for the peer that asked.
+
+**Availability under a targeted attack is not promised.** The guarantees above are about authenticity and
+integrity. An adversary spending real resources against one key can deny access to it. An application
+whose correctness depends on a record remaining reachable should anchor that record somewhere it does not
+depend on DHT convergence alone.
