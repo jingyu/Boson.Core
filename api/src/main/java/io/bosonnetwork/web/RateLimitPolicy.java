@@ -178,6 +178,14 @@ public record RateLimitPolicy(int perSecond, int perMinute, int perHour, int per
 	 * type, a negative number, an unparseable string - leaves the corresponding window at this
 	 * policy's value and is logged, because the alternative (treating it as absent-means-unlimited)
 	 * would turn a typo in plan data into an unmetered caller.
+	 * <p>
+	 * A window of {@code 0} is treated the same way, and this is the one place where {@code 0} does
+	 * NOT mean "disable this window". In a configuration file that meaning is deliberate and written
+	 * down; plan data is different, because it is edited through the admin API by whoever
+	 * administers the node's tiers, and there a zero is far more likely to be an empty form field
+	 * than a considered decision to stop metering a whole tier. Disabling a window remains the
+	 * operator's call, made in the service's own configuration.
+	 * </p>
 	 *
 	 * @param features the authorization details, may be {@code null}
 	 * @return the effective policy; {@code this} when there is nothing to override
@@ -229,6 +237,12 @@ public record RateLimitPolicy(int perSecond, int perMinute, int perHour, int per
 
 		if (limit < 0) {
 			log.warn("Ignoring negative {} in authorization details: {}", key, limit);
+			return defaultValue;
+		}
+
+		if (limit == 0) {
+			// Not "disable this window" - see override(). Plan data cannot unmeter a caller.
+			log.warn("Ignoring zero {} in authorization details; keeping the configured {}", key, defaultValue);
 			return defaultValue;
 		}
 
