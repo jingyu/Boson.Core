@@ -90,8 +90,9 @@ database:
 
 # Kademlia parameters.
 #
-# The values below are sized for a super node; they are deliberately larger than the defaults, which
-# are shown after each one.
+# Commented out, so this node runs the built-in defaults - shown after each setting below. The values
+# here illustrate a raised set rather than recommend one: what is right depends on what the node
+# does, and the packaged bootstrap and super node configurations each ship their own.
 # kademlia:
 #   # Standard Kademlia parameter: concurrency parameter. Default: 3
 #   alpha: 4
@@ -102,7 +103,7 @@ database:
 #   # Maximum number of concurrently running DHT tasks.
 #   # If too many tasks are started at once, the system will queue the rest.
 #   # Default: 32
-#   concurrentTasks: 2048
+#   concurrentTasks: 256
 
 # Initial entry points to the DHT network.
 # These nodes are contacted during startup to discover other peers.
