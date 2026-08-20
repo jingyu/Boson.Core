@@ -90,10 +90,6 @@ database:
 
 # Kademlia parameters.
 #
-# NOT YET APPLIED: the configuration is parsed and validated, but the DHT implementation still uses
-# its built-in values. Kept commented out so that this file cannot advertise settings a running node
-# would ignore. Uncomment once the implementation reads them.
-#
 # The values below are sized for a super node; they are deliberately larger than the defaults, which
 # are shown after each one.
 # kademlia:
@@ -106,10 +102,15 @@ database:
 #   # Maximum number of concurrently running DHT tasks.
 #   # If too many tasks are started at once, the system will queue the rest.
 #   # Default: 32
-#   concurrentTasks: 256
+#   concurrentTasks: 2048
 
 # Initial entry points to the DHT network.
 # These nodes are contacted during startup to discover other peers.
+#
+# The entries below are format examples, not reachable nodes: the addresses are from the
+# documentation ranges reserved by RFC 5737. Replace the ids and addresses with real ones
+# before uncommenting.
+#
 # Format: [ NodeID (Base58), IPAddress, Port ] or
 #         [ NodeID (Base58), IPv4Address, Port4, IPv6Address, Port6 ]
 # bootstraps:
