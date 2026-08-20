@@ -241,6 +241,47 @@ class RateLimiterTests {
 		assertFalse(limiter.checkUser(scope, user, plan, 1).allowed());
 	}
 
+	/**
+	 * A zero window in plan data is NOT "disable this window". Plan features are edited through the
+	 * admin API, where a blank field arriving as 0 is far likelier than a considered decision to stop
+	 * metering a whole tier - and the cost of guessing wrong is an unmetered caller. Disabling a
+	 * window stays the operator's call, made in the service's own configuration, where 0 does mean it.
+	 */
+	@Test
+	void testPlanCannotDisableAWindowWithZero() {
+		RateLimiter limiter = limiter();
+		RateLimiter.Scope scope = scope(2, 0, 0);
+		Id user = randomUser();
+
+		Map<String, Object> plan = features("perMinute", 0);
+		assertTrue(limiter.checkUser(scope, user, plan, 1).allowed());
+		assertTrue(limiter.checkUser(scope, user, plan, 1).allowed());
+		assertFalse(limiter.checkUser(scope, user, plan, 1).allowed(),
+				"a zero from plan data must leave the configured window in force");
+	}
+
+	/** The same rule for every window at once, which is the shape that would unmeter a caller. */
+	@Test
+	void testPlanOfAllZerosDoesNotUnmeterTheCaller() {
+		RateLimitPolicy configured = new RateLimitPolicy(0, 2, 10, 100);
+		RateLimitPolicy effective = configured.override(
+				features("perSecond", 0, "perMinute", 0, "perHour", 0, "perDay", 0));
+
+		assertTrue(effective.isLimited());
+		assertEquals(configured, effective);
+	}
+
+	/** A window the plan does not mention keeps the configured value - the merge is per window. */
+	@Test
+	void testPlanOverrideLeavesUnnamedWindowsAlone() {
+		RateLimitPolicy configured = new RateLimitPolicy(0, 2, 10, 100);
+		RateLimitPolicy effective = configured.override(features("perMinute", 5));
+
+		assertEquals(5, effective.perMinute());
+		assertEquals(10, effective.perHour());
+		assertEquals(100, effective.perDay());
+	}
+
 	@Test
 	void testUpgradeTakesEffectImmediately() {
 		RateLimiter limiter = limiter();
