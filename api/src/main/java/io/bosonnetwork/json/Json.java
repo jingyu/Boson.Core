@@ -54,10 +54,13 @@ import io.vertx.core.json.jackson.DatabindCodec;
 
 import org.jspecify.annotations.Nullable;
 
+import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.json.internal.AnnounceResultDeserializer;
+import io.bosonnetwork.json.internal.AnnounceResultSerializer;
 import io.bosonnetwork.json.internal.DateDeserializer;
 import io.bosonnetwork.json.internal.DateSerializer;
 import io.bosonnetwork.json.internal.IdDeserializer;
@@ -144,6 +147,8 @@ public final class Json {
 		module.addSerializer(InetAddress.class, new InetAddressSerializer());
 		module.addDeserializer(InetAddress.class, new InetAddressDeserializer());
 
+		module.addSerializer(AnnounceResult.class, new AnnounceResultSerializer());
+		module.addDeserializer(AnnounceResult.class, new AnnounceResultDeserializer());
 		module.addSerializer(NodeInfo.class, new NodeInfoSerializer());
 		module.addDeserializer(NodeInfo.class, new NodeInfoDeserializer());
 		module.addSerializer(PeerInfo.class, new PeerInfoSerializer());

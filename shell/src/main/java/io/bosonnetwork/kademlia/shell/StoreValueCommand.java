@@ -133,7 +133,7 @@ public class StoreValueCommand implements Callable<Integer> {
 		for (AnnounceResult.Target t : result.targets()) {
 			if (!t.isAcknowledged())
 				System.out.println("  " + t.nodeId() + ": " + t.outcome() +
-						(t.cause() != null ? " - " + t.cause().getMessage() : ""));
+						(t.cause() != null ? " - " + t.cause() : ""));
 		}
 
 		return 0;

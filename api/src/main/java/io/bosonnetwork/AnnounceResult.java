@@ -112,14 +112,45 @@ public final class AnnounceResult {
 	}
 
 	/**
+	 * Why a node did not take the payload.
+	 * <p>
+	 * <b>For a refusal this is the remote node's word, not a finding.</b> The code and the message are
+	 * whatever that node chose to send, reproduced here unexamined - see the note on
+	 * {@link AnnounceResult}. Anything acted on it should be weighed across the whole target set, and a
+	 * message must not be treated as trustworthy text: it crossed the network from a node nobody vouches
+	 * for.
+	 * </p>
+	 * <p>
+	 * The code is the numeric DHT error code, which is what the wire actually carried - a refusal arrives
+	 * as a code and a message, so nothing is lost or invented by keeping it that way. Codes also describe
+	 * failures that never left this node, distinguished by the {@link Outcome} rather than by the code:
+	 * {@link Outcome#REFUSED} is what a peer said, {@link Outcome#NOT_SENT} is what happened here.
+	 * </p>
+	 * <p>
+	 * A cause is present only where there is something to say. A node that never answered, one whose call
+	 * was cancelled, and one that supplied no write token all carry none: their outcome is the whole of
+	 * the explanation.
+	 * </p>
+	 *
+	 * @param code    the DHT error code.
+	 * @param message the accompanying detail, or null if there was none.
+	 */
+	public record Cause(int code, @Nullable String message) {
+		@Override
+		public String toString() {
+			return message == null ? String.valueOf(code) : code + ": " + message;
+		}
+	}
+
+	/**
 	 * One node's answer.
 	 *
 	 * @param nodeId  the node that was written to.
 	 * @param outcome how it answered.
-	 * @param cause   what the node claimed, for {@link Outcome#REFUSED}; null otherwise. A claim, not a
-	 *                finding - see the note on {@link AnnounceResult}.
+	 * @param cause   why it did not take the payload, or null if there is nothing to say - always null
+	 *                for {@link Outcome#ACKNOWLEDGED}. A claim, not a finding - see {@link Cause}.
 	 */
-	public record Target(Id nodeId, Outcome outcome, @Nullable Throwable cause) {
+	public record Target(Id nodeId, Outcome outcome, @Nullable Cause cause) {
 		/**
 		 * Whether this node stored the payload.
 		 *
@@ -235,27 +266,32 @@ public final class AnnounceResult {
 	/**
 	 * The refusal to report when every node that refused said the same thing.
 	 * <p>
-	 * Offered so that a caller can still write {@code catch (SequenceNotExpectedException)} for the case
-	 * the network agrees on, without any single node being able to produce that outcome by itself. With
-	 * one target, "every node that refused" is one node's word - {@link #targets()} is where to check how
-	 * many actually agreed.
+	 * Offered so that the network's agreement can still be surfaced as one typed exception - letting a
+	 * caller keep catching the refusal it cares about - without any single node being able to produce
+	 * that outcome by itself. Agreement is on the code alone: the message is free text each node writes
+	 * for itself, and requiring it to match would mean one node's phrasing decided whether the network
+	 * agreed.
+	 * </p>
+	 * <p>
+	 * With one target, "every node that refused" is one node's word. {@link #targets()} is where to
+	 * check how many actually agreed.
 	 * </p>
 	 *
 	 * @return the shared cause, or null if no node refused or they refused for different reasons.
 	 */
-	public @Nullable Throwable unanimousRefusal() {
-		Throwable first = null;
+	public @Nullable Cause unanimousRefusal() {
+		Cause first = null;
 		for (Target target : targets) {
 			if (target.outcome() != Outcome.REFUSED)
 				continue;
 
-			Throwable cause = target.cause();
+			Cause cause = target.cause();
 			if (cause == null)
 				return null;
 
 			if (first == null)
 				first = cause;
-			else if (first.getClass() != cause.getClass())
+			else if (first.code() != cause.code())
 				return null;
 		}
 

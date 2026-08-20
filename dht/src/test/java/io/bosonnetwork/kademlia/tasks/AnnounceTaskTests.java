@@ -3,6 +3,7 @@ package io.bosonnetwork.kademlia.tasks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,7 +29,9 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
 import io.bosonnetwork.kademlia.exceptions.InvalidValueException;
+import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.exceptions.SequenceNotExpectedException;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TestKadContext;
@@ -204,11 +207,14 @@ class AnnounceTaskTests {
 		SequenceNotExpectedException lost = new SequenceNotExpectedException("Sequence number not expected");
 		failCall(sent.get(0), lost);
 
-		// The typed cause survives to the caller - it is the answer a caller that supplied a sequence
-		// number asked for - but it arrives as one node's claim among several rather than as a verdict.
+		// The refusal survives to the caller - it is the answer a caller that supplied a sequence number
+		// asked for - but it arrives as one node's claim among several rather than as a verdict, and as
+		// the code and message the wire carried rather than as the exception we inflated them into.
 		AnnounceResult.Target target = targetOf(task.getResult(), refuser);
 		assertEquals(AnnounceResult.Outcome.REFUSED, target.outcome());
-		assertSame(lost, target.cause());
+		assertNotNull(target.cause());
+		assertEquals(ErrorCode.CasFail.value(), target.cause().code());
+		assertEquals(lost.getMessage(), target.cause().message());
 		assertEquals(4, sent.size(), "the announce continues");
 	}
 
@@ -228,13 +234,19 @@ class AnnounceTaskTests {
 
 	@Test
 	void testUnanimousRefusalIsOfferedAsACauseAndAMixedOneIsNot() {
-		// So a caller can still write catch (SequenceNotExpectedException) for the case the network
-		// agrees on, without any single node being able to produce that outcome by itself.
+		// What DHT.completeAnnounce turns back into a typed exception, so a caller can still write
+		// catch (SequenceNotExpectedException) for the case the network agrees on, without any single
+		// node being able to produce that outcome by itself.
 		TestValueAnnounceTask agreed = storeTask(3, 7);
 		for (RpcCall call : sent)
 			failCall(call, new SequenceNotExpectedException("Sequence number not expected"));
 
-		assertInstanceOf(SequenceNotExpectedException.class, agreed.getResult().unanimousRefusal());
+		AnnounceResult.Cause unanimous = agreed.getResult().unanimousRefusal();
+		assertNotNull(unanimous);
+		assertEquals(ErrorCode.CasFail.value(), unanimous.code());
+		assertInstanceOf(SequenceNotExpectedException.class,
+				KadException.fromErrorCode(unanimous.code(), unanimous.message()),
+				"the code is enough to rebuild the type a caller catches");
 
 		sent.clear();
 		TestValueAnnounceTask mixed = storeTask(3, 7);
@@ -243,6 +255,20 @@ class AnnounceTaskTests {
 		failCall(sent.get(2), new SequenceNotExpectedException("Sequence number not expected"));
 
 		assertNull(mixed.getResult().unanimousRefusal(), "disagreement is not a network verdict");
+	}
+
+	@Test
+	void testAgreementIsOnTheCodeNotTheMessage() {
+		// Every node writes its own text for the same refusal, so requiring the messages to match would
+		// let one node's phrasing decide whether the network agreed.
+		TestValueAnnounceTask task = storeTask(3, 7);
+		int i = 0;
+		for (RpcCall call : sent)
+			failCall(call, new SequenceNotExpectedException("stale, expected " + (i++)));
+
+		AnnounceResult.Cause unanimous = task.getResult().unanimousRefusal();
+		assertNotNull(unanimous, "differing detail must not break the agreement");
+		assertEquals(ErrorCode.CasFail.value(), unanimous.code());
 	}
 
 	@Test
@@ -296,7 +322,9 @@ class AnnounceTaskTests {
 		assertEquals(3, result.targets().size());
 		result.targets().forEach(t -> {
 			assertEquals(AnnounceResult.Outcome.NOT_SENT, t.outcome());
-			assertInstanceOf(IOException.class, t.cause(), "the reason the send failed is kept");
+			assertNotNull(t.cause(), "the reason the send failed is kept");
+			assertEquals(ErrorCode.IOError.value(), t.cause().code(), "an I/O failure is reported as one");
+			assertEquals("no route to host", t.cause().message());
 		});
 	}
 

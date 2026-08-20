@@ -82,17 +82,36 @@ public class AnnounceFailedException extends BosonException {
 
 	/**
 	 * Constructs a new exception carrying what each node answered.
-	 * <p>
-	 * The cause is the result's {@link AnnounceResult#unanimousRefusal()} when there is one, so that a
-	 * caller can keep catching the typed refusal it cares about while the per-node detail stays available
-	 * to anyone who wants to weigh it.
-	 * </p>
 	 *
 	 * @param message the detail message, saved for later retrieval by {@link #getMessage()}.
 	 * @param result  what each node answered.
 	 */
 	public AnnounceFailedException(String message, AnnounceResult result) {
-		super(message, result.unanimousRefusal());
+		super(message);
+		this.result = result;
+	}
+
+	/**
+	 * Constructs a new exception carrying what each node answered, and one typed cause standing for all
+	 * of them.
+	 * <p>
+	 * Supplied by the caller rather than derived here, because deriving it means turning a
+	 * {@link AnnounceResult.Cause} back into the exception type that code names - and which code stands
+	 * for which is the DHT's to know, not this package's. The intended argument is the result's
+	 * {@link AnnounceResult#unanimousRefusal()} mapped to its type, so that a caller can keep catching
+	 * the refusal it cares about while the per-node detail stays available to anyone who wants to weigh
+	 * it. Passing anything narrower than what every refusing node agreed on would let one node decide
+	 * what the caller catches.
+	 * </p>
+	 *
+	 * @param message the detail message, saved for later retrieval by {@link #getMessage()}.
+	 * @param result  what each node answered.
+	 * @param cause   the refusal every refusing node agreed on, saved for later retrieval by
+	 *                {@link #getCause()}. A {@code null} value is permitted and means they did not agree,
+	 *                or that none refused.
+	 */
+	public AnnounceFailedException(String message, AnnounceResult result, @Nullable Throwable cause) {
+		super(message, cause);
 		this.result = result;
 	}
 
