@@ -411,8 +411,9 @@ public class ConfigMap implements Map<String, Object> {
 	 * The value corresponding to the key can be:
 	 * - An Integer: returned as is.
 	 * - A Long: returned as is.
-	 * - A String: representing a plain number or a size with units (e.g., "k" for kilobytes, "m" for megabytes,
-	 *   "g" for gigabytes, "b" for bytes). The method parses and converts it accordingly.
+	 * - A String: representing a plain number or a size with a unit suffix. The suffixes are "b" for bytes,
+	 *   "k" for kibibytes, "m" for mebibytes, "g" for gibibytes and "t" for tebibytes, each a power of 1024
+	 *   rather than of 1000, and each accepted in either case.
 	 *
 	 * @param key the key whose corresponding size value is to be retrieved and converted
 	 * @return the size value as a long type
@@ -447,13 +448,14 @@ public class ConfigMap implements Map<String, Object> {
 					throw new IllegalArgumentException("Invalid size value - " + key + ": " + s, e);
 				}
 			} else {
-				int weight = switch (Character.toLowerCase(specifier)) {
-					case 'b' -> 1;
-					case 'k' -> 1024;
-					case 'm' -> 1024 * 1024;
-					case 'g' -> 1024 * 1024 * 1024;
+				long weight = switch (Character.toLowerCase(specifier)) {
+					case 'b' -> 1L;
+					case 'k' -> 1024L;
+					case 'm' -> 1024L * 1024;
+					case 'g' -> 1024L * 1024 * 1024;
+					case 't' -> 1024L * 1024 * 1024 * 1024;
 					default -> throw new IllegalArgumentException("Invalid size value - " + key + ": " + s +
-							", units: b, k, m, g");
+							", units: b, k, m, g, t");
 				};
 
 				try {
@@ -461,7 +463,7 @@ public class ConfigMap implements Map<String, Object> {
 					if (size < 0)
 						throw new IllegalArgumentException("Invalid size value - " + key + ": " + s + " (negative)");
 					try {
-						return Math.multiplyExact(size, (long) weight);
+						return Math.multiplyExact(size, weight);
 					} catch (ArithmeticException e) {
 						throw new IllegalArgumentException("Size value out of range for long - " + key + ": " + s, e);
 					}
