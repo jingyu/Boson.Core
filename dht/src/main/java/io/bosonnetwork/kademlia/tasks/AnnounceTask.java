@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.kademlia.tasks;
 
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
@@ -31,6 +32,9 @@ import java.util.stream.Collectors;
 import io.bosonnetwork.AnnounceResult;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.crypto.CryptoException;
+import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.kademlia.impl.ErrorCode;
 import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
@@ -154,7 +158,44 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 	 * @param cause   what it claimed, for a refusal; null otherwise.
 	 */
 	private void record(Id nodeId, AnnounceResult.Outcome outcome, Throwable cause) {
-		outcomes.putIfAbsent(nodeId, new AnnounceResult.Target(nodeId, outcome, cause));
+		outcomes.putIfAbsent(nodeId, new AnnounceResult.Target(nodeId, outcome, causeOf(cause)));
+	}
+
+	/**
+	 * Restates a failure as the code and message a caller can carry off this node.
+	 * <p>
+	 * A refusal was already a code and a message when it arrived - the wire carries
+	 * {@code Error(c, m)}, and {@link KadException#fromErrorCode} is what turned it into an exception
+	 * on the way in. Taking the code back off it is not a loss of detail; it is the detail, with a
+	 * detour removed that only ever existed for Java's benefit.
+	 * </p>
+	 * <p>
+	 * Failures that never left this node are described with the same vocabulary rather than a private
+	 * one, because there is nothing to disambiguate: the {@link AnnounceResult.Outcome} already says
+	 * whether a peer refused or the send failed here, so a code means "what went wrong" in both cases
+	 * and never has to also mean "who said so". {@code ServerError} is the fallback because every
+	 * remaining case - the DHT stopped, the call rejected by our own budget, a bug - is an internal
+	 * failure of this node, which is the server as far as anyone reading the result is concerned.
+	 * </p>
+	 *
+	 * @param cause the failure, or null if there is nothing to say.
+	 * @return the cause to report, or null.
+	 */
+	private static AnnounceResult.Cause causeOf(Throwable cause) {
+		if (cause == null)
+			return null;
+
+		int code;
+		if (cause instanceof KadException ke)
+			code = ke.getCode();
+		else if (cause instanceof CryptoException)
+			code = ErrorCode.CryptoError.value();
+		else if (cause instanceof IOException)
+			code = ErrorCode.IOError.value();
+		else
+			code = ErrorCode.ServerError.value();
+
+		return new AnnounceResult.Cause(code, cause.getMessage());
 	}
 
 	/**
@@ -172,7 +213,7 @@ public abstract class AnnounceTask<S extends AnnounceTask<S>> extends Task<S> {
 	 * @param cause  why the send failed.
 	 */
 	private void recordNotSent(Id nodeId, Throwable cause) {
-		outcomes.put(nodeId, new AnnounceResult.Target(nodeId, AnnounceResult.Outcome.NOT_SENT, cause));
+		outcomes.put(nodeId, new AnnounceResult.Target(nodeId, AnnounceResult.Outcome.NOT_SENT, causeOf(cause)));
 	}
 
 	/**

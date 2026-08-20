@@ -2530,12 +2530,16 @@ public class DHT extends BosonVerticle {
 	 * failure rather than a silent completion, which is what it used to be.
 	 * </p>
 	 *
+	 * <p>
+	 * Takes the result rather than the task it came from: nothing here needs the task, and a rule about
+	 * how a set of answers is reported to a caller is worth being able to state on a set of answers.
+	 * </p>
+	 *
 	 * @param promise the caller's promise.
-	 * @param task    the finished announce task.
+	 * @param result  what the finished announce task achieved.
 	 * @param what    the leading half of the failure message, naming the payload.
 	 */
-	private void completeAnnounce(Promise<AnnounceResult> promise, AnnounceTask<?> task, String what) {
-		AnnounceResult result = task.getResult();
+	static void completeAnnounce(Promise<AnnounceResult> promise, AnnounceResult result, String what) {
 		if (!result.isFailure()) {
 			// Everything except "asked and refused everywhere" completes, with the detail attached. One
 			// node refusing is one node's claim, and letting it decide the outcome of the whole publish
@@ -2546,7 +2550,13 @@ public class DHT extends BosonVerticle {
 			return;
 		}
 
-		promise.fail(new AnnounceFailedException(what + ": " + result, result));
+		// The typed refusal is rebuilt here rather than inside the exception, because which code stands
+		// for which exception is this module's knowledge: AnnounceResult lives in the API package and
+		// carries the code, and only the DHT can say that 301 is a lost compare-and-set. Rebuilding it
+		// round-trips exactly for a refusal, whose code came off a KadException in the first place.
+		AnnounceResult.Cause refusal = result.unanimousRefusal();
+		promise.fail(new AnnounceFailedException(what + ": " + result, result,
+				refusal == null ? null : KadException.fromErrorCode(refusal.code(), refusal.message())));
 	}
 
 	public Future<AnnounceResult> storeValue(Value value, int expectedSequenceNumber) {
@@ -2555,7 +2565,7 @@ public class DHT extends BosonVerticle {
 		runOnContext(v -> {
 			ValueAnnounceTask announceTask = new ValueAnnounceTask(kadContext, value, expectedSequenceNumber)
 					.setName("Store value: " + value.getId())
-					.addListener(t -> completeAnnounce(promise, t, "Value " + value.getId() + " was not stored"));
+					.addListener(t -> completeAnnounce(promise, t.getResult(), "Value " + value.getId() + " was not stored"));
 
 			NodeLookupTask lookupTask = new NodeLookupTask(kadContext, value.getId())
 					.setWantToken(true)
@@ -2631,7 +2641,7 @@ public class DHT extends BosonVerticle {
 		runOnContext(v -> {
 			PeerAnnounceTask announceTask = new PeerAnnounceTask(kadContext, peer, expectedSequenceNumber)
 					.setName("Announce peer: " + peer.getId())
-					.addListener(t -> completeAnnounce(promise, t, "Peer " + peer.getId() + " was not announced"));
+					.addListener(t -> completeAnnounce(promise, t.getResult(), "Peer " + peer.getId() + " was not announced"));
 
 			NodeLookupTask lookupTask = new NodeLookupTask(kadContext, peer.getId())
 					.setWantToken(true)

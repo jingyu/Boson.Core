@@ -115,7 +115,7 @@ public class AnnouncePeerCommand implements Callable<Integer> {
 		for (AnnounceResult.Target target : result.targets()) {
 			if (!target.isAcknowledged())
 				System.out.println("  " + target.nodeId() + ": " + target.outcome() +
-						(target.cause() != null ? " - " + target.cause().getMessage() : ""));
+						(target.cause() != null ? " - " + target.cause() : ""));
 		}
 
 		return 0;
