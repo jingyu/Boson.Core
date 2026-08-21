@@ -225,6 +225,62 @@ class RateLimiterTests {
 	}
 
 	// -------------------------------------------------------------------------
+	// Charging for work already done
+	// -------------------------------------------------------------------------
+
+	/**
+	 * {@code chargeUser} is for a price that could not be known until the work was finished - an
+	 * upload billed by the bytes it turned out to carry. Refusing then would mean discarding
+	 * something already stored, so it never refuses; it bills, and lets the bucket go short.
+	 */
+	@Test
+	void testChargingForFinishedWorkIsNotRefused() {
+		RateLimiter limiter = limiter();
+		RateLimiter.Scope scope = scope(4, 0, 0);
+		Id user = randomUser();
+
+		assertTrue(limiter.checkUser(scope, user, null, 4).allowed());
+		assertFalse(limiter.checkUser(scope, user, null, 1).allowed(), "the budget should now be spent");
+
+		// Charged anyway. Nothing is thrown, nothing is refused.
+		limiter.chargeUser(scope, user, null, 3);
+
+		// And the deficit is real: refunding what was over-charged does not hand back a full bucket,
+		// which is what proves the tokens were actually taken rather than quietly dropped.
+		limiter.refundUser(scope, user, null, 3);
+		assertFalse(limiter.checkUser(scope, user, null, 4).allowed());
+	}
+
+	/** The same for the address and service scopes, which are charged alongside the user. */
+	@Test
+	void testChargingAppliesToEveryScope() {
+		RateLimiter limiter = RateLimiter.builder()
+				.clock(new TestClock())
+				.serviceRateLimitPolicy(RateLimitPolicy.perSecond(2))
+				.build();
+		RateLimiter.Scope address = addressScope(2);
+
+		assertTrue(limiter.checkAddress(address, "10.0.0.1", 2).allowed());
+		limiter.chargeAddress(address, "10.0.0.1", 5);
+		assertFalse(limiter.checkAddress(address, "10.0.0.1", 1).allowed());
+
+		assertTrue(limiter.checkService(2).allowed());
+		limiter.chargeService(5);
+		assertFalse(limiter.checkService(1).allowed());
+	}
+
+	/** An unmetered caller is not billed after the fact either - there is no bucket to bill. */
+	@Test
+	void testChargingAnUnmeteredCallerIsAnoop() {
+		RateLimiter limiter = limiter();
+		RateLimiter.Scope unlimited = new RateLimiter.Scope("user", RateLimitPolicy.UNLIMITED);
+		Id user = randomUser();
+
+		limiter.chargeUser(unlimited, user, null, 100);
+		assertTrue(limiter.checkUser(unlimited, user, null, 1000).allowed());
+	}
+
+	// -------------------------------------------------------------------------
 	// Plan overrides from the authorizer
 	// -------------------------------------------------------------------------
 

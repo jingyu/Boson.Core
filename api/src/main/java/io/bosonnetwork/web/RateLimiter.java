@@ -497,6 +497,67 @@ public class RateLimiter implements AutoCloseable {
 	}
 
 	/**
+	 * Charges a caller {@code cost} tokens for work that has ALREADY been done, whether or not they
+	 * can afford it.
+	 * <p>
+	 * The counterpart of {@link #checkUser}: that one asks permission before doing the work and
+	 * refuses when the budget is short. This one is for a price that cannot be known until the work
+	 * is finished - an upload billed by the bytes it turned out to carry - where refusing afterwards
+	 * would mean discarding something already stored, and letting it pass unbilled would make the
+	 * price optional for anyone who arrived with an empty bucket.
+	 * </p>
+	 * <p>
+	 * So the bucket is allowed to go into deficit. Nothing is refused here; the caller simply has
+	 * nothing left, and their next request is refused by the ordinary check until the deficit has
+	 * refilled away.
+	 * </p>
+	 *
+	 * @param scope    the limit namespace to charge in
+	 * @param userId   the caller to charge
+	 * @param features the authorization details for the caller, may be {@code null}
+	 * @param cost     the number of tokens to charge
+	 */
+	public void chargeUser(Scope scope, Id userId, @Nullable Map<String, Object> features, long cost) {
+		RateLimitPolicy policy = scope.defaults().override(features);
+		// Mirrors checkUser: an unmetered caller is not billed after the fact either.
+		if (!policy.isLimited() || userId == null || cost <= 0)
+			return;
+
+		bucketFor(userBuckets, new UserKey(scope.name(), userId), bucketConfiguration(policy))
+				.consumeIgnoringRateLimits(cost);
+	}
+
+	/**
+	 * Charges an address bucket for work already done. See {@link #chargeUser}.
+	 *
+	 * @param scope   the limit namespace to charge in
+	 * @param address the remote address to charge
+	 * @param cost    the number of tokens to charge
+	 */
+	public void chargeAddress(Scope scope, @Nullable String address, long cost) {
+		RateLimitPolicy policy = scope.defaults();
+		if (!policy.isLimited() || cost <= 0)
+			return;
+
+		String key = addressKey(address);
+		if (key == null)
+			return;
+
+		bucketFor(addressBuckets, new AddressKey(scope.name(), key), bucketConfiguration(policy))
+				.consumeIgnoringRateLimits(cost);
+	}
+
+	/**
+	 * Charges the service-wide bucket for work already done. See {@link #chargeUser}.
+	 *
+	 * @param cost the number of tokens to charge
+	 */
+	public void chargeService(long cost) {
+		if (serviceBucket != null && cost > 0)
+			serviceBucket.consumeIgnoringRateLimits(cost);
+	}
+
+	/**
 	 * Returns {@code cost} tokens to a caller's bucket, for a request that was charged but then
 	 * refused for a reason of the service's own making rather than the client's.
 	 * <p>
