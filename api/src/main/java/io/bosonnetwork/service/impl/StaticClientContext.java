@@ -58,6 +58,7 @@ import io.bosonnetwork.web.CwtAuthOptions;
 public class StaticClientContext implements ClientContext {
 	private final Identity nodeIdentity;
 	private final Map<Id, UserAndDevices> userDevicesRegistry;
+	private final Map<Id, Map<String, Object>> userFeatures;
 
 	private record UserAndDevices(ClientUser user, List<ClientDevice> devices) {}
 
@@ -71,6 +72,38 @@ public class StaticClientContext implements ClientContext {
 	public StaticClientContext(Identity nodeIdentity) {
 		this.nodeIdentity = nodeIdentity;
 		this.userDevicesRegistry = new ConcurrentHashMap<>();
+		this.userFeatures = new ConcurrentHashMap<>();
+	}
+
+	/**
+	 * Gives a user a plan feature block, as the Director would.
+	 * <p>
+	 * Without this every user looks unplanned, so a service falls back to its configured
+	 * {@code limits.user} for everything and no plan-driven behaviour can be exercised at all. The
+	 * map is in the same shape a real feature block has - the service's own configuration key names,
+	 * with a nested {@code rateLimit} where the service has one.
+	 * </p>
+	 *
+	 * @param userId   the user the block belongs to, must not be null
+	 * @param features the feature block; an empty map restores the unplanned default
+	 * @throws NullPointerException if either argument is null
+	 */
+	public void setFeatures(Id userId, Map<String, Object> features) {
+		Objects.requireNonNull(userId);
+		Objects.requireNonNull(features);
+		userFeatures.put(userId, Map.copyOf(features));
+	}
+
+	/**
+	 * Returns the feature block set for a user, or an empty map if they have none.
+	 *
+	 * @param userId the user to look up, must not be null
+	 * @return the feature block, never null
+	 * @throws NullPointerException if the provided userId is null
+	 */
+	public Map<String, Object> getFeatures(Id userId) {
+		Objects.requireNonNull(userId);
+		return userFeatures.getOrDefault(userId, Map.of());
 	}
 
 	/**
@@ -303,6 +336,7 @@ public class StaticClientContext implements ClientContext {
 	 */
 	public void clear() {
 		userDevicesRegistry.clear();
+		userFeatures.clear();
 	}
 
 	@Override
@@ -352,7 +386,10 @@ public class StaticClientContext implements ClientContext {
 
 	@Override
 	public ClientAuthorizer getAuthorizer() {
-		return (userId, deviceId, serviceType) -> ContextualFuture.succeededFuture(Map.of());
+		// Every service resolves its per-user limits through here, so a user with no block set looks
+		// unplanned and the service falls back to its own configuration - which is what a fixture
+		// wants until it says otherwise.
+		return (userId, deviceId, serviceType) -> ContextualFuture.succeededFuture(getFeatures(userId));
 	}
 
 	@Override
