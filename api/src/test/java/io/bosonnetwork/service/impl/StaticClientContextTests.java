@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -86,5 +87,31 @@ public class StaticClientContextTests {
 		assertTrue(context.getAuthenticator().authenticateDevice(userId, deviceId, "localhost").get());
 		assertFalse(context.getAuthenticator().authenticateDevice(userId, Id.random(), "localhost").get());
 		assertFalse(context.getAuthenticator().authenticateDevice(Id.random(), deviceId, "localhost").get());
+	}
+
+	/**
+	 * A fixture has to be able to say "this user is on a plan", or plan-driven behaviour cannot be
+	 * exercised at all: every service resolves its per-user limits through the authorizer, and a user
+	 * with no block set falls back to the service's own configuration for everything.
+	 */
+	@Test
+	public void testFeatureBlocksReachTheAuthorizer() throws Exception {
+		Id user = Id.random();
+
+		// Unset means unplanned, not empty-and-therefore-unlimited.
+		assertEquals(Map.of(), context.getFeatures(user));
+		assertEquals(Map.of(), context.getAuthorizer()
+				.authorize(user, Id.random(), "io.bosonnetwork.test").toCompletableFuture().get());
+
+		context.setFeatures(user, Map.of("maxChannels", 4, "rateLimit", Map.of("perMinute", 10)));
+		assertEquals(4, context.getFeatures(user).get("maxChannels"));
+		assertEquals(4, context.getAuthorizer()
+				.authorize(user, Id.random(), "io.bosonnetwork.test").toCompletableFuture().get()
+				.get("maxChannels"));
+
+		// Another user is unaffected, and clearing the fixture forgets the block.
+		assertEquals(Map.of(), context.getFeatures(Id.random()));
+		context.clear();
+		assertEquals(Map.of(), context.getFeatures(user));
 	}
 }
