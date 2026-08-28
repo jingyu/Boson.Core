@@ -261,31 +261,6 @@ public class ServiceConfigMapTests {
 	}
 
 	@Test
-	void testAnnouncedEndpointMustAgreeWithTheListener() {
-		ListenOptions secure = new ListenOptions("0.0.0.0", 9000, true);
-		ListenOptions plaintext = new ListenOptions("0.0.0.0", 9000, false);
-
-		// Announcing TLS while serving plaintext reads as a network fault rather than a config error,
-		// so it is rejected while someone is still reading.
-		assertThrows(IllegalArgumentException.class,
-				() -> plaintext.checkConsistentWith(new PeerOptions("https://example.com", 0, 0), "http", "https"));
-		assertThrows(IllegalArgumentException.class,
-				() -> secure.checkConsistentWith(new PeerOptions("http://example.com", 0, 0), "http", "https"));
-
-		// Agreeing pairs, and a derived endpoint, are fine.
-		secure.checkConsistentWith(new PeerOptions("https://example.com", 0, 0), "http", "https");
-		plaintext.checkConsistentWith(new PeerOptions("http://example.com", 0, 0), "http", "https");
-		secure.checkConsistentWith(PeerOptions.DEFAULT, "http", "https");
-		plaintext.checkConsistentWith(PeerOptions.DEFAULT, "http", "https");
-	}
-
-	@Test
-	void testEndpointSchemeComparisonIsCaseInsensitive() {
-		ListenOptions secure = new ListenOptions("0.0.0.0", 9000, true);
-		secure.checkConsistentWith(new PeerOptions("HTTPS://example.com", 0, 0), "http", "https");
-	}
-
-	@Test
 	void testPutListenOptionsWithNullClearsTheEntries() {
 		ServiceConfigMap m = new ServiceConfigMap();
 		m.putListenOptions(new ListenOptions("127.0.0.1", 8443, true));

@@ -74,41 +74,6 @@ public record ListenOptions(String host, int port, boolean ssl) implements Confi
 				cm.getBoolean("ssl", defaultSsl));
 	}
 
-	/**
-	 * Checks that an announced endpoint agrees with this listener's transport.
-	 * <p>
-	 * A service that announces a TLS scheme while serving plaintext - or the reverse - is
-	 * unreachable in a way that looks like a network fault rather than a configuration error,
-	 * because the two settings are consistent on their own and only disagree with each other. The
-	 * scheme is only cross-checked when the endpoint is written down: a derived endpoint takes its
-	 * scheme from {@link #ssl()} and cannot disagree.
-	 * <p>
-	 * The scheme pair is the caller's because it differs by protocol - {@code http}/{@code https}
-	 * for the HTTP services, {@code mqtt}/{@code mqtts} for messaging. Pass the same pair given to
-	 * {@link ServiceConfigMap#getPeerOptions}.
-	 *
-	 * @param peer         the peer options carrying the announced endpoint
-	 * @param plainScheme  the scheme this service announces without TLS
-	 * @param secureScheme the scheme this service announces with TLS
-	 * @throws NullPointerException     if any argument is null
-	 * @throws IllegalArgumentException if the endpoint's scheme contradicts {@link #ssl()}
-	 */
-	public void checkConsistentWith(PeerOptions peer, String plainScheme, String secureScheme) {
-		Objects.requireNonNull(peer, "peer");
-		Objects.requireNonNull(plainScheme, "plainScheme");
-		Objects.requireNonNull(secureScheme, "secureScheme");
-
-		String endpoint = peer.endpoint();
-		if (endpoint == null)
-			return;
-
-		String expected = ssl ? secureScheme : plainScheme;
-		if (!endpoint.regionMatches(true, 0, expected + ":", 0, expected.length() + 1))
-			throw new IllegalArgumentException("Invalid peer.endpoint: " + endpoint +
-					" does not match ssl=" + ssl + "; use the " + expected +
-					" scheme or set ssl=" + !ssl);
-	}
-
 	@Override
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<>();
