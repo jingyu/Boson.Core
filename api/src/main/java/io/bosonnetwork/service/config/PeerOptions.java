@@ -25,6 +25,7 @@ package io.bosonnetwork.service.config;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -40,10 +41,13 @@ import io.bosonnetwork.utils.ConfigMap;
  * @param fingerprint    the peer fingerprint used for stable peer identification, or {@code 0} for
  *                       none
  * @param sequenceNumber the peer-info sequence number, or {@code 0} if unset
+ * @param extra          the service-defined values to announce alongside the endpoint, empty if
+ *                       there are none
  */
-public record PeerOptions(@Nullable String endpoint, long fingerprint, int sequenceNumber) implements ConfigOptions {
+public record PeerOptions(@Nullable String endpoint, long fingerprint, int sequenceNumber, Map<String, Object> extra)
+		implements ConfigOptions {
 	/** Announce nothing in particular: derive the endpoint, with no fingerprint or sequence number. */
-	public static final PeerOptions DEFAULT = new PeerOptions(null, 0, 0);
+	public static final PeerOptions DEFAULT = new PeerOptions(null, 0, 0, Map.of());
 
 	/**
 	 * Canonical constructor.
@@ -51,11 +55,28 @@ public record PeerOptions(@Nullable String endpoint, long fingerprint, int seque
 	 * @param endpoint       the endpoint URL to announce, or {@code null} to derive it
 	 * @param fingerprint    the peer fingerprint, or {@code 0} for none
 	 * @param sequenceNumber the peer-info sequence number, or {@code 0} if unset
+	 * @param extra          the service-defined values to announce, empty if there are none
 	 * @throws IllegalArgumentException if {@code sequenceNumber} is negative
 	 */
 	public PeerOptions {
 		if (sequenceNumber < 0)
 			throw new IllegalArgumentException("Invalid sequence number - " + sequenceNumber);
+
+		// These options are a value: copy the map so a caller holding on to its own reference cannot
+		// change what an already-constructed options object means.
+		extra = extra.isEmpty() ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(extra));
+	}
+
+	/**
+	 * Construct a PeerOption with empty extra data.
+	 *
+	 * @param endpoint       the endpoint URL to announce, or {@code null} to derive it
+	 * @param fingerprint    the peer fingerprint, or {@code 0} for none
+	 * @param sequenceNumber the peer-info sequence number, or {@code 0} if unset
+	 * @throws IllegalArgumentException if {@code sequenceNumber} is negative
+	 */
+	public PeerOptions(@Nullable String endpoint, long fingerprint, int sequenceNumber) {
+		this(endpoint, fingerprint, sequenceNumber, Map.of());
 	}
 
 	static PeerOptions fromMap(@Nullable ConfigMap cm, String... expectedSchemes) {
@@ -68,8 +89,10 @@ public record PeerOptions(@Nullable String endpoint, long fingerprint, int seque
 		if (endpoint != null)
 			validateEndpoint(endpoint, expectedSchemes);
 
+		ConfigMap extra = cm.getObject("extra");
+
 		return new PeerOptions(endpoint, cm.getLong("fingerprint", 0L),
-				cm.getNonNegativeInteger("sequenceNumber", 0));
+				cm.getNonNegativeInteger("sequenceNumber", 0), extra != null ? extra : Map.of());
 	}
 
 	/**
@@ -103,6 +126,8 @@ public record PeerOptions(@Nullable String endpoint, long fingerprint, int seque
 			map.put("fingerprint", fingerprint);
 		if (sequenceNumber != 0)
 			map.put("sequenceNumber", sequenceNumber);
+		if (!extra.isEmpty())
+			map.put("extra", extra);
 		return map;
 	}
 }

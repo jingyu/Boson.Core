@@ -254,6 +254,29 @@ public class ServiceConfigMap extends ConfigMap {
 	}
 
 	/**
+	 * Reads the {@link ListenOptions} held in a named block of this map.
+	 * <p>
+	 * This is for the secondary interfaces a service may listen on beyond its main one, which is
+	 * read by {@link #getListenOptions(String, int, boolean)} from the top level instead. A missing
+	 * block is not an omission to complain about: it means every setting is at its default, so the
+	 * caller's defaults are returned as they stand. Pass defaults derived from the main interface to
+	 * keep a document that says nothing about the secondary one behaving as it did before there was
+	 * one to configure.
+	 *
+	 * @param key         the configuration key holding the listen block, must not be null
+	 * @param defaultHost the host to bind to when the block does not name one
+	 * @param defaultPort the port to listen on when the block does not name one
+	 * @param defaultSsl  whether TLS is enabled when the block does not say
+	 * @return the options
+	 * @throws NullPointerException     if the key is null
+	 * @throws IllegalArgumentException if the block holds an invalid host or port
+	 */
+	public ListenOptions getListenOptions(String key, String defaultHost, int defaultPort, boolean defaultSsl) {
+		Objects.requireNonNull(key);
+		return ListenOptions.fromMap(getObject(key), defaultHost, defaultPort, defaultSsl);
+	}
+
+	/**
 	 * Reads the operator-provided {@link TlsOptions} from this map.
 	 * <p>
 	 * Like {@link #getListenOptions} these are top-level entries rather than a named block, so they

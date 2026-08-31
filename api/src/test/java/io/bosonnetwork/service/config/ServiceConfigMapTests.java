@@ -149,6 +149,40 @@ public class ServiceConfigMapTests {
 	}
 
 	@Test
+	void testPeerOptionsExtraRoundTrip() {
+		PeerOptions peer = new PeerOptions("https://example.com/store", 42L, 7,
+				Map.of("federationEndpoint", "https://example.com/store/federation"));
+		ServiceConfigMap m = new ServiceConfigMap();
+		m.put("peer", peer);
+
+		assertEquals(peer, m.getPeerOptions("peer", "http", "https"));
+		assertEquals(Map.of("federationEndpoint", "https://example.com/store/federation"),
+				m.getPeerOptions("peer", "http", "https").extra());
+	}
+
+	/**
+	 * The extra block is service-defined and may be absent, so it has to read back as an empty map
+	 * rather than as null - callers of {@link PeerOptions#extra()} index into it directly.
+	 */
+	@Test
+	void testPeerOptionsWithoutExtraReadsAsEmpty() {
+		assertEquals(Map.of(), cm(Map.of("peer", Map.of("endpoint", "https://example.com")))
+				.getPeerOptions("peer", "http", "https").extra());
+		assertEquals(Map.of(), new PeerOptions("https://example.com", 0, 0).extra());
+	}
+
+	/** These options are a value; a caller must not be able to change one after building it. */
+	@Test
+	void testPeerOptionsCopiesExtra() {
+		Map<String, Object> extra = new LinkedHashMap<>(Map.of("k", "v"));
+		PeerOptions peer = new PeerOptions("https://example.com", 0, 0, extra);
+		extra.put("k", "changed");
+
+		assertEquals("v", peer.extra().get("k"));
+		assertThrows(UnsupportedOperationException.class, () -> peer.extra().put("k", "changed"));
+	}
+
+	@Test
 	void testPeerOptionsRejectsUnexpectedScheme() {
 		ServiceConfigMap m = cm(Map.of("peer", Map.of("endpoint", "ftp://example.com")));
 		assertThrows(IllegalArgumentException.class, () -> m.getPeerOptions("peer", "http", "https"));
@@ -244,6 +278,29 @@ public class ServiceConfigMapTests {
 		assertEquals(8443, m.get("port"));
 		assertEquals(true, m.get("ssl"));
 		assertEquals(listen, m.getListenOptions("0.0.0.0", 9000, false));
+	}
+
+	/**
+	 * A secondary interface is configured in a block of its own. A missing block means every setting
+	 * is at its default, which is how a document written before the block existed keeps working.
+	 */
+	@Test
+	void testKeyedListenOptions() {
+		ServiceConfigMap m = cm(Map.of("federation", Map.of("host", "127.0.0.1", "port", 9084, "ssl", false)));
+		assertEquals(new ListenOptions("127.0.0.1", 9084, false),
+				m.getListenOptions("federation", "0.0.0.0", 9000, true));
+
+		// Absent block, and a block that names only some of the settings
+		assertEquals(new ListenOptions("0.0.0.0", 9000, true),
+				new ServiceConfigMap().getListenOptions("federation", "0.0.0.0", 9000, true));
+		assertEquals(new ListenOptions("0.0.0.0", 9084, true),
+				cm(Map.of("federation", Map.of("port", 9084))).getListenOptions("federation", "0.0.0.0", 9000, true));
+	}
+
+	@Test
+	void testKeyedListenOptionsRejectInvalidPort() {
+		assertThrows(IllegalArgumentException.class, () -> cm(Map.of("federation", Map.of("port", 0)))
+				.getListenOptions("federation", "0.0.0.0", 9000, false));
 	}
 
 	@Test
