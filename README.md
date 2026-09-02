@@ -150,7 +150,7 @@ cd shell/target/dist
   -p 39001 \
   -d ./data \
   --developerMode \
-  -b "HZXXs9LTfNQjrDKvvexRhuMk8TTJhYCfrHwaj3jUzuhZ:155.138.245.211:39001"
+  -b "FyHfVWtscJWUeejGQaJXyUnjUcKFGSVVYmozqBuJSmjo:155.138.245.211:39001"
 ```
 
 Once started, type `help` at the `Boson $` prompt to list all available commands.
@@ -162,23 +162,22 @@ Once started, type `help` at the `Boson $` prompt to list all available commands
 The node can be configured via a YAML file (loaded with `-c <file>`). Below is an annotated example:
 
 ```yaml
-ipv4: true
-ipv6: false
-address4: "203.0.113.42"   # Must be a specific public unicast IP address
+host4: "203.0.113.42"   # Must be a specific public unicast IP address
+# host6: "2001:db8::42"  # Set to also serve the network over IPv6
 port: 39001
 
 dataDir: "/var/lib/boson"
 
 bootstraps:
-  - id: "HZXXs9LTfNQjrDKvvexRhuMk8TTJhYCfrHwaj3jUzuhZ"
-    address: "155.138.245.211"
-    port: 39001
-  - id: "6o6LkHgLyD5sYyW9iN5LNRYnUoX29jiYauQ5cDjhCpWQ"
-    address: "45.32.138.246"
-    port: 39001
+  - - FyHfVWtscJWUeejGQaJXyUnjUcKFGSVVYmozqBuJSmjo
+    - 155.138.245.211
+    - 39001
+  - - 66yzSu9imYLtG4TWMZKdk79BXGcX17s2b259taYFeyKw
+    - 45.32.138.246
+    - 39001
 ```
 
-> **Important:** `address4` and `address6` must be specific **public unicast** IP addresses. Wildcard addresses (`0.0.0.0`, `::`) and loopback addresses (`127.0.0.1`, `::1`) are not valid - the DHT embeds this address in node announcements so that other peers can reach you. If you omit the field entirely, the node will auto-detect its public IP via the default network route.
+> **Important:** `host4` and `host6` must be specific **public unicast** IP addresses. Wildcard addresses (`0.0.0.0`, `::`) and loopback addresses (`127.0.0.1`, `::1`) are not valid - the DHT embeds this address in node announcements so that other peers can reach you. If you omit the field entirely, the node will auto-detect its public IP via the default network route.
 
 ---
 
