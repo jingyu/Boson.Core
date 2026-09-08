@@ -748,7 +748,7 @@ public class RpcServer implements Measured {
 		}
 
 		// Validate packet size
-		if (buffer.length() < Id.BYTES + CryptoBox.MAC_BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
+		if (buffer.length() < Id.BYTES + CryptoBox.Nonce.BYTES + CryptoBox.MAC_BYTES + Message.MIN_BYTES) {
 			log.debug("Ignored invalid packet(too short) from {}", remoteAddress);
 			// Unproven source - a packet this short carries no identity at all, so the address it names is
 			// the only thing to go on, and the sender chose that. Reported as an unproven observation, which
