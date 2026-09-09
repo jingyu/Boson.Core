@@ -33,15 +33,38 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.jspecify.annotations.Nullable;
 
 /**
  * File based application instance exclusive lock, guarantee the application can only run
  * in single instance mode.
+ * <p>
+ * <b>The holding process must not open its own lock file.</b> As {@link FileLock} puts it: "On some
+ * systems, closing a channel releases all locks held by the Java virtual machine on the underlying
+ * file regardless of whether the locks were acquired via that channel or via another channel open on
+ * the same file. It is strongly recommended that, within a program, a unique channel be used to
+ * acquire all locks on any given file." That is what this class does - the registry below keeps a
+ * single channel per path - but the hazard reaches wider than locking: on POSIX the locks belong to
+ * the process rather than to the descriptor that took them, so a read-only descriptor, or the
+ * short-lived open/close pair inside {@link Files#readString(Path)}, releases them just as
+ * effectively. Nothing reports this, and {@link FileLock#isValid()} keeps returning {@code true}
+ * while another process is free to take the lock, so read the owner marker only from a process that
+ * does not itself hold it.
  */
 public class ApplicationLock implements AutoCloseable {
+	/**
+	 * Lock files held by this JVM, so that a second attempt can be refused without opening - and then
+	 * closing - a descriptor that would release the lock the first one holds. See the class notes on
+	 * the POSIX close semantics this works around.
+	 */
+	private static final List<Path> heldByThisJvm = new ArrayList<>(2);
+
 	private final Path lockFile;
+	/** Whether this instance owns {@code lockFile}'s entry above. Guarded by the same monitor. */
+	private boolean registered;
 	private @Nullable FileChannel fc;
 	private @Nullable FileLock lock;
 
@@ -51,7 +74,8 @@ public class ApplicationLock implements AutoCloseable {
 	 *
 	 * @param lockFile the path to the lock file.
 	 * @throws IOException if the I/O error occurred.
-	 * @throws IllegalStateException if another application instance already took the lock.
+	 * @throws IllegalStateException if the lock is already taken, by another application instance or
+	 *         by this one.
 	 */
 	public ApplicationLock(Path lockFile) throws IOException, IllegalStateException {
 		this.lockFile = lockFile.normalize().toAbsolutePath();
@@ -82,7 +106,53 @@ public class ApplicationLock implements AutoCloseable {
 		this(Paths.get(lockFile));
 	}
 
+	/**
+	 * Claims {@link #lockFile} for this instance, so that no other instance in this JVM opens a second
+	 * channel on it.
+	 *
+	 * @throws IllegalStateException if this JVM already holds the file
+	 */
+	private void register() throws IllegalStateException {
+		synchronized (heldByThisJvm) {
+			if (heldByThisJvm.contains(lockFile))
+				throw new IllegalStateException("Already locked by this application instance.");
+
+			heldByThisJvm.add(lockFile);
+			registered = true;
+		}
+	}
+
+	/**
+	 * Gives up this instance's claim on {@link #lockFile}, once.
+	 * <p>
+	 * The claim is released only if this instance still owns it. Removing the path unconditionally
+	 * would let a redundant {@link #close()} drop an entry belonging to a <em>different</em> instance
+	 * that has since taken the same path, which would then let a third instance open a second channel
+	 * on it and, on closing that channel, release the second instance's lock.
+	 */
+	private void unregister() {
+		synchronized (heldByThisJvm) {
+			if (registered) {
+				heldByThisJvm.remove(lockFile);
+				registered = false;
+			}
+		}
+	}
+
 	private void tryLock() throws IOException, IllegalStateException {
+		// Claimed before the channel is opened: it is the close of a second descriptor that drops the
+		// lock, and a losing attempt would otherwise open one and immediately close it again.
+		register();
+
+		try {
+			open();
+		} catch (IOException | RuntimeException | Error e) {
+			unregister();
+			throw e;
+		}
+	}
+
+	private void open() throws IOException, IllegalStateException {
 		Path parent = lockFile.getParent();
 		if (parent != null && Files.notExists(parent))
 			Files.createDirectories(parent);
@@ -133,6 +203,7 @@ public class ApplicationLock implements AutoCloseable {
 		} finally {
 			lock = null;
 			fc = null;
+			unregister();
 		}
 	}
 
