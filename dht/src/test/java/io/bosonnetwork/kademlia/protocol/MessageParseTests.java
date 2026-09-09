@@ -111,13 +111,60 @@ public class MessageParseTests extends MessageTests {
 	}
 
 	@Test
-	void parseNegativeTxidThrows() throws Exception {
-		// The protocol defines the transaction id as a non-zero *unsigned* integer.
+	void parseTxidAboveTheSignedIntRangeIsValid() throws Exception {
+		// The half of the id space above 0x7FFFFFFF is ordinary: this node reaches it itself once the
+		// counter wraps, and it goes on the wire as a conforming CBOR unsigned integer. Reading the
+		// field as a signed int rejects every id in that half - our own included - so a node that got
+		// there would be answered by nobody and would parse no answer.
+		for (long txid : new long[] { 0x80000000L, 0xC0000000L, 0xFFFFFFFFL }) {
+			var fields = map();
+			fields.put("y", PING_REQUEST);
+			fields.put("t", txid);
+
+			var msg = Message.parse(cbor(fields));
+			assertEquals(txid, msg.getTxid(), "unsigned transaction id not preserved");
+		}
+	}
+
+	@Test
+	void parseTxidFromAPeerHoldingItInASignedIntIsValid() throws Exception {
+		// An implementation that keeps the transaction id in a signed 32-bit int serializes every id
+		// past 0x7FFFFFFF as a negative number. Those four bytes carry the id the peer meant, so they
+		// are reinterpreted rather than refused - otherwise half of that peer's messages are dropped.
 		var fields = map();
 		fields.put("y", PING_REQUEST);
 		fields.put("t", -5L);
-		var bytes = cbor(fields);
-		assertThrows(IllegalArgumentException.class, () -> Message.parse(bytes));
+		assertEquals(0xFFFFFFFBL, Message.parse(cbor(fields)).getTxid());
+
+		fields = map();
+		fields.put("y", PING_REQUEST);
+		fields.put("t", (long) Integer.MIN_VALUE);
+		assertEquals(0x80000000L, Message.parse(cbor(fields)).getTxid());
+	}
+
+	@Test
+	void parseNegativeTxidWiderThanASignedIntThrows() throws Exception {
+		// Reinterpretation covers exactly the values a signed 32-bit int can hold, so a negative wider
+		// than that is not an unsigned transaction id under any reading and stays a malformed envelope.
+		for (long txid : new long[] { -0x100000000L, Long.MIN_VALUE }) {
+			var fields = map();
+			fields.put("y", PING_REQUEST);
+			fields.put("t", txid);
+			var bytes = cbor(fields);
+			assertThrows(IllegalArgumentException.class, () -> Message.parse(bytes),
+					"accepted an out-of-range transaction id: " + txid);
+		}
+	}
+
+	@Test
+	void messagesWithATxidPastTheSignedIntRangeRoundTrip() throws Exception {
+		// End to end over this node's own codec, which is where the signed read broke first: every
+		// message it sends past the wrap becomes unparseable, by its peers and by itself.
+		for (long txid : new long[] { 1L, 0x7FFFFFFFL, 0x80000000L, 0xFFFFFFFFL }) {
+			var msg = Message.pingResponse(txid);
+			assertEquals(txid, Message.parse(msg.toBytes()).getTxid(),
+					"round trip lost transaction id " + Long.toHexString(txid));
+		}
 	}
 
 	@Test

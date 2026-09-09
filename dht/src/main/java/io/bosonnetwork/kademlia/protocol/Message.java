@@ -706,12 +706,15 @@ public class Message {
 						bodyClass = method.bodyClassOf(type);
 						break;
 					}
-					case "t":
-						txid = p.getLongValue();
+					case "t": {
+						// txid is unsigned integer
+						long value = p.getLongValue();
+						txid = value < 0 && value >= Integer.MIN_VALUE ? Integer.toUnsignedLong((int) value) : value;
 						if (txid <= 0)
 							throw ctxt.weirdNumberException(txid, Long.class,
 									"Invalid '[t]xid' field: should be a positive (unsigned) integer");
 						break;
+					}
 
 					case "q":
 					case "r":
