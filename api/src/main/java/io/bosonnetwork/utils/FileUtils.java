@@ -44,9 +44,22 @@ import java.util.Objects;
  * <ul>
  *   <li>File and directory deletion (including recursive deletion)</li>
  *   <li>Path normalization and resolution</li>
- *   <li>Platform-specific configuration and data directory retrieval</li>
+ *   <li>Platform-specific configuration, data, cache, state and log directory retrieval</li>
  * </ul>
  *
+ * <p>
+ * <b>Per-user directories.</b> The {@code getUser*Dir()} methods follow the XDG Base Directory
+ * Specification on Linux <em>and</em> on macOS, where the XDG layout is preferred over
+ * {@code ~/Library} on purpose so that an installation looks the same on both. Each honours its
+ * {@code XDG_*_HOME} environment variable and falls back to the documented path under
+ * {@code user.home}. Windows has no comparable split: {@link #getUserDataDir()},
+ * {@link #getUserCacheDir()}, {@link #getUserStateDir()} and {@link #getUserLogDir()} all resolve to
+ * {@code %LOCALAPPDATA%}, so callers must separate their files with their own subdirectory rather
+ * than relying on the base paths to differ.
+ * <p>
+ * These methods locate a directory; they do not create it, and they do not append an application
+ * name. On Windows they read an environment variable and throw {@link NullPointerException} if it is
+ * not set.
  * <p>
  * All methods in this class are static and the class cannot be instantiated.
  */
@@ -304,6 +317,41 @@ public final class FileUtils {
 	}
 
 	/**
+	 * Returns the per-user state directory for the current platform.
+	 * <p>
+	 * State is data that should survive a restart but is not valuable or portable enough for the data
+	 * directory: logs, history, recently-used lists, window layout, and lock files, whose contents
+	 * mean nothing once the machine reboots. Use {@link #getUserDataDir()} for anything the user
+	 * would miss if it were deleted. On Unix-like systems this follows the XDG Base Directory
+	 * specification.
+	 *
+	 * <p>
+	 * Platform-specific locations:
+	 * <ul>
+	 *   <li>Windows: %LOCALAPPDATA% (e.g., {@code C:\\Users\\username\\AppData\\Local}), which is
+	 *       also the data and cache directory</li>
+	 *   <li>Linux: {@code ~/.local/state} (XDG_STATE_HOME, added in XDG spec v0.8)</li>
+	 *   <li>macOS: {@code ~/.local/state} (intentionally using XDG style instead of
+	 *       {@code ~/Library/Application Support})</li>
+	 * </ul>
+	 *
+	 * <p>
+	 * This returns the same path as {@link #getUserLogDir()}, deliberately: the XDG specification
+	 * defines no log directory of its own and places logs under {@code XDG_STATE_HOME}. The two
+	 * methods differ only in what they say about the caller's intent.
+	 *
+	 * @return the per-user state directory as a {@link Path}
+	 * @see #getUserLogDir()
+	 * @see #getUserDataDir()
+	 */
+	public static Path getUserStateDir() {
+		String osName = System.getProperty("os.name").toLowerCase();
+		if (osName.startsWith("windows"))
+			return Paths.get(System.getenv("LOCALAPPDATA"));
+		return xdgPath("XDG_STATE_HOME", ".local/state");
+	}
+
+	/**
 	 * Returns the system-wide log directory for the current platform.
 	 * <p>
 	 * This directory is used for storing system and application log files that apply
@@ -334,18 +382,21 @@ public final class FileUtils {
 	/**
 	 * Returns the per-user log directory for the current platform.
 	 * <p>
-	 * This directory is used for storing user-specific application log files. On Unix-like
-	 * systems, this follows the XDG Base Directory specification.
+	 * This is the per-user state directory: the XDG specification defines no {@code XDG_LOG_HOME} and
+	 * places log files under {@code XDG_STATE_HOME}. It therefore returns the same path as
+	 * {@link #getUserStateDir()}, and the choice between them is one of intent, not location.
 	 *
 	 * <p>
 	 * Platform-specific locations:
 	 * <ul>
 	 *   <li>Windows: %LOCALAPPDATA% (e.g., {@code C:\\Users\\username\\AppData\\Local})</li>
-	 *   <li>Linux: {@code ~/.local/state} (XDG_STATE_HOME, preferred for logs since XDG spec v0.8)</li>
-	 *   <li>macOS: {@code ~/.local/state} (intentionally using XDG style instead of {@code ~/Library/Logs})</li>
+	 *   <li>Linux: {@code ~/.local/state} (XDG_STATE_HOME, added in XDG spec v0.8)</li>
+	 *   <li>macOS: {@code ~/.local/state} (intentionally using XDG style instead of
+	 *       {@code ~/Library/Logs})</li>
 	 * </ul>
 	 *
 	 * @return the per-user log directory as a {@link Path}
+	 * @see #getUserStateDir()
 	 */
 	public static Path getUserLogDir() {
 		String osName = System.getProperty("os.name").toLowerCase();
