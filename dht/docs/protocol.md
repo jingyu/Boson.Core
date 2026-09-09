@@ -20,12 +20,12 @@ Every message is a top-level map/object with the following fields.
 
 | Key | Name | JSON Type | CBOR Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`y`** | Type & Method | `Number` | `Integer` | Yes | Composite field encoding message type and RPC method (see below). |
-| **`t`** | Transaction ID | `Number` | `Integer` | Yes | Non-zero unsigned integer used to match requests with responses. |
+| **`y`** | Type & Method | `Number` | `u8` | Yes | Composite field encoding message type and RPC method (see below). |
+| **`t`** | Transaction ID | `Number` | `u32` | Yes | Non-zero. Matches requests with responses. See [Integer types](#integer-types) - the upper half of the range is ordinary and must be read as unsigned. |
 | **`q`** | Request Body | `Object` | `Map` | Conditional | Present only in **Request** messages. |
 | **`r`** | Response Body | `Object` | `Map` | Conditional | Present only in **Response** messages. |
 | **`e`** | Error Body | `Object` | `Map` | Conditional | Present only in **Error** messages. |
-| **`v`** | Version | `Number` | `Integer` | No | Node software version. Omitted when zero. |
+| **`v`** | Version | `Number` | `i32`, non-negative | No | Node software version. Omitted when zero. The top two bytes are the ASCII software name, so the value never exceeds `0x7EFFFFFF`. |
 
 > **Note:** The `y` field **must** appear before `q`, `r`, or `e` in the encoded stream. The deserializer uses `y` to select the body class before reading the body field.
 
@@ -40,6 +40,10 @@ The `y` field packs message type and RPC method into a single integer using a bi
 | 4–0 | `0x1F` | **Method** | `PING(1)`, `FIND_NODE(2)`, `ANNOUNCE_PEER(3)`, `FIND_PEER(4)`, `STORE_VALUE(5)`, `FIND_VALUE(6)` |
 | 7–5 | `0xE0` | **Type** | `ERROR(0x00)`, `REQUEST(0x20)`, `RESPONSE(0x40)` |
 
+Bits 7-5 and 4-0 together account for the whole of `y`. The field is 8 bits wide and a sender **MUST NOT**
+set anything above bit 7; a receiver **MAY** ignore such bits rather than reject the message. A value whose
+method bits name no method, or whose type bits name no type, is invalid either way.
+
 **Example computation:**
 - `FIND_NODE` request: `0x02 | 0x20 = 0x22` (34)
 - `FIND_NODE` response: `0x02 | 0x40 = 0x42` (66)
@@ -48,6 +52,37 @@ The `y` field packs message type and RPC method into a single integer using a bi
 ---
 
 ## Data Representations
+
+### Integer types
+
+Every numeric field in this protocol is an integer; none is a float. Neither encoding pins a field's width
+or sign on its own - CBOR's integer types span all of `u8`-`u64` and `i8`-`i64`, and JSON's `Number` is
+wider still - so both are part of the schema and are given for each field in the tables below, in Rust's
+notation: `u8`, `u16`, `u32` unsigned, `i32`, `i64` signed.
+
+**Encoding.** A sender **MUST** use CBOR's preferred serialization: the shortest encoding that holds the
+value. Every mainstream CBOR library does this by default. It is normative here because message sizes are
+bounded, and without it a field's encoded width would be the sender's to choose.
+
+**Sign is a property of the field, not of the encoding.** An `i32` field carries CBOR major type 1 for
+negative values and major type 0 otherwise; a `u32` field is always major type 0. The distinction is not
+cosmetic, because most languages have no unsigned 32-bit type: an implementation holding a `u32` field in
+a signed integer emits the entire upper half of that field's range as CBOR *negative* numbers, and one
+holding an `i32` field in an unsigned integer does the reverse. Both are common, and each looks like
+malformed input to a receiver that reads the field with its own native width.
+
+A receiver therefore **MUST**, for a field declared `u32`:
+
+- accept CBOR major type 0 across the full range `0`-`4294967295`, which does not fit a signed 32-bit
+  integer and must not be read as one; and
+- accept CBOR major type 1 down to `-2147483648`, reinterpreting the two's-complement bit pattern as the
+  unsigned value the sender meant - `-1` is `4294967295`, `-2147483648` is `2147483648`.
+
+The reinterpretation costs the ability to reject a negative in that field as malformed, since `-5` and
+`4294967291` are the same four bytes. That is the right trade: the alternative silently drops half of a
+conforming peer's messages, and no field declared `u32` here is one where a wrong value is dangerous.
+
+Values outside a field's declared range are **not** reinterpreted and remain invalid.
 
 ### Binary fields
 - **JSON**: URL-safe Base64, no padding.
@@ -65,7 +100,7 @@ Encoded as a compact **3-element array** `[id, host, port]`, not a map.
 | :--- | :--- | :--- | :--- |
 | 0 | Node ID | Base58 string | 32-byte binary |
 | 1 | Host | IP address string (IPv4 or IPv6) or hostname | Raw binary IP address |
-| 2 | Port | Number | Number |
+| 2 | Port | Number | `u16` (1-65535) |
 
 Example (JSON): `["HZXXs9LTfNQjrDKvvexRhuMk8TTJhYCfrHwaj3jUzuhZ", "155.138.245.211", 39001]`
 
@@ -75,11 +110,11 @@ Encoded as a **map/object**. The peer ID (`id`) may be omitted by the serializer
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `id` | Peer ID | `Id` | Conditional | Public key of the service peer. Omitted when the receiver already knows it. |
-| `seq` | Sequence | `Number` | No | Version number. Omitted when zero. |
+| `seq` | Sequence | `i32`, non-negative | No | Version number. Omitted when zero. |
 | `o` | Node ID | `Id` | No | ID of the DHT node hosting the peer (authenticated peers only). |
 | `os` | Node Signature | `Binary` | No | Node's Ed25519 signature over `SHA-256(id, o, f, seq)`. Required if `o` is present. |
 | `sig` | Peer Signature | `Binary` | Yes | Owner's Ed25519 signature over the peer record. |
-| `f` | Fingerprint | `Number` | No | Unique `long` fingerprint for this peer instance. Omitted when zero. |
+| `f` | Fingerprint | `i64` | No | Opaque fingerprint distinguishing peer instances that share an `id`. Uses the full signed 64-bit range, negatives included. Omitted when zero. |
 | `e` | Endpoint | `String` | Yes | Service endpoint URI (e.g., `https://...`). |
 | `ex` | Extra Data | `Binary` | No | Opaque extension bytes. |
 
@@ -105,7 +140,7 @@ Value fields as they appear on the wire:
 | `k` | Public Key | `Id` | Owner's public key (mutable/encrypted only). |
 | `rec` | Recipient | `Id` | Recipient's public key (encrypted only). |
 | `n` | Nonce | `Binary` | 24-byte CryptoBox nonce (encrypted only). |
-| `seq` | Sequence | `Number` | Version number (mutable/encrypted only). |
+| `seq` | Sequence | `i32`, non-negative | Version number (mutable/encrypted only). |
 | `sig` | Signature | `Binary` | Owner's Ed25519 signature (mutable/encrypted only). |
 | `v` | Data | `Binary` | The value payload (all types). |
 
@@ -122,12 +157,22 @@ Value fields as they appear on the wire:
 
 STORE_VALUE and ANNOUNCE_PEER require a valid **write token** obtained from a prior lookup. Tokens are short-lived and opaque integers generated by the receiving node.
 
-**A token is a non-zero 32-bit integer, and this is normative.** Zero is reserved to mean "no token": an
+**A token is a non-zero `i32`, and this is normative.** Zero is reserved to mean "no token": an
 implementation MUST NOT issue it, and MUST reject it if one arrives in a STORE_VALUE or ANNOUNCE_PEER. The
 reservation is what lets a single integer carry both the token and the fact that there is one, so a client
 may hold it in a plain fixed-width field rather than an optional. An issuer whose derivation happens to
 produce zero must map it onto some other value, not send it. A responder that sends zero anyway is read as
 having sent no token, and the requester will not attempt the write.
+
+**The token is signed, and half of all tokens are negative.** A token's 32 bits are opaque - it is compared
+for equality and never ordered or used in arithmetic - but its *encoding* is not, because it travels back
+to its issuer and must arrive as the same value. Issuers derive tokens from a keyed digest, so the bits are
+uniform and roughly half of every issuer's tokens have the high bit set: those are `i32` negatives and go on
+the wire as CBOR major type 1. An implementation holding the token in a `u32` **MUST** reinterpret the
+two's-complement bit pattern rather than reject it, and **MUST** echo the token back in the encoding it
+would have chosen for that value, not the bytes it received. Getting this wrong makes STORE_VALUE and
+ANNOUNCE_PEER fail against half the tokens a conforming peer issues, and only against that half - which
+presents as an intermittent write failure rather than as a protocol error.
 
 A token is acquired from a `FIND_NODE` response, and only from there: set bit 2 (`wantToken`) in the
 request's `w`, and the responder returns `tok` alongside the closest nodes. `FIND_VALUE` and `FIND_PEER`
@@ -222,7 +267,7 @@ Iterative lookup returning the K closest nodes to a target ID.
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `t` | Target | `Id` | Yes | The 256-bit identifier to look up. |
-| `w` | Want | `Number` | Yes | Bitmask: bit 0 = want IPv4 nodes, bit 1 = want IPv6 nodes, bit 2 = want a write token. |
+| `w` | Want | `u8` (0-7) | Yes | Bitmask: bit 0 = want IPv4 nodes, bit 1 = want IPv6 nodes, bit 2 = want a write token. No other bit may be set. |
 
 **Response (`r`):**
 
@@ -230,7 +275,7 @@ Iterative lookup returning the K closest nodes to a target ID.
 | :--- | :--- | :--- | :--- | :--- |
 | `n4` | Nodes (IPv4) | `Array<NodeInfo>` | No | Closest IPv4 nodes, bounded by [Message Limits](#message-limits). Omitted if empty. |
 | `n6` | Nodes (IPv6) | `Array<NodeInfo>` | No | Closest IPv6 nodes, bounded by [Message Limits](#message-limits). Omitted if empty. |
-| `tok` | Token | `Number` | No | Write token. Included only when `w` bit 2 was set. |
+| `tok` | Token | `i32`, non-zero | No | Write token; see [Write Tokens](#write-tokens). Included only when `w` bit 2 was set. |
 
 ---
 
@@ -242,8 +287,8 @@ Retrieves a stored value by its ID. Returns the value when found, or the closest
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `t` | Target | `Id` | Yes | ID of the value to look up. |
-| `w` | Want | `Number` | Yes | Same bitmask as `FIND_NODE`. |
-| `cas` | Expected Seq | `Number` | No | If present, only return the value if its stored `seq` is greater than this number. |
+| `w` | Want | `u8` (0-7) | Yes | Same bitmask as `FIND_NODE`. |
+| `cas` | Expected Seq | `i32`, non-negative | No | If present, only return the value if its stored `seq` is greater than this number. Absence means no condition; a negative value is not a way to express one. |
 
 **Response (`r`):**
 
@@ -256,7 +301,7 @@ When the value is **found**, the response contains value fields. When the value 
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
 | `n` | Nonce | `Binary` | Encrypted | 24-byte CryptoBox nonce. |
-| `seq` | Sequence | `Number` | Mutable/encrypted | Version number. Omitted when zero. |
+| `seq` | Sequence | `i32`, non-negative | Mutable/encrypted | Version number. Omitted when zero. |
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Value found | The value payload. |
 
@@ -269,12 +314,12 @@ Publishes a value to a node. Requires a write token from a prior `FIND_NODE` tha
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `tok` | Token | `Number` | Yes | Write token from a prior `FIND_NODE` that set `wantToken`. |
-| `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
+| `tok` | Token | `i32`, non-zero | Yes | Write token from a prior `FIND_NODE` that set `wantToken`; see [Write Tokens](#write-tokens). |
+| `cas` | Expected Seq | `i32`, non-negative | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Public Key | `Id` | Mutable/encrypted | Owner's public key. |
 | `rec` | Recipient | `Id` | Encrypted | Recipient's public key. |
 | `n` | Nonce | `Binary` | Encrypted | 24-byte CryptoBox nonce. |
-| `seq` | Sequence | `Number` | Mutable/encrypted | New version number. Omitted when zero. |
+| `seq` | Sequence | `i32`, non-negative | Mutable/encrypted | New version number. Omitted when zero. |
 | `sig` | Signature | `Binary` | Mutable/encrypted | Owner's Ed25519 signature. |
 | `v` | Data | `Binary` | Yes | The value payload. |
 
@@ -290,9 +335,9 @@ Discovers service endpoints registered under a service ID. Returns matching peer
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `t` | Target | `Id` | Yes | Service identifier. |
-| `w` | Want | `Number` | Yes | Same bitmask as `FIND_NODE`. |
-| `cas` | Expected Seq | `Number` | No | If present, only return peers if their stored `seq` is greater than this number. |
-| `e` | Count | `Number` | No | Desired number of peer results. The responder returns at most 8 whatever this asks for. |
+| `w` | Want | `u8` (0-7) | Yes | Same bitmask as `FIND_NODE`. |
+| `cas` | Expected Seq | `i32`, non-negative | No | If present, only return peers if their stored `seq` is greater than this number. |
+| `e` | Count | `u8` (0-8) | No | Desired number of peer results. The responder returns at most 8 whatever this asks for. Omitted when zero. |
 
 **Response (`r`):**
 
@@ -311,14 +356,14 @@ Registers a service endpoint with a node. Requires a write token from a prior `F
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `tok` | Token | `Number` | Yes | Write token from a prior `FIND_NODE` that set `wantToken`. |
-| `cas` | Expected Seq | `Number` | No | Atomic update: only store if the currently stored `seq` equals this value. |
+| `tok` | Token | `i32`, non-zero | Yes | Write token from a prior `FIND_NODE` that set `wantToken`; see [Write Tokens](#write-tokens). |
+| `cas` | Expected Seq | `i32`, non-negative | No | Atomic update: only store if the currently stored `seq` equals this value. |
 | `k` | Peer ID | `Id` | Yes | Public key of the service peer (the peer owner's key). |
-| `seq` | Sequence | `Number` | No | Current sequence number. Omitted when zero. |
+| `seq` | Sequence | `i32`, non-negative | No | Current sequence number. Omitted when zero. |
 | `o` | Node ID | `Id` | No | ID of the DHT node hosting the peer (authenticated mode only). |
 | `os` | Node Signature | `Binary` | No | The hosting node's Ed25519 signature over `SHA-256(k, o, f, seq)`. Required if `o` is present. |
 | `sig` | Peer Signature | `Binary` | Yes | Peer owner's Ed25519 signature over the peer record. |
-| `f` | Fingerprint | `Number` | Yes | Unique `long` fingerprint distinguishing peer instances with the same `k`. |
+| `f` | Fingerprint | `i64` | Yes | Opaque fingerprint distinguishing peer instances that share a `k`. Uses the full signed 64-bit range, negatives included. |
 | `e` | Endpoint | `String` | Yes | Service URI (e.g., `https://example.com:8080`). |
 | `ex` | Extra Data | `Binary` | No | Opaque extension bytes. |
 
@@ -334,7 +379,7 @@ Error messages use `y` type bits = `0x00`. The body is carried in the `e` envelo
 
 | Key | Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `c` | Code | `Number` | Yes | Numeric error code. |
+| `c` | Code | `i32` | Yes | Numeric error code; see the registry below. A receiver **MUST** carry an unrecognized code through as a generic failure rather than reject the message - the registry grows. |
 | `m` | Message | `String` | No | Human-readable description. |
 
 ### Error Codes
