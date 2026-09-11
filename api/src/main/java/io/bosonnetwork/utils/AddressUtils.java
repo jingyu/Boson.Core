@@ -51,6 +51,18 @@ import io.vertx.core.net.SocketAddress;
  * @see <a href="https://en.wikipedia.org/wiki/Martian_packet">Martian packet</a>
  */
 public final class AddressUtils {
+	private static final int IPV4_OCTETS = 4;
+	private static final int IPV6_GROUPS = 8;
+
+	/**
+	 * A "::" must stand for at least one all-zero group, so a compressed address carries at
+	 * most this many explicit groups.
+	 */
+	private static final int IPV6_MAX_EXPLICIT_GROUPS = IPV6_GROUPS - 1;
+
+	/** Groups an embedded dotted-quad tail is worth, e.g. the "1.2.3.4" in "::ffff:1.2.3.4". */
+	private static final int IPV4_TAIL_GROUPS = 2;
+
 	private AddressUtils() {
 	}
 
@@ -699,5 +711,249 @@ public final class AddressUtils {
 	 */
 	public static String toString(InetSocketAddress addr) {
 		return toString(addr, false);
+	}
+
+	/**
+	 * Checks whether the given string is a dotted-quad IPv4 address literal such as
+	 * {@code 192.168.0.1}.
+	 *
+	 * <p>Four decimal octets of 0-255 separated by dots are required. Leading zeros are
+	 * rejected because {@code 010} is octal to some resolvers and decimal to others, and the
+	 * legacy short forms accepted by {@code InetAddress} ({@code 1.2}, {@code 0x7f.1}) are
+	 * rejected as well.
+	 *
+	 * @param addr the address string to test, may be null
+	 * @return true if the string is an IPv4 literal
+	 */
+	public static boolean isIPv4Literal(@Nullable String addr) {
+		if (addr == null || addr.isEmpty())
+			return false;
+
+		return isIPv4(addr);
+	}
+
+	private static boolean isIPv4(String addr) {
+		int octets = 0;
+		int start = 0;
+
+		for (int i = 0; i <= addr.length(); i++) {
+			if (i < addr.length() && addr.charAt(i) != '.')
+				continue;
+
+			int digits = i - start;
+			if (digits < 1 || digits > 3)
+				return false;
+			if (digits > 1 && addr.charAt(start) == '0')
+				return false;
+
+			int octet = 0;
+			for (int j = start; j < i; j++) {
+				char c = addr.charAt(j);
+				if (c < '0' || c > '9')
+					return false;
+				octet = octet * 10 + (c - '0');
+			}
+			if (octet > 255)
+				return false;
+
+			octets++;
+			start = i + 1;
+		}
+
+		return octets == IPV4_OCTETS;
+	}
+
+	/**
+	 * Checks whether the given string is an IPv6 address literal, with or without the
+	 * enclosing brackets used by URIs and {@code host:port} pairs, such as {@code ::1} or
+	 * {@code [::1]}.
+	 *
+	 * <p>Accepts the forms of RFC 4291: full and {@code ::}-compressed groups of one to four
+	 * hex digits, and a trailing embedded dotted-quad such as {@code ::ffff:192.168.0.1}. A
+	 * RFC 4007 zone id is allowed after a {@code %}, bare or bracketed, such as
+	 * {@code [fe80::1%25eth0]}. Brackets, when present, must be the outermost characters and
+	 * are never accepted around an IPv4 literal.
+	 *
+	 * <p>Groups are held to the RFC's one to four hex digits. Implementations disagree on
+	 * over-long groups whose value still fits in 16 bits: {@code InetAddress} and BSD/macOS
+	 * {@code inet_pton} bound the group by value and accept {@code 00001::1}, while Python's
+	 * {@code ipaddress} rejects it. This rejects it.
+	 *
+	 * @param addr the string to test, may be null
+	 * @return true if the string is an IPv6 literal
+	 */
+	public static boolean isIPv6Literal(@Nullable String addr) {
+		if (addr == null || addr.isEmpty())
+			return false;
+
+		String address = addr;
+		if (address.charAt(0) == '[') {
+			int end = address.length() - 1;
+			if (end < 2 || address.charAt(end) != ']')
+				return false;
+			address = address.substring(1, end);
+		}
+		if (address.indexOf('[') >= 0 || address.indexOf(']') >= 0)
+			return false;
+
+		int zone = address.indexOf('%');
+		if (zone >= 0) {
+			if (!isZoneId(address.substring(zone + 1)))
+				return false;
+			address = address.substring(0, zone);
+		}
+
+		return isIPv6(address);
+	}
+
+	private static boolean isIPv6(String addr) {
+		int compressed = addr.indexOf("::");
+		if (compressed >= 0 && addr.indexOf("::", compressed + 1) >= 0)
+			return false;
+
+		// The embedded dotted-quad may only sit at the very end of the address, so it is
+		// legal in the tail run always and in the head run only when there is no "::".
+		String headRun = compressed >= 0 ? addr.substring(0, compressed) : addr;
+		String tailRun = compressed >= 0 ? addr.substring(compressed + 2) : "";
+
+		int head = countGroups(headRun, compressed < 0);
+		int tail = countGroups(tailRun, true);
+		if (head < 0 || tail < 0)
+			return false;
+
+		int groups = head + tail;
+		return compressed >= 0 ? groups <= IPV6_MAX_EXPLICIT_GROUPS : groups == IPV6_GROUPS;
+	}
+
+	/**
+	 * Counts the 16-bit groups in one colon-separated run of an IPv6 literal.
+	 *
+	 * @param run           the run, containing no "::"
+	 * @param allowIPv4Tail whether the final token may be a dotted-quad worth two groups
+	 * @return the number of groups, or -1 if the run is malformed
+	 */
+	private static int countGroups(String run, boolean allowIPv4Tail) {
+		if (run.isEmpty())
+			return 0;
+
+		int groups = 0;
+		int start = 0;
+
+		for (int i = 0; i <= run.length(); i++) {
+			if (i < run.length() && run.charAt(i) != ':')
+				continue;
+
+			if (i == start)
+				return -1;
+
+			String token = run.substring(start, i);
+			if (token.indexOf('.') >= 0) {
+				if (!allowIPv4Tail || i != run.length() || !isIPv4(token))
+					return -1;
+				return groups + IPV4_TAIL_GROUPS;
+			}
+			if (!isHexGroup(token))
+				return -1;
+
+			groups++;
+			start = i + 1;
+		}
+
+		return groups;
+	}
+
+	private static boolean isHexGroup(String token) {
+		if (token.length() > 4)
+			return false;
+
+		for (int i = 0; i < token.length(); i++) {
+			char c = token.charAt(i);
+			boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+			if (!hex)
+				return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * RFC 4007 leaves the zone id implementation defined - in practice an interface name or
+	 * index. Restricted to the RFC 3986 "unreserved" characters so that a second '%' cannot
+	 * be smuggled in; this also covers the RFC 6874 URI form, whose "%25eth0" is read as the
+	 * zone id "25eth0".
+	 */
+	private static boolean isZoneId(String zone) {
+		if (zone.isEmpty())
+			return false;
+
+		for (int i = 0; i < zone.length(); i++) {
+			char c = zone.charAt(i);
+			boolean unreserved = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+					|| c == '-' || c == '.' || c == '_' || c == '~';
+			if (!unreserved)
+				return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Parses an IP address literal into an {@link InetAddress} without ever resolving a name.
+	 *
+	 * <p>The string must pass {@link #isIPv4Literal} or {@link #isIPv6Literal} first, so a host
+	 * name - or a form those reject but {@code InetAddress} would accept or look up, such as
+	 * {@code 1.2} - returns {@code null} instead of reaching a resolver. Callers can therefore
+	 * check a configured address without blocking on DNS or being steered by it. A zone id that
+	 * names no interface on this machine cannot be parsed either, and also returns {@code null}.
+	 *
+	 * @param addr the address to parse, may be null; an IPv6 literal may be bracketed
+	 * @return the parsed address, or {@code null} if the string is not a literal
+	 */
+	public static @Nullable InetAddress literalAddress(@Nullable String addr) {
+		if (addr == null || addr.isEmpty())
+			return null;
+
+		if (!isIPv4Literal(addr) && !isIPv6Literal(addr))
+			return null;
+
+		try {
+			return InetAddress.getByName(addr);
+		} catch (UnknownHostException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Checks whether the given host is a wildcard ("any local") address literal, such as
+	 * {@code 0.0.0.0}, {@code ::} or {@code [::]}.
+	 *
+	 * <p>Only literals qualify: a host name is never resolved, so it is never a wildcard.
+	 *
+	 * @param host the host to test, may be null
+	 * @return true if the host is a wildcard address literal
+	 */
+	public static boolean isWildcard(@Nullable String host) {
+		InetAddress address = literalAddress(host);
+		return address != null && address.isAnyLocalAddress();
+	}
+
+	/**
+	 * Formats a {@code host:port} pair, bracketing an IPv6 literal so that the port stays
+	 * unambiguous: {@code 2001:db8::1:9090} could be read either way, {@code [2001:db8::1]:9090}
+	 * cannot.
+	 *
+	 * @param host the host; an IPv6 literal may already be bracketed
+	 * @param port the port
+	 * @return the {@code host:port} string
+	 */
+	public static String endpointOf(String host, int port) {
+		String h;
+		if (isIPv6Literal(host))
+			h = host.length() > 1 && host.charAt(0) == '[' && host.charAt(host.length() - 1) == ']' ?
+					host : "[" + host + "]";
+		else
+			h = host;
+
+		return h + ":" + port;
 	}
 }

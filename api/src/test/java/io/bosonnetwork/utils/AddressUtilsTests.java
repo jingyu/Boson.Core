@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.utils;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -296,5 +297,187 @@ public class AddressUtilsTests {
 		assertThrows(NullPointerException.class,
 				() -> AddressUtils.Subnet.of(null, 24),
 				"Null address should throw NullPointerException");
+	}
+
+	@Test
+	void testIPv4Accepted() {
+		String[] accepted = {
+				"0.0.0.0", "1.2.3.4", "8.8.8.8", "127.0.0.1", "192.168.0.1",
+				"255.255.255.255", "10.0.0.255", "172.16.254.1", "0.0.0.1",
+		};
+
+		for (String addr : accepted)
+			assertTrue(AddressUtils.isIPv4Literal(addr), addr);
+	}
+
+	@Test
+	void testIPv4Rejected() {
+		String[] rejected = {
+				"", ".", "1.2.3", "1.2.3.4.5", "1.2.3.4.", ".1.2.3", "1..2.3", "256.1.1.1",
+				"1.2.3.256", "999.1.1.1", "1.2.3.-4", "-1.2.3.4", "+1.2.3.4", "a.b.c.d",
+				"1.2.3.4 ", " 1.2.3.4", "1.2.3.4:80", "1.2.3.4%eth0", "1,2,3,4",
+				"0x7f.0.0.1", "1.2.3.4/24", "\uFF11.2.3.4",
+		};
+
+		for (String addr : rejected)
+			assertFalse(AddressUtils.isIPv4Literal(addr), addr);
+	}
+
+	/**
+	 * The JDK's {@code InetAddress.getByName} resolves all of these; they are rejected here
+	 * because a validator that accepts them disagrees with itself about what an octet is.
+	 * Short forms are BSD legacy ({@code 16909060} == 1.0.0.4) and leading zeros are octal to
+	 * some resolvers and decimal to others - the ambiguity behind CVE-2021-29441 style SSRF
+	 * bypasses.
+	 */
+	@Test
+	void testIPv4RejectedByDesign() {
+		String[] rejected = {
+				"1", "1.2", "1.2.3", "16909060", "01.2.3.4", "1.02.3.4", "1.2.3.04", "00.0.0.0",
+		};
+
+		for (String addr : rejected)
+			assertFalse(AddressUtils.isIPv4Literal(addr), addr);
+	}
+
+	@Test
+	void testIPv6Accepted() {
+		String[] accepted = {
+				"::", "::0", "::1", "1::", "fe80::1", "ff01::101", "2001:db8::1",
+				"0:0:0:0:0:0:0:1", "1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7:A",
+				"2001:db8::8:800:200c:417a", "2001:0db8:0000:0000:0008:0800:200c:417a",
+				"ABCD:EF01:2345:6789:ABCD:EF01:2345:6789",
+				// "::" stands for exactly one group here - the JDK accepts it, so this does too.
+				"1:2:3:4:5:6:7::", "::1:2:3:4:5:6:7", "1:2:3:4:5:6::7",
+				// embedded dotted-quad tails
+				"::ffff:192.168.0.1", "::FFFF:192.168.0.1", "::1.2.3.4", "64:ff9b::192.0.2.33",
+				"0:0:0:0:0:ffff:192.168.1.1", "1:2:3:4:5:6:1.2.3.4", "::ffff:0:1.2.3.4",
+				"1:2:3:4:5::1.2.3.4",
+		};
+
+		for (String addr : accepted)
+			assertTrue(AddressUtils.isIPv6Literal(addr), addr);
+	}
+
+	@Test
+	void testIPv6AcceptedWithBrackets() {
+		String[] accepted = {
+				"[::]", "[::1]", "[fe80::1]", "[2001:db8::1]", "[1:2:3:4:5:6:7:8]",
+				"[::ffff:192.168.0.1]", "[0:0:0:0:0:0:0:1]",
+		};
+
+		for (String addr : accepted)
+			assertTrue(AddressUtils.isIPv6Literal(addr), addr);
+	}
+
+	@Test
+	void testIPv6AcceptedWithZone() {
+		String[] accepted = {
+				"fe80::1%eth0", "fe80::1%en0", "::1%lo", "::1%1", "fe80::1%12",
+				"fe80::1%vlan.100", "fe80::1%utun_0", "fe80::1%25eth0",
+				"[fe80::1%eth0]", "[fe80::1%25eth0]", "[::1%1]",
+		};
+
+		for (String addr : accepted)
+			assertTrue(AddressUtils.isIPv6Literal(addr), addr);
+	}
+
+	@Test
+	void testIPv6Rejected() {
+		String[] rejected = {
+				"", ":", ":::", "::::", "1:::2", "1::2::3", "::1::2", "1:2",
+				"1:2:3:4:5:6:7", "1:2:3:4:5:6:7:8:9", "1:2:3:4:5:6:7:8::",
+				"12345::1", "gggg::1", "1:2:3:4:5:6:7:g", "0x1::", "1:2:3:4:5:6:7:8:",
+				":1:2:3:4:5:6:7:8", " 1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7:8 ",
+				"::ffff:1.2.3", "::ffff:1.2.3.4.5", "::ffff:256.0.0.1", "::ffff:01.2.3.4",
+				"1:2:3:4:5:6:1.2.3.4:8", "1.2.3.4::5", "1.2.3.4:5:6", "1:2:3:4:5:6::1.2.3.4",
+				// Groups longer than four hex digits are rejected here per RFC 4291 even when
+				// the value still fits in 16 bits. The JDK's parser bounds the group by value
+				// rather than by digit count and accepts every one of these.
+				"00001::1", "0ffff::1", "049fd::d7", "002E81::Ad", "00000:0:0:0:0:0:0:1",
+				"0000000000000001::1",
+		};
+
+		for (String addr : rejected)
+			assertFalse(AddressUtils.isIPv6Literal(addr), addr);
+
+		// A bare IPv4 literal is not an IPv6 literal - use "::ffff:1.2.3.4" for that - but it
+		// is of course still an IPv4 literal, hence the IPv6-only assertion.
+		assertFalse(AddressUtils.isIPv6Literal("1.2.3.4"));
+		assertFalse(AddressUtils.isIPv6Literal("0.0.0.0"));
+	}
+
+	@Test
+	void testIPv6RejectedBracketsAndZones() {
+		String[] rejected = {
+				"[]", "[", "]", "[::1", "::1]", "[::1]]", "[[::1]", "[::1]:80", " [::1]",
+				"[::1] ", "[::1]x", "1.2.3.4]", "[1.2.3.4]", "[0.0.0.0]",
+				"fe80::1%", "fe80::1% ", "fe80::1%eth 0", "fe80::1%eth0%1", "fe80::1%eth/0",
+				"fe80::1%[eth0]", "[fe80::1%]", "[fe80::1%eth:0]",
+		};
+
+		for (String addr : rejected)
+			assertFalse(AddressUtils.isIPv6Literal(addr), addr);
+	}
+
+	@Test
+	void testNullOrEmptyIsRejected() {
+		assertFalse(AddressUtils.isIPv4Literal(null));
+		assertFalse(AddressUtils.isIPv4Literal(""));
+		assertFalse(AddressUtils.isIPv6Literal(null));
+		assertFalse(AddressUtils.isIPv6Literal(""));
+	}
+
+	@Test
+	void testEndpointOf() {
+		assertEquals("1.2.3.4:80", AddressUtils.endpointOf("1.2.3.4", 80));
+		assertEquals("203.0.113.10:40000", AddressUtils.endpointOf("203.0.113.10", 40000));
+		assertEquals("[1:2:3:4:5:6:7:8]:80", AddressUtils.endpointOf("1:2:3:4:5:6:7:8", 80));
+		assertEquals("[1:2:3:4:5:6:7:8]:80", AddressUtils.endpointOf("[1:2:3:4:5:6:7:8]", 80));
+		assertEquals("proxy.example.com:40000", AddressUtils.endpointOf("proxy.example.com", 40000));
+		assertEquals("[2001:db8::1]:40000", AddressUtils.endpointOf("2001:db8::1", 40000));
+		assertEquals("[2001:db8::1]:40000", AddressUtils.endpointOf("[2001:db8::1]", 40000));
+		assertEquals("[::1]:40000", AddressUtils.endpointOf("::1", 40000));
+	}
+
+	/**
+	 * literalAddress must never resolve a name. A host name, and every form the JDK would accept or
+	 * look up but these validators reject, comes back as null rather than as a lookup result.
+	 */
+	@Test
+	void testLiteralAddressNeverResolvesNames() {
+		String[] notLiterals = {
+				"localhost", "example.com", "proxy.internal", "1.2", "16909060", "01.2.3.4", "00001::1",
+				"[1.2.3.4]", "", " 1.2.3.4",
+		};
+
+		for (String addr : notLiterals)
+			assertNull(AddressUtils.literalAddress(addr), addr);
+		assertNull(AddressUtils.literalAddress(null));
+
+		// Syntactically a literal, but the zone names no interface here, so it cannot be parsed.
+		assertNull(AddressUtils.literalAddress("fe80::1%no-such-interface-xyz"));
+	}
+
+	@Test
+	void testLiteralAddressParsesLiterals() throws Exception {
+		assertEquals(InetAddress.getByName("192.168.0.1"), AddressUtils.literalAddress("192.168.0.1"));
+		assertEquals(InetAddress.getByName("::1"), AddressUtils.literalAddress("::1"));
+		assertEquals(InetAddress.getByName("::1"), AddressUtils.literalAddress("[::1]"));
+		assertEquals(InetAddress.getByName("2001:db8::1"), AddressUtils.literalAddress("2001:db8::1"));
+		// An IPv4-mapped IPv6 literal comes back as the IPv4 address, as the JDK maps it.
+		assertInstanceOf(Inet4Address.class, AddressUtils.literalAddress("::ffff:192.168.0.1"));
+	}
+
+	@Test
+	void testIsWildcard() {
+		for (String wildcard : new String[] { "0.0.0.0", "::", "::0", "[::]", "0:0:0:0:0:0:0:0", "::ffff:0.0.0.0" })
+			assertTrue(AddressUtils.isWildcard(wildcard), wildcard);
+
+		// Host names are never resolved, so even one that means "this machine" is not a wildcard.
+		for (String concrete : new String[] { "127.0.0.1", "::1", "[::1]", "192.168.0.1", "localhost",
+				"example.com", "0.0.0.0.", "00.0.0.0", "" })
+			assertFalse(AddressUtils.isWildcard(concrete), concrete);
+		assertFalse(AddressUtils.isWildcard(null));
 	}
 }
