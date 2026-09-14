@@ -180,6 +180,11 @@ public class Launcher {
 		System.out.println("  -h, --help                Display this help message and exit.");
 	}
 
+	/**
+	 * Main entry point for running the Boson DHT node launcher from the command line.
+	 *
+	 * @param args the command-line arguments.
+	 */
 	public static void main(String[] args) {
 		NodeConfiguration config;
 		try {

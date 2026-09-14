@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package io.bosonnetwork.kademlia;
 
 import java.io.IOException;
@@ -61,13 +83,29 @@ import io.bosonnetwork.vertx.BosonVerticle;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.vertx.VertxCaffeine;
 
+/**
+ * The main Kademlia DHT node implementation.
+ * <p>
+ * {@code KadNode} manages the lifecycle of the DHT subsystem, routing tables,
+ * RPC communications, value and peer storage, announcements, and background tasks.
+ */
 @NullMarked
 public class KadNode extends BosonVerticle implements Node {
-	// This implementation's identity on the wire. Not tuning: NAME and SHORT_NAME are what peers see
-	// in the version field, so they belong to this class rather than to KadConstants.
+	/**
+	 * The implementation name of the Kademlia DHT node on the wire.
+	 */
 	public static final String NAME = "Orca";
+	/**
+	 * The short implementation name used for protocol versioning on the wire.
+	 */
 	public static final String SHORT_NAME = "OR";
+	/**
+	 * The implementation version number.
+	 */
 	public static final int VERSION_NUMBER = 1;
+	/**
+	 * The packed integer representation of the implementation version.
+	 */
 	public static final int VERSION = Version.build(SHORT_NAME, VERSION_NUMBER);
 
 	private final NodeConfiguration config;
@@ -115,6 +153,11 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private static final Logger log = LoggerFactory.getLogger(KadNode.class);
 
+	/**
+	 * Constructs a new {@code KadNode} instance with the specified configuration.
+	 *
+	 * @param config the node configuration.
+	 */
 	public KadNode(NodeConfiguration config) {
 		Objects.requireNonNull(config, "Configuration can not be null");
 		try {

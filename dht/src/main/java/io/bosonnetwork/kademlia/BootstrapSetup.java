@@ -118,7 +118,21 @@ public class BootstrapSetup {
 		this.batch = batch;
 	}
 
-	public void run() throws IOException {
+	/**
+	 * Initializes the bootstrap node configuration and runtime directories.
+	 *
+	 * Checks whether the bootstrap configuration already exists. If it exists and batch mode is
+	 * enabled, initialization is skipped. If it exists and batch mode is disabled, the operator is
+	 * asked to confirm replacement. Without confirmation, the existing configuration remains unchanged.
+	 *
+	 * Generates a new node identity, determines the default public IPv4 address where available,
+	 * creates the configuration, data, and log directories, and renders the node configuration and
+	 * logging templates using the generated values.
+	 *
+	 * @throws IOException if the template directory cannot be found or if reading, creating, or
+	 *                     writing files fails.
+	 */
+	private void run() throws IOException {
 		// Define paths
 		Path configDir = Path.of("/etc/boson/bootstrap");
 		Path dataDir = Path.of("/var/lib/boson/bootstrap");
