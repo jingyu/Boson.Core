@@ -23,36 +23,26 @@
 
 package io.bosonnetwork.kademlia.shell;
 
+import java.io.Console;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.jline.builtins.ConfigurationPath;
-import org.jline.console.SystemRegistry;
-import org.jline.console.impl.Builtins;
-import org.jline.console.impl.SystemRegistryImpl;
-import org.jline.reader.EndOfFileException;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
-import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.MaskingCallback;
-import org.jline.reader.Parser;
-import org.jline.reader.UserInterruptException;
-import org.jline.reader.impl.DefaultParser;
-import org.jline.terminal.Size;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import picocli.shell.jline3.PicocliCommands;
-import picocli.shell.jline3.PicocliCommands.PicocliCommandsFactory;
 
 import io.bosonnetwork.ConnectionStatusListener;
 import io.bosonnetwork.Id;
@@ -66,22 +56,15 @@ import io.bosonnetwork.utils.ApplicationLock;
  * @hidden
  */
 @Command(name = "shell", mixinStandardHelpOptions = true, version = "Boson shell 2.0",
-		description = "Boson command line shell.",
-		subcommands = {
-			IdCommand.class,
-			BootstrapCommand.class,
-			FindValueCommand.class,
-			StoreValueCommand.class,
-			FindPeerCommand.class,
-			AnnouncePeerCommand.class,
-			FindNodeCommand.class,
-			RoutingTableCommand.class,
-			StorageCommand.class,
-			StopCommand.class,
-			DisplayCacheCommand.class,
-			GenerateKeyPairCommand.class
-		})
+		description = "Boson command line shell.")
 public class Main implements Callable<Integer> {
+	static {
+		// Before anything creates a logger: logback reads its configuration once, on first use.
+		ShellLogging.selectConfiguration();
+	}
+
+	private static final long SHUTDOWN_TIMEOUT_SECONDS = 10;
+
 	@Option(names = {"-4", "--address4"}, description = "IPv4 address to listen.")
 	private String addr4 = null;
 
@@ -111,78 +94,9 @@ public class Main implements Callable<Integer> {
 
 	private static KadNode bosonNode;
 
-	private Terminal terminal;
-	private LineReader reader;
-
-	private SystemRegistry systemRegistry;
 	private NodeConfiguration config;
 
-	private Terminal buildTerminal(boolean dumb) throws IOException {
-		TerminalBuilder builder = TerminalBuilder.builder();
-
-		if (dumb) {
-			builder.system(false)
-					.system(false)  // Disable system terminal detection
-					.dumb(true)     // Explicitly use dumb mode
-					.streams(System.in, System.out)
-					.size(new Size(80, 24));  // Provide default columns and rows (adjust as needed)
-		} else {
-			builder.system(true);
-		}
-
-		return builder.build();
-	}
-
-	private void closeTerminal() {
-		if (terminal != null) {
-			try {
-				terminal.close();
-			} catch (Exception ignored) {
-			}
-		}
-	}
-
-	private void initTerminal() {
-		try {
-			terminal = buildTerminal(false);
-			Path workDir = Path.of("");
-			// set up JLine built-in commands
-			Builtins builtins = new Builtins(() -> workDir, new ConfigurationPath((Path) null, (Path) null), null);
-			// builtins.rename(Builtins.Command.HELP, "builtin-help");
-
-			Main commands = new Main();
-			PicocliCommandsFactory factory = new PicocliCommandsFactory();
-			CommandLine cmd = new CommandLine(commands, factory);
-			PicocliCommands picocliCommands = new PicocliCommands(cmd);
-
-			Parser parser = new DefaultParser();
-
-			systemRegistry = new SystemRegistryImpl(parser, terminal, () -> workDir, null);
-			systemRegistry.setCommandRegistries(builtins, picocliCommands);
-			// systemRegistry.register("help", picocliCommands);
-
-			reader = LineReaderBuilder.builder()
-					.terminal(terminal)
-					.completer(systemRegistry.completer())
-					.parser(parser)
-					.variable(LineReader.LIST_MAX, 50)   // max tab completion candidates
-					.build();
-			builtins.setLineReader(reader);
-
-			factory.setTerminal(terminal);
-			// TailTipWidgets widgets = new TailTipWidgets(reader, systemRegistry::commandDescription, 5,
-			//		TailTipWidgets.TipType.COMPLETER);
-			// widgets.enable();
-
-			// bind alt-s to toggle tailtip
-			// KeyMap<Binding> keyMap = reader.getKeyMaps().get("main");
-			// keyMap.bind(new Reference("tailtip-toggle"), KeyMap.alt("s"));
-		} catch (Exception e) {
-			closeTerminal();
-			e.printStackTrace(System.err);
-			System.exit(-1);
-		}
-	}
+	private final AtomicBoolean shutdown = new AtomicBoolean();
 
 	// bootstrap formats:
 	// - ID:ADDRESS4:PORT4
@@ -340,60 +254,56 @@ public class Main implements Callable<Integer> {
 		return bosonNode;
 	}
 
-	private void setLogOutput() {
-		Path logDir = config.dataDir();
-		// with trailing slash
-		System.setProperty("BOSON_LOG_DIR", logDir.toString() + File.separator);
-	}
-
 	@Override
 	public Integer call() throws Exception {
 		parseArgs();
-		setLogOutput();
-
-		initTerminal();
 
 		Path lockFile = config.dataDir().resolve("lock");
+		ApplicationLock lock;
+		try {
+			lock = new ApplicationLock(lockFile);
+		} catch (IOException | IllegalStateException e) {
+			System.out.println("Another boson instance already running at " + config.dataDir());
+			return -1;
+		}
 
-		try (ApplicationLock lock = new ApplicationLock(lockFile)) {
+		try (lock) {
 			initBosonNode();
 
 			System.out.println("Boson Id: " + bosonNode.getId());
 
-			String prompt = "Boson $ ";
-			String rightPrompt = null;
-
-			String line;
-			while (true) {
-				try {
-					systemRegistry.cleanUp();
-					line = reader.readLine(prompt, rightPrompt, (MaskingCallback)null, null);
-					systemRegistry.execute(line);
-				} catch (UserInterruptException e) {
-					// Ignore
-				} catch (EndOfFileException e) {
-					closeTerminal();
-					return 0;
-				} catch (Exception e) {
-					systemRegistry.trace(e);
-				}
-			}
-		} catch (IOException | IllegalStateException e) {
-			System.out.println("Another boson instance already running at " + config.dataDir());
-			closeTerminal();
-			return -1;
+			Console console = System.console();
+			Charset charset = console != null ? console.charset() : Charset.defaultCharset();
+			return new Shell(new InputStreamReader(System.in, charset), new PrintWriter(System.out, true)).run();
 		}
 	}
 
 	public static void main(String[] args) {
 		Main app = new Main();
+		// Ctrl-C ends the process, not the line being typed - there is no line editor to catch it - so
+		// the node is stopped from a hook as well as on the normal way out.
+		Runtime.getRuntime().addShutdownHook(new Thread(app::shutdown, "shell-shutdown"));
 		int exitCode = new CommandLine(app).execute(args);
-		app.closeVertx();
+		app.shutdown();
 		System.exit(exitCode);
 	}
 
-	private void closeVertx() {
-		if (config != null)
-			config.vertx().close().toCompletionStage().toCompletableFuture().join();
+	private void shutdown() {
+		if (!shutdown.compareAndSet(false, true))
+			return;
+
+		try {
+			if (bosonNode != null && bosonNode.isRunning())
+				bosonNode.stop().get(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (Exception ignored) {
+		}
+
+		if (config != null) {
+			try {
+				config.vertx().close().toCompletionStage().toCompletableFuture()
+						.get(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			} catch (Exception ignored) {
+			}
+		}
 	}
 }

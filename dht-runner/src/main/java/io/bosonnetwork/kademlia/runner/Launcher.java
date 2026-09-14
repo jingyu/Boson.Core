@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.runner;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,6 +33,7 @@ import io.vertx.core.VertxOptions;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.json.Json;
+import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.utils.ApplicationLock;
 import io.bosonnetwork.vertx.ContextualFuture;
 

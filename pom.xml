@@ -58,7 +58,7 @@
     <modules>
         <module>api</module>
         <module>dht</module>
-        <module>shell</module>
+        <module>dht-runner</module>
     </modules>
 
     <properties>

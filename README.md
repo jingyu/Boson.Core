@@ -14,7 +14,7 @@ Boson Core is the foundational library for the [Boson Network](https://github.co
 - [About Boson Core](#about-boson-core)
   - [Common APIs (`api`)](#common-apis-api)
   - [Secure Kademlia DHT (`dht`)](#secure-kademlia-dht-dht)
-  - [DHT Shell (`shell`)](#dht-shell-shell)
+  - [DHT Runner (`dht-runner`)](#dht-runner-dht-runner)
 - [Prerequisites](#prerequisites)
 - [Build Instructions](#build-instructions)
 - [Running the DHT Shell](#running-the-dht-shell)
@@ -78,9 +78,12 @@ See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specifi
 
 ---
 
-### DHT Shell (`shell`)
+### DHT Runner (`dht-runner`)
 
-The `shell` module provides an interactive command-line shell that starts a local DHT node and lets developers interact with the network in real time. It is intended as a development and debugging tool.
+The `dht-runner` module holds everything that runs a standalone DHT node as a process, keeping the `dht` library free of command line code:
+
+- the bootstrap node launcher (`io.bosonnetwork.kademlia.runner.Launcher`) and its setup wizard (`BootstrapSetup`);
+- an interactive command-line shell that starts a local DHT node and lets developers interact with the network in real time. It is intended as a development and debugging tool.
 
 ---
 
@@ -138,7 +141,7 @@ To skip tests:
 The DHT shell is bundled as an executable JAR. Also create an easy-to-use shell script:
 
 ```bash
-cd shell/target/dist
+cd dht-runner/target/dist
 ./bin/dht-shell [OPTIONS]
 ```
 

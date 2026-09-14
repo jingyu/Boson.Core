@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-package io.bosonnetwork.kademlia;
+package io.bosonnetwork.kademlia.runner;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -65,10 +65,9 @@ public class BootstrapSetup {
 	/**
 	 * Program entry point.
 	 * <p>
-	 * REMARK: this is a command line entry point that happens to ship inside the library jar, which is
-	 * why it is the only place here that calls {@link System#exit}. Everything it does beyond argument
-	 * handling is in {@link #run()}, which reports failure by throwing - so calling that in-process
-	 * cannot take the JVM down with it.
+	 * REMARK: this is a command line entry point, which is why it is the only place here that calls
+	 * {@link System#exit}. Everything it does beyond argument handling is in {@link #run()}, which
+	 * reports failure by throwing - so calling that in-process cannot take the JVM down with it.
 	 * </p>
 	 *
 	 * @param args the command line arguments.
