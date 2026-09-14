@@ -48,6 +48,7 @@ import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
  * </p>
  * <p>
  * This class extends {@link NodeInfo} by adding fields and logic to track:
+ * </p>
  * <ul>
  *   <li><b>created:</b> Timestamp when this entry was first created.</li>
  *   <li><b>lastSeen:</b> Timestamp of the last successful interaction with the node.</li>
@@ -56,7 +57,6 @@ import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
  *   <li><b>reachable:</b> Whether the node is currently considered reachable based on recent responses.</li>
  *   <li><b>avgRTT:</b> An exponential weighted moving average of the round-trip time (RTT) to this node, used to prioritize nodes with lower latency.</li>
  * </ul>
- * </p>
  * <p>
  * The class provides methods for managing node liveness, ping backoff, merging updated node information,
  * and serialization/deserialization for routing table persistence.
