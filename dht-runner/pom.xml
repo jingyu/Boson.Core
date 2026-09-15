@@ -54,6 +54,12 @@
         <url>git@github.com:bosonnetwork/Boson.Core.git</url>
     </scm>
 
+    <properties>
+        <!-- Runs a standalone node - nothing declares a dependency on it, and the distribution builds
+             it from the reactor, so it has no reason to be on Maven Central. -->
+        <central.skipPublishing>true</central.skipPublishing>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -275,25 +281,6 @@
                     <classifier>osx-aarch_64</classifier>
                     <scope>runtime</scope>
                 </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-boringssl-static</artifactId>
-                    <classifier>osx-aarch_64</classifier>
-                    <scope>runtime</scope>
-                    <exclusions>
-                        <!-- Blocks the other platform JARs that the aggregate POM pulls in,
-                             but netty-tcnative-classes still arrives transitively via this POM -->
-                        <exclusion>
-                            <groupId>io.netty</groupId>
-                            <artifactId>netty-tcnative-boringssl-static</artifactId>
-                        </exclusion>
-                    </exclusions>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-classes</artifactId>
-                    <scope>runtime</scope>
-                </dependency>
             </dependencies>
         </profile>
 
@@ -322,25 +309,6 @@
                     <groupId>io.netty</groupId>
                     <artifactId>netty-transport-native-unix-common</artifactId>
                     <classifier>osx-x86_64</classifier>
-                    <scope>runtime</scope>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-boringssl-static</artifactId>
-                    <classifier>osx-x86_64</classifier>
-                    <scope>runtime</scope>
-                    <exclusions>
-                        <!-- Blocks the other platform JARs that the aggregate POM pulls in,
-                             but netty-tcnative-classes still arrives transitively via this POM -->
-                        <exclusion>
-                            <groupId>io.netty</groupId>
-                            <artifactId>netty-tcnative-boringssl-static</artifactId>
-                        </exclusion>
-                    </exclusions>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-classes</artifactId>
                     <scope>runtime</scope>
                 </dependency>
             </dependencies>
@@ -374,25 +342,6 @@
                     <classifier>linux-x86_64</classifier>
                     <scope>runtime</scope>
                 </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-boringssl-static</artifactId>
-                    <classifier>linux-x86_64</classifier>
-                    <scope>runtime</scope>
-                    <exclusions>
-                        <!-- Blocks the other platform JARs that the aggregate POM pulls in,
-                             but netty-tcnative-classes still arrives transitively via this POM -->
-                        <exclusion>
-                            <groupId>io.netty</groupId>
-                            <artifactId>netty-tcnative-boringssl-static</artifactId>
-                        </exclusion>
-                    </exclusions>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-classes</artifactId>
-                    <scope>runtime</scope>
-                </dependency>
             </dependencies>
         </profile>
 
@@ -422,43 +371,6 @@
                     <groupId>io.netty</groupId>
                     <artifactId>netty-transport-native-unix-common</artifactId>
                     <classifier>linux-aarch_64</classifier>
-                    <scope>runtime</scope>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-boringssl-static</artifactId>
-                    <classifier>linux-aarch_64</classifier>
-                    <scope>runtime</scope>
-                    <exclusions>
-                        <!-- Blocks the other platform JARs that the aggregate POM pulls in,
-                             but netty-tcnative-classes still arrives transitively via this POM -->
-                        <exclusion>
-                            <groupId>io.netty</groupId>
-                            <artifactId>netty-tcnative-boringssl-static</artifactId>
-                        </exclusion>
-                    </exclusions>
-                </dependency>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-classes</artifactId>
-                    <scope>runtime</scope>
-                </dependency>
-            </dependencies>
-        </profile>
-
-        <profile>
-            <id>windows-x86_64</id>
-            <activation>
-                <os>
-                    <family>windows</family>
-                    <arch>amd64</arch>
-                </os>
-            </activation>
-            <dependencies>
-                <dependency>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative-boringssl-static</artifactId>
-                    <classifier>windows-x86_64</classifier>
                     <scope>runtime</scope>
                 </dependency>
             </dependencies>
