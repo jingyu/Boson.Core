@@ -4,7 +4,7 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://adoptium.net/)
 [![Maven](https://img.shields.io/badge/Maven-3.8%2B-red.svg)](https://maven.apache.org/)
 
-Boson Core is the foundational library for the [Boson Network](https://github.com/bosonnetwork) - a decentralized, encrypted peer-to-peer communication framework. It provides the common APIs, a secure Kademlia DHT implementation, and an interactive developer shell.
+Boson Core is the foundational library for the [Boson Network](https://github.com/bosonnetwork) - a decentralized, encrypted peer-to-peer communication framework. It provides the common APIs and a secure Kademlia DHT implementation.
 
 ---
 
@@ -82,9 +82,12 @@ See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specifi
 |---|---|
 | Java JDK | 17 or later |
 | Apache Maven | 3.8 or later |
-| libsodium | 1.0.16 or later |
+| libsodium | 1.0.16 or later - to run the tests only |
 
-**Installing libsodium**
+**libsodium is a test dependency, not a runtime one.** Boson's cryptography is pure Java, on Bouncy
+Castle, and nothing shipped needs a native library. The crypto compatibility tests do: they run the
+Bouncy Castle backend and a libsodium binding (Apache Tuweni / JNR, test scope) side by side to check
+that the two stay byte-for-byte compatible. Build with `-DskipTests` and libsodium is not needed at all.
 
 - **macOS**: `brew install libsodium`
 - **Ubuntu / Debian**: `sudo apt-get install libsodium-dev`
