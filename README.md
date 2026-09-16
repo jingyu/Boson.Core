@@ -14,10 +14,8 @@ Boson Core is the foundational library for the [Boson Network](https://github.co
 - [About Boson Core](#about-boson-core)
   - [Common APIs (`api`)](#common-apis-api)
   - [Secure Kademlia DHT (`dht`)](#secure-kademlia-dht-dht)
-  - [DHT Runner (`dht-runner`)](#dht-runner-dht-runner)
 - [Prerequisites](#prerequisites)
 - [Build Instructions](#build-instructions)
-- [Running the DHT Shell](#running-the-dht-shell)
 - [Configuration](#configuration)
 - [Contributing](#contributing)
 - [License](#license)
@@ -78,15 +76,6 @@ See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specifi
 
 ---
 
-### DHT Runner (`dht-runner`)
-
-The `dht-runner` module holds everything that runs a standalone DHT node as a process, keeping the `dht` library free of command line code:
-
-- the bootstrap node launcher (`io.bosonnetwork.kademlia.runner.Launcher`) and its setup wizard (`BootstrapSetup`);
-- an interactive command-line shell that starts a local DHT node and lets developers interact with the network in real time. It is intended as a development and debugging tool.
-
----
-
 ## Prerequisites
 
 | Requirement | Version |
@@ -136,27 +125,16 @@ To skip tests:
 
 ---
 
-## Running the DHT Shell
+## Running a node
 
-The DHT shell is bundled as an executable JAR. Also create an easy-to-use shell script:
-
-```bash
-cd dht-runner/target/dist
-./bin/dht-shell [OPTIONS]
-```
-
-**Example - start a local shell node and bootstrap into the network:**
+Running a DHT node as a process, the setup wizard and the interactive developer shell all live in the
+`boson-node` tool rather than here, so that this library stays free of command line code. See
+[`tools/README.md`](../tools/README.md).
 
 ```bash
-./bin/dht-shell \
-  -4 192.168.8.1 \
-  -p 39001 \
-  -d ./data \
-  --developerMode \
-  -b "FyHfVWtscJWUeejGQaJXyUnjUcKFGSVVYmozqBuJSmjo:155.138.245.211:39001"
+boson-node shell        # the interactive developer shell
+boson-node run          # run a node in the foreground
 ```
-
-Once started, type `help` at the `Boson $` prompt to list all available commands.
 
 ---
 
