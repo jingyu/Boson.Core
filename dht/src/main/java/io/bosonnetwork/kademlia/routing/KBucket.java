@@ -530,6 +530,7 @@ public class KBucket implements Comparable<KBucket> {
 
 		for (int i = 0; i < entries.size(); i++) {
 			if (entries.get(i).needsReplacement()) {
+				log().debug("Entry {} is dead, replacing it with {}", entries.get(i), entry);
 				entries.remove(i);
 				badRemoved = true;
 				break;
@@ -556,10 +557,12 @@ public class KBucket implements Comparable<KBucket> {
 					KBucketEntry replacement = pollVerifiedReplacement();
 					// only remove if we have a replacement or really need to
 					if (replacement != null) {
+						log().debug("Entry {} is {}, replacing it with {}", entry, force ? "being forced out" : "dead", replacement);
 						entries.set(i, replacement);
 						entries.sort(KBucketEntry::ageOrder);
 						removed = true;
 					} else if (force) {
+						log().debug("Entry {} is being forced out and has no replacement, removing it", entry);
 						entries.remove(i);
 						removed = true;
 					}
@@ -574,6 +577,7 @@ public class KBucket implements Comparable<KBucket> {
 			if (entry.getId().equals(id)) {
 				// Note: stale replacements under capacity are left until periodic cleanup.
 				if (force || (replacements.size() >= maxReplacements && entry.oldAndStale())) {
+					log().debug("Replacement {} is {}, removing it", entry, force ? "being forced out" : "stale");
 					replacements.remove(i);
 					return entry;
 				}
@@ -687,6 +691,7 @@ public class KBucket implements Comparable<KBucket> {
 			if (entry.needsReplacement()) {
 				KBucketEntry replacement = pollVerifiedReplacement();
 				if (replacement != null) {
+					log().debug("Entry {} is dead, replacing it with {}", entry, replacement);
 					entries.set(i, replacement);
 					entries.sort(KBucketEntry::ageOrder);
 					return;
@@ -770,8 +775,25 @@ public class KBucket implements Comparable<KBucket> {
 
 	/**
 	 * A node failed to respond
+	 * <p>
+	 * A main entry that needs replacement is swapped for a verified replacement when there is one. Without
+	 * one it normally stays, so a thin bucket is not emptied by a burst of loss - but not once it is
+	 * {@link KBucketEntry#removableWithoutReplacement() removable without replacement}: it has failed more
+	 * than {@link KBucketEntry#MAX_FAILURES} requests in a row and sent nothing since. Such an entry is not
+	 * holding a slot for anything that will come back, and keeping it is not free: it goes on holding its
+	 * address, so {@link #put} refuses whatever answers there now, and its source's routing-table
+	 * allowance. A node restarted under a new id at the same address was locked out this way for as long as
+	 * the bucket had no replacement - indefinitely on a small table, since a request encrypted to the old id
+	 * cannot be decrypted by the node now there, and the old entry therefore never answers.
+	 * </p>
+	 * <p>
+	 * The maintenance ping refresh is what drives an unreachable entry here: nothing else sends to it.
+	 * Timeouts are only counted while this node is reachable, so an outage of our own does not run the
+	 * table down this way.
+	 * </p>
 	 *
 	 * @param id id of the node
+	 * @return true if the entry was replaced or removed.
 	 */
 	protected boolean onTimeout(Id id) {
 		for (int i = 0; i < entries.size(); i++) {
@@ -780,10 +802,16 @@ public class KBucket implements Comparable<KBucket> {
 				entry.onTimeout();
 				if (entry.needsReplacement()) {
 					KBucketEntry replacement = pollVerifiedReplacement();
-					// only remove if we have a replacement
 					if (replacement != null) {
+						log().debug("Entry {} is dead, replacing it with {}", entry, replacement);
 						entries.set(i, replacement);
 						entries.sort(KBucketEntry::ageOrder);
+						return true;
+					}
+
+					if (entry.removableWithoutReplacement()) {
+						log().debug("Entry {} is dead and has no replacement, removing it", entry);
+						entries.remove(i);
 						return true;
 					}
 				}
@@ -798,6 +826,7 @@ public class KBucket implements Comparable<KBucket> {
 				entry.onTimeout();
 				// Cull stale replacements only if the replacement list is full
 				if (replacements.size() >= maxReplacements && entry.oldAndStale()) {
+					log().debug("Replacement {} is stale, removing it", entry);
 					replacements.remove(i);
 					return true;
 				}
@@ -833,6 +862,7 @@ public class KBucket implements Comparable<KBucket> {
 			KBucketEntry entry = iterator.next();
 			if (entry.needsReplacement()) {
 				// TODO: check me - should we cleanup the entries from replacements?
+				log().debug("Replacement {} is dead, removing it", entry);
 				iterator.remove();
 				continue;
 			}
