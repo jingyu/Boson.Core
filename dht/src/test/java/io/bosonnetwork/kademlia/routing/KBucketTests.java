@@ -181,6 +181,56 @@ public class KBucketTests {
 	}
 
 	@Test
+	void testDeadEntryIsRemovedWithoutAReplacement() {
+		// A node restarted under a new id at the same address. The old binding can no longer answer - a
+		// request encrypted to the old id does not decrypt at the other end - so the maintenance pings only
+		// ever time out. The table is small: nothing in the replacement cache can take its slot.
+		addEntries(4);
+		KBucketEntry stale = addEntry();
+		assertEquals(0, bucket.replacementSize());
+
+		for (int i = 0; i < KBucketEntry.MAX_FAILURES; i++) {
+			bucket.onRequestSent(stale.getId());
+			assertFalse(bucket.onTimeout(stale.getId()));
+			assertTrue(bucket.contains(stale.getId(), false), "removed before it was dead");
+		}
+
+		bucket.onRequestSent(stale.getId());
+		assertTrue(bucket.onTimeout(stale.getId()));
+		assertFalse(bucket.contains(stale.getId(), true));
+		assertEquals(4, bucket.size());
+
+		// And the address it held is free again.
+		KBucketEntry renamed = new KBucketEntry(bucket.prefix().createRandomId(), stale.getAddress());
+		assertTrue(bucket.put(renamed));
+		assertTrue(bucket.contains(renamed.getId(), true));
+	}
+
+	@Test
+	void testEntrySeenSinceItsLastRequestIsKept() {
+		// Something that keeps talking to us is not dead, however many of our requests it dropped.
+		addEntries(4);
+		KBucketEntry flaky = addEntry();
+
+		for (int i = 0; i <= KBucketEntry.MAX_FAILURES; i++) {
+			bucket.onRequestSent(flaky.getId());
+			bucket.onTimeout(flaky.getId());
+		}
+		assertFalse(bucket.contains(flaky.getId(), false), "precondition: removed when silent");
+
+		KBucketEntry chatty = addEntry();
+		for (int i = 0; i < KBucketEntry.MAX_FAILURES; i++) {
+			bucket.onRequestSent(chatty.getId());
+			bucket.onTimeout(chatty.getId());
+		}
+		bucket.onRequestSent(chatty.getId());
+		// Heard from after the last request went out, without answering it.
+		chatty.setLastSeen(chatty.lastSend() + 1);
+		assertFalse(bucket.onTimeout(chatty.getId()));
+		assertTrue(bucket.contains(chatty.getId(), false));
+	}
+
+	@Test
 	void testRemoveIfBad() {
 		addEntries(4);
 

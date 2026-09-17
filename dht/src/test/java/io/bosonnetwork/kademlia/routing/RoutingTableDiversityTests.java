@@ -200,6 +200,80 @@ class RoutingTableDiversityTests {
 	}
 
 	/**
+	 * Drives an entry the way the maintenance ping refresh does when nothing answers at its address.
+	 */
+	private void timeOut(Id id, int times) {
+		for (int i = 0; i < times; i++) {
+			routingTable.onRequestSent(id);
+			routingTable.onTimeout(id);
+		}
+	}
+
+	/**
+	 * A host that has spent its whole table-wide allowance restarts one of its nodes under a new id. The old
+	 * binding can no longer answer - a request encrypted to the old id does not decrypt at the other end -
+	 * so it goes dead, and it has to leave the table even with no replacement to take its slot. Until it
+	 * does, it holds both the address and a unit of the host's allowance, and the renamed node is refused
+	 * on either count.
+	 */
+	@Test
+	void testADeadEntryFreesItsAddressAndItsAllowance() {
+		populateUntilBuckets(12);
+
+		List<Prefix> prefixes = new ArrayList<>();
+		for (KBucket bucket : routingTable.buckets())
+			prefixes.add(bucket.prefix());
+
+		// One per bucket, so the per-bucket allowance never binds and the table-wide one is what is spent.
+		List<KBucketEntry> held = new ArrayList<>();
+		for (Prefix prefix : prefixes) {
+			if (held.size() == KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE)
+				break;
+
+			KBucketEntry entry = entryAt(prefix.createRandomId(), ONE_HOST, 39001 + held.size());
+			assertTrue(routingTable.put(entry));
+			held.add(entry);
+		}
+		assertEquals(KadConstants.MAX_ROUTING_TABLE_ENTRIES_PER_SOURCE, held.size(),
+				"precondition: the host has spent its allowance");
+
+		// A full bucket files a newcomer as a replacement, so the dead entry is one that made the main list.
+		KBucketEntry stale = held.stream()
+				.filter(e -> routingTable.getEntry(e.getId(), false) != null)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("precondition: none of the host's entries is a main entry"));
+		KBucketEntry renamed = new KBucketEntry(Id.random(), stale.getAddress());
+		assertFalse(routingTable.put(renamed), "precondition: refused while the old entry is alive");
+
+		timeOut(stale.getId(), KBucketEntry.MAX_FAILURES);
+		assertNotNull(routingTable.getEntry(stale.getId(), false), "removed before it was dead");
+
+		timeOut(stale.getId(), 1);
+		assertNull(routingTable.getEntry(stale.getId(), true), "a dead entry with no replacement was kept");
+
+		assertTrue(routingTable.put(renamed), "the renamed node was refused");
+		assertNotNull(routingTable.getEntry(renamed.getId(), true));
+		for (KBucketEntry entry : held) {
+			if (entry != stale)
+				assertNotNull(routingTable.getEntry(entry.getId(), true));
+		}
+	}
+
+	/**
+	 * Demotion and a failure or two are not death. The same claim against such an entry is still refused.
+	 */
+	@Test
+	void testAnEntryThatIsNotDeadKeepsItsAddress() {
+		KBucketEntry live = entryAt(Id.random(), ONE_HOST, 39001);
+		assertTrue(routingTable.put(live));
+		routingTable.markUnreachable(live.getId());
+		timeOut(live.getId(), 2);
+
+		assertFalse(routingTable.put(new KBucketEntry(Id.random(), new InetSocketAddress(ONE_HOST, 39001))));
+		assertNotNull(routingTable.getEntry(live.getId(), false));
+	}
+
+	/**
 	 * And the drift is bounded rather than merely harmless: maintenance recounts from the buckets, so a
 	 * source whose entries have all gone stops looking spent and stops paying for the walk.
 	 */
