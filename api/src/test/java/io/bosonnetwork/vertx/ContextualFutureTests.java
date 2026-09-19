@@ -1,17 +1,23 @@
 package io.bosonnetwork.vertx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletionException;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import io.vertx.core.internal.ContextInternal;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -268,6 +274,139 @@ public class ContextualFutureTests {
 		ContextualFuture<String> completedFuture = ContextualFuture.succeededFuture("Foo bar");
 		ctx.runOnContext(v -> {
 			context.verify(() -> assertEquals("Foo bar", completedFuture.join()));
+		});
+	}
+
+	// A pending future that is not a promise: completed only by what produces it, like an HTTP call's.
+	private static Future<String> pendingSource(Promise<String> producer) {
+		Future<String> source = producer.future().map(v -> v);
+		assertFalse(source instanceof Promise<?>, "the test needs a source that is not a promise");
+		return source;
+	}
+
+	@Test
+	void completeFromOutsideWinsOverTheSource() throws Exception {
+		Promise<String> producer = Promise.promise();
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(producer));
+		CompletableFuture<String> dependent = f.thenApply(v -> v + "!");
+
+		assertTrue(f.complete("outside"));
+		assertTrue(f.isDone());
+		assertEquals("outside", f.get());
+		assertEquals("outside", f.getNow("pending"));
+		assertEquals("outside!", dependent.get(5, TimeUnit.SECONDS));
+
+		// The source's own result comes too late, and is ignored.
+		producer.complete("source");
+		assertEquals("outside", f.join());
+		assertFalse(f.complete("again"));
+	}
+
+	@Test
+	void completeExceptionallyFromOutside() {
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(Promise.promise()));
+		IllegalStateException failure = new IllegalStateException("outside");
+		assertTrue(f.completeExceptionally(failure));
+		assertTrue(f.isCompletedExceptionally());
+		ExecutionException e = assertThrows(ExecutionException.class, f::get);
+		assertSame(failure, e.getCause());
+		CompletionException ce = assertThrows(CompletionException.class, f::join);
+		assertSame(failure, ce.getCause());
+	}
+
+	@Test
+	void orTimeoutFailsThisFuture() {
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(Promise.promise()));
+		assertSame(f, f.orTimeout(200, TimeUnit.MILLISECONDS));
+		// The caller keeps waiting on the future it holds, not on a new one.
+		ExecutionException e = assertThrows(ExecutionException.class, () -> f.get(5, TimeUnit.SECONDS));
+		assertInstanceOf(java.util.concurrent.TimeoutException.class, e.getCause());
+	}
+
+	@Test
+	void completeOnTimeoutCompletesThisFuture() throws Exception {
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(Promise.promise()));
+		assertSame(f, f.completeOnTimeout("fallback", 200, TimeUnit.MILLISECONDS));
+		assertEquals("fallback", f.get(5, TimeUnit.SECONDS));
+	}
+
+	@Test
+	void aTimeoutDoesNotOverrideAnEarlierResult() throws Exception {
+		Promise<String> producer = Promise.promise();
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(producer))
+				.orTimeout(300, TimeUnit.MILLISECONDS);
+		producer.complete("in time");
+		assertEquals("in time", f.get(5, TimeUnit.SECONDS));
+		TimeUnit.MILLISECONDS.sleep(500);
+		assertEquals("in time", f.get());
+		assertFalse(f.isCompletedExceptionally());
+	}
+
+	@Test
+	void cancelCancelsTheFuture() throws Exception {
+		Promise<String> producer = Promise.promise();
+		ContextualFuture<String> f = ContextualFuture.of(pendingSource(producer));
+		CompletableFuture<String> dependent = f.thenApply(v -> v);
+
+		assertTrue(f.cancel(false));
+		assertTrue(f.isCancelled());
+		assertTrue(f.isDone());
+		assertThrows(java.util.concurrent.CancellationException.class, f::get);
+		assertThrows(java.util.concurrent.CancellationException.class, f::join);
+		ExecutionException e = assertThrows(ExecutionException.class, () -> dependent.get(5, TimeUnit.SECONDS));
+		assertInstanceOf(java.util.concurrent.CancellationException.class, e.getCause());
+
+		// Still cancelled after the operation behind it finishes; cancelling again reports so.
+		producer.complete("late");
+		assertTrue(f.isCancelled());
+		assertTrue(f.cancel(true));
+
+		// A future that already completed cannot be cancelled.
+		ContextualFuture<String> done = ContextualFuture.succeededFuture("done");
+		assertFalse(done.cancel(true));
+		assertFalse(done.isCancelled());
+		assertEquals("done", done.get());
+	}
+
+	@Test
+	void obtrudeReplacesTheResult() throws Exception {
+		ContextualFuture<String> f = ContextualFuture.succeededFuture("first");
+		f.obtrudeValue("second");
+		assertEquals("second", f.get());
+		assertEquals("second", f.join());
+
+		IllegalStateException failure = new IllegalStateException("third");
+		f.obtrudeException(failure);
+		assertTrue(f.isCompletedExceptionally());
+		ExecutionException e = assertThrows(ExecutionException.class, f::get);
+		assertSame(failure, e.getCause());
+	}
+
+	@Test
+	void composedStagesComeBackToTheSourceContext(Vertx vertx, VertxTestContext testContext) {
+		Context caller = vertx.getOrCreateContext();
+		Context other = vertx.getOrCreateContext();
+		caller.runOnContext(v -> {
+			// A source bound to the caller's context, as any future made on it is, and not a promise.
+			Promise<String> producer = ((ContextInternal) caller).promise();
+			ContextualFuture<String> f = ContextualFuture.of(producer.future().map(r -> r));
+
+			// The composed step finishes on another context - another component's, say - and the stage after
+			// it still runs on the caller's: the Vert.x contract that keeps a call on its caller's context.
+			f.thenCompose(r -> {
+				Promise<String> elsewhere = ((ContextInternal) other).promise();
+				other.runOnContext(x -> elsewhere.complete(r + " and back"));
+				return ContextualFuture.of(elsewhere.future().map(x -> x));
+			}).thenApply(r -> {
+				testContext.verify(() -> assertSame(caller, Vertx.currentContext(),
+						"the stage after the composed step runs on the caller's context"));
+				return r;
+			}).whenComplete((r, e) -> testContext.verify(() -> {
+				assertEquals("there and back", r);
+				testContext.completeNow();
+			}));
+
+			producer.complete("there");
 		});
 	}
 }
