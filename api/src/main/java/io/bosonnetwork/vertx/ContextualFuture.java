@@ -33,6 +33,8 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
@@ -45,8 +47,11 @@ import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.internal.FutureInternal;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullUnmarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * ContextualFuture is a {@link CompletableFuture}-compatible wrapper around Vert.x's {@link io.vertx.core.Future}.
@@ -59,6 +64,16 @@ import org.jspecify.annotations.NullUnmarked;
  *   <li>Optionally use blocking-style methods (e.g., {@link #get()}) outside the Vert.x event loop</li>
  * </ul>
  *
+ * <p>It honours the {@link CompletableFuture} contract for completing a future from outside:
+ * {@link #complete(Object)}, {@link #completeExceptionally(Throwable)}, {@link #orTimeout(long, TimeUnit)},
+ * {@link #completeOnTimeout(Object, long, TimeUnit)}, {@link #cancel(boolean)} and the {@code obtrude}
+ * methods all act on this future, whatever produces its result. Completing it that way - a timeout, a
+ * cancellation - does not stop the operation behind it; its result, when it comes, is ignored.
+ *
+ * <p>Dependent stages that are not {@code Async} run on the thread that completes the future: for an
+ * operation of the Vert.x runtime, typically an event loop. Callers outside Vert.x that do blocking work in
+ * them should use the {@code Async} variants with their own executor.
+ *
  * <p><strong>Note:</strong> Blocking methods like {@code get()} and {@code join()} must never be called on
  * Vert.x event loop or worker threads, as this will block the reactive runtime.
  *
@@ -67,28 +82,75 @@ import org.jspecify.annotations.NullUnmarked;
 
 @NullUnmarked
 public class ContextualFuture<T> extends CompletableFuture<T> implements java.util.concurrent.Future<T>, CompletionStage<T> {
+	// Completes the futures of orTimeout and completeOnTimeout. A single daemon thread that only
+	// completes futures; the dependent stages run where the future completes them, as for any completion.
+	private static final ScheduledThreadPoolExecutor delayer;
+	static {
+		delayer = new ScheduledThreadPoolExecutor(1, r -> {
+			Thread t = new Thread(r, "ContextualFuture-delayer");
+			t.setDaemon(true);
+			return t;
+		});
+		delayer.setRemoveOnCancelPolicy(true);
+	}
+
 	/**
-	 * The underlying Vert.x Future being wrapped.
+	 * The Vert.x Future holding this future's state: a promise this future owns, which the wrapped future
+	 * completes - so that the future can also be completed from outside, as a CompletableFuture can. Only
+	 * the obtrude methods replace it.
 	 */
-	final @NonNull Future<T> future;
+	volatile @NonNull Future<T> future;
+
+	// The exception this future was cancelled with, if it was. Dependent stages fail with it too, but are
+	// not themselves cancelled - as with CompletableFuture - so cancellation is recognised by identity.
+	private volatile @Nullable CancellationException cancellation;
 
 	/**
 	 * Wraps an existing Vert.x {@link Future} into a ContextualFuture.
 	 * Updates the internal state of this CompletableFuture whenever the Vert.x Future completes.
 	 *
-	 * @param future the Vert.x Future to wrap
+	 * @param source the Vert.x Future to wrap
 	 */
-	protected ContextualFuture(@NonNull Future<T> future) {
-		// Keep the original future (so a Promise-backed one stays completable via complete());
-		// register the state-sync handler for the inherited CompletableFuture machinery.
-		this.future = future;
-		future.andThen(ar -> {
+	protected ContextualFuture(@NonNull Future<T> source) {
+		Future<T> own;
+		if (source instanceof Promise<?>) {
+			// Already a promise: completing it from outside works as it is.
+			own = source;
+		} else {
+			// Anything else is completed by whatever produces it, and by nothing else. Own a promise it
+			// completes, so that complete(), cancel() and the timeouts can complete this future first; the
+			// source's result then arrives too late and is ignored. The promise is bound to the source's
+			// context, as the source is: dependent stages then run on that context, whichever thread
+			// completes the future - which is what keeps a call made on a context completing on it.
+			Promise<T> promise = promiseOn(source);
+			source.onComplete(ar -> {
+				if (ar.succeeded())
+					promise.tryComplete(ar.result());
+				else
+					promise.tryFail(ar.cause());
+			});
+			own = promise.future();
+		}
+
+		this.future = own;
+		own.andThen(ar -> {
 			// update the internal state of CompletableFuture
 			if (ar.succeeded())
 				super.complete(ar.result());
 			else
 				super.completeExceptionally(ar.cause());
 		});
+	}
+
+	// A promise bound to the context of the given future, if it has one.
+	@SuppressWarnings("unchecked")
+	private static <T> Promise<T> promiseOn(Future<T> future) {
+		if (future instanceof FutureInternal<?> internal) {
+			ContextInternal context = internal.context();
+			if (context != null)
+				return context.promise();
+		}
+		return Promise.promise();
 	}
 
 	/**
@@ -754,15 +816,30 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		return future;
 	}
 
+	/**
+	 * Cancels this future, if it is not complete yet: it completes exceptionally with a
+	 * {@link CancellationException}. As for a CompletableFuture, the operation that would have completed it
+	 * is not interrupted; its result, when it comes, is ignored.
+	 *
+	 * @param mayInterruptIfRunning ignored, as for a CompletableFuture
+	 * @return {@code true} if this future is now cancelled
+	 */
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		// not support cancel
-		return false;
+		CancellationException ce = new CancellationException();
+		Future<T> f = future;
+		if (f instanceof Promise<?> promise && promise.tryFail(ce)) {
+			cancellation = ce;
+			return true;
+		}
+		return isCancelled();
 	}
 
 	@Override
 	public boolean isCancelled() {
-		return false;
+		Future<T> f = future;
+		CancellationException ce = cancellation;
+		return ce != null && f.failed() && f.cause() == ce;
 	}
 
 	@Override
@@ -804,10 +881,13 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * {@link ExecutionException}. A complete Vert.x future is always either succeeded or failed.
 	 */
 	private T resultOrThrow() throws ExecutionException {
-		if (future.succeeded())
-			return future.result();
+		Future<T> f = future;
+		if (f.succeeded())
+			return f.result();
+		else if (isCancelled())
+			throw (CancellationException) f.cause();
 		else
-			throw new ExecutionException(future.cause());
+			throw new ExecutionException(f.cause());
 	}
 
 	/**
@@ -841,45 +921,38 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	public T join() {
 		try {
 			return get();
-		} catch (InterruptedException | ExecutionException e) {
+		} catch (ExecutionException e) {
+			// As CompletableFuture.join: the failure itself, wrapped once.
+			Throwable cause = e.getCause();
+			throw cause instanceof CompletionException ce ? ce : new CompletionException(cause);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 			throw new CompletionException(e);
 		}
 	}
 
 	@Override
 	public T getNow(T valueIfAbsent) {
-		if (future.isComplete()) {
-			if (future.succeeded()) {
-				return future.result();
-			} else {
-				Throwable cause = future.cause();
-				if (cause instanceof CompletionException ce) {
-					throw ce;
-				}
-				if (cause instanceof CancellationException ce) {
-					throw ce;
-				} else {
-					throw new CompletionException(cause);
-				}
-			}
-		} else {
+		Future<T> f = future;
+		if (!f.isComplete())
 			return valueIfAbsent;
-		}
+		if (f.succeeded())
+			return f.result();
+		if (isCancelled())
+			throw (CancellationException) f.cause();
+
+		Throwable cause = f.cause();
+		throw cause instanceof CompletionException ce ? ce : new CompletionException(cause);
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean complete(T value) {
-		// Only a Promise-backed (incomplete) future can be completed here; otherwise the underlying
-		// Vert.x future is controlled elsewhere, so report "not completed" rather than throwing.
-		// This relies on the Vert.x contract that Promise.promise().future() returns an object that
-		// is itself a Promise (true on Vert.x 4.x/5.x), so the instanceof check identifies the
-		// wrappers we created from a Promise (see succeededFuture/newIncompleteFuture/copy).
-		if (future instanceof Promise<?>) {
-			Promise<T> promise = (Promise<T>) future;
-			return promise.tryComplete(value);
-		} else
-			return false;
+		// The state is always a promise this future owns (see the constructor), unless an obtrude method
+		// replaced it with a completed future - which cannot be completed again. This relies on the Vert.x
+		// contract that Promise.promise().future() returns the promise itself (true on Vert.x 4.x/5.x).
+		Future<T> f = future;
+		return f instanceof Promise<?> promise && ((Promise<T>) promise).tryComplete(value);
 	}
 
 	@Override
@@ -898,41 +971,59 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	@Override
 	public boolean completeExceptionally(Throwable ex) {
 		Objects.requireNonNull(ex);
-		if (future instanceof Promise<?> promise)
-			return promise.tryFail(ex);
-		else
-			return false;
+		Future<T> f = future;
+		return f instanceof Promise<?> promise && promise.tryFail(ex);
 	}
 
+	/**
+	 * Completes this future with a {@link TimeoutException} if it is not complete within the given time,
+	 * and returns it, as CompletableFuture does. The operation behind it is not stopped.
+	 */
 	@Override
 	public @NonNull ContextualFuture<T> orTimeout(long timeout, @NonNull TimeUnit unit) {
 		Objects.requireNonNull(unit);
-		Future<T> f = future.timeout(timeout, unit);
-		return f == future ? this : of(f);
+		return completeAfter(timeout, unit, () -> completeExceptionally(new TimeoutException()));
 	}
 
+	/**
+	 * Completes this future with the given value if it is not complete within the given time, and returns
+	 * it, as CompletableFuture does. The operation behind it is not stopped.
+	 */
 	@Override
 	public @NonNull ContextualFuture<T> completeOnTimeout(T value, long timeout, @NonNull TimeUnit unit) {
 		Objects.requireNonNull(unit);
-
-		Future<T> f = future.timeout(timeout, unit).recover(e -> {
-			if (e instanceof TimeoutException)
-				return Future.succeededFuture(value);
-			else
-				return Future.failedFuture(e);
-		});
-
-		return of(f);
+		return completeAfter(timeout, unit, () -> complete(value));
 	}
 
+	// Runs the completion after the delay unless this future completes first, in which case the timer is
+	// dropped at once rather than kept until it would have fired.
+	private ContextualFuture<T> completeAfter(long timeout, TimeUnit unit, Runnable completion) {
+		if (!future.isComplete()) {
+			ScheduledFuture<?> timer = delayer.schedule(completion, timeout, unit);
+			future.onComplete(ar -> timer.cancel(false));
+		}
+		return this;
+	}
+
+	/**
+	 * Forcibly sets the result of this future, whether or not it is already complete, as CompletableFuture
+	 * does. Meant for error recovery; stages that already ran are not run again.
+	 */
 	@Override
 	public void obtrudeValue(T value) {
-		throw new UnsupportedOperationException();
+		future = Future.succeededFuture(value);
+		super.obtrudeValue(value);
 	}
 
+	/**
+	 * Forcibly makes this future fail, whether or not it is already complete, as CompletableFuture does.
+	 * Meant for error recovery; stages that already ran are not run again.
+	 */
 	@Override
 	public void obtrudeException(Throwable ex) {
-		throw new UnsupportedOperationException();
+		Objects.requireNonNull(ex);
+		future = Future.failedFuture(ex);
+		super.obtrudeException(ex);
 	}
 
 	@Override
