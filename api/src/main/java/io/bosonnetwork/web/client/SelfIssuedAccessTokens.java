@@ -78,8 +78,9 @@ public final class SelfIssuedAccessTokens implements AccessTokenSource {
 	private final Id subject;
 	private final @Nullable Id clientId;
 	private final String scope;
-	// The id of the node the tokens are for; a node accepts only tokens addressed to it. A supplier,
-	// because a client may have to ask the node for its id before it can issue its first token.
+	// The id of the service the tokens are for; a service accepts only tokens addressed to it. A
+	// supplier, because a client may have to ask the service for its id before it can issue its first
+	// token.
 	private final Supplier<Future<Id>> audience;
 	private final long lifetime;
 	private final Logger log;
@@ -245,28 +246,28 @@ public final class SelfIssuedAccessTokens implements AccessTokenSource {
 		}
 
 		/**
-		 * Sets the node the tokens are for (required), when its id is known.
+		 * Sets the service the tokens are for (required), when its id is known.
 		 *
-		 * @param nodeId the id of the node that will accept the tokens
+		 * @param audienceId the id of the service that will accept the tokens
 		 * @return this builder
 		 */
-		public Builder audience(Id nodeId) {
-			Objects.requireNonNull(nodeId, "nodeId");
-			Future<Id> resolved = Future.succeededFuture(nodeId);
+		public Builder audience(Id audienceId) {
+			Objects.requireNonNull(audienceId, "audienceId");
+			Future<Id> resolved = Future.succeededFuture(audienceId);
 			this.audience = () -> resolved;
 			return this;
 		}
 
 		/**
-		 * Sets how to find the node the tokens are for (required), when its id has to be looked up.
+		 * Sets how to find the service the tokens are for (required), when its id has to be looked up.
 		 * The supplier is called before every token is issued, so it is expected to answer from a
 		 * cache once it has an answer.
 		 *
-		 * @param nodeId supplies the id of the node that will accept the tokens
+		 * @param audienceId supplies the id of the service that will accept the tokens
 		 * @return this builder
 		 */
-		public Builder audience(Supplier<Future<Id>> nodeId) {
-			this.audience = Objects.requireNonNull(nodeId, "nodeId");
+		public Builder audience(Supplier<Future<Id>> audienceId) {
+			this.audience = Objects.requireNonNull(audienceId, "audienceId");
 			return this;
 		}
 
