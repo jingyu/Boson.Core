@@ -38,12 +38,19 @@ import org.jspecify.annotations.Nullable;
  * Note: the underlying stream may still invoke {@code endHandler}
  * after termination. Consumers should treat {@code exceptionHandler}
  * as the authoritative failure signal.
+ * <p>
+ * A terminated stream stays paused and refuses to be restarted, so that no further element can
+ * reach a consumer that has already failed. Whoever owns the wrapper releases the underlying stream
+ * with {@link #close()}, which detaches this wrapper and hands the stream back to its owner.
  */
 public class ObservableReadStream<T> implements ReadStream<T> {
 	private final ReadStream<T> delegate;
 	private final @Nullable Handler<T> observeHandler;
 	private volatile boolean terminated;
+	private volatile boolean ended;
+	private volatile boolean closed;
 	private @Nullable Handler<Throwable> exceptionHandler;
+	private @Nullable Handler<Void> endHandler;
 
 	/**
 	 * Constructs an ObservableReadStream that wraps a given ReadStream and observes each element
@@ -69,13 +76,15 @@ public class ObservableReadStream<T> implements ReadStream<T> {
 
 	@Override
 	public ObservableReadStream<T> handler(@Nullable Handler<T> handler) {
-		if (terminated)
-			return this;
-
+		// Unsetting the handler is always allowed: it stops delivery rather than resuming it, and a
+		// pipe unsets it as part of its own cleanup.
 		if (handler == null) {
 			delegate.handler(null);
 			return this;
 		}
+
+		if (terminated || closed)
+			return this;
 
 		delegate.handler(element -> {
 			if (observeHandler != null) {
@@ -105,21 +114,66 @@ public class ObservableReadStream<T> implements ReadStream<T> {
 
 	@Override
 	public ObservableReadStream<T> resume() {
-		if (!terminated)
+		if (!terminated && !closed)
 			delegate.resume();
 		return this;
 	}
 
 	@Override
 	public ObservableReadStream<T> fetch(long amount) {
-		if (!terminated)
+		if (!terminated && !closed)
 			delegate.fetch(amount);
 		return this;
 	}
 
 	@Override
 	public ObservableReadStream<T> endHandler(@Nullable Handler<Void> endHandler) {
-		delegate.endHandler(endHandler);
+		this.endHandler = endHandler;
+		// Wrapped rather than passed through, so that the wrapper knows whether the stream has
+		// ended - close() must not resume a stream that is already over.
+		delegate.endHandler(v -> {
+			ended = true;
+			Handler<Void> handler = this.endHandler;
+			if (handler != null)
+				handler.handle(v);
+		});
 		return this;
+	}
+
+	/**
+	 * Detaches this wrapper from the underlying stream and hands the stream back to its owner.
+	 * <p>
+	 * The handlers this wrapper installed are removed and the stream is resumed, unless it has
+	 * already ended. What is left is a flowing stream with no handler, whose remaining elements are
+	 * discarded and whose end still arrives - which for an HTTP request body is what releases the
+	 * connection, and for a peer's response is what lets the client reuse it.
+	 * <p>
+	 * This is the way out of a terminated stream. When the observer throws, the stream is paused and
+	 * refuses to resume, so that nothing further reaches the failed consumer; the pipe's own cleanup
+	 * cannot release it, and without this neither can anyone else. Whoever created the wrapper calls
+	 * this on its failure path, and then decides what the stream is for: reading the remainder away,
+	 * as here, or closing the resource underneath it.
+	 * <p>
+	 * Wrappers nest - one component measures a stream that another component has already wrapped -
+	 * and closing one closes those beneath it. Otherwise the stream would be released only as far as
+	 * the next wrapper down, which may itself be terminated and refusing to resume.
+	 * <p>
+	 * Calling it more than once does nothing. Modelled on {@code Pipe.close()}.
+	 */
+	public void close() {
+		if (closed)
+			return;
+
+		closed = true;
+		endHandler = null;
+		exceptionHandler = null;
+		delegate.handler(null);
+		delegate.exceptionHandler(null);
+		delegate.endHandler(null);
+
+		if (delegate instanceof ObservableReadStream<T> wrapped)
+			wrapped.close();
+		else if (!ended)
+			delegate.resume();
 	}
 }
