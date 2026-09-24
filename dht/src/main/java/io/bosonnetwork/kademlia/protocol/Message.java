@@ -25,6 +25,9 @@ package io.bosonnetwork.kademlia.protocol;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +60,7 @@ import io.bosonnetwork.json.JsonContext;
 import io.bosonnetwork.kademlia.KadNode;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 
-@JsonPropertyOrder({"y", "t", "q", "r", "e", "v"})
+@JsonPropertyOrder({"y", "t", "q", "r", "e", "o", "v"})
 @JsonDeserialize(using = Message.Deserializer.class)
 public class Message {
 	// The minimum size of message: 10 bytes
@@ -81,6 +84,12 @@ public class Message {
 	@JsonProperty("v")
 	@JsonInclude(JsonInclude.Include.NON_DEFAULT)
 	private final int version;
+
+	// On a reply (response or error): the address the request arrived from, as the replying node saw
+	// it. That is the requester's public endpoint when it sits behind NAT or an elastic address, which
+	// the requester cannot learn from its own socket. Null on requests, and on replies from nodes that
+	// predate the field.
+	private InetSocketAddress observed;
 
 	private RpcCall associatedCall;
 
@@ -362,6 +371,66 @@ public class Message {
 		return Version.toString(version);
 	}
 
+	/**
+	 * Returns the address the replying node saw this message's request arrive from.
+	 *
+	 * @return the observed endpoint, or {@code null} if the message does not carry one.
+	 */
+	public InetSocketAddress getObserved() {
+		return observed;
+	}
+
+	/**
+	 * Sets the address the request this message answers arrived from.
+	 *
+	 * @param observed the requester's endpoint as seen by this node, or {@code null} for none.
+	 * @return this message.
+	 */
+	public Message setObserved(InetSocketAddress observed) {
+		this.observed = observed;
+		return this;
+	}
+
+	/**
+	 * The observed endpoint in its wire form: the address bytes followed by the port, big-endian - 6
+	 * bytes for IPv4, 18 for IPv6. Nine and twenty-one bytes on the wire with the key.
+	 */
+	@JsonProperty("o")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	protected byte[] getObservedBytes() {
+		if (observed == null || observed.getAddress() == null)
+			return null;
+
+		byte[] ip = observed.getAddress().getAddress();
+		return ByteBuffer.allocate(ip.length + 2).put(ip).putShort((short) observed.getPort()).array();
+	}
+
+	/**
+	 * Decodes the wire form of an observed endpoint, without any name lookup.
+	 * <p>
+	 * A malformed value yields {@code null} rather than failing the message: the field is a hint that
+	 * rides on a reply, and the reply itself is still good. Only the vote is lost.
+	 * </p>
+	 *
+	 * @param bytes the wire form.
+	 * @return the endpoint, or {@code null} if the bytes are not one.
+	 */
+	static InetSocketAddress decodeObserved(byte[] bytes) {
+		if (bytes == null || (bytes.length != 6 && bytes.length != 18))
+			return null;
+
+		int port = ((bytes[bytes.length - 2] & 0xff) << 8) | (bytes[bytes.length - 1] & 0xff);
+		if (port == 0)
+			return null;
+
+		try {
+			byte[] ip = Arrays.copyOf(bytes, bytes.length - 2);
+			return new InetSocketAddress(InetAddress.getByAddress(ip), port);
+		} catch (UnknownHostException e) {
+			return null; // unreachable: getByAddress only rejects lengths other than 4 and 16
+		}
+	}
+
 	public Message setAssociatedCall(RpcCall associatedCall) {
 		this.associatedCall = associatedCall;
 		return this;
@@ -388,6 +457,21 @@ public class Message {
 		return remoteAddress.port();
 	}
 
+	/**
+	 * Returns the remote endpoint as a resolved socket address, without parsing or looking up a name.
+	 *
+	 * @return the remote address and port, or {@code null} if there is no remote address or it is a host
+	 *         name rather than an address. Never the wildcard address, which is what
+	 *         {@code new InetSocketAddress((InetAddress) null, port)} would silently produce.
+	 */
+	public InetSocketAddress getRemoteSocketAddress() {
+		if (remoteAddress == null)
+			return null;
+
+		InetAddress ip = getRemoteIpAddress();
+		return ip != null ? new InetSocketAddress(ip, remoteAddress.port()) : null;
+	}
+
 	public Message setRemote(Id id, SocketAddress address) {
 		this.remoteId = id;
 		this.remoteAddress = address;
@@ -408,7 +492,7 @@ public class Message {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, type, method, txid, body, version);
+		return Objects.hash(id, type, method, txid, body, version, observed);
 	}
 
 	@Override
@@ -422,7 +506,8 @@ public class Message {
 					&& method == that.method
 					&& txid == that.txid
 					&& Objects.equals(body, that.body)
-					&& version == that.version;
+					&& version == that.version
+					&& Objects.equals(observed, that.observed);
 
 		return false;
 	}
@@ -536,6 +621,9 @@ public class Message {
 
 		if (version != 0)
 			repr.append(", version: ").append(Version.toString(version));
+
+		if (observed != null)
+			repr.append(", observed: ").append(observed.getAddress().getHostAddress()).append(':').append(observed.getPort());
 
 		if (remoteId != null && remoteAddress != null) {
 			if (remoteId.equals(id))
@@ -669,6 +757,28 @@ public class Message {
 		return new Message(Type.ERROR, method, txid, new Error(code, message));
 	}
 
+	/**
+	 * Reads an observed endpoint from the parser, whatever shape the value turns out to have.
+	 *
+	 * @param p the parser, positioned on the value.
+	 * @return the endpoint, or {@code null} if the value is not one.
+	 * @throws IOException if the input cannot be read at all.
+	 */
+	private static InetSocketAddress readObserved(JsonParser p) throws IOException {
+		JsonToken token = p.currentToken();
+		if (token == JsonToken.VALUE_EMBEDDED_OBJECT || token == JsonToken.VALUE_STRING) {
+			try {
+				return decodeObserved(p.getBinaryValue());
+			} catch (IOException e) {
+				return null; // not binary after all: the same as malformed
+			}
+		}
+
+		// Any other shape is malformed too, and must still be consumed whole.
+		p.skipChildren();
+		return null;
+	}
+
 	static class Deserializer extends StdDeserializer<Message> {
 		private static final long serialVersionUID = -46020275686127311L;
 
@@ -694,6 +804,7 @@ public class Message {
 
 			Body body = null;
 			Class<?> bodyClass = null;
+			InetSocketAddress observed = null;
 
 			while (p.nextToken() != JsonToken.END_OBJECT) {
 				String fieldName = p.currentName();
@@ -743,6 +854,11 @@ public class Message {
 						version = p.getIntValue();
 						break;
 
+					case "o":
+						// Only a reply carries it; on anything else it is ignored rather than trusted.
+						observed = readObserved(p);
+						break;
+
 					default:
 						p.skipChildren();
 				}
@@ -764,7 +880,11 @@ public class Message {
 				ctxt.reportInputMismatch(Message.class, "Missing '" + type.bodyFieldName()
 						+ "' body for " + method + " " + type + " message");
 
-			return new Message(type, method, txid, body, version);
+			Message message = new Message(type, method, txid, body, version);
+			if (type != Type.REQUEST)
+				message.setObserved(observed);
+
+			return message;
 		}
 	}
 }

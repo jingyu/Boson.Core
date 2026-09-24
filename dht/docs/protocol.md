@@ -25,11 +25,29 @@ Every message is a top-level map/object with the following fields.
 | **`q`** | Request Body | `Object` | `Map` | Conditional | Present only in **Request** messages. |
 | **`r`** | Response Body | `Object` | `Map` | Conditional | Present only in **Response** messages. |
 | **`e`** | Error Body | `Object` | `Map` | Conditional | Present only in **Error** messages. |
+| **`o`** | Observed endpoint | `String` (Base64) | `Binary` | No | On replies (responses and errors) only: the endpoint the request arrived from, as the replying node saw it - address bytes then port, big-endian; 6 bytes for IPv4, 18 for IPv6. See [Observed endpoint](#observed-endpoint). |
 | **`v`** | Version | `Number` | `i32`, non-negative | No | Node software version. Omitted when zero. The top two bytes are the ASCII software name, so the value never exceeds `0x7EFFFFFF`. |
 
 > **Note:** The `y` field **must** appear before `q`, `r`, or `e` in the encoded stream. The deserializer uses `y` to select the body class before reading the body field.
 
 The sender's node ID is **not** included in the wire message. It is resolved from the network context (source IP/port matched to the routing table) on the receiving side.
+
+### Observed endpoint
+
+A node cannot learn its public endpoint from its own socket: behind NAT, or on a cloud host with an elastic or floating address, the address it binds is not the one the Internet reaches it by, and behind NAT the port is mapped as well. So every reply tells the requester what it looked like from outside: a node replying to a request **SHOULD** set `o` to the source address and port the request arrived from.
+
+It is a top-level field rather than a body field because PING, STORE_VALUE and ANNOUNCE_PEER responses have no body, and a receiver rejects any body on them. An unknown top-level key is skipped, so a node that predates the field ignores it. A receiver **MUST** ignore `o` on a request, and **SHOULD** treat a malformed `o` - wrong length, zero port, not binary - as absent rather than reject the reply.
+
+A single report is only a claim. A receiver:
+
+- takes a report only from a reply that answered one of its own requests, by transaction id, from the address and under the node id the request went to;
+- ignores an endpoint that is not an address of its own family, or not globally routable (any unicast address in developer mode);
+- counts each reporter's latest report only, reporters grouped by [source unit](#source-units) (by address and port in developer mode), and drops reports older than 10 minutes;
+- believes an endpoint once 3 reporters agree on it, and replaces a believed endpoint only with one that is agreed on and has more reporters.
+
+Reporters that agree on the address but each report a different port indicate a NAT that maps a port per destination: such a node has no stable public endpoint, and nodes it has not contacted first cannot reach it.
+
+A node that has no believed endpoint and binds an address a receiver would not accept as a lookup candidate does not list itself in `n4`/`n6`.
 
 ### Message Type & Method Encoding (`y`)
 

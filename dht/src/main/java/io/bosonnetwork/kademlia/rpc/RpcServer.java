@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.kademlia.rpc;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -269,6 +270,12 @@ public class RpcServer implements Measured {
 
 	/** Handler for identity churn at a known endpoint, null if not set. */
 	private BiConsumer<NodeInfo, Boolean> churnHandler;
+
+	/**
+	 * Handler for the endpoint a replying node saw our request come from, null if not set. Takes the
+	 * replying node's address and the endpoint it reported.
+	 */
+	private BiConsumer<InetSocketAddress, InetSocketAddress> observedEndpointHandler;
 
 	/** Server start time in milliseconds, or -1 if not started. */
 	private long startTime;
@@ -588,6 +595,22 @@ public class RpcServer implements Measured {
 	 */
 	public void setChurnHandler(BiConsumer<NodeInfo, Boolean> churnHandler) {
 		this.churnHandler = churnHandler;
+	}
+
+	/**
+	 * Sets the handler for the endpoint a replying node saw our request come from.
+	 * <p>
+	 * Called only for a reply that answers a call of ours by transaction id, from the address the call
+	 * went to, under the id it went to - so the report is that node's own, and nobody can aim one at us
+	 * on its behalf. Replies that fail any of those checks, and replies from nodes that do not report,
+	 * are not passed on.
+	 * </p>
+	 *
+	 * @param observedEndpointHandler the handler, taking the replying node's address and the endpoint
+	 *                                it reported.
+	 */
+	public void setObservedEndpointHandler(BiConsumer<InetSocketAddress, InetSocketAddress> observedEndpointHandler) {
+		this.observedEndpointHandler = observedEndpointHandler;
 	}
 
 	/**
@@ -923,6 +946,14 @@ public class RpcServer implements Measured {
 
 						// Remove call to prevent timeout race, defense against timeout race
 						if (pendingCalls.remove(message.getTxid(), call)) {
+							// Proven: our transaction id, from the address and under the id the call went to.
+							// The one place a reply's report of our endpoint can be taken as its own.
+							// The reporter is the packet's source - the same endpoint as the call's target, as
+							// sameEndpoint above established - and never null off the wire.
+							InetSocketAddress reporter = message.getRemoteSocketAddress();
+							if (observedEndpointHandler != null && message.getObserved() != null && reporter != null)
+								observedEndpointHandler.accept(reporter, message.getObserved());
+
 							call.respond(message);
 
 							if (messageHandler != null)
@@ -1200,6 +1231,13 @@ public class RpcServer implements Measured {
 	public Future<Void> sendMessage(Message message) {
 		message.setId(identity.getId());
 
+		// Every reply tells the requester the endpoint its request came from - which, behind NAT or an
+		// elastic address, it has no other way to learn. Set here rather than where replies are built so
+		// that none is missed; the error substituted for an oversized response copies it from the reply
+		// it replaces (see tooBigToSend).
+		if (!message.isRequest() && message.getObserved() == null)
+			message.setObserved(message.getRemoteSocketAddress());
+
 		// Serialization and encryption go to a worker for the same reason the receive side does - see
 		// handlePacket for the measurements and the reasoning behind the extra context switch. The send
 		// side is cheaper than the receive side but still well above the handoff: 0.86 us inline for a
@@ -1351,6 +1389,10 @@ public class RpcServer implements Measured {
 		Message error = Message.error(message.getMethod(), message.getTxid(), cause.getCode(), cause.getMessage());
 		error.setRemote(message.getRemoteId(), message.getRemoteAddress());
 		error.setId(identity.getId());
+
+		// The substitute is what goes out in place of the reply, so it carries the reply's report of the
+		// requester's endpoint - set by sendMessage on the original, which is never sent.
+		error.setObserved(message.getObserved());
 		return error;
 	}
 

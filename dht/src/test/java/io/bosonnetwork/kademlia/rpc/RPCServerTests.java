@@ -30,11 +30,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -689,6 +691,72 @@ public class RPCServerTests {
 			});
 
 			context.completeNow();
+		}));
+	}
+
+	/**
+	 * Every reply tells the requester where its request came from, and the requester takes the report
+	 * only from a reply it can vouch for - both halves of how a node learns its own public endpoint.
+	 * On one host there is no NAT, so the endpoint reported is the one the requester binds.
+	 */
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	public void testRepliesReportTheRequestersEndpoint(Vertx vertx, VertxTestContext context) {
+		TestNode node1 = new TestNode(localAddr, 8890);
+		TestNode node2 = new TestNode(localAddr, 8891);
+		List<InetSocketAddress[]> reports = new CopyOnWriteArrayList<>();
+
+		Future.all(vertx.deployVerticle(node1), vertx.deployVerticle(node2)).compose(unused -> {
+			node1.rpcServer.setObservedEndpointHandler((reporter, observed) ->
+					reports.add(new InetSocketAddress[] { reporter, observed }));
+
+			// A response, and an error: node2 answers an unknown method with one.
+			node1.sendCall(new RpcCall(node2.getNodeInfo(), Message.pingRequest()));
+			node1.sendCall(new RpcCall(node2.getNodeInfo(),
+					Message.message(Message.Type.REQUEST, Message.Method.UNKNOWN, 0x7FFF0123, null)));
+
+			Promise<Void> settled = Promise.promise();
+			vertx.setTimer(1500, id -> settled.complete());
+			return settled.future();
+		}).onComplete(context.succeeding(unused -> {
+			context.verify(() -> {
+				assertEquals(2, reports.size(), "one report per reply, the error included");
+				for (InetSocketAddress[] report : reports) {
+					assertEquals(new InetSocketAddress(localAddr, 8891), report[0], "the reporter is the node that replied");
+					assertEquals(new InetSocketAddress(localAddr, 8890), report[1], "and it saw us where we are");
+				}
+			});
+
+			Future.all(vertx.undeploy(node1.deploymentID()), vertx.undeploy(node2.deploymentID()))
+					.onComplete(ar -> context.completeNow());
+		}));
+	}
+
+	/**
+	 * A reply that fails the checks - here, one answering with the wrong method - is misbehavior, and its
+	 * report of our endpoint is not taken.
+	 */
+	@Test
+	@Timeout(value = 30, timeUnit = TimeUnit.SECONDS)
+	public void testMisbehavingRepliesReportNothing(Vertx vertx, VertxTestContext context) {
+		TestNode node1 = new TestNode(localAddr, 8892);
+		TestNode node2 = new TestNode(localAddr, 8893);
+		node2.setSimulateWrongMethod(true);
+		AtomicInteger reports = new AtomicInteger();
+
+		Future.all(vertx.deployVerticle(node1), vertx.deployVerticle(node2)).compose(unused -> {
+			node1.rpcServer.setObservedEndpointHandler((reporter, observed) -> reports.incrementAndGet());
+			for (int i = 0; i < 5; i++)
+				node1.sendCall(new RpcCall(node2.getNodeInfo(), Message.pingRequest()));
+
+			Promise<Void> settled = Promise.promise();
+			vertx.setTimer(1500, id -> settled.complete());
+			return settled.future();
+		}).onComplete(context.succeeding(unused -> {
+			context.verify(() -> assertEquals(0, reports.get()));
+
+			Future.all(vertx.undeploy(node1.deploymentID()), vertx.undeploy(node2.deploymentID()))
+					.onComplete(ar -> context.completeNow());
 		}));
 	}
 

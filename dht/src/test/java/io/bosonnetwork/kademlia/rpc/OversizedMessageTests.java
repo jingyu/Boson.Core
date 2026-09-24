@@ -219,6 +219,8 @@ public class OversizedMessageTests {
 							"the error code the protocol reserves for this must be the one that is sent");
 					assertEquals(Message.Method.FIND_NODE, response.getMethod(),
 							"the substitute answers the request it replaces, or it is discarded as a wrong-method reply");
+					assertEquals(node1.nodeInfo.getAddress(), response.getObserved(),
+							"the substitute goes out in place of the reply, so it carries the reply's report of the requester");
 
 					// The round trip in full: the requester gets the typed exception back, not a bare
 					// code it would have to compare by hand.
