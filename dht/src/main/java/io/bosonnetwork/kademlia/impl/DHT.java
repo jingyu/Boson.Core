@@ -114,6 +114,9 @@ public class DHT extends BosonVerticle {
 	// When a change of public endpoint was last announced with a self-lookup, in epoch milliseconds;
 	// see announceEndpointChange. Confined to this DHT's context.
 	private long lastEndpointAnnouncement;
+	// The last public endpoint agreed on - kept when it is lost, since peers may still hold it; see
+	// shouldAnnounceEndpointChange. Confined to this DHT's context.
+	private @Nullable InetSocketAddress lastAgreedEndpoint;
 	// This node as the network reaches it: the agreed public endpoint once there is one, the bound
 	// address until then. Written on this DHT's context, read from any thread through getNodeInfo().
 	private volatile NodeInfo nodeInfo;
@@ -2199,9 +2202,19 @@ public class DHT extends BosonVerticle {
 							AddressUtils.toString(boundNodeInfo.getAddress()));
 
 					long now = System.currentTimeMillis();
-					if (shouldAnnounceEndpointChange(previous, now))
+					if (shouldAnnounceEndpointChange(endpoint, now))
 						announceEndpointChange(now);
+					lastAgreedEndpoint = endpoint;
 				}
+			}
+			case LOST -> {
+				// Back to what we bind, which a node behind NAT does not hand out: the lost endpoint no longer
+				// reaches us, and an endpoint nobody can use is worse than none.
+				NodeInfo previous = nodeInfo;
+				nodeInfo = boundNodeInfo;
+				log.warn("DHT {}:{} public endpoint {} is no longer seen by the nodes it contacts, which see it "
+						+ "elsewhere and not at any one endpoint: the NAT in front of it has changed", network,
+						identity.getId(), AddressUtils.toString(previous.getAddress()));
 			}
 			case PORTS_DISAGREE -> log.warn("DHT {}:{} is seen at one address but a different port by each node it "
 					+ "contacts: the NAT maps a port per destination, so nodes that have not heard from this one "
@@ -2213,20 +2226,23 @@ public class DHT extends BosonVerticle {
 	/**
 	 * Whether a change of public endpoint is worth a self-lookup now.
 	 * <p>
-	 * Only a move from one agreed endpoint to another: the first agreement tells peers nothing they did not
+	 * Only a move away from an endpoint agreed on before - whether it is still current or was lost in
+	 * between, since peers may hold it either way. The first agreement tells peers nothing they did not
 	 * already have - they learned us from our packets, which carried that endpoint all along - and it
-	 * comes straight after the startup bootstrap anyway. And at most once per
+	 * comes straight after the startup bootstrap anyway. Nor does agreeing again on the endpoint that was
+	 * lost: what peers hold is then right again. And at most once per
 	 * {@link KadConstants#BOOTSTRAP_INTERVAL}, so an endpoint that flips between two - a host egressing
 	 * through either of two addresses - cannot turn into a stream of lookups. A change the limit skips is
 	 * announced by the periodic self-lookup in its time.
 	 * </p>
 	 *
-	 * @param previous the node's info before the change.
+	 * @param endpoint the endpoint just agreed on.
 	 * @param now      the current time, in epoch milliseconds.
 	 * @return true if the change should be announced.
 	 */
-	boolean shouldAnnounceEndpointChange(NodeInfo previous, long now) {
-		return previous != boundNodeInfo && now - lastEndpointAnnouncement >= KadConstants.BOOTSTRAP_INTERVAL;
+	boolean shouldAnnounceEndpointChange(InetSocketAddress endpoint, long now) {
+		return lastAgreedEndpoint != null && !lastAgreedEndpoint.equals(endpoint) &&
+				now - lastEndpointAnnouncement >= KadConstants.BOOTSTRAP_INTERVAL;
 	}
 
 	/**

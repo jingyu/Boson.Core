@@ -55,6 +55,13 @@ import io.bosonnetwork.utils.AddressUtils;
  * stray report cannot make it flap.
  * </p>
  * <p>
+ * An agreed endpoint is also given up when it goes stale against evidence: none of its reports is left in
+ * the window, while at least as many reporters as agreement takes have reported something else. That is
+ * a NAT that has changed behaviour under a running node - replaced, or now mapping a port per
+ * destination - and the endpoint it gave out no longer works. Silence alone is not evidence: a node that
+ * hears no reports at all keeps its endpoint.
+ * </p>
+ * <p>
  * A NAT that maps a different port for every destination shows up as reporters agreeing on the address
  * but not on the port. No endpoint is ever agreed on then, which is the truth - such a node cannot be
  * reached by a node it has not contacted first - and {@link #report} says so once, so it can be logged.
@@ -70,6 +77,8 @@ final class PublicEndpointTracker {
 		NONE,
 		/** A new public endpoint was agreed on; {@link #current()} returns it. */
 		CHANGED,
+		/** The agreed endpoint went stale against reporters seeing something else; there is none now. */
+		LOST,
 		/** Reporters agree on the address but not on the port - reported once. */
 		PORTS_DISAGREE
 	}
@@ -78,10 +87,10 @@ final class PublicEndpointTracker {
 	 * One change of public endpoint.
 	 *
 	 * @param from the endpoint before, or {@code null} if there was none.
-	 * @param to   the endpoint after.
+	 * @param to   the endpoint after, or {@code null} if it was lost.
 	 * @param at   when it changed, in epoch milliseconds.
 	 */
-	record Change(@Nullable InetSocketAddress from, InetSocketAddress to, long at) { }
+	record Change(@Nullable InetSocketAddress from, @Nullable InetSocketAddress to, long at) { }
 
 	private record Report(InetSocketAddress endpoint, long at) { }
 
@@ -216,13 +225,18 @@ final class PublicEndpointTracker {
 
 		int currentCount = current == null ? 0 : byEndpoint.getOrDefault(current, 0);
 		if (leader != null && leaderCount >= minReporters && !leader.equals(current) && leaderCount > currentCount) {
-			history.addLast(new Change(current, leader, now));
-			while (history.size() > historySize)
-				history.removeFirst();
-
-			current = leader;
-			portsDisagreeReported = false;
+			record(leader, now);
 			return Outcome.CHANGED;
+		}
+
+		// Stale against evidence: not one fresh report for the agreed endpoint, and enough reporters to have
+		// agreed on it all saying otherwise - just not on any one endpoint, or the branch above would have
+		// taken it. Every report left is fresh after expire(), and none is for the current endpoint, so the
+		// map's size is the count of reporters seeing something else. The port check below gets its turn on
+		// the next report, now that there is no current endpoint to hide it.
+		if (current != null && currentCount == 0 && reports.size() >= minReporters) {
+			record(null, now);
+			return Outcome.LOST;
 		}
 
 		// Enough reporters for agreement, all on one address, and still none on one endpoint: the port is
@@ -237,6 +251,15 @@ final class PublicEndpointTracker {
 		}
 
 		return Outcome.NONE;
+	}
+
+	private void record(@Nullable InetSocketAddress endpoint, long now) {
+		history.addLast(new Change(current, endpoint, now));
+		while (history.size() > historySize)
+			history.removeFirst();
+
+		current = endpoint;
+		portsDisagreeReported = false;
 	}
 
 	/**
