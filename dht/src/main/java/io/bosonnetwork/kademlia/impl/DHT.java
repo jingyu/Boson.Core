@@ -111,6 +111,9 @@ public class DHT extends BosonVerticle {
 	// Whether replies' reports of our endpoint are still taken; see onObservedEndpoint. Confined to this
 	// DHT's context.
 	private boolean trackingPublicEndpoint = true;
+	// When a change of public endpoint was last announced with a self-lookup, in epoch milliseconds;
+	// see announceEndpointChange. Confined to this DHT's context.
+	private long lastEndpointAnnouncement;
 	// This node as the network reaches it: the agreed public endpoint once there is one, the bound
 	// address until then. Written on this DHT's context, read from any thread through getNodeInfo().
 	private volatile NodeInfo nodeInfo;
@@ -2194,6 +2197,10 @@ public class DHT extends BosonVerticle {
 					log.info("DHT {}:{} public endpoint is now {} (was {}; bound to {})", network, identity.getId(),
 							AddressUtils.toString(endpoint), AddressUtils.toString(previous.getAddress()),
 							AddressUtils.toString(boundNodeInfo.getAddress()));
+
+					long now = System.currentTimeMillis();
+					if (shouldAnnounceEndpointChange(previous, now))
+						announceEndpointChange(now);
 				}
 			}
 			case PORTS_DISAGREE -> log.warn("DHT {}:{} is seen at one address but a different port by each node it "
@@ -2201,6 +2208,54 @@ public class DHT extends BosonVerticle {
 					+ "cannot reach it", network, identity.getId());
 			case NONE -> { }
 		}
+	}
+
+	/**
+	 * Whether a change of public endpoint is worth a self-lookup now.
+	 * <p>
+	 * Only a move from one agreed endpoint to another: the first agreement tells peers nothing they did not
+	 * already have - they learned us from our packets, which carried that endpoint all along - and it
+	 * comes straight after the startup bootstrap anyway. And at most once per
+	 * {@link KadConstants#BOOTSTRAP_INTERVAL}, so an endpoint that flips between two - a host egressing
+	 * through either of two addresses - cannot turn into a stream of lookups. A change the limit skips is
+	 * announced by the periodic self-lookup in its time.
+	 * </p>
+	 *
+	 * @param previous the node's info before the change.
+	 * @param now      the current time, in epoch milliseconds.
+	 * @return true if the change should be announced.
+	 */
+	boolean shouldAnnounceEndpointChange(NodeInfo previous, long now) {
+		return previous != boundNodeInfo && now - lastEndpointAnnouncement >= KadConstants.BOOTSTRAP_INTERVAL;
+	}
+
+	/**
+	 * Announces a changed public endpoint by looking up our own id - the home-bucket half of a bootstrap,
+	 * without the per-bucket refresh that makes a full one expensive.
+	 * <p>
+	 * The nodes nearest our id are the ones other nodes ask about us, and they hold our old address. A
+	 * lookup of our own id reaches exactly them, from the new address, and each one then demotes its stale
+	 * entry at once: it stops handing the dead address out, and retires the entry after two failed pings,
+	 * after which the next contact installs the new one (see {@link #onChurn} and the address-change
+	 * handling in {@code received}). It does not make them adopt the new address directly; that is refused
+	 * by design, since an authenticated packet can be relayed by whoever captures it. What it saves is
+	 * waiting for {@link KadConstants#SELF_LOOKUP_INTERVAL}, or for whenever we next happen to contact them.
+	 * </p>
+	 * <p>
+	 * Deliberately not a bootstrap: {@code lastBootstrap} is left alone, so the periodic schedule and its
+	 * quiet period are unaffected, and an announcement cannot be cancelled by a bootstrap in progress
+	 * stamping it on completion.
+	 * </p>
+	 *
+	 * @param now the current time, in epoch milliseconds.
+	 */
+	private void announceEndpointChange(long now) {
+		// Stamped whether or not the task is queued: dispatchTask only refuses when this DHT is stopping,
+		// and then nothing is left for the stamp to limit.
+		lastEndpointAnnouncement = now;
+		NodeLookupTask task = new NodeLookupTask(kadContext, identity.getId())
+				.setName("Announcing a changed public endpoint");
+		dispatchTask(task);
 	}
 
 	/**
