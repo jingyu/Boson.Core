@@ -43,7 +43,8 @@ A single report is only a claim. A receiver:
 - takes a report only from a reply that answered one of its own requests, by transaction id, from the address and under the node id the request went to;
 - ignores an endpoint that is not an address of its own family, or not globally routable (any unicast address in developer mode);
 - counts each reporter's latest report only, reporters grouped by [source unit](#source-units) (by address and port in developer mode), and drops reports older than 10 minutes;
-- believes an endpoint once 3 reporters agree on it, and replaces a believed endpoint only with one that is agreed on and has more reporters.
+- believes an endpoint once 3 reporters agree on it, and replaces a believed endpoint only with one that is agreed on and has more reporters;
+- gives a believed endpoint up when none of its reports is left in the window while at least 3 reporters have reported something else - a NAT that changed behaviour under a running node. Silence alone is not evidence: a node that hears no reports keeps its endpoint.
 
 Reporters that agree on the address but each report a different port indicate a NAT that maps a port per destination: such a node has no stable public endpoint, and nodes it has not contacted first cannot reach it.
 

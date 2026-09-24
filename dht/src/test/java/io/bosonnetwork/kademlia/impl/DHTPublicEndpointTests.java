@@ -147,10 +147,10 @@ public class DHTPublicEndpointTests {
 		// changes nothing for them, and must not spend the announcement budget.
 		DHT dht = dht("10.0.0.10", false);
 		long now = System.currentTimeMillis();
-		assertFalse(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now), "no agreed endpoint to move from");
+		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now), "no agreed endpoint to move from");
 
 		agreeOn(dht, PUBLIC);
-		assertTrue(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now),
+		assertTrue(dht.shouldAnnounceEndpointChange(ELSEWHERE, now),
 				"a move from the agreed endpoint would be announced, and nothing has been yet");
 	}
 
@@ -163,9 +163,41 @@ public class DHTPublicEndpointTests {
 		agreeOn(dht, ELSEWHERE, 1, 3);  // a real move: announced
 		assertEquals(ELSEWHERE, dht.getNodeInfo().getAddress());
 
+		// Moving back is a change like any other - held back only by the limit.
 		long now = System.currentTimeMillis();
-		assertFalse(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now));
-		assertTrue(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now + KadConstants.BOOTSTRAP_INTERVAL + 1));
+		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now));
+		assertTrue(dht.shouldAnnounceEndpointChange(PUBLIC, now + KadConstants.BOOTSTRAP_INTERVAL + 1));
+	}
+
+	@Test
+	void aLostEndpointStopsBeingHandedOut() {
+		// The NAT in front of a running node starts mapping a port per destination: the same reporters now
+		// each see a different port, and the endpoint it had is gone.
+		DHT dht = dht("10.0.0.10", false);
+		agreeOn(dht, PUBLIC);
+		assertEquals(List.of(dht.getNodeInfo()), answer(dht));
+
+		for (int i = 1; i <= 3; i++)
+			dht.onObservedEndpoint(new InetSocketAddress("64.227.0." + i, 39001),
+					new InetSocketAddress(PUBLIC.getAddress(), 50000 + i));
+
+		assertEquals("10.0.0.10", dht.getNodeInfo().getHost(), "back to what it binds");
+		assertTrue(answer(dht).isEmpty(), "and so handing out nothing, as before the endpoint was agreed");
+	}
+
+	@Test
+	void aNewEndpointAfterALossIsAnnouncedButTheLostOneAgainIsNot() {
+		DHT dht = dht("10.0.0.10", false);
+		agreeOn(dht, PUBLIC);
+		for (int i = 1; i <= 3; i++)
+			dht.onObservedEndpoint(new InetSocketAddress("64.227.0." + i, 39001),
+					new InetSocketAddress(PUBLIC.getAddress(), 50000 + i));
+
+		// Peers near our id may still hold the lost endpoint, so a new one is worth telling them about;
+		// the lost one agreed again is what they hold already.
+		long now = System.currentTimeMillis();
+		assertTrue(dht.shouldAnnounceEndpointChange(ELSEWHERE, now));
+		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now));
 	}
 
 	@Test

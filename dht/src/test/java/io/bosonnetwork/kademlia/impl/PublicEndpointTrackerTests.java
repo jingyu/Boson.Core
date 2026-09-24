@@ -179,6 +179,55 @@ public class PublicEndpointTrackerTests {
 	}
 
 	@Test
+	void anEndpointGoneStaleAgainstEvidenceIsLostAndThePortsAreThenReported() {
+		// The NAT under a running node is replaced by one mapping a port per destination: the agreed
+		// endpoint's reports age out, and the nodes contacted since each see a different port.
+		PublicEndpointTracker tracker = tracker();
+		for (int i = 1; i <= 3; i++)
+			tracker.report(reporter(i), PUBLIC, T0);
+
+		long later = T0 + WINDOW + 1;
+		assertEquals(Outcome.NONE, tracker.report(reporter(4), endpoint("155.138.245.211", 50004), later));
+		assertEquals(Outcome.NONE, tracker.report(reporter(5), endpoint("155.138.245.211", 50005), later));
+		assertEquals(Outcome.LOST, tracker.report(reporter(6), endpoint("155.138.245.211", 50006), later));
+		assertNull(tracker.current());
+
+		List<PublicEndpointTracker.Change> history = tracker.history();
+		assertEquals(PUBLIC, history.get(history.size() - 1).from());
+		assertNull(history.get(history.size() - 1).to());
+
+		// With no endpoint to hide it any more, the reason is told.
+		assertEquals(Outcome.PORTS_DISAGREE, tracker.report(reporter(7), endpoint("155.138.245.211", 50007), later));
+	}
+
+	@Test
+	void silenceIsNoEvidenceAgainstAnEndpoint() {
+		// A node that hears next to nothing - offline, deaf - keeps what it had: its reports aging out says
+		// nothing about where it is, and fewer dissenters than agreement takes are not evidence either.
+		PublicEndpointTracker tracker = tracker();
+		for (int i = 1; i <= 3; i++)
+			tracker.report(reporter(i), PUBLIC, T0);
+
+		long later = T0 + WINDOW + 1;
+		assertEquals(Outcome.NONE, tracker.report(reporter(4), MOVED, later));
+		assertEquals(Outcome.NONE, tracker.report(reporter(5), endpoint("64.227.9.9", 39001), later));
+		assertEquals(PUBLIC, tracker.current());
+	}
+
+	@Test
+	void oneFreshReportKeepsAnEndpoint() {
+		// Dissent is not staleness: while anyone still sees the endpoint, scattered reports elsewhere do not
+		// retire it.
+		PublicEndpointTracker tracker = tracker();
+		for (int i = 1; i <= 3; i++)
+			tracker.report(reporter(i), PUBLIC, T0);
+		for (int i = 4; i <= 9; i++)
+			assertEquals(Outcome.NONE, tracker.report(reporter(i), endpoint("155.138.245.211", 50000 + i), T0));
+
+		assertEquals(PUBLIC, tracker.current());
+	}
+
+	@Test
 	void clearingTheReportsKeepsWhatWasAgreed() {
 		PublicEndpointTracker tracker = tracker();
 		for (int i = 1; i <= 3; i++)
