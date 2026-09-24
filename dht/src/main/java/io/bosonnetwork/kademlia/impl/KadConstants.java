@@ -395,14 +395,15 @@ public final class KadConstants {
 	/**
 	 * Bytes reserved in the packet budget for everything in a response that is not a node entry.
 	 * <p>
-	 * Covers the ~24-byte message base (type, method, txid, version), the optional token, the
-	 * 32-byte sender id and 16-byte MAC that {@code RpcServer} prepends when it encrypts, and
-	 * headroom so that a small growth in the message header cannot silently push a response over the
-	 * MTU. Deliberately generous: the cost of over-reserving is one or two fewer nodes per response,
-	 * while the cost of under-reserving is a fragmented datagram.
+	 * Covers the ~24-byte message base (type, method, txid, version), the optional token (up to 9),
+	 * the observed endpoint every reply carries (9 bytes for IPv4, 21 for IPv6), the 32-byte sender
+	 * id, 24-byte nonce and 16-byte MAC that {@code RpcServer} adds when it encrypts - 126 in all for
+	 * IPv6 - and headroom so that a small growth in the message header cannot silently push a response
+	 * over the MTU. Deliberately generous: the cost of over-reserving is one or two fewer nodes per
+	 * response, while the cost of under-reserving is a fragmented datagram.
 	 * </p>
 	 */
-	public static final int RESPONSE_OVERHEAD = 128;
+	public static final int RESPONSE_OVERHEAD = 160;
 
 	/**
 	 * The declared ceiling on how many peers one FIND_PEER response may carry.
@@ -614,6 +615,38 @@ public final class KadConstants {
 	 * </p>
 	 */
 	public static final int SELF_LOOKUP_INTERVAL = 30 * 60 * 1000;                  // 30 minutes
+
+	/**
+	 * How many independent reporters must agree on an observed endpoint before a node takes it as its
+	 * own public endpoint.
+	 * <p>
+	 * Every reply tells the requester the address its request arrived from. One reporter is only a
+	 * claim - a node can say anything - so an endpoint is believed once this many reporters from
+	 * distinct sources (see {@link io.bosonnetwork.kademlia.security.SourceKey}, the unit the routing
+	 * table's diversity budget uses) report the same one. An attacker able to muster that many sources
+	 * already beats the routing table's own limits with them.
+	 * </p>
+	 */
+	public static final int PUBLIC_ENDPOINT_MIN_REPORTERS = 3;
+
+	/**
+	 * How long a reporter's latest observation counts toward agreement.
+	 * <p>
+	 * Long enough that an idle node, which hears mostly its own liveness ping every
+	 * {@link #RANDOM_PING_INTERVAL}, collects enough reporters; short enough that after its address
+	 * changes, the reports of the old one age out within minutes rather than out-voting the new one.
+	 * </p>
+	 */
+	public static final int PUBLIC_ENDPOINT_VOTE_WINDOW = 10 * 60 * 1000;           // 10 minutes
+
+	/**
+	 * How many reporters' observations are kept at once; beyond it the least recent is dropped. Bounds
+	 * the state a flood of distinct reporters could make a node hold.
+	 */
+	public static final int PUBLIC_ENDPOINT_MAX_REPORTERS = 64;
+
+	/** How many past public endpoints are remembered, for logs and diagnostics only. */
+	public static final int PUBLIC_ENDPOINT_HISTORY = 8;
 
 	/**
 	 * Delay before the first routing-table snapshot is written after startup.

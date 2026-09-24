@@ -81,7 +81,6 @@ import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.storage.DataStorage;
-import io.bosonnetwork.kademlia.tasks.AnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
 import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.NodeLookupTask;
@@ -103,7 +102,20 @@ public class DHT extends BosonVerticle {
 	private final String host;
 	private final int port;
 
-	private final NodeInfo nodeInfo;
+	// This node as its own socket sees it: the address and port it binds.
+	private final NodeInfo boundNodeInfo;
+	// Whether the bound address is itself a public one - an address on this host's own interface that the
+	// Internet routes to. When the agreed public endpoint turns out to be exactly that, there is nothing
+	// left to learn: it cannot change without the socket changing with it.
+	private final boolean boundOnGlobalUnicast;
+	// Whether replies' reports of our endpoint are still taken; see onObservedEndpoint. Confined to this
+	// DHT's context.
+	private boolean trackingPublicEndpoint = true;
+	// This node as the network reaches it: the agreed public endpoint once there is one, the bound
+	// address until then. Written on this DHT's context, read from any thread through getNodeInfo().
+	private volatile NodeInfo nodeInfo;
+	// Works out the public endpoint from what replying nodes report seeing; owned by this DHT's context.
+	private final PublicEndpointTracker publicEndpoint;
 
 	// Kademlia parameters, received as plain values from KadNode: nothing below KadNode knows about
 	// NodeConfiguration.KademliaOptions.
@@ -282,7 +294,11 @@ public class DHT extends BosonVerticle {
 		this.kadContext = new KadContext(this);
 
 		// TODO: improve
-		this.nodeInfo = NodeInfo.of(identity.getId(), host, port);
+		this.boundNodeInfo = NodeInfo.of(identity.getId(), host, port);
+		InetAddress boundIp = boundNodeInfo.getIpAddress(network.protocolFamily());
+		this.boundOnGlobalUnicast = boundIp != null && AddressUtils.isGlobalUnicast(boundIp);
+		this.nodeInfo = boundNodeInfo;
+		this.publicEndpoint = new PublicEndpointTracker(network, enableDeveloperMode);
 	}
 
 	public final int getAlpha() {
@@ -321,6 +337,12 @@ public class DHT extends BosonVerticle {
 		return bootstrapNodes;
 	}
 
+	/**
+	 * Returns this node as the network reaches it: the agreed public endpoint once there is one, the
+	 * bound address until then.
+	 *
+	 * @return this node's info.
+	 */
 	public NodeInfo getNodeInfo() {
 		return nodeInfo;
 	}
@@ -434,6 +456,7 @@ public class DHT extends BosonVerticle {
 			rpcServer.setCallSentHandler(this::onSend);
 			rpcServer.setCallTimeoutHandler(this::onTimeout);
 			rpcServer.setChurnHandler(this::onChurn);
+			rpcServer.setObservedEndpointHandler(this::onObservedEndpoint);
 			return rpcServer.start();
 		}).<Void>map(v -> {
 			// Set before anything below can send. The startup bootstrap runs inside this block, and
@@ -2136,6 +2159,98 @@ public class DHT extends BosonVerticle {
 	}
 
 	/**
+	 * Takes a replying node's report of the endpoint our request came from.
+	 * <p>
+	 * The RPC server passes on only reports it can vouch for - a reply to our call, from the address and
+	 * under the id the call went to - and {@link PublicEndpointTracker} believes an endpoint only once
+	 * enough independent reporters agree on it. When they do, it becomes what {@link #getNodeInfo()}
+	 * returns and what this node hands out as itself.
+	 * </p>
+	 * <p>
+	 * When the endpoint agreed on is the public address this node binds, tracking stops for good: that
+	 * endpoint cannot change while the socket stays bound to it, so every further report would only
+	 * confirm it. Agreement comes first, as for any other endpoint, so no single reporter can stop it.
+	 * </p>
+	 * <p>
+	 * No {@code isRunning()} guard, for the same reason as {@link #onChurn}: the only caller is the
+	 * receive path.
+	 * </p>
+	 *
+	 * @param reporter the replying node's address.
+	 * @param observed the endpoint it reported for us.
+	 */
+	void onObservedEndpoint(InetSocketAddress reporter, InetSocketAddress observed) {
+		if (!trackingPublicEndpoint)
+			return;
+
+		switch (publicEndpoint.report(reporter, observed, System.currentTimeMillis())) {
+			case CHANGED -> {
+				InetSocketAddress endpoint = publicEndpoint.current();
+				NodeInfo previous = nodeInfo;
+				if (boundOnGlobalUnicast && endpoint.equals(boundNodeInfo.getAddress(network.protocolFamily()))) {
+					stopTrackingPublicEndpoint(previous);
+				} else {
+					nodeInfo = NodeInfo.of(identity.getId(), endpoint);
+					log.info("DHT {}:{} public endpoint is now {} (was {}; bound to {})", network, identity.getId(),
+							AddressUtils.toString(endpoint), AddressUtils.toString(previous.getAddress()),
+							AddressUtils.toString(boundNodeInfo.getAddress()));
+				}
+			}
+			case PORTS_DISAGREE -> log.warn("DHT {}:{} is seen at one address but a different port by each node it "
+					+ "contacts: the NAT maps a port per destination, so nodes that have not heard from this one "
+					+ "cannot reach it", network, identity.getId());
+			case NONE -> { }
+		}
+	}
+
+	/**
+	 * Stops learning the public endpoint, once it is agreed to be the public address this node binds.
+	 * <p>
+	 * The node's info goes back to the bound one: an endpoint agreed on earlier - before the bound
+	 * address out-voted it - must not outlive the decision that it was wrong.
+	 * </p>
+	 *
+	 * @param previous the node's info before this agreement.
+	 */
+	private void stopTrackingPublicEndpoint(NodeInfo previous) {
+		trackingPublicEndpoint = false;
+		nodeInfo = boundNodeInfo;
+
+		// Nothing left to hand over, so the RPC server can stop building reports. An undeployed DHT has no
+		// RPC server; the flag above is what holds either way.
+		RpcServer server = rpcServer;
+		if (server != null)
+			server.setObservedEndpointHandler(null);
+
+		publicEndpoint.clearReports();
+
+		if (previous == boundNodeInfo)
+			log.info("DHT {}:{} public endpoint is its bound address {}; no longer tracking it", network,
+					identity.getId(), AddressUtils.toString(boundNodeInfo.getAddress()));
+		else
+			log.info("DHT {}:{} public endpoint is its bound address {} (was {}); no longer tracking it", network,
+					identity.getId(), AddressUtils.toString(boundNodeInfo.getAddress()),
+					AddressUtils.toString(previous.getAddress()));
+	}
+
+	/**
+	 * Returns the public endpoint changes seen so far, oldest first; for logs and diagnostics only.
+	 *
+	 * @return the changes.
+	 */
+	List<PublicEndpointTracker.Change> getPublicEndpointHistory() {
+		return publicEndpoint.history();
+	}
+
+	// Whether a node's address is one a receiver would accept as a lookup candidate: see
+	// LookupTask.isAddressEligible, whose rule this mirrors.
+	private boolean isAnnounceable(NodeInfo node) {
+		InetAddress addr = node.getIpAddress();
+		return addr != null &&
+				(enableDeveloperMode ? AddressUtils.isAnyUnicast(addr) : AddressUtils.isGlobalUnicast(addr));
+	}
+
+	/**
 	 * An endpoint presented a different id than the last one seen there: retire the binding it invalidates,
 	 * as far as the evidence allows.
 	 * <p>
@@ -2433,9 +2548,12 @@ public class DHT extends BosonVerticle {
 				.fill()
 				.nodes();
 
-		// Add self to the list if needed
-		if (nodes.size() < want)
-			nodes.add(nodeInfo);
+		// Add self to the list if needed - but only as an address the requester could use. Behind NAT or an
+		// elastic address, until the public endpoint is agreed on, all we have is the private address we
+		// bind, and handing that out wastes the slot: every receiver drops it as a candidate.
+		NodeInfo self = nodeInfo;
+		if (nodes.size() < want && isAnnounceable(self))
+			nodes.add(self);
 
 		return nodes;
 	}
