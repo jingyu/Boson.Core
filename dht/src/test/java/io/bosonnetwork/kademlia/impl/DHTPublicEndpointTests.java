@@ -23,6 +23,7 @@
 package io.bosonnetwork.kademlia.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.InetSocketAddress;
@@ -138,6 +139,33 @@ public class DHTPublicEndpointTests {
 		agreeOn(dht, ELSEWHERE, 1, 3);
 
 		assertEquals(ELSEWHERE, dht.getNodeInfo().getAddress());
+	}
+
+	@Test
+	void theFirstAgreementIsNotAnnounced() {
+		// Peers learned us from our packets, which carried that endpoint all along - so the first agreement
+		// changes nothing for them, and must not spend the announcement budget.
+		DHT dht = dht("10.0.0.10", false);
+		long now = System.currentTimeMillis();
+		assertFalse(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now), "no agreed endpoint to move from");
+
+		agreeOn(dht, PUBLIC);
+		assertTrue(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now),
+				"a move from the agreed endpoint would be announced, and nothing has been yet");
+	}
+
+	@Test
+	void aMoveIsAnnouncedAtMostOncePerBootstrapInterval() {
+		// A host egressing through either of two addresses can flip between them; that must not become a
+		// stream of lookups. A change the limit skips is left to the periodic self-lookup.
+		DHT dht = dht("10.0.0.10", false);
+		agreeOn(dht, PUBLIC, 1, 3);
+		agreeOn(dht, ELSEWHERE, 1, 3);  // a real move: announced
+		assertEquals(ELSEWHERE, dht.getNodeInfo().getAddress());
+
+		long now = System.currentTimeMillis();
+		assertFalse(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now));
+		assertTrue(dht.shouldAnnounceEndpointChange(dht.getNodeInfo(), now + KadConstants.BOOTSTRAP_INTERVAL + 1));
 	}
 
 	@Test
