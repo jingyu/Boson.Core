@@ -14,6 +14,7 @@ Boson Core is the foundational library for the [Boson Network](https://github.co
 - [About Boson Core](#about-boson-core)
   - [Common APIs (`api`)](#common-apis-api)
   - [Secure Kademlia DHT (`dht`)](#secure-kademlia-dht-dht)
+- [Adding as a Dependency](#adding-as-a-dependency)
 - [Prerequisites](#prerequisites)
 - [Build Instructions](#build-instructions)
 - [Configuration](#configuration)
@@ -35,7 +36,7 @@ Every node in the Boson network has a cryptographic identity derived from an Ed2
 
 ## About Boson Core
 
-This repository is organized into three Maven modules:
+This repository is organized into two Maven modules:
 
 ### Common APIs (`api`)
 
@@ -76,6 +77,59 @@ See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specifi
 
 ---
 
+## Adding as a Dependency
+
+Boson Core is published to Maven Central under the group id `io.bosonnetwork`. The current release
+is **3.1.2** and requires Java 17 or later. Nothing here needs a native library.
+
+| Artifact | Provides |
+|---|---|
+| `boson-api` | `Node`, `Id`, `Value`, `PeerInfo`, identities, cryptography and the DID layer |
+| `boson-dht` | The Kademlia DHT node behind `Node.kadNode()`; brings in `boson-api` |
+
+**Maven**
+
+```xml
+<dependency>
+    <groupId>io.bosonnetwork</groupId>
+    <artifactId>boson-dht</artifactId>
+    <version>3.1.2</version>
+</dependency>
+```
+
+**Gradle (Kotlin DSL)**
+
+```kotlin
+implementation("io.bosonnetwork:boson-dht:3.1.2")
+```
+
+Using more than one Boson library, import the bill of materials once and leave the versions off the
+dependencies themselves:
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.bosonnetwork</groupId>
+            <artifactId>boson-dependencies</artifactId>
+            <version>3.1.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+```kotlin
+implementation(platform("io.bosonnetwork:boson-dependencies:3.1.2"))
+implementation("io.bosonnetwork:boson-dht")
+```
+
+The sections below are for building this repository from source, which an application using the
+library does not need to do.
+
+---
+
 ## Prerequisites
 
 | Requirement | Version |
@@ -105,20 +159,15 @@ git clone https://github.com/bosonnetwork/Boson.Core.git
 cd Boson.Core
 ```
 
-### 2. Install the parent POM
-
-The parent module must be installed into the local Maven repository before building the submodules.
-
-```bash
-# From the parent repository root (Boson.Java)
-mvn install -f parent/pom.xml
-```
-
-### 3. Build all modules
+### 2. Build all modules
 
 ```bash
 ./mvnw clean package
 ```
+
+`boson-parent` and `boson-dependencies` resolve from Maven Central, so there is nothing to install
+first. Only a build against an unreleased parent needs `mvn install -f parent/pom.xml` from the
+`Boson.Java` working tree.
 
 To skip tests:
 
