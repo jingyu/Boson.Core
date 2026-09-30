@@ -23,6 +23,7 @@
 package io.bosonnetwork.kademlia.subscription;
 
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +46,7 @@ import io.bosonnetwork.Value;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
+import io.bosonnetwork.kademlia.protocol.FindNodeResponse;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.NotifyPeerRequest;
 import io.bosonnetwork.kademlia.protocol.NotifyValueRequest;
@@ -76,6 +78,15 @@ import io.bosonnetwork.kademlia.security.SourceKey;
  * belong to a pair of endpoints, so one packet per storing node keeps every subscription on it reachable,
  * however many there are. A mapping that lapses anyway costs latency, not data: the storing node stalls the
  * subscription, and the next renewal, which carries the sequence number held here, brings it up to date.
+ * </p>
+ * <p>
+ * <b>Rebinding.</b> A NAT that loses a mapping may open the next one on a different port, and the storing
+ * node goes on pushing to the old one. Every reply carries the endpoint the replier saw the request come
+ * from, so the keepalive notices: when a storing node sees us somewhere other than where it accepted the
+ * subscription, the subscription is moved at once rather than at the next renewal. Moving needs a token for
+ * the new endpoint - the one held is bound to the old - so it is fetched from that node alone with a
+ * token-only FIND_NODE, and presented in a fresh SUBSCRIBE. A renewal refused for its token takes the same
+ * path.
  * </p>
  * <p>
  * <b>Notifications.</b> One is accepted only from a node holding the matching subscription for us - the
@@ -233,7 +244,10 @@ public class SubscriptionClient {
 		final InetAddress unit;
 		int token;
 		boolean confirmed;
+		boolean retokening;
 		long renewTimer = -1;
+		// Where the storing node saw our SUBSCRIBE come from: the mapping its pushes go to.
+		InetSocketAddress observed;
 
 		Slot(NodeInfo node, int token) {
 			this.node = node;
@@ -420,6 +434,7 @@ public class SubscriptionClient {
 						return;
 					}
 
+					log.debug("Notified by {} of {} {}", sender, topic.kind(), topic.target());
 					deliver(watch, record);
 				});
 
@@ -586,7 +601,7 @@ public class SubscriptionClient {
 
 			@Override
 			public void onResponse(RpcCall c) {
-				accepted(watch, slot, c.getResponse().getBody());
+				accepted(watch, slot, c.getResponse().getBody(), c.getResponse().getObserved());
 			}
 
 			@Override
@@ -603,9 +618,11 @@ public class SubscriptionClient {
 		host.send(call).onFailure(e -> rejected(watch, slot, e));
 	}
 
-	private void accepted(Watch watch, Slot slot, SubscribeResponse response) {
+	private void accepted(Watch watch, Slot slot, SubscribeResponse response, InetSocketAddress observed) {
 		if (watch.cancelled || watch.slots.get(slot.node.getId()) != slot)
 			return;
+
+		slot.observed = observed;
 
 		if (response != null && response.getToken() != 0)
 			slot.token = response.getToken();
@@ -629,6 +646,14 @@ public class SubscriptionClient {
 		if (watch.cancelled || watch.slots.get(slot.node.getId()) != slot)
 			return;
 
+		// A node that accepted us before and now refuses the token is not refusing us: the token is bound to
+		// the endpoint it was issued for, and ours has moved - a NAT rebinding. Keep the node, fetch a token
+		// for where we are now.
+		if (cause instanceof InvalidTokenException && slot.confirmed) {
+			retoken(watch, slot);
+			return;
+		}
+
 		long exclude;
 		if (cause instanceof InvalidTokenException) {
 			// Our token went stale, which says nothing against the node: try again with a fresh one.
@@ -649,6 +674,78 @@ public class SubscriptionClient {
 			requestLookup(watch);
 		else
 			replace(watch);
+	}
+
+	/**
+	 * Moves a subscription on one storing node to wherever that node now sees us: fetches a token for our
+	 * current endpoint from that node alone, and subscribes again with it.
+	 */
+	private void retoken(Watch watch, Slot slot) {
+		if (slot.retokening)
+			return;
+
+		slot.retokening = true;
+		Message request = Message.findNodeRequest(watch.topic.target(), false, false, true);
+		RpcCall call = new RpcCall(slot.node, request).addListener(new RpcCallListener() {
+			@Override
+			public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+				if (state.isFinal())
+					slot.retokening = false;
+			}
+
+			@Override
+			public void onResponse(RpcCall c) {
+				if (watch.cancelled || watch.slots.get(slot.node.getId()) != slot)
+					return;
+
+				int token = c.getResponse().<FindNodeResponse>getBody().getToken();
+				if (token == 0) {
+					drop(watch, slot, EXCLUDE_FAILED, true);
+					replace(watch);
+					return;
+				}
+
+				slot.token = token;
+				send(watch, slot);
+			}
+
+			@Override
+			public void onError(RpcCall c) {
+				if (!watch.cancelled && watch.slots.get(slot.node.getId()) == slot) {
+					drop(watch, slot, EXCLUDE_FAILED, true);
+					replace(watch);
+				}
+			}
+
+			@Override
+			public void onTimeout(RpcCall c) {
+				onError(c);
+			}
+		});
+
+		host.send(call).onFailure(e -> {
+			slot.retokening = false;
+			if (!watch.cancelled && watch.slots.get(slot.node.getId()) == slot) {
+				drop(watch, slot, EXCLUDE_FAILED, true);
+				replace(watch);
+			}
+		});
+	}
+
+	/**
+	 * Takes the endpoint a storing node reports seeing us at. A different one from where it accepted the
+	 * subscription means our NAT has moved us, and its pushes are going somewhere we no longer are.
+	 */
+	private void observedBy(Id nodeId, InetSocketAddress seen) {
+		for (Watch watch : List.copyOf(watches.values())) {
+			Slot slot = watch.slots.get(nodeId);
+			if (slot == null || !slot.confirmed || slot.observed == null || slot.observed.equals(seen))
+				continue;
+
+			log.debug("{} now sees us at {} instead of {}, moving the {} subscription to {}", nodeId, seen,
+					slot.observed, watch.topic.kind(), watch.topic.target());
+			retoken(watch, slot);
+		}
 	}
 
 	private void drop(Watch watch, Slot slot, long exclude, boolean quiet) {
@@ -734,8 +831,21 @@ public class SubscriptionClient {
 				}
 			}
 
-			for (NodeInfo node : nodes.values())
-				host.send(new RpcCall(node, Message.pingRequest()));
+			for (NodeInfo node : nodes.values()) {
+				RpcCall ping = new RpcCall(node, Message.pingRequest()).addListener(new RpcCallListener() {
+					@Override
+					public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+					}
+
+					@Override
+					public void onResponse(RpcCall c) {
+						InetSocketAddress seen = c.getResponse().getObserved();
+						if (seen != null)
+							observedBy(node.getId(), seen);
+					}
+				});
+				host.send(ping);
+			}
 		}
 
 		ensureKeepalive();

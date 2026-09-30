@@ -168,8 +168,10 @@ public class NodeSubscriptions {
 	 */
 	public void valueStored(Value value) {
 		Hub hub = hubs.get(new Topic(SubscriptionKind.VALUE, value.getId()));
-		if (hub != null)
+		if (hub != null) {
+			log.debug("This node's storage holds value {} seq {}", value.getId(), value.getSequenceNumber());
 			hub.offer(value);
+		}
 	}
 
 	/**
@@ -351,6 +353,9 @@ public class NodeSubscriptions {
 		private void offer(Value value) {
 			if (closed)
 				return;
+
+			if (latest == null || value.getSequenceNumber() > latest.getSequenceNumber())
+				log.debug("Value {} seq {} is new to this node's listeners", value.getId(), value.getSequenceNumber());
 
 			if (latest == null || value.getSequenceNumber() > latest.getSequenceNumber())
 				latest = value;

@@ -106,6 +106,11 @@ public class SubscriptionManager {
 	public static final long PUSH_MIN_INTERVAL = 1000;
 	/** Unacknowledged pushes in a row after which a subscription stalls until renewed. */
 	public static final int MAX_CONSECUTIVE_FAILURES = 3;
+	/**
+	 * How long a push may go unanswered before a packet from the subscriber is taken to mean it was lost, in
+	 * milliseconds. Well above a round trip, so a push merely on its way is not sent twice.
+	 */
+	static final long RESEND_WHEN_HEARD_AFTER = 1000;
 	/** Node-wide push rate, per second. */
 	public static final int PUSH_RATE = 200;
 	/** Node-wide push burst. */
@@ -198,6 +203,9 @@ public class SubscriptionManager {
 		long valuePushedAt;
 
 		boolean inFlight;
+		long inFlightSince;
+		// Bumped when a push in flight is abandoned; its outcome, when it arrives, is ignored.
+		int generation;
 		boolean stalled;
 		boolean queued;
 		boolean removed;
@@ -284,6 +292,7 @@ public class SubscriptionManager {
 	private final Host host;
 	private final Map<Key, Subscription> subscriptions;
 	private final Map<Topic, Set<Subscription>> byTopic;
+	private final Map<Id, Set<Subscription>> bySubscriber;
 	private final Map<InetAddress, Integer> perSource;
 	private final ArrayDeque<Subscription> ready;
 	private final PriorityQueue<Subscription> waiting;
@@ -301,6 +310,7 @@ public class SubscriptionManager {
 		this.host = host;
 		this.subscriptions = new HashMap<>();
 		this.byTopic = new HashMap<>();
+		this.bySubscriber = new HashMap<>();
 		this.perSource = new HashMap<>();
 		this.ready = new ArrayDeque<>();
 		this.waiting = new PriorityQueue<>(Comparator.comparingLong(s -> s.eligibleAt));
@@ -350,6 +360,7 @@ public class SubscriptionManager {
 			sub = new Subscription(key, address, source, now + lease * 1000L);
 			subscriptions.put(key, sub);
 			byTopic.computeIfAbsent(sub.topic, t -> new LinkedHashSet<>()).add(sub);
+			bySubscriber.computeIfAbsent(subscriber, t -> new LinkedHashSet<>()).add(sub);
 			perSource.merge(source, 1, Integer::sum);
 			log.debug("New {} subscription to {} from {}@{}", kind, target, subscriber, address);
 		} else {
@@ -362,8 +373,15 @@ public class SubscriptionManager {
 				sub.source = source;
 			}
 
-			if (!sub.address.equals(address))
+			if (!sub.address.equals(address)) {
 				log.debug("{} subscription to {} from {} moved {} -> {}", kind, target, subscriber, sub.address, address);
+				// A push in flight went to where the subscriber no longer is, and would only time out. Abandon
+				// it and push again at once, rather than wait out the timeout for an answer that cannot come.
+				if (sub.inFlight) {
+					sub.generation++;
+					sub.inFlight = false;
+				}
+			}
 
 			sub.address = address;
 			sub.expiresAt = now + lease * 1000L;
@@ -435,6 +453,65 @@ public class SubscriptionManager {
 	}
 
 	/**
+	 * Whether a node holds any subscription here: the cheap test to run before {@link #heardFrom}.
+	 *
+	 * @param nodeId the node id.
+	 * @return true if it is a subscriber.
+	 */
+	public boolean isSubscriber(Id nodeId) {
+		return bySubscriber.containsKey(nodeId);
+	}
+
+	/**
+	 * Takes a packet from a subscriber, which proves the path from it open - and so, through a NAT, the
+	 * path back to it.
+	 * <p>
+	 * This is how a subscription recovers from a mapping that lapsed and was opened again on the same port,
+	 * which the subscriber cannot notice: nothing about it looks different from its side. Pushes into the
+	 * gap have been timing out, and the retries follow the call timeout rather than the mapping, so without
+	 * this a gap somewhat longer than the keepalive stalls the subscription until its next renewal - minutes.
+	 * With it, the subscriber's next keepalive resumes a stalled subscription and resends a retry that was
+	 * sent into the gap.
+	 * </p>
+	 * <p>
+	 * Only a packet from the subscription's own address counts: that is the mapping pushes go to. The source
+	 * address is unproven, so a replayed packet can do the same - which buys an attacker at most a few pushes
+	 * before the subscription stalls again, sent to the subscriber that asked for them, under the node-wide
+	 * rate.
+	 * </p>
+	 *
+	 * @param nodeId the sender's node id.
+	 * @param from   the address the packet came from.
+	 */
+	public void heardFrom(Id nodeId, InetSocketAddress from) {
+		Set<Subscription> own = bySubscriber.get(nodeId);
+		if (own == null || from == null)
+			return;
+
+		for (Subscription sub : List.copyOf(own)) {
+			if (!sub.address.equals(from))
+				continue;
+
+			if (sub.stalled) {
+				log.debug("{} subscription to {} from {} resumes: heard from {}", sub.key.kind(), sub.key.target(),
+						nodeId, from);
+				sub.stalled = false;
+				sub.failures = 0;
+				schedule(sub);
+			} else if (sub.inFlight && (sub.failures > 0 || host.now() - sub.inFlightSince >= RESEND_WHEN_HEARD_AFTER)) {
+				// A push still unanswered while the subscriber is plainly reachable was most likely sent into
+				// the gap - before its packet reopened the mapping. Resend now the path is open, rather than
+				// wait out the call timeout; a duplicate is dropped at the subscriber.
+				log.debug("{} subscription to {} from {}: resending the push in flight, the path is open again",
+						sub.key.kind(), sub.key.target(), nodeId);
+				sub.generation++;
+				sub.inFlight = false;
+				schedule(sub);
+			}
+		}
+	}
+
+	/**
 	 * Drops subscriptions whose lease has run out.
 	 */
 	public void sweep() {
@@ -454,6 +531,7 @@ public class SubscriptionManager {
 		subscriptions.values().forEach(s -> s.removed = true);
 		subscriptions.clear();
 		byTopic.clear();
+		bySubscriber.clear();
 		perSource.clear();
 		ready.clear();
 		waiting.clear();
@@ -496,6 +574,13 @@ public class SubscriptionManager {
 			subs.remove(sub);
 			if (subs.isEmpty())
 				byTopic.remove(sub.topic);
+		}
+
+		Set<Subscription> own = bySubscriber.get(sub.key.subscriber());
+		if (own != null) {
+			own.remove(sub);
+			if (own.isEmpty())
+				bySubscriber.remove(sub.key.subscriber());
 		}
 
 		releaseSource(sub.source);
@@ -637,9 +722,14 @@ public class SubscriptionManager {
 		}
 
 		sub.inFlight = true;
+		sub.inFlightSince = now;
+		InetSocketAddress to = sub.address;
+		int generation = sub.generation;
+		log.debug("Pushing {} of {} to {}@{}", describe(record), sub.key.target(), sub.key.subscriber(), to);
 
-		// One settlement per push, whichever of the call's outcome and a refused send arrives first.
-		boolean[] settled = new boolean[1];
+		// One settlement per push, whichever of the call's outcome and a refused send arrives first - and
+		// none at all for a push abandoned since.
+		boolean[] settled = new boolean[] { false };
 		RpcCall call = new RpcCall(NodeInfo.of(sub.key.subscriber(), sub.address), request)
 				.setLivenessNeutral(true)
 				.addListener(new RpcCallListener() {
@@ -649,7 +739,7 @@ public class SubscriptionManager {
 
 					@Override
 					public void onResponse(RpcCall c) {
-						if (!settled[0]) {
+						if (!settled[0] && sub.generation == generation) {
 							settled[0] = true;
 							acknowledged(sub, record);
 						}
@@ -657,15 +747,15 @@ public class SubscriptionManager {
 
 					@Override
 					public void onTimeout(RpcCall c) {
-						if (!settled[0]) {
+						if (!settled[0] && sub.generation == generation) {
 							settled[0] = true;
-							failed(sub, "timeout");
+							failed(sub, to, "timeout");
 						}
 					}
 
 					@Override
 					public void onError(RpcCall c) {
-						if (settled[0])
+						if (settled[0] || sub.generation != generation)
 							return;
 
 						settled[0] = true;
@@ -675,13 +765,13 @@ public class SubscriptionManager {
 							sub.inFlight = false;
 							remove(sub);
 						} else {
-							failed(sub, String.valueOf(c.getCause()));
+							failed(sub, to, String.valueOf(c.getCause()));
 						}
 					}
 
 					@Override
 					public void onCancel(RpcCall c) {
-						if (!settled[0]) {
+						if (!settled[0] && sub.generation == generation) {
 							settled[0] = true;
 							// Cancelled on our side - a stop - which says nothing about the subscriber.
 							sub.inFlight = false;
@@ -691,14 +781,15 @@ public class SubscriptionManager {
 				});
 
 		host.send(call).onFailure(e -> {
-			if (!settled[0]) {
+			if (!settled[0] && sub.generation == generation) {
 				settled[0] = true;
-				failed(sub, e.getMessage());
+				failed(sub, to, e.getMessage());
 			}
 		});
 	}
 
 	private void acknowledged(Subscription sub, Object record) {
+		log.debug("{} of {} acknowledged by {}", describe(record), sub.key.target(), sub.key.subscriber());
 		sub.inFlight = false;
 		sub.failures = 0;
 		if (record instanceof Value value) {
@@ -716,11 +807,13 @@ public class SubscriptionManager {
 		schedule(sub);
 	}
 
-	private void failed(Subscription sub, String reason) {
+	private void failed(Subscription sub, InetSocketAddress to, String reason) {
 		sub.inFlight = false;
 		if (sub.removed)
 			return;
 
+		log.debug("Push of {} to {}@{} failed ({}), {} in a row", sub.key.target(), sub.key.subscriber(),
+				to, reason, sub.failures + 1);
 		if (++sub.failures >= MAX_CONSECUTIVE_FAILURES) {
 			sub.stalled = true;
 			log.debug("{} subscription to {} from {}@{} stalled after {} failed pushes ({}), waiting for renewal",
@@ -729,6 +822,13 @@ public class SubscriptionManager {
 		}
 
 		schedule(sub);
+	}
+
+	private static String describe(Object record) {
+		if (record instanceof Value value)
+			return "value seq " + value.getSequenceNumber();
+		PeerInfo peer = (PeerInfo) record;
+		return "peer " + peer.getFingerprint() + " seq " + peer.getSequenceNumber();
 	}
 
 	// Package-private, for tests: drops removed subscriptions still sitting in the queues.

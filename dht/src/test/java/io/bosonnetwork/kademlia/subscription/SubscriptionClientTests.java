@@ -46,7 +46,9 @@ import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
 import io.bosonnetwork.kademlia.exceptions.SubscriptionRefusedException;
+import io.bosonnetwork.kademlia.protocol.FindNodeRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.SubscribeRequest;
 import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
@@ -184,6 +186,22 @@ class SubscriptionClientTests {
 
 	private static void accept(RpcCall call, int token, int lease) {
 		invoke(call, "respond", Message.class, Message.subscribeResponse(call.getTxid(), token, lease));
+	}
+
+	private static void acceptAt(RpcCall call, int token, InetSocketAddress observed) {
+		invoke(call, "respond", Message.class, Message.subscribeResponse(call.getTxid(), token, 600).setObserved(observed));
+	}
+
+	private static void pong(RpcCall call, InetSocketAddress observed) {
+		invoke(call, "respond", Message.class, Message.pingResponse(call.getTxid()).setObserved(observed));
+	}
+
+	private static void tokenReply(RpcCall call, int token) {
+		invoke(call, "respond", Message.class, Message.findNodeResponse(call.getTxid(), List.of(), List.of(), token));
+	}
+
+	private List<RpcCall> calls(Message.Method method) {
+		return sent.stream().filter(c -> c.getRequest().getMethod() == method).toList();
 	}
 
 	private static void refuse(RpcCall call) {
@@ -433,5 +451,57 @@ class SubscriptionClientTests {
 		assertEquals(expected, watch.nodes());
 		assertEquals(1, subscribesTo(old.node().getId()).stream().filter(c -> body(c).isCancel()).count(),
 				"the node let go is told");
+	}
+
+	/**
+	 * A NAT that lost a mapping may open the next one on another port, and the storing node would push to
+	 * the old one until the next renewal - minutes. The keepalive's reply says where the node sees us now, so
+	 * the subscription is moved at once: a token for the new endpoint from that node alone, then SUBSCRIBE.
+	 */
+	@Test
+	void testARebindingSeenByTheKeepaliveMovesTheSubscription() {
+		SubscriptionClient.Candidate a = candidate("12.1.1.1", 11);
+		candidates.add(a);
+		client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
+		InetSocketAddress before = new InetSocketAddress("12.9.9.9", 40000);
+		acceptAt(subscribes().get(0), 5, before);
+
+		// Seen where it was: nothing to do.
+		advance(SubscriptionClient.NAT_KEEPALIVE_INTERVAL);
+		pong(calls(Message.Method.PING).get(0), before);
+		assertTrue(calls(Message.Method.FIND_NODE).isEmpty());
+
+		// Seen at a new port: move.
+		int lookupsBefore = lookups;
+		advance(SubscriptionClient.NAT_KEEPALIVE_INTERVAL);
+		pong(calls(Message.Method.PING).get(1), new InetSocketAddress("12.9.9.9", 40001));
+		List<RpcCall> tokenRequests = calls(Message.Method.FIND_NODE);
+		assertEquals(1, tokenRequests.size());
+		assertEquals(a.node().getId(), tokenRequests.get(0).getTargetId(), "a token from that node alone");
+		assertTrue(tokenRequests.get(0).getRequest().<FindNodeRequest>getBody().doesWantToken());
+		assertEquals(lookupsBefore, lookups, "no lookup");
+
+		tokenReply(tokenRequests.get(0), 77);
+		assertEquals(2, subscribes().size());
+		assertEquals(77, body(subscribes().get(1)).getToken());
+	}
+
+	@Test
+	void testARenewalRefusedForItsTokenFetchesANewOneFromThatNode() {
+		SubscriptionClient.Candidate a = candidate("12.1.1.1", 11);
+		candidates.add(a);
+		SubscriptionClient.Watch watch = client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
+		accept(subscribes().get(0), 5, 600);
+		int lookupsBefore = lookups;
+
+		advance(SubscriptionClient.RENEW_INTERVAL);
+		invoke(subscribes().get(1), "fail", Throwable.class, new InvalidTokenException("moved"));
+		assertTrue(watch.nodes().contains(a.node().getId()), "the node is kept");
+
+		List<RpcCall> tokenRequests = calls(Message.Method.FIND_NODE);
+		assertEquals(1, tokenRequests.size());
+		tokenReply(tokenRequests.get(0), 88);
+		assertEquals(88, body(subscribes().get(2)).getToken());
+		assertEquals(lookupsBefore, lookups);
 	}
 }

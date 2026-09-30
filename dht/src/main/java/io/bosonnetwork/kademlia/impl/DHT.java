@@ -1705,6 +1705,10 @@ public class DHT extends BosonVerticle {
 		if (message.getId().equals(identity.getId()))
 			return;
 
+		// A packet from a subscriber proves the path back to it open; see SubscriptionManager#heardFrom.
+		if (subscriptionManager.isSubscriber(message.getId()))
+			subscriptionManager.heardFrom(message.getId(), message.getRemoteSocketAddress());
+
 		switch (message.getType()) {
 			case REQUEST -> onRequest(message);
 			case RESPONSE -> onResponse(message);

@@ -336,6 +336,99 @@ class SubscriptionManagerTests {
 		assertEquals(moved, last().getTarget().getAddress());
 	}
 
+	/**
+	 * A push in flight when the subscription moves went to where the subscriber no longer is. Waiting for it
+	 * to time out would add a whole call timeout to the recovery from a NAT rebinding; it is abandoned instead
+	 * and the record pushed to the new address at once.
+	 */
+	@Test
+	void testAMoveAbandonsThePushInFlightToTheOldAddress() throws Exception {
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.valueStored(value(1));
+		RpcCall stale = last();
+		assertEquals(address, stale.getTarget().getAddress());
+
+		advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		InetSocketAddress moved = new InetSocketAddress("12.34.56.78", 40000);
+		manager.subscribe(subscriber, moved, SubscriptionKind.VALUE, valueId, -1, -1);
+		assertEquals(2, sent.size(), "pushed again without waiting for the old push to time out");
+		assertEquals(moved, last().getTarget().getAddress());
+
+		// The abandoned push's timeout, when it comes, counts for nothing.
+		timeout(stale);
+		assertEquals(0, manager.get(subscriber, SubscriptionKind.VALUE, valueId).failures);
+		ack(last());
+		assertNull(manager.get(subscriber, SubscriptionKind.VALUE, valueId).pendingValue);
+	}
+
+	/**
+	 * A mapping that lapsed and reopened on the same port: the subscriber cannot tell anything happened, so
+	 * the storing node has to. A packet from the subscriber at the subscription's address resumes a stalled
+	 * subscription at once, rather than at the next renewal.
+	 */
+	@Test
+	void testAPacketFromTheSubscriberResumesAStalledSubscription() throws Exception {
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.valueStored(value(1));
+		for (int i = 0; i < SubscriptionManager.MAX_CONSECUTIVE_FAILURES; i++) {
+			timeout(last());
+			advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		}
+		assertTrue(manager.get(subscriber, SubscriptionKind.VALUE, valueId).stalled);
+		int before = sent.size();
+
+		// From somewhere else: not the mapping pushes go to, so no proof of anything.
+		manager.heardFrom(subscriber, new InetSocketAddress("12.34.56.78", 40000));
+		assertEquals(before, sent.size());
+		// From the subscription's own address, by another node: not the subscriber.
+		manager.heardFrom(Id.random(), address);
+		assertEquals(before, sent.size());
+
+		manager.heardFrom(subscriber, address);
+		assertFalse(manager.get(subscriber, SubscriptionKind.VALUE, valueId).stalled);
+		assertEquals(before + 1, sent.size());
+		ack(last());
+		assertNull(manager.get(subscriber, SubscriptionKind.VALUE, valueId).pendingValue);
+	}
+
+	@Test
+	void testAPacketFromTheSubscriberResendsARetrySentIntoTheGap() throws Exception {
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.valueStored(value(1));
+		timeout(last());
+		advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		RpcCall retry = last();
+		assertEquals(2, sent.size());
+
+		// A first push in flight is left alone: nothing says it failed.
+		manager.valueStored(value(2));
+
+		advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		manager.heardFrom(subscriber, address);
+		assertEquals(3, sent.size(), "the retry in flight is resent now the path is open");
+		timeout(retry);
+		assertEquals(1, manager.get(subscriber, SubscriptionKind.VALUE, valueId).failures,
+				"the abandoned retry's timeout counts for nothing");
+		assertEquals(2, seqOf(last()), "and what goes out is the newest version");
+	}
+
+	@Test
+	void testAFirstPushLongUnansweredIsResentWhenTheSubscriberIsHeardFrom() throws Exception {
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.valueStored(value(1));
+		assertEquals(1, sent.size());
+
+		// Heard from at once: the push is simply on its way.
+		manager.heardFrom(subscriber, address);
+		assertEquals(1, sent.size());
+
+		// Heard from long after: the push went into a gap the subscriber's packet has since closed.
+		advance(SubscriptionManager.RESEND_WHEN_HEARD_AFTER);
+		manager.heardFrom(subscriber, address);
+		assertEquals(2, sent.size());
+		assertEquals(1, seqOf(last()));
+	}
+
 	@Test
 	void testSubscribersPerTargetAreCapped() throws Exception {
 		for (int i = 0; i < SubscriptionManager.MAX_SUBSCRIBERS_PER_TARGET; i++)

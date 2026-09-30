@@ -438,6 +438,10 @@ Behaviour of the storing node:
 - A failed notification **MUST NOT** be taken as evidence about the subscriber's liveness: it most likely
   means the subscriber's NAT mapping lapsed. It degrades the subscription - pushes stop until the next
   renewal - and never the subscriber's standing in the routing table.
+- It **SHOULD** treat any packet from the subscriber, arriving from the subscription's address, as proof that
+  the path back is open again: resume a subscription whose pushes had stopped, and resend a notification that
+  has gone unanswered for longer than a round trip. A mapping that lapsed and reopened on the same port is
+  otherwise invisible to both sides, and recovery would wait on call timeouts or the next renewal.
 
 Behaviour of the subscriber:
 
@@ -448,6 +452,11 @@ Behaviour of the subscriber:
   previous response.
 - Behind NAT it keeps its mapping to each storing node open by sending to it more often than the mapping
   times out - one packet per storing node covers every subscription on that node.
+- It **SHOULD** compare the [observed endpoint](#observed-endpoint) in a storing node's replies with the one in
+  that node's SUBSCRIBE response. A different one means its NAT opened a new mapping, on a new port, and the
+  storing node is pushing to the old one. It then fetches a token for the new endpoint from that node - a
+  `FIND_NODE` for the target with only `wantToken` set - and subscribes again. The token from the previous
+  SUBSCRIBE response cannot be used: it is bound to the old endpoint.
 - A node that predates subscriptions cannot parse SUBSCRIBE and does not answer; the subscriber treats a
   timeout on a first subscription as "not supported" and uses another node.
 
