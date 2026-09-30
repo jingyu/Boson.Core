@@ -109,7 +109,10 @@ public class Message {
 		ANNOUNCE_PEER(0x03, AnnouncePeerRequest.class, Void.class),
 		FIND_PEER(0x04, FindPeerRequest.class, FindPeerResponse.class),
 		STORE_VALUE(0x05, StoreValueRequest.class, Void.class),
-		FIND_VALUE(0x06, FindValueRequest.class, FindValueResponse.class);
+		FIND_VALUE(0x06, FindValueRequest.class, FindValueResponse.class),
+		SUBSCRIBE(0x07, SubscribeRequest.class, SubscribeResponse.class),
+		NOTIFY_VALUE(0x08, NotifyValueRequest.class, Void.class),
+		NOTIFY_PEER(0x09, NotifyPeerRequest.class, Void.class);
 
 		private static final Method[] VALUES = values();
 		private static final int MASK = 0x0000001F;
@@ -753,6 +756,37 @@ public class Message {
 		return new Message(Type.RESPONSE, Method.STORE_VALUE, txid, null);
 	}
 
+	public static Message subscribeRequest(Id target, SubscriptionKind kind, int token, int knownSequenceNumber, int lease) {
+		return new Message(Type.REQUEST, Method.SUBSCRIBE, nextTxid(),
+				new SubscribeRequest(target, kind, token, knownSequenceNumber, lease));
+	}
+
+	public static Message subscribeResponse(long txid, int token, int lease) {
+		return new Message(Type.RESPONSE, Method.SUBSCRIBE, txid, SubscribeResponse.of(token, lease));
+	}
+
+	public static Message notifyValueRequest(Value value) {
+		return new Message(Type.REQUEST, Method.NOTIFY_VALUE, nextTxid(), new NotifyValueRequest(value));
+	}
+
+	public static Message notifyPeerRequest(PeerInfo peer) {
+		return new Message(Type.REQUEST, Method.NOTIFY_PEER, nextTxid(), new NotifyPeerRequest(peer));
+	}
+
+	/**
+	 * Builds the acknowledgement of a NOTIFY_VALUE or NOTIFY_PEER.
+	 *
+	 * @param method the method of the notification being answered.
+	 * @param txid   the transaction id of the notification being answered.
+	 * @return the response message.
+	 */
+	public static Message notifyResponse(Method method, long txid) {
+		if (method != Method.NOTIFY_VALUE && method != Method.NOTIFY_PEER)
+			throw new IllegalArgumentException("Not a notification method: " + method);
+
+		return new Message(Type.RESPONSE, method, txid, null);
+	}
+
 	public static Message error(Method method, long txid, int code, String message) {
 		return new Message(Type.ERROR, method, txid, new Error(code, message));
 	}
@@ -873,7 +907,7 @@ public class Message {
 				ctxt.reportInputMismatch(Message.class, "Missing '[t]xid' field");
 
 			// A body is mandatory unless the message legitimately omits it:
-			//  - Void body: PING request/response, STORE_VALUE/ANNOUNCE_PEER responses.
+			//  - Void body: PING request/response, STORE_VALUE/ANNOUNCE_PEER/NOTIFY_* responses.
 			//  - JsonNode body (UNKNOWN method): a forward-compatible catch-all that may carry
 			//    arbitrary content or none at all.
 			if (body == null && bodyClass != Void.class && bodyClass != JsonNode.class)

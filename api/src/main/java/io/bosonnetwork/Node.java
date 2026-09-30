@@ -370,6 +370,63 @@ public interface Node extends Identity {
 	CompletableFuture<AnnounceResult> announcePeer(PeerInfo peer, int expectedSequenceNumber, boolean persistent);
 
 	/**
+	 * Subscribes to changes of the value stored under an ID.
+	 * <p>
+	 * Equivalent to {@code subscribeValue(id, -1, listener)}: the current value, if any node holds one, is
+	 * delivered as the first update.
+	 * </p>
+	 *
+	 * @param id       the value id.
+	 * @param listener receives each newer value.
+	 * @return a {@link CompletableFuture} of the subscription; see {@link #subscribeValue(Id, int, SubscriptionListener)}.
+	 */
+	default CompletableFuture<Subscription> subscribeValue(Id id, SubscriptionListener<Value> listener) {
+		return subscribeValue(id, -1, listener);
+	}
+
+	/**
+	 * Subscribes to changes of the value stored under an ID.
+	 * <p>
+	 * The nodes storing the value tell this node when a newer version is written, instead of this node
+	 * polling with {@link #findValue}. Updates are delivered in increasing sequence number order, each
+	 * once, and only when newer than {@code knownSequenceNumber}; an immutable value is delivered once,
+	 * when it appears. Every delivered value has been validated.
+	 * </p>
+	 * <p>
+	 * A subscription is a best effort, not a guarantee: a storing node can withhold an update as it can
+	 * withhold a lookup answer. Notifications lost in transit are recovered on the next renewal, a few
+	 * minutes later at most.
+	 * </p>
+	 *
+	 * @param id                  the value id.
+	 * @param knownSequenceNumber the sequence number of the value the caller already holds, or -1 for none.
+	 * @param listener            receives each newer value.
+	 * @return a {@link CompletableFuture} of the subscription, completing once at least one storing node has
+	 *         accepted it, and failing if none did.
+	 */
+	default CompletableFuture<Subscription> subscribeValue(Id id, int knownSequenceNumber,
+			SubscriptionListener<Value> listener) {
+		return CompletableFuture.failedFuture(new UnsupportedOperationException("Subscriptions not supported"));
+	}
+
+	/**
+	 * Subscribes to changes of the peer records announced under an ID.
+	 * <p>
+	 * A record is delivered when its fingerprint has not been seen before or its sequence number rose - a
+	 * service gaining an instance, or an instance moving endpoint. The records already stored are delivered
+	 * first. Removal is not reported: a record that is not re-announced simply ages out.
+	 * </p>
+	 *
+	 * @param id       the peer id.
+	 * @param listener receives each new or changed record.
+	 * @return a {@link CompletableFuture} of the subscription, completing once at least one storing node has
+	 *         accepted it, and failing if none did.
+	 */
+	default CompletableFuture<Subscription> subscribePeer(Id id, SubscriptionListener<PeerInfo> listener) {
+		return CompletableFuture.failedFuture(new UnsupportedOperationException("Subscriptions not supported"));
+	}
+
+	/**
 	 * Gets the value associated with the given ID from the node's local storage.
 	 *
 	 * @param valueId the {@link Id} of the value to retrieve.

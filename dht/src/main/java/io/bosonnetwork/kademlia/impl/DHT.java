@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ThreadLocalRandom;
 
 import io.vertx.core.Context;
@@ -63,6 +64,7 @@ import io.bosonnetwork.kademlia.exceptions.InvalidPeerException;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
 import io.bosonnetwork.kademlia.exceptions.InvalidValueException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
+import io.bosonnetwork.kademlia.exceptions.UnknownSubscriptionException;
 import io.bosonnetwork.kademlia.metrics.DHTMetrics;
 import io.bosonnetwork.kademlia.protocol.AnnouncePeerRequest;
 import io.bosonnetwork.kademlia.protocol.Error;
@@ -72,6 +74,8 @@ import io.bosonnetwork.kademlia.protocol.FindPeerRequest;
 import io.bosonnetwork.kademlia.protocol.FindValueRequest;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.StoreValueRequest;
+import io.bosonnetwork.kademlia.protocol.SubscribeRequest;
+import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
 import io.bosonnetwork.kademlia.routing.KBucket;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.routing.RoutingTable;
@@ -81,6 +85,8 @@ import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.security.Blacklist;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.storage.DataStorage;
+import io.bosonnetwork.kademlia.subscription.SubscriptionClient;
+import io.bosonnetwork.kademlia.subscription.SubscriptionManager;
 import io.bosonnetwork.kademlia.tasks.ClosestSet;
 import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.NodeLookupTask;
@@ -192,6 +198,11 @@ public class DHT extends BosonVerticle {
 	private TaskManager taskManager;
 
 	private final Map<KBucket, Task<?>> maintenanceTasks = new IdentityHashMap<>();
+
+	/** Who is watching what on this node, and telling them when it changes. */
+	private final SubscriptionManager subscriptionManager;
+	/** What this node watches on others. */
+	private final SubscriptionClient subscriptionClient;
 
 	/**
 	 * The endpoint whose identity just changed, as {@code host:port}, or null.
@@ -305,6 +316,79 @@ public class DHT extends BosonVerticle {
 		this.boundOnGlobalUnicast = boundIp != null && AddressUtils.isGlobalUnicast(boundIp);
 		this.nodeInfo = boundNodeInfo;
 		this.publicEndpoint = new PublicEndpointTracker(network, enableDeveloperMode);
+
+		this.subscriptionManager = new SubscriptionManager(new SubscriptionManager.Host() {
+			@Override
+			public long now() {
+				return System.currentTimeMillis();
+			}
+
+			@Override
+			public Future<RpcCall> send(RpcCall call) {
+				return sendCall(call);
+			}
+
+			@Override
+			public Future<Value> getValue(Id id) {
+				return storage.getValue(id);
+			}
+
+			@Override
+			public Future<List<PeerInfo>> getPeers(Id id) {
+				return storage.getPeers(id);
+			}
+
+			@Override
+			public void setTimer(long delay, Runnable action) {
+				kadContext.setTimer(delay, unused -> action.run());
+			}
+		});
+
+		this.subscriptionClient = new SubscriptionClient(new SubscriptionClient.Host() {
+			@Override
+			public long now() {
+				return System.currentTimeMillis();
+			}
+
+			@Override
+			public Future<RpcCall> send(RpcCall call) {
+				return sendCall(call);
+			}
+
+			@Override
+			public Future<List<SubscriptionClient.Candidate>> lookup(Id target) {
+				return subscriptionLookup(target);
+			}
+
+			@Override
+			public long setTimer(long delay, Runnable action) {
+				return kadContext.setTimer(delay, unused -> action.run());
+			}
+
+			@Override
+			public void cancelTimer(long id) {
+				kadContext.cancelTimer(id);
+			}
+
+			@Override
+			public boolean needsNatKeepalive() {
+				// Tracking stops only once the endpoint peers agree on is the public address this node
+				// binds - the one case where nothing sits between us and them. Until then, or behind NAT
+				// for good, assume a mapping that needs keeping open.
+				return trackingPublicEndpoint;
+			}
+
+			@Override
+			public <T> Future<T> executeBlocking(Callable<T> task) {
+				return kadContext.executeBlocking(task, false);
+			}
+
+			@Override
+			public void reportInvalid(Message notification) {
+				// Unproven: a notification is a request to us, not an answer to a call of ours.
+				suspiciousNodeDetector.inconsistent(notification.getRemoteAddress(), notification.getId());
+			}
+		});
 	}
 
 	public final int getAlpha() {
@@ -530,6 +614,11 @@ public class DHT extends BosonVerticle {
 
 			cancelPeriodicTasks();
 
+			// Soft state on both sides: subscribers renew against whatever runs next, and the nodes we
+			// subscribed to let our leases run out.
+			subscriptionManager.clear();
+			subscriptionClient.clear();
+
 			if (taskManager != null) {
 				taskManager.cancelAll();
 				taskManager = null;
@@ -595,6 +684,10 @@ public class DHT extends BosonVerticle {
 			timer = kadContext.setPeriodic(KadConstants.ROUTING_TABLE_PERSIST_INITIAL_DELAY, KadConstants.ROUTING_TABLE_PERSIST_INTERVAL, this::persistRoutingTable);
 			timers.add(timer);
 		}
+
+		timer = kadContext.setPeriodic(KadConstants.SUBSCRIPTION_SWEEP_INTERVAL, KadConstants.SUBSCRIPTION_SWEEP_INTERVAL,
+				unused -> subscriptionManager.sweep());
+		timers.add(timer);
 	}
 
 	private void cancelPeriodicTasks() {
@@ -1629,6 +1722,8 @@ public class DHT extends BosonVerticle {
 			case STORE_VALUE -> onStoreValue(message);
 			case FIND_PEER -> onFindPeer(message);
 			case ANNOUNCE_PEER -> onAnnouncePeer(message);
+			case SUBSCRIBE -> onSubscribe(message);
+			case NOTIFY_VALUE, NOTIFY_PEER -> onNotify(message);
 			default -> onUnknownMethod(message);
 		}
 	}
@@ -2077,6 +2172,61 @@ public class DHT extends BosonVerticle {
 			response.setRemote(request.getId(), request.getRemoteAddress());
 			return sendResponse(response);
 		});
+	}
+
+	private void onSubscribe(Message request) {
+		SubscribeRequest body = request.getBody();
+		Id target = body.getTarget();
+
+		// A cancel only releases state, and it authenticates as the subscriber - the one party that can name
+		// the subscription - so it needs no token, and the address it comes from does not matter.
+		if (body.isCancel()) {
+			subscriptionManager.cancel(request.getId(), body.getKind(), target);
+			Message response = Message.subscribeResponse(request.getTxid(), 0, 0);
+			response.setRemote(request.getId(), request.getRemoteAddress());
+			sendResponse(response);
+			return;
+		}
+
+		// Notifications go back to this address, so it is held to the same rule as an announced one.
+		InetAddress remoteAddress = request.getRemoteIpAddress();
+		boolean allowed = kadContext.isDeveloperMode() ?
+				AddressUtils.isAnyUnicast(remoteAddress) : AddressUtils.isGlobalUnicast(remoteAddress);
+		if (!allowed) {
+			log.debug("Received a subscribe request from unsupported address {}, ignored", request.getRemoteAddress());
+			return;
+		}
+
+		// The token is what makes the address safe to push to: it proves the subscriber receives there, so a
+		// subscription cannot be aimed at a third party.
+		if (!verifyToken(request, body.getToken(), target, "SUBSCRIBE"))
+			return;
+
+		InetSocketAddress address = request.getRemoteSocketAddress();
+		Message response;
+		try {
+			int lease = subscriptionManager.subscribe(request.getId(), address, body.getKind(), target,
+					body.getKnownSequenceNumber(), body.getLease());
+			// A fresh token with every acceptance, so a renewal needs no lookup of its own.
+			int token = tokenManager.generateToken(request.getId(), address, target);
+			response = Message.subscribeResponse(request.getTxid(), token, lease);
+		} catch (KadException e) {
+			response = exceptionToError(request.getMethod(), request.getTxid(), e);
+		}
+
+		response.setRemote(request.getId(), request.getRemoteAddress());
+		sendResponse(response);
+	}
+
+	private void onNotify(Message request) {
+		// Answered on whether we hold a matching subscription with the sender. The record is validated and
+		// delivered afterwards, off the event loop; see SubscriptionClient#onNotify.
+		Message response = subscriptionClient.onNotify(request) ?
+				Message.notifyResponse(request.getMethod(), request.getTxid()) :
+				exceptionToError(request.getMethod(), request.getTxid(),
+						new UnknownSubscriptionException("No such subscription"));
+		response.setRemote(request.getId(), request.getRemoteAddress());
+		sendResponse(response);
 	}
 
 	private void onUnknownMethod(Message request) {
@@ -2821,6 +2971,109 @@ public class DHT extends BosonVerticle {
 		});
 
 		return promise.future();
+	}
+
+	/**
+	 * Subscribes to changes of a value or of the peer records under an id, on this address family.
+	 * <p>
+	 * The sink is called on this DHT's context. The returned subscription must be cancelled through
+	 * {@link #unsubscribe}, which runs the cancel on this context too.
+	 * </p>
+	 *
+	 * @param kind     what to watch.
+	 * @param target   the value id or peer id.
+	 * @param knownSeq values: the sequence number already held, or -1 for none.
+	 * @param sink     where deliveries go.
+	 * @return a future of the subscription as soon as it exists - whether a storing node has accepted it is
+	 *         its {@link SubscriptionClient.Watch#ready() ready} future. Handed over either way, so that the
+	 *         caller can always cancel it, and a subscription no node accepted yet keeps trying.
+	 */
+	public Future<SubscriptionClient.Watch> subscribe(SubscriptionKind kind, Id target, int knownSeq,
+			SubscriptionClient.Sink sink) {
+		Promise<SubscriptionClient.Watch> promise = Promise.promise();
+		runOnContext(v -> {
+			if (!isRunning()) {
+				promise.fail(new IllegalStateException("DHT is not running"));
+				return;
+			}
+
+			try {
+				promise.complete(subscriptionClient.subscribe(kind, target, knownSeq, sink));
+			} catch (RuntimeException e) {
+				promise.fail(e);
+			}
+		});
+
+		return promise.future();
+	}
+
+	/**
+	 * Cancels a subscription made through {@link #subscribe}.
+	 *
+	 * @param watch the subscription.
+	 */
+	public void unsubscribe(SubscriptionClient.Watch watch) {
+		runOnContext(v -> watch.cancel());
+	}
+
+	/**
+	 * Takes a value storage now holds, from whatever thread wrote it.
+	 *
+	 * @param value the effective stored value.
+	 */
+	public void valueStored(Value value) {
+		if (isRunning())
+			runOnContext(v -> {
+				if (isRunning())
+					subscriptionManager.valueStored(value);
+			});
+	}
+
+	/**
+	 * Takes a peer record storage now holds, from whatever thread wrote it.
+	 *
+	 * @param peer the effective stored record.
+	 */
+	public void peerStored(PeerInfo peer) {
+		if (isRunning())
+			runOnContext(v -> {
+				if (isRunning())
+					subscriptionManager.peerStored(peer);
+			});
+	}
+
+	/**
+	 * Finds the nodes a subscription should go to: the closest to the target, each with its write token.
+	 *
+	 * @param target the target.
+	 * @return a future of the candidates, closest first; empty if the lookup found none.
+	 */
+	private Future<List<SubscriptionClient.Candidate>> subscriptionLookup(Id target) {
+		Promise<List<SubscriptionClient.Candidate>> promise = Promise.promise();
+		NodeLookupTask task = new NodeLookupTask(kadContext, target)
+				.setWantToken(true)
+				.setName("Subscribe: lookup closest node to - " + target)
+				.addListener(t -> {
+					ClosestSet closest = t.getClosestSet();
+					if (t.getState() != Task.State.COMPLETED || closest == null) {
+						promise.tryComplete(List.of());
+						return;
+					}
+
+					promise.tryComplete(closest.stream()
+							.map(cn -> new SubscriptionClient.Candidate(cn, cn.getToken()))
+							.toList());
+				});
+
+		if (!dispatchTask(task))
+			promise.tryFail(new IllegalStateException("DHT is not running"));
+
+		return promise.future();
+	}
+
+	// Package-private, for tests.
+	SubscriptionManager getSubscriptionManager() {
+		return subscriptionManager;
 	}
 
 	@SuppressWarnings("unused")

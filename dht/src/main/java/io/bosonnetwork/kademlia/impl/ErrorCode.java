@@ -51,6 +51,8 @@ public enum ErrorCode {
 	InvalidToken(400),
 	InvalidValue(401),
 	InvalidPeer(402),
+	SubscriptionRefused(403),
+	UnknownSubscription(404),
 
 
 	Unknown(-1);

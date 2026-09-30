@@ -63,6 +63,8 @@ import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.Subscription;
+import io.bosonnetwork.SubscriptionListener;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.CachedCryptoIdentity;
@@ -74,7 +76,11 @@ import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TokenManager;
 import io.bosonnetwork.kademlia.routing.KBucketEntry;
 import io.bosonnetwork.kademlia.security.Blacklist;
+import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
 import io.bosonnetwork.kademlia.storage.DataStorage;
+import io.bosonnetwork.kademlia.storage.ObservableStorage;
+import io.bosonnetwork.kademlia.subscription.NodeSubscriptions;
+import io.bosonnetwork.kademlia.subscription.SubscriptionClient;
 import io.bosonnetwork.kademlia.tasks.EligiblePeers;
 import io.bosonnetwork.kademlia.tasks.EligibleValue;
 import io.bosonnetwork.utils.AddressUtils;
@@ -126,6 +132,8 @@ public class KadNode extends BosonVerticle implements Node {
 
 	private TokenManager tokenManager;
 	private DataStorage storage;
+	// Subscriptions made by this node's users, merged across both families. Confined to the node's context.
+	private @Nullable NodeSubscriptions subscriptions;
 
 	private final List<Long> timers;
 
@@ -472,7 +480,57 @@ public class KadNode extends BosonVerticle implements Node {
 			if (!dbFile.isAbsolute())
 				storageURI = "jdbc:sqlite:" + config.dataDir().resolve(dbFile).toAbsolutePath();
 		}
-		storage = DataStorage.create(storageURI, config.database().poolSize(), config.database().schema());
+		// Observed so that subscriptions hear about every write, whichever path made it: a remote store or
+		// announce on either family, a local one, or a lookup result cached here.
+		ObservableStorage observable = new ObservableStorage(
+				DataStorage.create(storageURI, config.database().poolSize(), config.database().schema()));
+		storage = observable;
+
+		subscriptions = new NodeSubscriptions(new NodeSubscriptions.Host() {
+			@Override
+			public void runOnContext(Runnable action) {
+				KadNode.this.runOnContext(v -> action.run());
+			}
+
+			@Override
+			public Future<Value> localValue(Id id) {
+				return storage.getValue(id);
+			}
+
+			@Override
+			public Future<List<PeerInfo>> localPeers(Id id) {
+				return storage.getPeers(id);
+			}
+		});
+
+		// Called on whatever thread completed the write; every receiver hops to its own context.
+		observable.addListener(new ObservableStorage.Listener() {
+			@Override
+			public void valueStored(Value value) {
+				DHT d4 = dht4, d6 = dht6;
+				if (d4 != null)
+					d4.valueStored(value);
+				if (d6 != null)
+					d6.valueStored(value);
+
+				NodeSubscriptions subs = subscriptions;
+				if (subs != null)
+					runOnContext(v -> subs.valueStored(value));
+			}
+
+			@Override
+			public void peerStored(PeerInfo peer) {
+				DHT d4 = dht4, d6 = dht6;
+				if (d4 != null)
+					d4.peerStored(peer);
+				if (d6 != null)
+					d6.peerStored(peer);
+
+				NodeSubscriptions subs = subscriptions;
+				if (subs != null)
+					runOnContext(v -> subs.peerStored(peer));
+			}
+		});
 
 		// TODO: empty blacklist for now
 		blacklist = Blacklist.empty();
@@ -618,6 +676,12 @@ public class KadNode extends BosonVerticle implements Node {
 			// DHTs that no longer exist, and would keep persistentAnnounce skipping forever on the
 			// still-draining check.
 			announceTodo.clear();
+
+			// Before the DHTs go, so the storing nodes are told while there is still a socket to tell them on.
+			if (subscriptions != null) {
+				subscriptions.clear();
+				subscriptions = null;
+			}
 		}).compose(v -> {
 			List<Future<Void>> stopFutures = new ArrayList<>(2);
 
@@ -1221,6 +1285,56 @@ public class KadNode extends BosonVerticle implements Node {
 		} finally {
 			announceDispatching = false;
 		}
+	}
+
+	@Override
+	public ContextualFuture<Subscription> subscribeValue(Id id, int knownSequenceNumber,
+			SubscriptionListener<Value> listener) {
+		return subscribe(SubscriptionKind.VALUE, id, knownSequenceNumber, listener);
+	}
+
+	@Override
+	public ContextualFuture<Subscription> subscribePeer(Id id, SubscriptionListener<PeerInfo> listener) {
+		return subscribe(SubscriptionKind.PEER, id, -1, listener);
+	}
+
+	private ContextualFuture<Subscription> subscribe(SubscriptionKind kind, Id id, int knownSequenceNumber,
+			SubscriptionListener<?> listener) {
+		Objects.requireNonNull(id, "id");
+		Objects.requireNonNull(listener, "listener");
+		checkRunning();
+
+		Promise<Subscription> promise = Promise.promise();
+		runOnContext(v -> {
+			NodeSubscriptions subs = subscriptions;
+			if (subs == null) {
+				promise.fail(new IllegalStateException("Node is not running"));
+				return;
+			}
+
+			List<NodeSubscriptions.Family> families = new ArrayList<>(2);
+			for (DHT dht : new DHT[] { dht4, dht6 }) {
+				if (dht == null)
+					continue;
+
+				families.add(new NodeSubscriptions.Family() {
+					@Override
+					public Future<SubscriptionClient.Watch> subscribe(SubscriptionKind k, Id target, int knownSeq,
+							SubscriptionClient.Sink sink) {
+						return dht.subscribe(k, target, knownSeq, sink);
+					}
+
+					@Override
+					public void unsubscribe(SubscriptionClient.Watch watch) {
+						dht.unsubscribe(watch);
+					}
+				});
+			}
+
+			subs.subscribe(families, kind, id, knownSequenceNumber, listener).onComplete(promise);
+		});
+
+		return ContextualFuture.of(promise.future());
 	}
 
 	@Override

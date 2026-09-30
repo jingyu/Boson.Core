@@ -1,0 +1,745 @@
+/*
+ * Copyright (c) 2023 -      bosonnetwork.io
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+package io.bosonnetwork.kademlia.subscription;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.util.ArrayDeque;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
+
+import io.vertx.core.Future;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.bosonnetwork.Id;
+import io.bosonnetwork.NodeInfo;
+import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.exceptions.SubscriptionRefusedException;
+import io.bosonnetwork.kademlia.exceptions.UnknownSubscriptionException;
+import io.bosonnetwork.kademlia.protocol.Message;
+import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
+import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.kademlia.rpc.RpcCallListener;
+import io.bosonnetwork.kademlia.security.SourceKey;
+
+/**
+ * The storing side of subscriptions: who is watching what on this node, and telling them when it changes.
+ * <p>
+ * <b>Soft state only.</b> Nothing here is persisted. A subscriber renews on its own schedule and a renewal
+ * the table has no record of simply creates the subscription again, carrying the sequence number the
+ * subscriber holds - so a restart of this node heals within one renewal, and anything missed meanwhile is
+ * pushed then.
+ * </p>
+ * <p>
+ * <b>Standalone.</b> The only inputs are the three request handlers the DHT forwards (subscribe, cancel)
+ * and the storage change events; the only output is a notification call through {@link Host#send}. None of
+ * it runs inside a lookup or announce task.
+ * </p>
+ * <p>
+ * <b>A push failure degrades the subscription, never the node.</b> Notifications are sent
+ * {@link RpcCall#setLivenessNeutral liveness-neutral}, so a subscriber whose NAT mapping has lapsed is not
+ * demoted, and eventually evicted, from the routing table by its own subscriptions. After
+ * {@link #MAX_CONSECUTIVE_FAILURES} unacknowledged pushes the subscription stalls: it keeps the latest
+ * record pending and pushes nothing more until the subscriber's next renewal proves it reachable again.
+ * </p>
+ * <p>
+ * <b>Bounded.</b> Three quotas, all of which refuse rather than evict - eviction would let a flood push
+ * honest subscribers out: per source unit, per target, and for the node. Pending state is at most one
+ * record per subscription (one per fingerprint for peers, capped), so a node pushing slower than records
+ * change falls behind in latency, never in memory.
+ * </p>
+ * <p>
+ * <b>Damped.</b> A record - the value, or one peer instance - is pushed to a subscription at most once per
+ * {@link #PUSH_MIN_INTERVAL}; changes in between only replace the pending record, so a burst of writes to
+ * one key costs each subscriber one push per interval. One push per subscription is in flight at a time. All
+ * pushes together are held to a node-wide rate.
+ * </p>
+ * <p>
+ * Not thread-safe: owned by one DHT and driven from its event loop.
+ * </p>
+ */
+public class SubscriptionManager {
+	/** Lease granted when the subscriber asks for none, in seconds. */
+	public static final int DEFAULT_LEASE = 10 * 60;
+	/** Shortest lease granted, in seconds. A shorter request is raised to this. */
+	public static final int MIN_LEASE = 60;
+	/** Longest lease granted, in seconds. A longer request is shortened to this. */
+	public static final int MAX_LEASE = 10 * 60;
+
+	/** Subscriptions one source unit may hold on this node. */
+	public static final int MAX_SUBSCRIPTIONS_PER_SOURCE = 64;
+	/** Subscribers one target may have on this node. */
+	public static final int MAX_SUBSCRIBERS_PER_TARGET = 64;
+	/** Subscriptions this node holds in total. */
+	public static final int MAX_SUBSCRIPTIONS = 8192;
+
+	/** Least time between two pushes to one subscription, in milliseconds. */
+	public static final long PUSH_MIN_INTERVAL = 1000;
+	/** Unacknowledged pushes in a row after which a subscription stalls until renewed. */
+	public static final int MAX_CONSECUTIVE_FAILURES = 3;
+	/** Node-wide push rate, per second. */
+	public static final int PUSH_RATE = 200;
+	/** Node-wide push burst. */
+	public static final int PUSH_BURST = 400;
+
+	/**
+	 * Peer fingerprints tracked per subscription, pending and acknowledged each. A target with more
+	 * instances than this is still served; beyond it, a record's acknowledged state may be forgotten and
+	 * pushed once more, and a pending record may wait for a slot.
+	 */
+	static final int MAX_TRACKED_PEERS = 64;
+
+	/**
+	 * What the manager needs from the DHT that owns it. An interface rather than the DHT itself so that the
+	 * manager can be exercised without a network.
+	 */
+	public interface Host {
+		/**
+		 * Returns the current time.
+		 *
+		 * @return epoch milliseconds.
+		 */
+		long now();
+
+		/**
+		 * Sends a call.
+		 *
+		 * @param call the call.
+		 * @return a future settling when the call has been handed to the network or refused.
+		 */
+		Future<RpcCall> send(RpcCall call);
+
+		/**
+		 * Reads the value stored under an id.
+		 *
+		 * @param id the value id.
+		 * @return a future of the value, or of null if none is stored.
+		 */
+		Future<Value> getValue(Id id);
+
+		/**
+		 * Reads the peer records stored under an id.
+		 *
+		 * @param id the peer id.
+		 * @return a future of the records, empty if none is stored.
+		 */
+		Future<List<PeerInfo>> getPeers(Id id);
+
+		/**
+		 * Runs an action once, on the owner's context, after a delay.
+		 *
+		 * @param delay  the delay in milliseconds.
+		 * @param action the action.
+		 */
+		void setTimer(long delay, Runnable action);
+	}
+
+	record Key(Id subscriber, SubscriptionKind kind, Id target) { }
+
+	record Topic(SubscriptionKind kind, Id target) { }
+
+	static final class Subscription {
+		final Key key;
+		final Topic topic;
+		InetSocketAddress address;
+		InetAddress source;
+		long expiresAt;
+		long eligibleAt;
+
+		// VALUE: the highest sequence number the subscriber holds, and the newer value waiting to go out.
+		int ackedSeq = -1;
+		Value pendingValue;
+
+		// PEER: per fingerprint, the same two things.
+		final Map<Long, Integer> ackedPeers = new LinkedHashMap<>(16, 0.75f, true) {
+			@Override
+			protected boolean removeEldestEntry(Map.Entry<Long, Integer> eldest) {
+				return size() > MAX_TRACKED_PEERS;
+			}
+		};
+		final LinkedHashMap<Long, PeerInfo> pendingPeers = new LinkedHashMap<>();
+		// When each fingerprint was last pushed: the damping interval is per record, not per subscription,
+		// so a target's other instances are not held up by one that just changed.
+		final Map<Long, Long> peerPushedAt = new LinkedHashMap<>(16, 0.75f, true) {
+			@Override
+			protected boolean removeEldestEntry(Map.Entry<Long, Long> eldest) {
+				return size() > MAX_TRACKED_PEERS;
+			}
+		};
+		long valuePushedAt;
+
+		boolean inFlight;
+		boolean stalled;
+		boolean queued;
+		boolean removed;
+		int failures;
+
+		Subscription(Key key, InetSocketAddress address, InetAddress source, long expiresAt) {
+			this.key = key;
+			this.topic = new Topic(key.kind(), key.target());
+			this.address = address;
+			this.source = source;
+			this.expiresAt = expiresAt;
+		}
+
+		boolean hasPending() {
+			return key.kind() == SubscriptionKind.VALUE ? pendingValue != null : !pendingPeers.isEmpty();
+		}
+
+		boolean canPush() {
+			return !removed && !stalled && !inFlight && hasPending();
+		}
+
+		/**
+		 * When the earliest pending record may be pushed: each record at most once per
+		 * {@link #PUSH_MIN_INTERVAL}.
+		 */
+		long nextEligible() {
+			if (key.kind() == SubscriptionKind.VALUE)
+				return valuePushedAt + PUSH_MIN_INTERVAL;
+
+			long next = Long.MAX_VALUE;
+			for (Long fingerprint : pendingPeers.keySet())
+				next = Math.min(next, peerPushedAt.getOrDefault(fingerprint, 0L) + PUSH_MIN_INTERVAL);
+			return next;
+		}
+
+		/**
+		 * The pending peer record to push now, or null if every one was pushed too recently.
+		 */
+		PeerInfo eligiblePeer(long now) {
+			for (Map.Entry<Long, PeerInfo> e : pendingPeers.entrySet()) {
+				if (peerPushedAt.getOrDefault(e.getKey(), 0L) + PUSH_MIN_INTERVAL <= now)
+					return e.getValue();
+			}
+			return null;
+		}
+	}
+
+	/** A token bucket, in milliseconds. */
+	static final class RateLimiter {
+		private final double perMilli;
+		private final double capacity;
+		private double tokens;
+		private long last;
+
+		RateLimiter(int perSecond, int burst, long now) {
+			this.perMilli = perSecond / 1000.0;
+			this.capacity = burst;
+			this.tokens = burst;
+			this.last = now;
+		}
+
+		private void refill(long now) {
+			if (now > last) {
+				tokens = Math.min(capacity, tokens + (now - last) * perMilli);
+				last = now;
+			}
+		}
+
+		boolean tryAcquire(long now) {
+			refill(now);
+			if (tokens < 1)
+				return false;
+
+			tokens -= 1;
+			return true;
+		}
+
+		long nextAvailableAt(long now) {
+			refill(now);
+			return tokens >= 1 ? now : now + (long) Math.ceil((1 - tokens) / perMilli);
+		}
+	}
+
+	private final Host host;
+	private final Map<Key, Subscription> subscriptions;
+	private final Map<Topic, Set<Subscription>> byTopic;
+	private final Map<InetAddress, Integer> perSource;
+	private final ArrayDeque<Subscription> ready;
+	private final PriorityQueue<Subscription> waiting;
+	private final RateLimiter limiter;
+	private long armedAt = Long.MAX_VALUE;
+
+	private static final Logger log = LoggerFactory.getLogger(SubscriptionManager.class);
+
+	/**
+	 * Creates a manager.
+	 *
+	 * @param host what the manager needs from its owner.
+	 */
+	public SubscriptionManager(Host host) {
+		this.host = host;
+		this.subscriptions = new HashMap<>();
+		this.byTopic = new HashMap<>();
+		this.perSource = new HashMap<>();
+		this.ready = new ArrayDeque<>();
+		this.waiting = new PriorityQueue<>(Comparator.comparingLong(s -> s.eligibleAt));
+		this.limiter = new RateLimiter(PUSH_RATE, PUSH_BURST, host.now());
+	}
+
+	/**
+	 * Creates or renews a subscription.
+	 * <p>
+	 * A renewal also resynchronises: the subscriber says which sequence number it holds, a stalled
+	 * subscription resumes, and whatever is stored and newer than what the subscriber holds is pushed. That
+	 * is what makes a lost notification late rather than lost.
+	 * </p>
+	 * <p>
+	 * The caller has verified the token for {@code address}, which is what makes it safe to move an existing
+	 * subscription to a new address here: a NAT rebinding, proven by the subscriber receiving there.
+	 * </p>
+	 *
+	 * @param subscriber     the subscriber's node id.
+	 * @param address        the address the request arrived from, where notifications will go.
+	 * @param kind           what is watched.
+	 * @param target         the value id or peer id.
+	 * @param knownSeq       values: the sequence number the subscriber holds, or -1 for none.
+	 * @param requestedLease the requested lease in seconds, or -1 for the default.
+	 * @return the granted lease, in seconds.
+	 * @throws SubscriptionRefusedException if a quota is reached.
+	 */
+	public int subscribe(Id subscriber, InetSocketAddress address, SubscriptionKind kind, Id target,
+			int knownSeq, int requestedLease) throws SubscriptionRefusedException {
+		int lease = requestedLease < 0 ? DEFAULT_LEASE : Math.max(MIN_LEASE, Math.min(MAX_LEASE, requestedLease));
+		long now = host.now();
+		Key key = new Key(subscriber, kind, target);
+		InetAddress source = SourceKey.of(address.getAddress());
+
+		Subscription sub = subscriptions.get(key);
+		if (sub == null) {
+			if (subscriptions.size() >= MAX_SUBSCRIPTIONS)
+				throw new SubscriptionRefusedException("Subscription limit of this node reached");
+
+			Set<Subscription> subs = byTopic.get(new Topic(kind, target));
+			if (subs != null && subs.size() >= MAX_SUBSCRIBERS_PER_TARGET)
+				throw new SubscriptionRefusedException("Subscriber limit of the target reached");
+
+			if (perSource.getOrDefault(source, 0) >= MAX_SUBSCRIPTIONS_PER_SOURCE)
+				throw new SubscriptionRefusedException("Subscription limit of the source reached");
+
+			sub = new Subscription(key, address, source, now + lease * 1000L);
+			subscriptions.put(key, sub);
+			byTopic.computeIfAbsent(sub.topic, t -> new LinkedHashSet<>()).add(sub);
+			perSource.merge(source, 1, Integer::sum);
+			log.debug("New {} subscription to {} from {}@{}", kind, target, subscriber, address);
+		} else {
+			if (!sub.source.equals(source)) {
+				if (perSource.getOrDefault(source, 0) >= MAX_SUBSCRIPTIONS_PER_SOURCE)
+					throw new SubscriptionRefusedException("Subscription limit of the source reached");
+
+				releaseSource(sub.source);
+				perSource.merge(source, 1, Integer::sum);
+				sub.source = source;
+			}
+
+			if (!sub.address.equals(address))
+				log.debug("{} subscription to {} from {} moved {} -> {}", kind, target, subscriber, sub.address, address);
+
+			sub.address = address;
+			sub.expiresAt = now + lease * 1000L;
+			sub.failures = 0;
+			sub.stalled = false;
+		}
+
+		if (kind == SubscriptionKind.VALUE) {
+			// The subscriber's word is authoritative about what it holds: after a restart it may hold less
+			// than it once acknowledged, and it must then be sent the current value again.
+			sub.ackedSeq = knownSeq;
+			if (sub.pendingValue != null && sub.pendingValue.getSequenceNumber() <= knownSeq)
+				sub.pendingValue = null;
+		}
+
+		resync(sub);
+		schedule(sub);
+		return lease;
+	}
+
+	/**
+	 * Cancels a subscription.
+	 * <p>
+	 * No token is needed: the request authenticates as the subscriber's node id, which is the only party
+	 * that can name this subscription, and a cancel only releases state.
+	 * </p>
+	 *
+	 * @param subscriber the subscriber's node id.
+	 * @param kind       what was watched.
+	 * @param target     the value id or peer id.
+	 * @return true if there was such a subscription.
+	 */
+	public boolean cancel(Id subscriber, SubscriptionKind kind, Id target) {
+		Subscription sub = subscriptions.get(new Key(subscriber, kind, target));
+		if (sub == null)
+			return false;
+
+		remove(sub);
+		log.debug("Cancelled {} subscription to {} from {}", kind, target, subscriber);
+		return true;
+	}
+
+	/**
+	 * Takes a value storage now holds.
+	 *
+	 * @param value the effective stored value.
+	 */
+	public void valueStored(Value value) {
+		Set<Subscription> subs = byTopic.get(new Topic(SubscriptionKind.VALUE, value.getId()));
+		if (subs == null)
+			return;
+
+		for (Subscription sub : subs)
+			offer(sub, value);
+	}
+
+	/**
+	 * Takes a peer record storage now holds.
+	 *
+	 * @param peer the effective stored record.
+	 */
+	public void peerStored(PeerInfo peer) {
+		Set<Subscription> subs = byTopic.get(new Topic(SubscriptionKind.PEER, peer.getId()));
+		if (subs == null)
+			return;
+
+		for (Subscription sub : subs)
+			offer(sub, peer);
+	}
+
+	/**
+	 * Drops subscriptions whose lease has run out.
+	 */
+	public void sweep() {
+		long now = host.now();
+		// Collected first: remove() edits the maps being walked.
+		List<Subscription> expired = subscriptions.values().stream().filter(s -> s.expiresAt <= now).toList();
+		for (Subscription sub : expired) {
+			log.debug("{} subscription to {} from {} expired", sub.key.kind(), sub.key.target(), sub.key.subscriber());
+			remove(sub);
+		}
+	}
+
+	/**
+	 * Drops every subscription, for when the owning DHT stops.
+	 */
+	public void clear() {
+		subscriptions.values().forEach(s -> s.removed = true);
+		subscriptions.clear();
+		byTopic.clear();
+		perSource.clear();
+		ready.clear();
+		waiting.clear();
+	}
+
+	/**
+	 * Returns the number of subscriptions held.
+	 *
+	 * @return the count.
+	 */
+	public int size() {
+		return subscriptions.size();
+	}
+
+	/**
+	 * Returns the number of subscribers of one target.
+	 *
+	 * @param kind   what is watched.
+	 * @param target the value id or peer id.
+	 * @return the count.
+	 */
+	public int subscribers(SubscriptionKind kind, Id target) {
+		Set<Subscription> subs = byTopic.get(new Topic(kind, target));
+		return subs == null ? 0 : subs.size();
+	}
+
+	// Package-private, for tests.
+	Subscription get(Id subscriber, SubscriptionKind kind, Id target) {
+		return subscriptions.get(new Key(subscriber, kind, target));
+	}
+
+	private void remove(Subscription sub) {
+		if (sub.removed)
+			return;
+
+		sub.removed = true;
+		subscriptions.remove(sub.key);
+		Set<Subscription> subs = byTopic.get(sub.topic);
+		if (subs != null) {
+			subs.remove(sub);
+			if (subs.isEmpty())
+				byTopic.remove(sub.topic);
+		}
+
+		releaseSource(sub.source);
+		// Left in the queues if it is queued: both skip a removed subscription when they reach it.
+	}
+
+	private void releaseSource(InetAddress source) {
+		perSource.computeIfPresent(source, (k, n) -> n > 1 ? n - 1 : null);
+	}
+
+	private void resync(Subscription sub) {
+		if (sub.key.kind() == SubscriptionKind.VALUE) {
+			host.getValue(sub.key.target()).onSuccess(value -> {
+				if (value != null && !sub.removed)
+					offer(sub, value);
+			}).onFailure(e -> log.warn("Can not read value {} for a subscription", sub.key.target(), e));
+		} else {
+			host.getPeers(sub.key.target()).onSuccess(peers -> {
+				if (peers != null && !sub.removed)
+					peers.forEach(peer -> offer(sub, peer));
+			}).onFailure(e -> log.warn("Can not read peers {} for a subscription", sub.key.target(), e));
+		}
+	}
+
+	private void offer(Subscription sub, Value value) {
+		int seq = value.getSequenceNumber();
+		if (seq <= sub.ackedSeq)
+			return;
+
+		if (sub.pendingValue != null && sub.pendingValue.getSequenceNumber() >= seq)
+			return;
+
+		sub.pendingValue = value;
+		schedule(sub);
+	}
+
+	private void offer(Subscription sub, PeerInfo peer) {
+		long fingerprint = peer.getFingerprint();
+		int seq = peer.getSequenceNumber();
+		Integer acked = sub.ackedPeers.get(fingerprint);
+		if (acked != null && seq <= acked)
+			return;
+
+		PeerInfo pending = sub.pendingPeers.get(fingerprint);
+		if (pending != null && pending.getSequenceNumber() >= seq)
+			return;
+
+		if (pending == null && sub.pendingPeers.size() >= MAX_TRACKED_PEERS) {
+			log.debug("Too many pending peer records for subscription to {} from {}, deferring {}",
+					sub.key.target(), sub.key.subscriber(), fingerprint);
+			return;
+		}
+
+		sub.pendingPeers.put(fingerprint, peer);
+		schedule(sub);
+	}
+
+	private void schedule(Subscription sub) {
+		if (sub.queued || !sub.canPush())
+			return;
+
+		sub.queued = true;
+		sub.eligibleAt = sub.nextEligible();
+		if (host.now() < sub.eligibleAt) {
+			waiting.add(sub);
+			arm();
+		} else {
+			ready.add(sub);
+			pump();
+		}
+	}
+
+	/**
+	 * Sends what the rate allows, then arranges to be called again when more is due.
+	 */
+	void pump() {
+		long now = host.now();
+		while (!waiting.isEmpty() && waiting.peek().eligibleAt <= now)
+			ready.add(waiting.poll());
+
+		while (!ready.isEmpty()) {
+			Subscription sub = ready.peek();
+			if (!sub.canPush()) {
+				ready.poll().queued = false;
+				continue;
+			}
+
+			// Pending state can change while queued; a record that is not yet due goes back to wait.
+			if (sub.nextEligible() > now) {
+				ready.poll();
+				sub.eligibleAt = sub.nextEligible();
+				waiting.add(sub);
+				continue;
+			}
+
+			if (!limiter.tryAcquire(now))
+				break;
+
+			ready.poll().queued = false;
+			push(sub, now);
+		}
+
+		arm();
+	}
+
+	private void arm() {
+		long now = host.now();
+		long next = Long.MAX_VALUE;
+		if (!ready.isEmpty())
+			next = limiter.nextAvailableAt(now);
+		if (!waiting.isEmpty())
+			next = Math.min(next, waiting.peek().eligibleAt);
+
+		// One timer, for the earliest thing due. A later one already armed is left to fire harmlessly.
+		if (next == Long.MAX_VALUE || next >= armedAt)
+			return;
+
+		long at = next;
+		armedAt = at;
+		host.setTimer(Math.max(1, at - now), () -> {
+			if (armedAt == at)
+				armedAt = Long.MAX_VALUE;
+			pump();
+		});
+	}
+
+	private void push(Subscription sub, long now) {
+		Message request;
+		Object record;
+		if (sub.key.kind() == SubscriptionKind.VALUE) {
+			record = sub.pendingValue;
+			request = Message.notifyValueRequest(sub.pendingValue);
+			sub.valuePushedAt = now;
+		} else {
+			PeerInfo peer = sub.eligiblePeer(now);
+			record = peer;
+			request = Message.notifyPeerRequest(peer);
+			sub.peerPushedAt.put(peer.getFingerprint(), now);
+		}
+
+		sub.inFlight = true;
+
+		// One settlement per push, whichever of the call's outcome and a refused send arrives first.
+		boolean[] settled = new boolean[1];
+		RpcCall call = new RpcCall(NodeInfo.of(sub.key.subscriber(), sub.address), request)
+				.setLivenessNeutral(true)
+				.addListener(new RpcCallListener() {
+					@Override
+					public void onStateChange(RpcCall c, RpcCall.State previous, RpcCall.State state) {
+					}
+
+					@Override
+					public void onResponse(RpcCall c) {
+						if (!settled[0]) {
+							settled[0] = true;
+							acknowledged(sub, record);
+						}
+					}
+
+					@Override
+					public void onTimeout(RpcCall c) {
+						if (!settled[0]) {
+							settled[0] = true;
+							failed(sub, "timeout");
+						}
+					}
+
+					@Override
+					public void onError(RpcCall c) {
+						if (settled[0])
+							return;
+
+						settled[0] = true;
+						if (c.getCause() instanceof UnknownSubscriptionException) {
+							log.debug("{} has no {} subscription to {} any more, dropping it", sub.key.subscriber(),
+									sub.key.kind(), sub.key.target());
+							sub.inFlight = false;
+							remove(sub);
+						} else {
+							failed(sub, String.valueOf(c.getCause()));
+						}
+					}
+
+					@Override
+					public void onCancel(RpcCall c) {
+						if (!settled[0]) {
+							settled[0] = true;
+							// Cancelled on our side - a stop - which says nothing about the subscriber.
+							sub.inFlight = false;
+							schedule(sub);
+						}
+					}
+				});
+
+		host.send(call).onFailure(e -> {
+			if (!settled[0]) {
+				settled[0] = true;
+				failed(sub, e.getMessage());
+			}
+		});
+	}
+
+	private void acknowledged(Subscription sub, Object record) {
+		sub.inFlight = false;
+		sub.failures = 0;
+		if (record instanceof Value value) {
+			sub.ackedSeq = Math.max(sub.ackedSeq, value.getSequenceNumber());
+			if (sub.pendingValue != null && sub.pendingValue.getSequenceNumber() <= sub.ackedSeq)
+				sub.pendingValue = null;
+		} else if (record instanceof PeerInfo peer) {
+			long fingerprint = peer.getFingerprint();
+			int seq = sub.ackedPeers.merge(fingerprint, peer.getSequenceNumber(), Math::max);
+			PeerInfo pending = sub.pendingPeers.get(fingerprint);
+			if (pending != null && pending.getSequenceNumber() <= seq)
+				sub.pendingPeers.remove(fingerprint);
+		}
+
+		schedule(sub);
+	}
+
+	private void failed(Subscription sub, String reason) {
+		sub.inFlight = false;
+		if (sub.removed)
+			return;
+
+		if (++sub.failures >= MAX_CONSECUTIVE_FAILURES) {
+			sub.stalled = true;
+			log.debug("{} subscription to {} from {}@{} stalled after {} failed pushes ({}), waiting for renewal",
+					sub.key.kind(), sub.key.target(), sub.key.subscriber(), sub.address, sub.failures, reason);
+			return;
+		}
+
+		schedule(sub);
+	}
+
+	// Package-private, for tests: drops removed subscriptions still sitting in the queues.
+	int queued() {
+		int n = 0;
+		for (Iterator<Subscription> it = ready.iterator(); it.hasNext(); )
+			if (!it.next().removed)
+				n++;
+		for (Subscription s : waiting)
+			if (!s.removed)
+				n++;
+		return n;
+	}
+}

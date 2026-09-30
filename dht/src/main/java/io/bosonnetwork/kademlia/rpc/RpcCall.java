@@ -63,6 +63,9 @@ public class RpcCall {
 	/** Indicates whether an unverified inbound packet is what caused this call to be made. */
 	private boolean unsolicited;
 
+	/** Indicates whether the outcome of this call says nothing about the target's liveness or ours. */
+	private boolean livenessNeutral;
+
 	/** Timestamp when the request was sent, in milliseconds, or -1 if not sent. */
 	private long sentTime = -1;
 
@@ -189,6 +192,40 @@ public class RpcCall {
 	 */
 	public boolean isUnsolicited() {
 		return unsolicited;
+	}
+
+	/**
+	 * Marks this call as one whose outcome must not be read as evidence about the target's liveness, or
+	 * about whether this node can still be reached.
+	 * <p>
+	 * A subscription notification is the case this exists for. It goes to whatever NAT mapping the
+	 * subscriber last opened towards us, and a mapping that has lapsed swallows it - which says the
+	 * mapping lapsed, not that the subscriber is dead. Counted as an ordinary timeout it would demote the
+	 * subscriber's routing table entry and, repeated, remove it: a subscriber behind a flaky NAT would be
+	 * pushed out of the table by its own subscriptions. Counted as an unanswered send it would also feed
+	 * the check that decides this node's own socket has gone deaf.
+	 * </p>
+	 * <p>
+	 * So a marked call is invisible to all of that: it is not reported as sent, its timeout is not
+	 * reported, and it does not touch the loss-rate metrics. Its failure is the caller's to handle - for a
+	 * notification, by degrading that one subscription.
+	 * </p>
+	 *
+	 * @param livenessNeutral true to keep this call out of liveness and reachability accounting
+	 * @return this RpcCall instance for method chaining
+	 */
+	public RpcCall setLivenessNeutral(boolean livenessNeutral) {
+		this.livenessNeutral = livenessNeutral;
+		return this;
+	}
+
+	/**
+	 * Checks whether this call is kept out of liveness and reachability accounting.
+	 *
+	 * @return true if the call's outcome says nothing about the target's liveness or ours
+	 */
+	public boolean isLivenessNeutral() {
+		return livenessNeutral;
 	}
 
 	/**

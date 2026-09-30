@@ -966,11 +966,15 @@ public class RpcServer implements Measured {
 							if (metrics != null) {
 								metrics.responseReceived(message);
 
-								// Update loss rate: 0f for successful response, 1f for timeout
-								if (call.isReachableAtCreationTime())
-									metrics.verifiedLossRateUpdate(0f);
-								else
-									metrics.unverifiedLossRateUpdate(0f);
+								// Update loss rate: 0f for successful response, 1f for timeout. Skipped for a
+								// liveness-neutral call, whose timeouts are not counted either - counting only
+								// its successes would bias the rate.
+								if (!call.isLivenessNeutral()) {
+									if (call.isReachableAtCreationTime())
+										metrics.verifiedLossRateUpdate(0f);
+									else
+										metrics.unverifiedLossRateUpdate(0f);
+								}
 							}
 						}
 
@@ -1113,6 +1117,10 @@ public class RpcServer implements Measured {
 				if (state != RpcCall.State.TIMEOUT)
 					return;
 
+				// Nor does the timeout of a call whose outcome is not evidence about the target at all.
+				if (c.isLivenessNeutral())
+					return;
+
 				if (callTimeoutHandler != null)
 					callTimeoutHandler.accept(c);
 
@@ -1194,12 +1202,16 @@ public class RpcServer implements Measured {
 		return sendMessage(call.getRequest()).andThen(ar -> {
 			if (ar.succeeded()) {
 				call.sent();
-				// Feeds checkReachability: an unanswered request is the only evidence we have that the
-				// socket has gone deaf, as opposed to the network simply being quiet.
-				lastCallSent = System.currentTimeMillis();
+				// A liveness-neutral call reports none of this - see RpcCall#setLivenessNeutral. Its failure
+				// is expected to say something about a NAT mapping rather than about the target or us.
+				if (!call.isLivenessNeutral()) {
+					// Feeds checkReachability: an unanswered request is the only evidence we have that the
+					// socket has gone deaf, as opposed to the network simply being quiet.
+					lastCallSent = System.currentTimeMillis();
 
-				if (callSentHandler != null)
-					callSentHandler.accept(call);
+					if (callSentHandler != null)
+						callSentHandler.accept(call);
+				}
 
 				// Nothing is credited to the inbound throttle here, on purpose. Sending a call used to
 				// clear the target's inbound counter outright, which was the right intent - the answer we

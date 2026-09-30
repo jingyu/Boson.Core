@@ -134,6 +134,8 @@ public class KadException extends BosonException {
 			case InvalidToken -> new InvalidTokenException(message);
 			case InvalidValue -> new InvalidValueException(message);
 			case InvalidPeer -> new InvalidPeerException(message);
+			case SubscriptionRefused -> new SubscriptionRefusedException(message);
+			case UnknownSubscription -> new UnknownSubscriptionException(message);
 			case MessageTooBig -> new MessageTooBigException(message);
 			// GenericError, ServerError, MethodUnknown, SaltTooBig, Success, Unknown
 			default -> new KadException(code, message);

@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -55,6 +56,8 @@ import io.bosonnetwork.Node;
 import io.bosonnetwork.NodeConfiguration;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
+import io.bosonnetwork.Subscription;
+import io.bosonnetwork.SubscriptionListener;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
@@ -645,5 +648,101 @@ public class NodeAsyncTests {
 				});
 			});
 		}).toVertxFuture().onComplete(context.succeedingThenComplete());
+	}
+
+	/**
+	 * End to end: a node subscribed to a value hears each new version written by another node, once and
+	 * in order, and a second listener on the same node is caught up at once.
+	 */
+	@Test
+	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
+	void testSubscribeValue(VertxTestContext context) throws Exception {
+		KadNode subscriber = testNodes.get(3);
+		KadNode writer = testNodes.get(TEST_NODES - 4);
+		KeyPair owner = KeyPair.random();
+		Value v1 = Value.signedBuilder().key(owner).sequenceNumber(1).data("first".getBytes()).build();
+		Value v2 = Value.signedBuilder().key(owner).sequenceNumber(2).data("second".getBytes()).build();
+
+		List<Value> received = new CopyOnWriteArrayList<>();
+		Promise<Void> gotV1 = Promise.promise();
+		Promise<Void> gotV2 = Promise.promise();
+		SubscriptionListener<Value> listener = value -> {
+			received.add(value);
+			if (value.getSequenceNumber() == 1)
+				gotV1.tryComplete();
+			else if (value.getSequenceNumber() == 2)
+				gotV2.tryComplete();
+		};
+
+		Promise<Value> lateJoiner = Promise.promise();
+		Subscription[] subscription = new Subscription[1];
+
+		// Nothing is stored yet: the storing nodes accept a subscription to a value that does not exist.
+		subscriber.subscribeValue(v1.getId(), listener).thenCompose(sub -> {
+			subscription[0] = sub;
+			context.verify(() -> assertTrue(sub.getSubscribedNodes() >= 1, "accepted by at least one node"));
+			return writer.storeValue(v1);
+		}).thenCompose(r -> ContextualFuture.of(gotV1.future()))
+				.thenCompose(v -> writer.storeValue(v2))
+				.thenCompose(r -> ContextualFuture.of(gotV2.future()))
+				.thenCompose(v -> subscriber.subscribeValue(v1.getId(), lateJoiner::tryComplete))
+				.thenCompose(late -> ContextualFuture.of(lateJoiner.future()).thenCompose(v -> late.cancel()))
+				.thenCompose(v -> subscription[0].cancel())
+				.whenComplete((v, e) -> {
+					if (e != null) {
+						context.failNow(e);
+						return;
+					}
+
+					context.verify(() -> {
+						assertEquals(List.of(v1, v2), received, "each version once, in order");
+						assertEquals(v2, lateJoiner.future().result(), "a late listener is caught up at once");
+						assertTrue(subscription[0].isCancelled());
+					});
+					context.completeNow();
+				});
+	}
+
+	/**
+	 * End to end: a node subscribed to a peer id hears a new instance, and a changed one, announced by another
+	 * node.
+	 */
+	@Test
+	@Timeout(value = 2, timeUnit = TimeUnit.MINUTES)
+	void testSubscribePeer(VertxTestContext context) throws Exception {
+		KadNode subscriber = testNodes.get(5);
+		KadNode announcer = testNodes.get(TEST_NODES - 6);
+		KeyPair key = KeyPair.random();
+		PeerInfo first = PeerInfo.builder().key(key).fingerprint(1).sequenceNumber(1)
+				.endpoint("tcp://203.0.113.10:3456").build();
+		PeerInfo moved = PeerInfo.builder().key(key).fingerprint(1).sequenceNumber(2)
+				.endpoint("tcp://203.0.113.11:3456").build();
+
+		List<PeerInfo> received = new CopyOnWriteArrayList<>();
+		Promise<Void> gotFirst = Promise.promise();
+		Promise<Void> gotMoved = Promise.promise();
+		SubscriptionListener<PeerInfo> listener = peer -> {
+			received.add(peer);
+			if (peer.getSequenceNumber() == 1)
+				gotFirst.tryComplete();
+			else if (peer.getSequenceNumber() == 2)
+				gotMoved.tryComplete();
+		};
+
+		subscriber.subscribePeer(first.getId(), listener).thenCompose(sub ->
+				announcer.announcePeer(first)
+						.thenCompose(r -> ContextualFuture.of(gotFirst.future()))
+						.thenCompose(v -> announcer.announcePeer(moved))
+						.thenCompose(r -> ContextualFuture.of(gotMoved.future()))
+						.thenCompose(v -> sub.cancel())
+		).whenComplete((v, e) -> {
+			if (e != null) {
+				context.failNow(e);
+				return;
+			}
+
+			context.verify(() -> assertEquals(List.of(first, moved), received));
+			context.completeNow();
+		});
 	}
 }

@@ -775,6 +775,16 @@ public final class KadConstants {
 	public static final int SUSPICIOUS_NODES_PURGE_INTERVAL = 60 * 1000;            // 60 seconds
 
 	/**
+	 * How often subscriptions whose lease has run out are dropped.
+	 * <p>
+	 * Memory only, as with the purges above: a lapsed subscription left in the table a little longer can
+	 * at most cost a push to a subscriber that has stopped renewing, and pushes to one that does not answer
+	 * stall after a few attempts anyway.
+	 * </p>
+	 */
+	public static final int SUBSCRIPTION_SWEEP_INTERVAL = 60 * 1000;                // 60 seconds
+
+	/**
 	 * Delay before the first purge of expired local storage after startup.
 	 * See {@link #STORAGE_EXPIRE_INTERVAL}.
 	 */
