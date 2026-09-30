@@ -88,4 +88,15 @@ public non-sealed interface ClientDevice extends Principal {
 	 * @return an {@link Optional} with the last known address, or empty if unknown
 	 */
 	Optional<String> getLastAddress();
+
+	/**
+	 * Determines if the device may act as an administrator. The provider that looks the device up
+	 * decides it, and should grant it only to a device the user's own key flagged as such, of a user who
+	 * is an administrator.
+	 *
+	 * @return {@code true} if the device may act as an administrator, {@code false} otherwise
+	 */
+	default boolean isAdmin() {
+		return false;
+	}
 }
