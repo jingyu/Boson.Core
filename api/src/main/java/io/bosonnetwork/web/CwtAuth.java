@@ -46,6 +46,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.cwt.Claim;
+import io.bosonnetwork.cwt.InvalidClaimException;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
@@ -67,6 +68,8 @@ public class CwtAuth implements AuthenticationProvider {
 	private final Identity identity;
 	private final ClientProvider clientProvider;
 	private final int defaultTtl;
+	private final int maxSelfIssuedLifetime;
+	private final int leeway;
 	private final @Nullable String defaultScope;
 	private final SignedCwt.Parser cwtParser;
 
@@ -74,6 +77,8 @@ public class CwtAuth implements AuthenticationProvider {
 		this.identity = Objects.requireNonNull(options.getIdentity(), "identity");
 		this.clientProvider = Objects.requireNonNull(options.getClientProvider(), "clientProvider");
 		this.defaultTtl = options.getDefaultTtl();
+		this.maxSelfIssuedLifetime = options.getMaxSelfIssuedLifetime();
+		this.leeway = options.getLeeway();
 		this.defaultScope = options.getDefaultScope();
 
 		this.cwtParser = SignedCwt.parser().setLeeway(options.getLeeway());
@@ -161,6 +166,20 @@ public class CwtAuth implements AuthenticationProvider {
 			!(clientId != null && issuerId.equals(clientId)))
 			return Future.failedFuture("Invalid authorization token: unacceptable issuer");
 
+		// Every token must expire, and only this server's own tokens may live long: a token that a user
+		// or a client signs is bounded, so that a key which leaks for a moment cannot mint one that
+		// outlives the leak. The parser has already refused an expiration that is not a number.
+		final Number exp = cwt.getClaim(Claim.EXPIRATION.getValue());
+		if (exp == null)
+			return Future.failedFuture(new InvalidClaimException("Invalid authorization token: missing expiration"));
+		if (!issuerId.equals(identity.getId())) {
+			long latest = System.currentTimeMillis() / 1000 + maxSelfIssuedLifetime + leeway;
+			if (exp.longValue() > latest)
+				return Future.failedFuture(new InvalidClaimException(
+						"Invalid authorization token: a self-issued token may live at most " +
+						maxSelfIssuedLifetime + " seconds"));
+		}
+
 		final String scope = cwt.getClaimAsString(Claim.SCOPE.getValue());
 
 		Future<Principal> getClient;
@@ -204,6 +223,8 @@ public class CwtAuth implements AuthenticationProvider {
 			userId = d.getUserId();
 			clientId = d.getId();
 			authorizations.add(RoleBasedAuthorization.create(Role.CLIENT.toString()));
+			if (d.isAdmin())
+				authorizations.add(RoleBasedAuthorization.create(Role.ADMIN.toString()));
 		} else if (client instanceof SuperNodeInfo n) {
 			userId = n.getId();
 			clientId = null;

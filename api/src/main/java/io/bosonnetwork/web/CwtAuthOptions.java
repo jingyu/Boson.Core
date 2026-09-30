@@ -33,30 +33,40 @@ import io.bosonnetwork.Identity;
  * Authentication options for configuring the {@link CwtAuth} provider.
  * <p>
  * This class provides configuration properties for cryptographic identity, client
- * lookup, audience restrictions, token lifetime (TTL), and clock skew leeway.
+ * lookup, audience restrictions, token lifetime (TTL), the longest lifetime accepted from a token this
+ * server did not issue, and clock skew leeway.
  * </p>
  */
 public class CwtAuthOptions {
 	private static final int DEFAULT_LEEWAY = 5 * 60;           // 5 minutes in seconds
 	private static final int DEFAULT_TTL = 14 * 24 * 60 * 60;   // 14 days in seconds
 
+	/**
+	 * The longest a token signed by a user or a client may live by default, in seconds: one hour, the
+	 * longest any Boson client asks for (messaging federation).
+	 */
+	public static final int DEFAULT_MAX_SELF_ISSUED_LIFETIME = 60 * 60;
+
 	private @Nullable Identity identity;
 	private @Nullable ClientProvider clientProvider;
 	private @Nullable Id expectedAudience;
 	private int leeway; // seconds
 	private int defaultTtl; // seconds
+	private int maxSelfIssuedLifetime; // seconds
 	private @Nullable String defaultScope;
 
 	/**
 	 * Creates a new instance of {@code CwtAuthOptions} with default settings.
 	 * <p>
 	 * The default clock skew leeway is 5 minutes (300 seconds) and the default
-	 * token time-to-live (TTL) is 14 days.
+	 * token time-to-live (TTL) is 14 days. A token signed by a user or a client may live one hour at
+	 * most.
 	 * </p>
 	 */
 	public CwtAuthOptions() {
 		this.leeway = DEFAULT_LEEWAY;
 		this.defaultTtl = DEFAULT_TTL;
+		this.maxSelfIssuedLifetime = DEFAULT_MAX_SELF_ISSUED_LIFETIME;
 	}
 
 	/**
@@ -172,6 +182,34 @@ public class CwtAuthOptions {
 		if (defaultTtl < 0)
 			throw new IllegalArgumentException("defaultTtl must be >= 0");
 		this.defaultTtl = defaultTtl;
+		return this;
+	}
+
+	/**
+	 * Returns the longest lifetime accepted from a token this server did not issue, in seconds.
+	 *
+	 * @return the longest accepted lifetime of a self-issued token, in seconds
+	 * @see #setMaxSelfIssuedLifetime(int)
+	 */
+	public int getMaxSelfIssuedLifetime() {
+		return maxSelfIssuedLifetime;
+	}
+
+	/**
+	 * Sets the longest lifetime accepted from a token this server did not issue: one a user or a client
+	 * signed with its own key. Such a token is refused when its expiration lies further ahead than this,
+	 * plus the {@linkplain #setLeeway(int) leeway}, so that a key which leaks for a moment cannot mint a
+	 * token that outlives the leak. Tokens this server issues itself are bounded by their own TTL
+	 * instead.
+	 *
+	 * @param maxSelfIssuedLifetime the longest accepted lifetime in seconds; must be positive
+	 * @return this CwtAuthOptions instance for method chaining
+	 * @throws IllegalArgumentException if maxSelfIssuedLifetime is not positive
+	 */
+	public CwtAuthOptions setMaxSelfIssuedLifetime(int maxSelfIssuedLifetime) {
+		if (maxSelfIssuedLifetime <= 0)
+			throw new IllegalArgumentException("maxSelfIssuedLifetime must be > 0");
+		this.maxSelfIssuedLifetime = maxSelfIssuedLifetime;
 		return this;
 	}
 

@@ -499,4 +499,129 @@ public class CwtAuthTest {
 			});
 		}));
 	}
+
+	@Test
+	void testSelfIssuedTokenWithinMaxLifetime(VertxTestContext context) throws Exception {
+		int lifetime = CwtAuthOptions.DEFAULT_MAX_SELF_ISSUED_LIFETIME - 10;
+		String userToken = generateClientToken(aliceIdentity, alice.getId(), null, superNodeIdentity.getId(), lifetime, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), superNodeIdentity.getId(), lifetime, "test");
+
+		Future.all(auth.authenticate(new TokenCredentials(userToken)), auth.authenticate(new TokenCredentials(deviceToken)))
+				.onComplete(context.succeedingThenComplete());
+	}
+
+	@Test
+	void testSelfIssuedTokenBeyondMaxLifetime(VertxTestContext context) throws Exception {
+		// A key that leaked for a moment must not mint a token that outlives the leak.
+		int lifetime = CwtAuthOptions.DEFAULT_MAX_SELF_ISSUED_LIFETIME + 120;
+		String userToken = generateClientToken(aliceIdentity, alice.getId(), null, superNodeIdentity.getId(), lifetime, "test");
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), superNodeIdentity.getId(), lifetime, "test");
+
+		Future<User> f1 = auth.authenticate(new TokenCredentials(userToken)).andThen(ar -> context.verify(() -> {
+			assertTrue(ar.failed());
+			assertInstanceOf(InvalidClaimException.class, ar.cause());
+		})).otherwiseEmpty();
+		Future<User> f2 = auth.authenticate(new TokenCredentials(deviceToken)).andThen(ar -> context.verify(() -> {
+			assertTrue(ar.failed());
+			assertInstanceOf(InvalidClaimException.class, ar.cause());
+		})).otherwiseEmpty();
+
+		Future.all(f1, f2).andThen(context.succeedingThenComplete());
+	}
+
+	@Test
+	void testMaxSelfIssuedLifetimeIsConfigurable(VertxTestContext context) throws Exception {
+		CwtAuth strict = CwtAuth.create(new CwtAuthOptions()
+				.setIdentity(superNodeIdentity)
+				.setExpectedAudience(superNodeIdentity.getId())
+				.setLeeway(0)
+				.setMaxSelfIssuedLifetime(60)
+				.setClientProvider(options.getClientProvider()));
+		String deviceToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), superNodeIdentity.getId(), 120, "test");
+
+		strict.authenticate(new TokenCredentials(deviceToken)).onComplete(ar -> context.verify(() -> {
+			assertTrue(ar.failed());
+			assertInstanceOf(InvalidClaimException.class, ar.cause());
+			context.completeNow();
+		}));
+	}
+
+	@Test
+	void testServerIssuedTokenMayOutliveMaxSelfIssuedLifetime(VertxTestContext context) {
+		// The server's own tokens are bounded by their TTL, not by the self-issued limit.
+		String token = auth.generateToken(alice.getId(), iPad.getId(), "test", 14 * 24 * 60 * 60);
+		auth.authenticate(new TokenCredentials(token)).onComplete(context.succeedingThenComplete());
+	}
+
+	@Test
+	void testTokenWithoutExpiration(VertxTestContext context) throws Exception {
+		// Neither a self-issued token nor one that claims this server as its issuer may live forever.
+		String selfIssued = SignedCwt.builder(iPadIdentity)
+				.subject(alice.getId())
+				.clientId(iPad.getId())
+				.audience(superNodeIdentity.getId())
+				.buildToString();
+		String serverIssued = SignedCwt.builder(superNodeIdentity)
+				.subject(alice.getId())
+				.audience(superNodeIdentity.getId())
+				.buildToString();
+
+		Future<User> f1 = auth.authenticate(new TokenCredentials(selfIssued)).andThen(ar -> context.verify(() -> {
+			assertTrue(ar.failed());
+			assertInstanceOf(InvalidClaimException.class, ar.cause());
+		})).otherwiseEmpty();
+		Future<User> f2 = auth.authenticate(new TokenCredentials(serverIssued)).andThen(ar -> context.verify(() -> {
+			assertTrue(ar.failed());
+			assertInstanceOf(InvalidClaimException.class, ar.cause());
+		})).otherwiseEmpty();
+
+		Future.all(f1, f2).andThen(context.succeedingThenComplete());
+	}
+
+	@Test
+	void testDeviceAdminAuthorizationFollowsTheDevice(VertxTestContext context) throws Exception {
+		// Only a device its provider reports as an administrator acts as one; any other device of the same
+		// user stays a client, whatever its token claims.
+		final Identity adminDeviceIdentity = new CryptoIdentity();
+		final ClientDevice adminDevice = new TestClientDevice(adminDeviceIdentity.getId(), alice.getId(), "Passkey", "Test") {
+			@Override
+			public boolean isAdmin() {
+				return true;
+			}
+		};
+
+		CwtAuth deviceAuth = CwtAuth.create(new CwtAuthOptions()
+				.setIdentity(superNodeIdentity)
+				.setExpectedAudience(superNodeIdentity.getId())
+				.setLeeway(0)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<Optional<Principal>> getUser(Id userId) {
+						return Future.succeededFuture(Optional.empty());
+					}
+
+					@Override
+					public Future<Optional<Principal>> getClient(Id userId, Id clientId) {
+						if (clientId.equals(adminDevice.getId()))
+							return Future.succeededFuture(Optional.of(adminDevice));
+						if (clientId.equals(iPad.getId()))
+							return Future.succeededFuture(Optional.of(iPad));
+						return Future.succeededFuture(Optional.empty());
+					}
+				}));
+
+		String adminToken = generateClientToken(adminDeviceIdentity, alice.getId(), adminDevice.getId(), superNodeIdentity.getId(), 0, "api:admin");
+		String plainToken = generateClientToken(iPadIdentity, alice.getId(), iPad.getId(), superNodeIdentity.getId(), 0, "api:admin");
+
+		Future<User> f1 = deviceAuth.authenticate(new TokenCredentials(adminToken)).andThen(context.succeeding(user -> context.verify(() -> {
+			assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.CLIENT.toString())));
+			assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.ADMIN.toString())));
+		})));
+		Future<User> f2 = deviceAuth.authenticate(new TokenCredentials(plainToken)).andThen(context.succeeding(user -> context.verify(() -> {
+			assertTrue(user.authorizations().verify(RoleBasedAuthorization.create(Role.CLIENT.toString())));
+			assertFalse(user.authorizations().verify(RoleBasedAuthorization.create(Role.ADMIN.toString())));
+		})));
+
+		Future.all(f1, f2).andThen(context.succeedingThenComplete());
+	}
 }
