@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import io.vertx.core.Future;
 import org.jspecify.annotations.Nullable;
@@ -264,7 +265,7 @@ public class StaticFederationContext implements FederationContext {
 		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
 		return sns == null ? List.of() : sns.services.stream()
 				.filter(s -> s.getPeerId().equals(peerId))
-				.toList();
+				.collect(Collectors.toUnmodifiableList());
 	}
 
 	/**
@@ -291,7 +292,7 @@ public class StaticFederationContext implements FederationContext {
 		return nodeServicesRegistry.values().stream()
 				.flatMap(sns -> sns.services.stream())
 				.filter(s -> s.getPeerId().equals(peerId))
-				.toList();
+				.collect(Collectors.toUnmodifiableList());
 	}
 
 	/**

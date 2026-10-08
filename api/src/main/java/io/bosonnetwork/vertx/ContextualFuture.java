@@ -42,6 +42,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -252,7 +253,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * @return a new ContextualFuture that is completed when all the given futures complete
 	 */
 	public static @NonNull ContextualFuture<Void> allOf(@NonNull ContextualFuture<?>... futures) {
-		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).collect(Collectors.toUnmodifiableList());
 		Future<Void> cf = Future.all(vfs).mapEmpty();
 		return of(cf);
 	}
@@ -264,7 +265,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * @return a new ContextualFuture that is completed when all the given futures complete
 	 */
 	public static @NonNull ContextualFuture<Void> allOf(@NonNull Collection<ContextualFuture<?>> futures) {
-		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).collect(Collectors.toUnmodifiableList());
 		Future<Void> cf = Future.all(vfs).mapEmpty();
 		return of(cf);
 	}
@@ -276,7 +277,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * @return a new ContextualFuture that is completed when any of the given futures succeed
 	 */
 	public static @NonNull ContextualFuture<Void> anyOf(@NonNull ContextualFuture<?>... futures) {
-		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).toList();
+		List<? extends Future<?>> vfs = Arrays.stream(futures).map(f -> f.future).collect(Collectors.toUnmodifiableList());
 		Future<Void> cf = Future.any(vfs).mapEmpty();
 		return of(cf);
 	}
@@ -288,7 +289,7 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 * @return a new ContextualFuture that is completed when any of the given futures succeed
 	 */
 	public static @NonNull ContextualFuture<Void> anyOf(@NonNull Collection<ContextualFuture<?>> futures) {
-		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).toList();
+		List<? extends Future<?>> vfs = futures.stream().map(f -> f.future).collect(Collectors.toUnmodifiableList());
 		Future<Void> cf = Future.any(vfs).mapEmpty();
 		return of(cf);
 	}
