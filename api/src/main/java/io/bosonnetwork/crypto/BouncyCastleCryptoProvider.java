@@ -1653,19 +1653,20 @@ public class BouncyCastleCryptoProvider implements CryptoProvider {
 					.addExtension(Extension.extendedKeyUsage, false,
 							new ExtendedKeyUsage(new KeyPurposeId[]{KeyPurposeId.id_kp_serverAuth, KeyPurposeId.id_kp_clientAuth}));
 
-			// Optional Boson identity binding as a standard issuerAltName URI GeneralName: an Ed25519
-			// signature over the ECDSA SubjectPublicKeyInfo, so peers can pin the identity via HybridTrustManager.
+			// Optional Boson identity binding as standard issuerAltName URI GeneralNames, so peers can pin
+			// the identity via HybridTrustManager: the current form (boson:certbind:1, an Ed25519 signature
+			// over its label and the ECDSA SubjectPublicKeyInfo), then the first form (a signature over the
+			// bare SPKI) for clients that predate it. Verifiers take the current form when it is there.
 			if (identityKey != null) {
 				byte[] spki = keyPair.getPublic().getEncoded();
 				byte[] sk = identityKey.bytes();
 				byte[] publicKey = Arrays.copyOfRange(sk, 32, 64);
-				Ed25519Signer ed = new Ed25519Signer();
-				ed.init(true, keyOf(identityKey));
-				ed.update(spki, 0, spki.length);
-				byte[] signature = ed.generateSignature();
-				String uri = CertUtil.formatIdentityBinding(publicKey, signature);
-				builder.addExtension(Extension.issuerAlternativeName, false,
-						new GeneralNames(new GeneralName(GeneralName.uniformResourceIdentifier, uri)));
+				String current = CertUtil.formatCertBinding(publicKey, ed25519Sign(CertUtil.certBindingMessage(spki), identityKey));
+				String legacy = CertUtil.formatLegacyIdentityBinding(publicKey, ed25519Sign(spki, identityKey));
+				builder.addExtension(Extension.issuerAlternativeName, false, new GeneralNames(new GeneralName[] {
+						new GeneralName(GeneralName.uniformResourceIdentifier, current),
+						new GeneralName(GeneralName.uniformResourceIdentifier, legacy)
+				}));
 			}
 
 			X509CertificateHolder certHolder = builder.build(signer);

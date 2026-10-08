@@ -678,13 +678,14 @@ public class SodiumCryptoProvider implements CryptoProvider {
 			Date notBefore = Date.from(now.minus(10, ChronoUnit.MINUTES));
 			Date notAfter = Date.from(now.plus(3650, ChronoUnit.DAYS));
 
-			// Boson identity binding: Ed25519 signature over the ECDSA SPKI, encoded as an issuerAltName URI.
+			// Boson identity binding, current form only: Ed25519 signature over its label and the ECDSA SPKI,
+			// encoded as an issuerAltName URI.
 			String bindingUri = null;
 			if (identityKey != null) {
 				byte[] sk = identityKey.bytes();
 				byte[] publicKey = Arrays.copyOfRange(sk, 32, 64);
-				byte[] signature = ed25519Sign(Arrays.copyOfRange(sk, 0, 32), spki);
-				bindingUri = CertUtil.formatIdentityBinding(publicKey, signature);
+				byte[] signature = ed25519Sign(Arrays.copyOfRange(sk, 0, 32), CertUtil.certBindingMessage(spki));
+				bindingUri = CertUtil.formatCertBinding(publicKey, signature);
 			}
 
 			byte[] tbs = encodeEcdsaTBS(serial, cn, notBefore, notAfter, spki, ipAddress, hostName, enableWildcard, bindingUri);

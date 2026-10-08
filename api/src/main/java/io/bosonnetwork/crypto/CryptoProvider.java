@@ -488,9 +488,11 @@ public interface CryptoProvider {
 	 * <p>
 	 * Browsers do not support Ed25519 server certificates, so this produces a browser-compatible ECDSA
 	 * certificate. When {@code identityKey} is non-null, an {@code issuerAltName} URI
-	 * ({@code boson:ed25519:<base58 public key>:<base64url signature>}) binds the ECDSA key to a Boson
-	 * identity: the signature covers the certificate's {@code SubjectPublicKeyInfo} DER, letting
-	 * {@link HybridTrustManager} pin the identity even though the TLS key is not the identity key.
+	 * ({@code boson:certbind:1:<base58 public key>:<base64url signature>}, see {@link CertUtil}) binds the
+	 * ECDSA key to a Boson identity: the signature covers {@link CertUtil#certBindingMessage(byte[])}, its
+	 * label and the certificate's {@code SubjectPublicKeyInfo} DER, letting {@link HybridTrustManager} pin
+	 * the identity even though the TLS key is not the identity key. Providers may add the first form of the
+	 * binding beside it, for clients that predate it, as the Bouncy Castle provider does.
 	 * <p>
 	 * At least one Subject Alternative Name (SAN) entry must be produced: if both {@code ipAddress} and
 	 * {@code hostName} are {@code null} the implementation throws {@link IllegalArgumentException}.
