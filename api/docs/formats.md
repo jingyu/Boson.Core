@@ -34,7 +34,7 @@ field        = 1*( %x21-7E except "?" and "#" )      ; visible ASCII
 | Kind | What it is | Rule |
 |---|---|---|
 | **Format** | Text people or programs exchange: QR codes, pasted codes, certificate fields. | Parsed from input; a new version is an incompatible parse. |
-| **Label** | A constant fed to a hash, a PRF or a key derivation, separating cryptographic domains. | Never parsed from input; a new version means new keys. Label namespaces are named by their role (`prf`, `kdf`), so a format can never look like a label. |
+| **Label** | A constant fed to a hash, a PRF or a key derivation, separating cryptographic domains. | Never parsed from input; a new version means new keys. Label namespaces are named by their role (`prf`, `kdf`, `sig`), so a format can never look like a label. |
 
 ## Registry
 
@@ -45,6 +45,7 @@ field        = 1*( %x21-7E except "?" and "#" )      ; visible ASCII
 | `signin` | `boson:signin:1:<requestId>` | the sign-in request id, Base58 | `SignInRequest` (Java), `signInCode` (web) |
 | `pair` | `boson:pair:1:<registrationId>:<key>` | the registration id, Base58; the 32-byte X25519 key the approver seals the user key to, base64url without padding (43 characters) | `PairingCode` (Java), `pairingCode` (web) |
 | `supernode` | `boson:supernode:1:<nodeId>:<url>` | the node id, Base58; the Director's http(s) URL without user info, query, fragment or trailing slash | `SuperNodeCode` (Java), `superNodeCode` (web) |
+| `enroll` | `boson:enroll:1:<requestId>:<nodeId>:<url>` | an administrator's enrollment request id, Base58; the node id, Base58; the Director's http(s) URL as apps reach it, without user info, query, fragment or trailing slash | `EnrollmentCode` (Java) |
 | `certbind` | `boson:certbind:1:<publicKey>:<signature>` | the identity's Ed25519 public key, Base58; its signature over `boson:certbind:1` (ASCII) followed by the certificate's SubjectPublicKeyInfo DER, base64url without padding | `CertUtil` |
 
 `certbind` is carried in a self-signed certificate's `issuerAltName` extension as a URI GeneralName.
@@ -59,6 +60,7 @@ field        = 1*( %x21-7E except "?" and "#" )      ; visible ASCII
 | `boson:kdf:1:aes256gcm:user-key-wrap` | HKDF-SHA256 info: the AES-256-GCM key that wraps the user key in that backup (empty salt, 32 bytes). | `PasskeyBackupFormat` (Boson Identity) |
 | `boson:kdf:1:registration-pow` | The key-derivation context of the key that signs registration proof-of-work challenges. | `RegistrationPow` (Director) |
 | `boson:certbind:1` | Prefixed to what a `certbind` signature covers. | `CertUtil` |
+| `boson:sig:1:enroll-claim` | Prefixed to what the user key and the device key each sign to claim an enrollment request: then the node id, the request id and the signer's id (32 bytes each), then the claim's nonce. | `EnrollmentCode` (Java), `EnrollmentRequest` (Director) |
 
 ## Forms read but no longer written
 
