@@ -25,21 +25,36 @@ package io.bosonnetwork.crypto;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.List;
 
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -261,19 +276,31 @@ public class CertUtilTests {
 				new ByteArrayInputStream(result.cert().getBytes()));
 		X509Certificate[] chain = {cert};
 
-		// The cert is a browser-compatible ECDSA cert carrying the Boson identity binding in issuerAltName.
+		// The cert is a browser-compatible ECDSA cert carrying the Boson identity binding in issuerAltName:
+		// the current form first, then the first form for clients that predate it.
 		assertEquals("EC", cert.getPublicKey().getAlgorithm());
 		assertNotNull(cert.getIssuerAlternativeNames(), "issuerAltName should be present");
-		String idBindingUri = cert.getIssuerAlternativeNames().stream()
-				.filter(e -> e.get(1) instanceof String s && s.startsWith(CertUtil.ID_BINDING_URI_PREFIX))
+		List<String> uris = cert.getIssuerAlternativeNames().stream()
+				.filter(e -> e.get(1) instanceof String)
 				.map(e -> (String) e.get(1))
-				.findFirst()
-				.orElse(null);
-		assertNotNull(idBindingUri, "binding URI should be present in issuerAltName");
-		CertUtil.IdentityBinding binding = CertUtil.parseIdentityBinding(idBindingUri);
-		assertNotNull(binding, "binding should be parseable");
-		assertArrayEquals(id.publicKey().bytes(), binding.publicKey());
-		Signature.PublicKey.fromBytes(binding.publicKey()).verify(id.publicKey().bytes(), binding.signature());
+				.toList();
+		assertEquals(2, uris.size());
+		assertTrue(uris.get(0).startsWith("boson:certbind:1:"), uris.get(0));
+		assertTrue(uris.get(1).startsWith(CertUtil.LEGACY_ID_BINDING_URI_PREFIX), uris.get(1));
+
+		byte[] spki = cert.getPublicKey().getEncoded();
+		CertUtil.IdentityBinding current = CertUtil.parseIdentityBinding(uris.get(0));
+		assertNotNull(current);
+		assertFalse(current.legacy());
+		assertArrayEquals(id.publicKey().bytes(), current.publicKey());
+		assertTrue(Signature.verify(CertUtil.certBindingMessage(spki), current.signature(), id.publicKey()));
+		// The current signature covers its label: it is no signature over the bare SPKI.
+		assertFalse(Signature.verify(spki, current.signature(), id.publicKey()));
+
+		CertUtil.IdentityBinding legacy = CertUtil.parseIdentityBinding(uris.get(1));
+		assertNotNull(legacy);
+		assertTrue(legacy.legacy());
+		assertTrue(Signature.verify(spki, legacy.signature(), id.publicKey()));
 
 		// A trust manager pinning the correct identity accepts it.
 		HybridTrustManager good = new HybridTrustManager("cn-ignored-for-binding", id.publicKey().bytes());
@@ -306,5 +333,77 @@ public class CertUtilTests {
 		Signature.KeyPair other = Signature.KeyPair.random();
 		HybridTrustManager bad = new HybridTrustManager(Base58.encode(other.publicKey().bytes()), other.publicKey().bytes());
 		assertThrows(CertificateException.class, () -> bad.checkServerTrusted(chain, "ECDHE_ECDSA"));
+	}
+
+	// A self-signed ECDSA certificate carrying the given issuerAltName URIs, built from a key pair the
+	// test controls, so bindings can be made right, wrong or missing on purpose.
+	private static X509Certificate ecdsaCert(KeyPair keyPair, String... bindingUris) throws Exception {
+		X500Name subject = new X500Name("CN=localhost");
+		Date notBefore = Date.from(Instant.now().minus(1, ChronoUnit.MINUTES));
+		Date notAfter = Date.from(Instant.now().plus(1, ChronoUnit.DAYS));
+		X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(subject, BigInteger.ONE, notBefore, notAfter,
+				subject, keyPair.getPublic());
+		if (bindingUris.length > 0) {
+			GeneralName[] names = new GeneralName[bindingUris.length];
+			for (int i = 0; i < bindingUris.length; i++)
+				names[i] = new GeneralName(GeneralName.uniformResourceIdentifier, bindingUris[i]);
+			builder.addExtension(Extension.issuerAlternativeName, false, new GeneralNames(names));
+		}
+		ContentSigner signer = new JcaContentSignerBuilder("SHA256withECDSA").build(keyPair.getPrivate());
+		return new JcaX509CertificateConverter().getCertificate(builder.build(signer));
+	}
+
+	private static KeyPair ecdsaKeyPair() throws Exception {
+		KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+		kpg.initialize(new ECGenParameterSpec("secp256r1"));
+		return kpg.generateKeyPair();
+	}
+
+	@Test
+	public void testANodeFromBeforeCertBindStillVerifies() throws Exception {
+		Signature.KeyPair id = Signature.KeyPair.random();
+		KeyPair tls = ecdsaKeyPair();
+		byte[] spki = tls.getPublic().getEncoded();
+		X509Certificate cert = ecdsaCert(tls,
+				CertUtil.formatLegacyIdentityBinding(id.publicKey().bytes(), Signature.sign(spki, id.privateKey())));
+
+		HybridTrustManager tm = new HybridTrustManager("cn-ignored", id.publicKey().bytes());
+		assertDoesNotThrow(() -> tm.checkServerTrusted(new X509Certificate[] {cert}, "ECDHE_ECDSA"));
+	}
+
+	@Test
+	public void testACertBindOnlyCertificateVerifies() throws Exception {
+		Signature.KeyPair id = Signature.KeyPair.random();
+		KeyPair tls = ecdsaKeyPair();
+		byte[] spki = tls.getPublic().getEncoded();
+		X509Certificate cert = ecdsaCert(tls,
+				CertUtil.formatCertBinding(id.publicKey().bytes(), Signature.sign(CertUtil.certBindingMessage(spki), id.privateKey())));
+
+		HybridTrustManager tm = new HybridTrustManager("cn-ignored", id.publicKey().bytes());
+		assertDoesNotThrow(() -> tm.checkServerTrusted(new X509Certificate[] {cert}, "ECDHE_ECDSA"));
+	}
+
+	@Test
+	public void testABrokenCertBindIsNotRescuedByTheFirstForm() throws Exception {
+		// A certificate with a current binding is judged by it alone: a valid first-form binding beside a
+		// bad current one doesn't make it acceptable.
+		Signature.KeyPair id = Signature.KeyPair.random();
+		KeyPair tls = ecdsaKeyPair();
+		byte[] spki = tls.getPublic().getEncoded();
+		X509Certificate cert = ecdsaCert(tls,
+				CertUtil.formatCertBinding(id.publicKey().bytes(), Signature.sign(spki, id.privateKey())),
+				CertUtil.formatLegacyIdentityBinding(id.publicKey().bytes(), Signature.sign(spki, id.privateKey())));
+
+		HybridTrustManager tm = new HybridTrustManager("cn-ignored", id.publicKey().bytes());
+		assertThrows(CertificateException.class, () -> tm.checkServerTrusted(new X509Certificate[] {cert}, "ECDHE_ECDSA"));
+	}
+
+	@Test
+	public void testAMalformedBindingIsRefusedAsACertificateProblem() throws Exception {
+		Signature.KeyPair id = Signature.KeyPair.random();
+		X509Certificate cert = ecdsaCert(ecdsaKeyPair(), "boson:certbind:1:not-enough-fields");
+
+		HybridTrustManager tm = new HybridTrustManager("cn-ignored", id.publicKey().bytes());
+		assertThrows(CertificateException.class, () -> tm.checkServerTrusted(new X509Certificate[] {cert}, "ECDHE_ECDSA"));
 	}
 }

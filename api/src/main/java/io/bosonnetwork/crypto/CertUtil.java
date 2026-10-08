@@ -50,61 +50,125 @@ import io.vertx.core.net.PfxOptions;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.utils.Base58;
+import io.bosonnetwork.utils.BosonString;
 
 /**
  * Utility class for certificate and key management.
  */
 public class CertUtil {
 	/**
-	 * URI scheme/prefix of the Boson Ed25519 identity binding carried in a certificate's standard
-	 * {@code issuerAltName} extension (RFC 5280) as a {@code uniformResourceIdentifier} GeneralName.
-	 * The full URI is {@code boson:ed25519:<base58 public key>:<base64url signature>}, where the
-	 * signature is an Ed25519 signature over the certificate's ECDSA {@code SubjectPublicKeyInfo} DER.
-	 * Using a standard extension lets verifiers parse it with the JDK ({@code getIssuerAlternativeNames})
-	 * without Bouncy Castle, and avoids a private OID.
+	 * The namespace of the Boson certificate binding, a {@link BosonString} carried in a certificate's
+	 * standard {@code issuerAltName} extension (RFC 5280) as a {@code uniformResourceIdentifier}
+	 * GeneralName: {@code boson:certbind:1:<base58 public key>:<base64url signature>}. The signature is an
+	 * Ed25519 signature over {@link #CERT_BINDING_LABEL} followed by the certificate's ECDSA
+	 * {@code SubjectPublicKeyInfo} DER (see {@link #certBindingMessage(byte[])}), so the identity key's
+	 * signature can't be taken for one it made for anything else. A standard extension lets verifiers
+	 * parse it with the JDK ({@code getIssuerAlternativeNames}) without Bouncy Castle, and avoids a
+	 * private OID.
 	 */
-	public static final String ID_BINDING_URI_PREFIX = "boson:ed25519:";
+	public static final String CERT_BINDING_NAMESPACE = "certbind";
+
+	/** The version of the certificate binding. */
+	public static final int CERT_BINDING_VERSION = 1;
+
+	/** What the binding's signature covers ahead of the SPKI: {@code boson:certbind:1}. */
+	public static final BosonString CERT_BINDING_LABEL = BosonString.of(CERT_BINDING_NAMESPACE, CERT_BINDING_VERSION);
+
+	/**
+	 * The prefix of the first form of the binding, {@code boson:ed25519:<base58 public key>:<base64url
+	 * signature>}, whose signature covers the bare SPKI. Certificates carry it beside the current one so
+	 * that clients from before the current one still verify them; verifiers accept it only from
+	 * certificates that carry no current one.
+	 */
+	public static final String LEGACY_ID_BINDING_URI_PREFIX = "boson:ed25519:";
+
+	private static final Base64.Encoder B64URL = Base64.getUrlEncoder().withoutPadding();
 
 	private CertUtil() {}
 
 	/**
-	 * Formats a Boson identity binding URI from an Ed25519 public key and a signature over the
-	 * certificate's {@code SubjectPublicKeyInfo}.
+	 * What the current binding's signature covers: {@link #CERT_BINDING_LABEL} (ASCII), then the
+	 * certificate's {@code SubjectPublicKeyInfo} DER.
 	 *
-	 * @param publicKey the Ed25519 public key bytes (the Boson id)
-	 * @param signature the Ed25519 signature over the certificate SPKI
-	 * @return the binding URI, suitable for an {@code issuerAltName} URI GeneralName
+	 * @param spki the certificate's SubjectPublicKeyInfo DER
+	 * @return the message to sign or verify
 	 */
-	public static String formatIdentityBinding(byte[] publicKey, byte[] signature) {
-		return ID_BINDING_URI_PREFIX + Base58.encode(publicKey) + ":"
-				+ Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+	public static byte[] certBindingMessage(byte[] spki) {
+		Objects.requireNonNull(spki, "spki");
+		byte[] label = CERT_BINDING_LABEL.bytes();
+		byte[] message = new byte[label.length + spki.length];
+		System.arraycopy(label, 0, message, 0, label.length);
+		System.arraycopy(spki, 0, message, label.length, spki.length);
+		return message;
 	}
 
 	/**
-	 * Parsed Boson identity binding: the endorsing Ed25519 public key and its signature over the
-	 * certificate's {@code SubjectPublicKeyInfo}.
+	 * Formats the certificate binding URI from an Ed25519 public key and its signature over
+	 * {@link #certBindingMessage(byte[])}.
+	 *
+	 * @param publicKey the Ed25519 public key bytes (the Boson id)
+	 * @param signature the Ed25519 signature over the binding message
+	 * @return the binding URI, for an {@code issuerAltName} URI GeneralName
+	 */
+	public static String formatCertBinding(byte[] publicKey, byte[] signature) {
+		return BosonString.format(CERT_BINDING_NAMESPACE, CERT_BINDING_VERSION,
+				Base58.encode(publicKey), B64URL.encodeToString(signature));
+	}
+
+	/**
+	 * Formats the first form of the binding URI, from an Ed25519 public key and its signature over the
+	 * bare SPKI; see {@link #LEGACY_ID_BINDING_URI_PREFIX}.
+	 *
+	 * @param publicKey the Ed25519 public key bytes (the Boson id)
+	 * @param signature the Ed25519 signature over the certificate SPKI
+	 * @return the binding URI
+	 */
+	public static String formatLegacyIdentityBinding(byte[] publicKey, byte[] signature) {
+		return LEGACY_ID_BINDING_URI_PREFIX + Base58.encode(publicKey) + ":" + B64URL.encodeToString(signature);
+	}
+
+	/**
+	 * A parsed Boson identity binding: the endorsing Ed25519 public key and its signature.
 	 *
 	 * @param publicKey the Ed25519 public key bytes
 	 * @param signature the Ed25519 signature bytes
+	 * @param legacy    whether it is the first form, whose signature covers the bare SPKI
 	 */
-	public record IdentityBinding(byte[] publicKey, byte[] signature) {}
+	public record IdentityBinding(byte[] publicKey, byte[] signature, boolean legacy) {
+		/**
+		 * What the signature covers, for a certificate with this SPKI.
+		 *
+		 * @param spki the certificate's SubjectPublicKeyInfo DER
+		 * @return the signed message
+		 */
+		public byte[] signedMessage(byte[] spki) {
+			return legacy ? spki : certBindingMessage(spki);
+		}
+	}
 
 	/**
-	 * Parses a Boson identity binding URI produced by {@link #formatIdentityBinding(byte[], byte[])}.
+	 * Parses a Boson identity binding URI, in either form.
 	 *
 	 * @param uri the candidate URI (for example, an {@code issuerAltName} URI GeneralName value)
 	 * @return the parsed {@link IdentityBinding}, or {@code null} if {@code uri} is not a Boson binding
-	 * @throws IllegalArgumentException if the URI has the Boson prefix but is malformed
+	 * @throws IllegalArgumentException if the URI has a binding's prefix but is malformed
 	 */
 	public static @Nullable IdentityBinding parseIdentityBinding(@Nullable String uri) {
-		if (uri == null || !uri.startsWith(ID_BINDING_URI_PREFIX))
+		if (uri == null)
 			return null;
-		String[] parts = uri.substring(ID_BINDING_URI_PREFIX.length()).split(":");
+
+		if (uri.startsWith(BosonString.PREFIX + CERT_BINDING_NAMESPACE + ":")) {
+			BosonString binding = BosonString.parse(uri, CERT_BINDING_NAMESPACE, CERT_BINDING_VERSION, 2)
+					.orElseThrow(() -> new IllegalArgumentException("Malformed Boson certificate binding URI"));
+			return new IdentityBinding(Base58.decode(binding.field(0)), Base64.getUrlDecoder().decode(binding.field(1)), false);
+		}
+
+		if (!uri.startsWith(LEGACY_ID_BINDING_URI_PREFIX))
+			return null;
+		String[] parts = uri.substring(LEGACY_ID_BINDING_URI_PREFIX.length()).split(":");
 		if (parts.length != 2)
 			throw new IllegalArgumentException("Malformed Boson identity binding URI");
-		byte[] publicKey = Base58.decode(parts[0]);
-		byte[] signature = Base64.getUrlDecoder().decode(parts[1]);
-		return new IdentityBinding(publicKey, signature);
+		return new IdentityBinding(Base58.decode(parts[0]), Base64.getUrlDecoder().decode(parts[1]), true);
 	}
 
 	/**
@@ -159,9 +223,9 @@ public class CertUtil {
 	 * while remaining a plain browser-compatible ECDSA certificate.
 	 * <p>
 	 * When {@code identityKey} is non-null, a Boson identity binding is added to the certificate's
-	 * standard {@code issuerAltName} extension as a {@code boson:ed25519:...} URI (see
-	 * {@link #ID_BINDING_URI_PREFIX}); the Ed25519 signature covers the certificate's ECDSA
-	 * {@code SubjectPublicKeyInfo} DER. This cryptographically binds the ephemeral ECDSA key to the Boson
+	 * standard {@code issuerAltName} extension as a {@code boson:certbind:1:...} URI (see
+	 * {@link #CERT_BINDING_NAMESPACE}), beside the first form ({@link #LEGACY_ID_BINDING_URI_PREFIX})
+	 * for clients that predate it. This cryptographically binds the ephemeral ECDSA key to the Boson
 	 * identity, so {@link HybridTrustManager} can pin the identity even though the TLS key is not the
 	 * identity key. Browsers ignore the extension. Certificate assembly is delegated to the crypto provider.
 	 *

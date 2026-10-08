@@ -276,16 +276,28 @@ public class HybridTrustManager extends X509ExtendedTrustManager {
 		if (names == null)
 			return null;
 
+		// The current form wins wherever it appears; the first form counts only in a certificate that
+		// carries no current one (a node from before it), so it can't stand in for a current one.
+		CertUtil.IdentityBinding legacy = null;
 		for (List<?> entry : names) {
 			// GeneralName type 6 == uniformResourceIdentifier; value is the URI String.
 			if (entry.size() >= 2 && entry.get(0) instanceof Integer type && type == 6
 					&& entry.get(1) instanceof String uri) {
-				CertUtil.IdentityBinding binding = CertUtil.parseIdentityBinding(uri);
-				if (binding != null)
+				CertUtil.IdentityBinding binding;
+				try {
+					binding = CertUtil.parseIdentityBinding(uri);
+				} catch (IllegalArgumentException e) {
+					throw new CertificateException("Malformed Boson identity binding", e);
+				}
+				if (binding == null)
+					continue;
+				if (!binding.legacy())
 					return binding;
+				if (legacy == null)
+					legacy = binding;
 			}
 		}
-		return null;
+		return legacy;
 	}
 
 	/**
@@ -305,11 +317,12 @@ public class HybridTrustManager extends X509ExtendedTrustManager {
 		if (!Arrays.equals(binding.publicKey(), expectedPublicKey))
 			throw new CertificateException("Identity binding public key mismatch");
 
-		// The binding signature covers the certificate's SubjectPublicKeyInfo DER encoding.
+		// The binding signature covers its label and the certificate's SubjectPublicKeyInfo DER encoding
+		// (the first form: the SPKI alone).
 		byte[] spki = cert.getPublicKey().getEncoded();
 		boolean valid;
 		try {
-			valid = Signature.verify(spki, binding.signature(), Signature.PublicKey.fromBytes(binding.publicKey()));
+			valid = Signature.verify(binding.signedMessage(spki), binding.signature(), Signature.PublicKey.fromBytes(binding.publicKey()));
 		} catch (Exception e) {
 			throw new CertificateException("Invalid identity binding signature", e);
 		}
