@@ -46,9 +46,14 @@ field        = 1*( %x21-7E except "?" and "#" )      ; visible ASCII
 | `pair` | `boson:pair:1:<registrationId>:<key>` | the registration id, Base58; the 32-byte X25519 key the approver seals the user key to, base64url without padding (43 characters) | `PairingCode` (Java), `pairingCode` (web) |
 | `supernode` | `boson:supernode:1:<nodeId>:<url>` | the node id, Base58; the Director's http(s) URL without user info, query, fragment or trailing slash | `SuperNodeCode` (Java), `superNodeCode` (web) |
 | `enroll` | `boson:enroll:1:<requestId>:<nodeId>:<url>` | an administrator's enrollment request id, Base58; the node id, Base58; the Director's http(s) URL as apps reach it, without user info, query, fragment or trailing slash | `EnrollmentCode` (Java) |
+| `move` | `boson:move:1:<salt>:<data>` | an identity moved to a new phone, encrypted: the salt (16 bytes) and the data (12-byte nonce, then the AES-256-GCM ciphertext of the user key, home node and profile, with `boson:move:1` as associated data), both base64url without padding. The key is derived with Argon2id (64 MiB, 3 passes, 1 lane) from a 10-character Crockford base32 code the old phone generates and shows apart from the QR code. | `MoveCode` (Boson Identity) |
 | `certbind` | `boson:certbind:1:<publicKey>:<signature>` | the identity's Ed25519 public key, Base58; its signature over `boson:certbind:1` (ASCII) followed by the certificate's SubjectPublicKeyInfo DER, base64url without padding | `CertUtil` |
 
 `certbind` is carried in a self-signed certificate's `issuerAltName` extension as a URI GeneralName.
+
+`move` holds only ciphertext, so the no-secrets rule holds; the code that opens it is shown on its own
+screen, never in the string, and is generated (about 50 bits), since a captured QR code can be tried
+against codes offline.
 
 ### Labels
 
