@@ -52,6 +52,9 @@ import io.bosonnetwork.crypto.CryptoException;
  * {@link #findPeer(Id)}, {@link #getPeer}) complete with an {@link java.util.Optional} that is empty
  * when nothing is found, while collection lookups ({@link #getPeers},
  * {@link #findPeer(Id, int, int, LookupOption)}) complete with an empty list.
+ * <p>
+ * <b>Threading:</b> the node does its work on its own Vert.x context, but a call made on a Vert.x context
+ * completes on that caller's context, so a service that calls the node carries on on its own event loop.
  */
 public interface Node extends Identity {
 	/** The maximum age for a peer (2 hours). */

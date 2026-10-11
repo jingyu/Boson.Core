@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import io.vertx.core.Context;
 import io.vertx.core.Future;
@@ -79,6 +80,10 @@ public class FutureContextTest {
 
 		<T> Promise<T> boundPromise() {
 			return promise();
+		}
+
+		<T> Future<T> ownContext(Supplier<Future<T>> work) {
+			return callOnContext(work);
 		}
 	}
 
@@ -138,5 +143,45 @@ public class FutureContextTest {
 	void testBoundPromiseCompletesOnOwningContext(Vertx vertx, VertxTestContext testContext) {
 		// BosonVerticle.promise() binds the promise to the verticle's own context.
 		assertCompletionContext(vertx, testContext, TestVerticle::boundPromise, true);
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void testOnCallerAnswersOnTheCallingContext(Vertx vertx, VertxTestContext testContext) {
+		// An API's bare promise, completed on its own context (B), handed to a caller on A through
+		// ContextualFuture.onCaller: the caller carries on on A.
+		TestVerticle a = new TestVerticle();
+		TestVerticle b = new TestVerticle();
+		vertx.deployVerticle(a)
+				.compose(unused -> vertx.deployVerticle(b))
+				.onFailure(testContext::failNow)
+				.onSuccess(unused -> a.context().runOnContext(v -> {
+					Promise<String> api = Promise.promise();
+					ContextualFuture.onCaller(api.future()).onComplete(ar -> testContext.verify(() -> {
+						assertSame(a.context(), Vertx.currentContext(), "the caller carried on on the API's context");
+						testContext.completeNow();
+					}));
+					b.context().runOnContext(unused2 -> api.complete("done"));
+				}));
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void testCallOnContextRunsThereAndAnswersOnTheCaller(Vertx vertx, VertxTestContext testContext) {
+		// B calls a method of A: the work runs on A's context, the answer comes back on B's.
+		TestVerticle a = new TestVerticle();
+		TestVerticle b = new TestVerticle();
+		vertx.deployVerticle(a)
+				.compose(unused -> vertx.deployVerticle(b))
+				.onFailure(testContext::failNow)
+				.onSuccess(unused -> b.context().runOnContext(v -> {
+					a.ownContext(() -> {
+						testContext.verify(() -> assertSame(a.context(), Vertx.currentContext(), "the work ran off its verticle's context"));
+						return Future.succeededFuture("done");
+					}).onComplete(ar -> testContext.verify(() -> {
+						assertSame(b.context(), Vertx.currentContext(), "the caller carried on on the callee's context");
+						testContext.completeNow();
+					}));
+				}));
 	}
 }

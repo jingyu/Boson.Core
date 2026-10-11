@@ -24,6 +24,7 @@ package io.bosonnetwork.vertx;
 
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
 import io.vertx.core.Context;
 import io.vertx.core.Deployable;
@@ -220,6 +221,32 @@ public abstract class BosonVerticle implements Deployable {
 	protected void runOnContext(Handler<Void> action) {
 		Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
 		vertxContext.runOnContext(action);
+	}
+
+	/**
+	 * Runs work on this verticle's own context, and answers on the caller's: for the methods another
+	 * verticle calls. The work touches this verticle's state (its connections, its sessions), which only
+	 * its own thread may touch, and the caller carries on on its own thread (see
+	 * {@link ContextualFuture#onCaller(Future)}).
+	 *
+	 * @param work the work, started on this verticle's context
+	 * @param <T>  the result type
+	 * @return the work's result, completed on the caller's context
+	 */
+	protected final <T> Future<T> callOnContext(Supplier<Future<T>> work) {
+		ContextInternal own = (ContextInternal) Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
+		if (own.isRunningOnContext())
+			return work.get();
+
+		Promise<T> promise = own.promise();
+		own.runOnContext(v -> {
+			try {
+				work.get().onComplete(promise);
+			} catch (Throwable t) {
+				promise.tryFail(t);
+			}
+		});
+		return ContextualFuture.onCaller(promise.future());
 	}
 
 	/**

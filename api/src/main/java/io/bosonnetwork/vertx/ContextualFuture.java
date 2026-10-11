@@ -184,6 +184,40 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	/**
+	 * The same result, completed on the calling thread's Vert.x context rather than the future's own.
+	 * <p>
+	 * For an API whose work runs on a context of its own (a DHT node's, a Director's), called from another
+	 * (a service's): a future of that API's context runs its caller's continuation on the API's event loop,
+	 * beside the caller's own, and the caller's state is then touched from two threads. An HTTP service
+	 * that resumed a request there lost the request's body: it was delivered on the request's event loop
+	 * before the body handler, reached on the other thread, was there to take it.
+	 *
+	 * @param future the API's future
+	 * @param <T>    the result type
+	 * @return a future of the caller's context, or the same future when the caller has no context
+	 */
+	public static <T> @NonNull Future<T> onCaller(@NonNull Future<T> future) {
+		Context caller = Vertx.currentContext();
+		if (caller == null)
+			return future;
+
+		Promise<T> promise = ((ContextInternal) caller).promise();
+		future.onComplete(promise);
+		return promise.future();
+	}
+
+	/**
+	 * Wraps a Vert.x Future completed on the calling thread's Vert.x context: see {@link #onCaller(Future)}.
+	 *
+	 * @param future the API's future
+	 * @param <T>    the result type
+	 * @return a ContextualFuture of the caller's context
+	 */
+	public static <T> @NonNull ContextualFuture<T> ofCaller(@NonNull Future<T> future) {
+		return new ContextualFuture<>(onCaller(future));
+	}
+
+	/**
 	 * Creates a failed ContextualFuture from a Throwable.
 	 *
 	 * @param cause the cause of the failure

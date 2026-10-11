@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -33,6 +34,8 @@ import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
+import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.internal.VertxInternal;
 import net.datafaker.Faker;
 
 import org.junit.jupiter.api.AfterAll;
@@ -438,6 +441,47 @@ public class NodeAsyncTests {
 				});
 			});
 		}).toVertxFuture().onComplete(context.succeedingThenComplete());
+	}
+
+	@Test
+	void testAnswersOnTheCallersContext(VertxTestContext context) {
+		// A service calls the node from a context of its own. Each answer must come back there, not on the
+		// node's event loop: a service carrying on there touched its state from two threads (a web service
+		// lost request bodies, counters raised on one thread were lowered on the other).
+		KadNode node = testNodes.get(0);
+		KadNode other = testNodes.get(1);
+		ContextInternal nodeContext = (ContextInternal) node.vertxContext();
+		assertNotNull(nodeContext);
+		ContextInternal caller;
+		do {
+			caller = ((VertxInternal) testingVertx).createEventLoopContext();
+		} while (caller.nettyEventLoop() == nodeContext.nettyEventLoop());
+		ContextInternal service = caller;
+
+		Value value = Value.immutableBuilder().data(("Asked from a service " + Id.random()).getBytes()).build();
+		Promise<Void> checked = Promise.promise();
+		service.runOnContext(x -> {
+			List<CompletableFuture<?>> answers = new ArrayList<>();
+			answers.add(node.findNode(other.getId()));
+			answers.add(node.storeValue(value).thenCompose(v -> {
+				context.verify(() -> assertTrue(service.isRunningOnContext(), "storeValue came back on another context"));
+				return node.findValue(value.getId());
+			}));
+			answers.add(node.findPeer(other.getId()));
+			answers.add(node.getValue(value.getId()));
+
+			List<Future<Boolean>> where = answers.stream()
+					.map(answer -> Future.fromCompletionStage(answer.handle((r, e) -> service.isRunningOnContext())))
+					.toList();
+			Future.all(where).onComplete(ar -> {
+				context.verify(() -> {
+					for (int i = 0; i < where.size(); i++)
+						assertTrue(where.get(i).result(), "answer " + i + " came back on another context");
+				});
+				checked.complete();
+			});
+		});
+		checked.future().onComplete(context.succeedingThenComplete());
 	}
 
 	@Test

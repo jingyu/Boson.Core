@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.vertx.core.Context;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import org.slf4j.Logger;
@@ -171,8 +172,10 @@ public class CachedResolver implements Resolver {
 			});
 		}
 
-		// Use the asynchronous cache to get or load the resolution result
-		return cache.get(id, (key, executor) -> {
+		// Use the asynchronous cache to get or load the resolution result. Answered on the caller's context:
+		// a caller that finds an entry another context is loading would otherwise carry on on the loader's
+		// thread (a resolver is shared by a service's verticles).
+		CompletableFuture<ResolutionResult<Card>> loading = cache.get(id, (key, executor) -> {
 			Promise<ResolutionResult<Card>> promise = Promise.promise();
 
 			// Execute cache loading logic asynchronously on the provided executor
@@ -214,6 +217,7 @@ public class CachedResolver implements Resolver {
 
 			return ContextualFuture.of(promise.future());
 		});
+		return ContextualFuture.ofCaller(Future.fromCompletionStage(loading));
 	}
 
 	/**

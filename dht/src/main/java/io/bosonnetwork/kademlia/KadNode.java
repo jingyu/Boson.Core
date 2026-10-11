@@ -433,7 +433,7 @@ public class KadNode extends BosonVerticle implements Node {
 			return ContextualFuture.failedFuture(new IllegalStateException("Already started"));
 
 		Future<Void> future = config.vertx().deployVerticle(this).mapEmpty();
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -451,7 +451,7 @@ public class KadNode extends BosonVerticle implements Node {
 				ctx.owner().undeploy(deploymentId).onComplete(promise);
 		});
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	@Override
@@ -686,7 +686,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}
 		});
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	@Override
@@ -698,7 +698,7 @@ public class KadNode extends BosonVerticle implements Node {
 
 		Promise<Optional<NodeInfo>> promise = Promise.promise();
 		runOnContext(v -> doFindNode(id, lookupOption).onComplete(promise));
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	/**
@@ -789,7 +789,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}).onComplete(promise);
 		});
 
-		return ContextualFuture.of(promise.future().map(Optional::ofNullable));
+		return ContextualFuture.ofCaller(promise.future().map(Optional::ofNullable));
 	}
 
 	private Future<Void> doFindValue(Id id, int expectedSequenceNumber, LookupOption option, EligibleValue result) {
@@ -855,7 +855,7 @@ public class KadNode extends BosonVerticle implements Node {
 				.onComplete(promise)
 		);
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	/**
@@ -984,7 +984,7 @@ public class KadNode extends BosonVerticle implements Node {
 			}).onComplete(promise);
 		});
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	private Future<Void> doFindPeer(Id id, int expectedSequenceNumber, int expectedCount,
@@ -1044,7 +1044,7 @@ public class KadNode extends BosonVerticle implements Node {
 				.onComplete(promise)
 		);
 
-		return ContextualFuture.of(promise.future());
+		return ContextualFuture.ofCaller(promise.future());
 	}
 
 	private Future<AnnounceResult> doAnnouncePeer(PeerInfo peer, int expectedSequenceNumber) {
@@ -1228,7 +1228,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(valueId, "valueId");
 		checkRunning();
 		Future<Optional<Value>> future = storage.getValue(valueId).map(Optional::ofNullable);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -1236,7 +1236,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(valueId, "valueId");
 		checkRunning();
 		Future<Boolean> future = storage.removeValue(valueId);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -1244,7 +1244,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<List<PeerInfo>> future = storage.getPeers(peerId);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -1252,7 +1252,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Boolean> future = storage.removePeers(peerId);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -1260,7 +1260,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Optional<PeerInfo>> future = storage.getPeer(peerId, fingerprint).map(Optional::ofNullable);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override
@@ -1268,7 +1268,7 @@ public class KadNode extends BosonVerticle implements Node {
 		Objects.requireNonNull(peerId, "peerId");
 		checkRunning();
 		Future<Boolean> future = storage.removePeer(peerId, fingerprint);
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	/**
@@ -1303,7 +1303,7 @@ public class KadNode extends BosonVerticle implements Node {
 			default -> Future.failedFuture(new IllegalArgumentException("Unsupported protocol family"));
 		};
 
-		return ContextualFuture.of(future);
+		return ContextualFuture.ofCaller(future);
 	}
 
 	@Override

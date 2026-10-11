@@ -29,11 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-import io.vertx.core.Context;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
-import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.auth.User;
 import io.vertx.ext.auth.authentication.AuthenticationProvider;
@@ -58,6 +54,7 @@ import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Role;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.service.SuperNodeInfo;
+import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
  * A CBOR Web Token (CWT) authentication provider.
@@ -213,17 +210,7 @@ public class CwtAuth implements AuthenticationProvider {
 		// database): the authentication handler resumes the request where this completes, and a request
 		// resumed from another thread has its body delivered on its own event loop before the body
 		// handler is there to take it.
-		return onCaller(getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken())));
-	}
-
-	private static <T> Future<T> onCaller(Future<T> future) {
-		Context caller = Vertx.currentContext();
-		if (caller == null)
-			return future;
-
-		Promise<T> promise = ((ContextInternal) caller).promise();
-		future.onComplete(promise);
-		return promise.future();
+		return ContextualFuture.onCaller(getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken())));
 	}
 
 	private User createUser(Principal client, @Nullable String scope, SignedCwt cwt, String accessToken) {
