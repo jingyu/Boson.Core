@@ -201,7 +201,15 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 		if (caller == null)
 			return future;
 
-		Promise<T> promise = ((ContextInternal) caller).promise();
+		// A completed future's result is fixed: hand it over at once rather than through the future's own
+		// context. Going through it, a call answered from a cache took two hops whenever the entry was
+		// loaded on another context and none otherwise, so calls made in order could finish out of order
+		// (a messaging client stored messages that way).
+		ContextInternal callerContext = (ContextInternal) caller;
+		if (future.isComplete())
+			return future.succeeded() ? callerContext.succeededFuture(future.result()) : callerContext.failedFuture(future.cause());
+
+		Promise<T> promise = callerContext.promise();
 		future.onComplete(promise);
 		return promise.future();
 	}
@@ -215,6 +223,32 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	 */
 	public static <T> @NonNull ContextualFuture<T> ofCaller(@NonNull Future<T> future) {
 		return new ContextualFuture<>(onCaller(future));
+	}
+
+	/**
+	 * Runs work on the given context, the one that owns the state the work touches, and answers on the
+	 * calling thread's context (see {@link #onCaller(Future)}). Already on that context, the work runs at
+	 * once.
+	 *
+	 * @param context the context that owns the state
+	 * @param work    the work, started on that context
+	 * @param <T>     the result type
+	 * @return the work's result, completed on the caller's context
+	 */
+	public static <T> @NonNull Future<T> callOnContext(@NonNull Context context, @NonNull Supplier<Future<T>> work) {
+		ContextInternal own = (ContextInternal) context;
+		if (own.isRunningOnContext())
+			return work.get();
+
+		Promise<T> promise = own.promise();
+		own.runOnContext(v -> {
+			try {
+				work.get().onComplete(promise);
+			} catch (Throwable t) {
+				promise.tryFail(t);
+			}
+		});
+		return onCaller(promise.future());
 	}
 
 	/**

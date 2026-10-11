@@ -24,8 +24,10 @@ package io.bosonnetwork.vertx;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -33,6 +35,7 @@ import io.vertx.core.Context;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import io.vertx.core.internal.ContextInternal;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -162,6 +165,26 @@ public class FutureContextTest {
 						testContext.completeNow();
 					}));
 					b.context().runOnContext(unused2 -> api.complete("done"));
+				}));
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void testOnCallerAnswersACompletedFutureAtOnce(Vertx vertx, VertxTestContext testContext) {
+		// A completed future of B's context (a cache entry B loaded), handed to a caller on A: the answer
+		// is there at once, on A, without a round trip through B. Answers that took that trip only for
+		// some entries let calls made in order finish out of order.
+		TestVerticle a = new TestVerticle();
+		TestVerticle b = new TestVerticle();
+		vertx.deployVerticle(a)
+				.compose(unused -> vertx.deployVerticle(b))
+				.onFailure(testContext::failNow)
+				.onSuccess(unused -> a.context().runOnContext(v -> {
+					Future<String> loaded = ((ContextInternal) b.context()).succeededFuture("done");
+					AtomicBoolean answered = new AtomicBoolean();
+					ContextualFuture.onCaller(loaded).onComplete(ar -> answered.set(Vertx.currentContext() == a.context()));
+					testContext.verify(() -> assertTrue(answered.get(), "the answer was not there at once, on the caller's context"));
+					testContext.completeNow();
 				}));
 	}
 

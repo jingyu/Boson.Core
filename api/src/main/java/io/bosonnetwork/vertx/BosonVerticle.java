@@ -234,20 +234,9 @@ public abstract class BosonVerticle implements Deployable {
 	 * @return the work's result, completed on the caller's context
 	 */
 	protected final <T> Future<T> callOnContext(Supplier<Future<T>> work) {
-		ContextInternal own = (ContextInternal) Objects.requireNonNull(vertxContext, "Vert.x context is not available.");
-		if (own.isRunningOnContext())
-			return work.get();
-
-		Promise<T> promise = own.promise();
-		own.runOnContext(v -> {
-			try {
-				work.get().onComplete(promise);
-			} catch (Throwable t) {
-				promise.tryFail(t);
-			}
-		});
-		return ContextualFuture.onCaller(promise.future());
+		return ContextualFuture.callOnContext(Objects.requireNonNull(vertxContext, "Vert.x context is not available."), work);
 	}
+
 
 	/**
 	 * Executes blocking code asynchronously, returning a {@link Future} that completes
