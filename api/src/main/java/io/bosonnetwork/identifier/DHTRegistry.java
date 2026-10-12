@@ -160,19 +160,19 @@ class DHTRegistry implements Registry {
 	}
 
 	/**
-	 * Resolves the card from the cache, or by looking it up in the DHT. A resolution that doesn't use the
-	 * cache asks the DHT afresh and leaves its answer in the cache.
+	 * Resolves the card from the cache, or by looking it up in the DHT. A forced resolution asks the DHT
+	 * afresh and leaves its answer in the cache.
 	 */
 	@Override
-	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, boolean useCache) {
+	public CompletableFuture<ResolutionResult<Card>> resolve(Id id, boolean force) {
 		Objects.requireNonNull(id, "id");
 
 		if (cache == null)
-			return lookup(id, useCache);
+			return lookup(id, force);
 
-		CompletableFuture<ResolutionResult<Card>> resolution = useCache ?
-				cache.get(id, key -> lookup(key, true)) :
-				cache.refresh(id, key -> lookup(key, false));
+		CompletableFuture<ResolutionResult<Card>> resolution = force ?
+				cache.refresh(id, key -> lookup(key, true)) :
+				cache.get(id, key -> lookup(key, false));
 		// Answered on the caller's context: a caller that finds an entry another context is loading would
 		// otherwise carry on on the loader's thread (a registry is shared by a service's verticles). It also
 		// keeps callers from completing the future the cache shares.
@@ -181,11 +181,10 @@ class DHTRegistry implements Registry {
 
 	/**
 	 * Looks the card up in the DHT, verifying it: the value must be the id's, and hold a genuine card of
-	 * the id. A lookup that may use what the DHT nodes have cached takes the first value found; one that
-	 * may not waits for the newest.
+	 * the id. An ordinary lookup takes the first value found; a forced one waits for the newest.
 	 */
-	private CompletableFuture<ResolutionResult<Card>> lookup(Id id, boolean useCache) {
-		LookupOption lookupOption = useCache ? LookupOption.ARBITRARY : LookupOption.OPTIMISTIC;
+	private CompletableFuture<ResolutionResult<Card>> lookup(Id id, boolean force) {
+		LookupOption lookupOption = force ? LookupOption.OPTIMISTIC : LookupOption.ARBITRARY;
 
 		return node.findValue(id, lookupOption).thenApply(v -> {
 			// If no value found in DHT, return the not found result

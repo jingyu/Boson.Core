@@ -110,6 +110,20 @@ public class CardCacheTests {
 	}
 
 	@Test
+	void aFailedRefreshKeepsTheCachedCard() {
+		CardCache cache = new CardCache(4, TTL, now::get);
+		Id id = Id.random();
+		CompletableFuture<ResolutionResult<Card>> cached = cache.get(id, answering(found));
+		CompletableFuture<ResolutionResult<Card>> refreshed = cache.refresh(id, key -> {
+			lookups.incrementAndGet();
+			return CompletableFuture.failedFuture(new IllegalStateException("unreachable"));
+		});
+		assertThrows(Exception.class, refreshed::join);
+		assertSame(cached, cache.get(id, answering(found)));
+		assertEquals(2, lookups.get());
+	}
+
+	@Test
 	void aLookupThatThrowsFailsTheResolution() {
 		CardCache cache = new CardCache(4, TTL, now::get);
 		CompletableFuture<ResolutionResult<Card>> f = cache.get(Id.random(), id -> {

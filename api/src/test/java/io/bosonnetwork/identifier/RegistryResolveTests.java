@@ -72,11 +72,11 @@ public class RegistryResolveTests {
 	}
 
 	private int resolvedVersion() throws Exception {
-		return resolvedVersion(true);
+		return resolvedVersion(false);
 	}
 
-	private int resolvedVersion(boolean useCache) throws Exception {
-		ResolutionResult<Card> result = registry.resolve(alice.getId(), useCache).get();
+	private int resolvedVersion(boolean force) throws Exception {
+		ResolutionResult<Card> result = registry.resolve(alice.getId(), force).get();
 		assertEquals(ResolutionStatus.SUCCESS, result.getResolutionStatus());
 		return result.getResultMetadata().getVersion();
 	}
@@ -129,7 +129,7 @@ public class RegistryResolveTests {
 		assertEquals(0, resolvedVersion());
 		publishedElsewhere(3);
 
-		assertEquals(3, resolvedVersion(false));
+		assertEquals(3, resolvedVersion(true));
 		assertEquals(3, resolvedVersion());
 		assertEquals(2, node.resolutions.get());
 	}

@@ -29,6 +29,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 
+import org.jspecify.annotations.Nullable;
+
 import io.bosonnetwork.Id;
 import io.bosonnetwork.identifier.Registry.ResolutionResult;
 
@@ -37,7 +39,7 @@ import io.bosonnetwork.identifier.Registry.ResolutionResult;
  * when full. No cache library: the registry runs on Android clients too.
  * <p>
  * An entry holds the resolution's future, so resolutions of one id made while its lookup runs share that
- * lookup. A lookup that fails leaves nothing behind; a card found answers for the cache's TTL, an answer
+ * lookup. A lookup that fails leaves the cache as it was before it; a card found answers for the cache's TTL, an answer
  * of none (not found, invalid) for at most {@link #MAX_NONE_TTL}, as a card may be published any moment.
  * An expired entry stays in the map until it is resolved again or evicted, and doesn't answer.
  */
@@ -101,12 +103,13 @@ final class CardCache {
 			entries.put(id, entry);
 		}
 
-		load(id, entry, lookup);
+		load(id, entry, null, lookup);
 		return entry.future;
 	}
 
 	/**
-	 * Resolves {@code id} afresh by {@code lookup}, replacing what the cache has for it.
+	 * Resolves {@code id} afresh by {@code lookup}, replacing what the cache has for it; if the lookup
+	 * fails, what the cache had stays.
 	 *
 	 * @param id the id to resolve
 	 * @param lookup resolves an id without the cache
@@ -114,11 +117,12 @@ final class CardCache {
 	 */
 	CompletableFuture<ResolutionResult<Card>> refresh(Id id, Function<Id, CompletableFuture<ResolutionResult<Card>>> lookup) {
 		Entry entry = new Entry();
+		Entry previous;
 		synchronized (entries) {
-			entries.put(id, entry);
+			previous = entries.put(id, entry);
 		}
 
-		load(id, entry, lookup);
+		load(id, entry, previous, lookup);
 		return entry.future;
 	}
 
@@ -139,7 +143,9 @@ final class CardCache {
 		}
 	}
 
-	private void load(Id id, Entry entry, Function<Id, CompletableFuture<ResolutionResult<Card>>> lookup) {
+	// Loads entry by lookup; a failed lookup puts back the previous entry it replaced, if any.
+	private void load(Id id, Entry entry, @Nullable Entry previous,
+					  Function<Id, CompletableFuture<ResolutionResult<Card>>> lookup) {
 		CompletableFuture<ResolutionResult<Card>> lookingUp;
 		try {
 			lookingUp = lookup.apply(id);
@@ -151,7 +157,10 @@ final class CardCache {
 			if (error != null) {
 				synchronized (entries) {
 					// Only this entry: a newer one may have replaced it meanwhile.
-					entries.remove(id, entry);
+					if (previous != null)
+						entries.replace(id, entry, previous);
+					else
+						entries.remove(id, entry);
 				}
 				entry.future.completeExceptionally(error);
 			} else {

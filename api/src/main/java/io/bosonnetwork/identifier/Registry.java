@@ -412,11 +412,11 @@ public interface Registry {
 	 * Resolves a Boson {@link Id} to the {@link Card} the network has for it.
 	 *
 	 * @param id the Boson ID to resolve
-	 * @param useCache whether a cached result may answer; false resolves afresh (and refreshes the cache
-	 *                 with the answer)
+	 * @param force true to ask the network afresh, whatever is cached, and cache its answer (a failed
+	 *              lookup leaves the cache as it was); false lets a cached result answer
 	 * @return a future containing the resolution result (status, card, and metadata)
 	 */
-	CompletableFuture<ResolutionResult<Card>> resolve(Id id, boolean useCache);
+	CompletableFuture<ResolutionResult<Card>> resolve(Id id, boolean force);
 
 	/**
 	 * Resolves a Boson {@link Id} to the {@link Card} the network has for it; a cached result may answer.
@@ -425,7 +425,7 @@ public interface Registry {
 	 * @return a future containing the resolution result (status, card, and metadata)
 	 */
 	default CompletableFuture<ResolutionResult<Card>> resolve(Id id) {
-		return resolve(id, true);
+		return resolve(id, false);
 	}
 
 	/**
@@ -433,13 +433,13 @@ public interface Registry {
 	 * successful, mapped to a DIDDocument.
 	 *
 	 * @param id the Boson ID to resolve
-	 * @param useCache whether a cached result may answer; false resolves afresh
+	 * @param force true to ask the network afresh, whatever is cached; see {@link #resolve(Id, boolean)}
 	 * @return a future containing the resolution result (status, DID document, and metadata)
 	 */
-	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDocument(Id id, boolean useCache) {
+	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDocument(Id id, boolean force) {
 		Objects.requireNonNull(id, "id");
 
-		return resolve(id, useCache).thenApply(rr -> {
+		return resolve(id, force).thenApply(rr -> {
 			Card card = rr.getResult();
 			DIDDocument doc = card == null ? null : DIDDocument.fromCard(card);
 			return new ResolutionResult<>(rr.getResolutionStatus(), doc, rr.getResultMetadata());
@@ -454,7 +454,7 @@ public interface Registry {
 	 * @return a future containing the resolution result (status, DID document, and metadata)
 	 */
 	default CompletableFuture<ResolutionResult<DIDDocument>> resolveDocument(Id id) {
-		return resolveDocument(id, true);
+		return resolveDocument(id, false);
 	}
 
 	/**
