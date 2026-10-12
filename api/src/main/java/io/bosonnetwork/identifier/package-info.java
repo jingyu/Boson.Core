@@ -43,13 +43,9 @@
  * <h2>Addressing and resolution</h2>
  * {@link io.bosonnetwork.identifier.DIDURL} parses and builds {@code did:boson:} URLs;
  * {@link io.bosonnetwork.identifier.DIDConstants} and {@link io.bosonnetwork.identifier.W3CDIDFormat}
- * hold the shared constants. {@link io.bosonnetwork.identifier.Resolver} /
- * {@link io.bosonnetwork.identifier.Registry} define DID resolution and publication, with a
- * DHT-backed implementation ({@link io.bosonnetwork.identifier.DHTResolver},
- * {@link io.bosonnetwork.identifier.DHTRegistry}) and a
- * {@link io.bosonnetwork.identifier.ResolutionCache} (e.g.
- * {@link io.bosonnetwork.identifier.FileSystemResolutionCache}) fronted by
- * {@link io.bosonnetwork.identifier.CachedResolver}.
+ * hold the shared constants. {@link io.bosonnetwork.identifier.Registry} publishes cards and resolves
+ * them, with a DHT-backed implementation ({@link io.bosonnetwork.identifier.DHTRegistry}) that caches
+ * resolutions in memory.
  *
  * <h2>References</h2>
  * <ul>
