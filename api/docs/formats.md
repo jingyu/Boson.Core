@@ -93,6 +93,7 @@ These keep their own formats, on purpose:
 | Channel invites | content type `application/invite-ticket` | A content type. |
 | Service type ids | `io.bosonnetwork.ionstore`, `.webgateway`, `.activeproxy`, `.photonmessaging` | Reverse-domain names. |
 | App sign-in returns | `https://bosonnetwork.io/identity/auth` (the result in the fragment); for Photon builds from before 3.2, which still signed in with accounts, `https://bosonnetwork.io/photon/auth` and, on nodes from before 3.2, `io.bosonnetwork.photon://auth` | URLs (App Links). Photon 3.2 and later leaves account sign-in to Boson Identity. |
+| Boson Identity app requests | actions `io.bosonnetwork.identity.action.GET_HOME_NODE`, `.APPROVE_DEVICE`; extras `io.bosonnetwork.identity.extra.*` carrying the codes above (`boson:supernode`, `boson:pair`) and Base58 ids | Android intents to the package `io.bosonnetwork.identity`, any app, started for a result; see BosonIdentity `docs/app-requests.md`. |
 | User key backup | the 64-byte private key in Base58; the key file (`Boson User Identity Key` / `privateKey:` / `publicKey:`) | A secret, written down and typed back; never a Boson string. |
 | Proof-of-work personalization | `BosonPoW`, then n and k as 32-bit little-endian integers | BLAKE2b's fixed 16-byte personalization field. |
 | Service keys | key-derivation context `<serviceType>` or `<serviceType>_<instance>` | Changing it changes every service's peer id. |
