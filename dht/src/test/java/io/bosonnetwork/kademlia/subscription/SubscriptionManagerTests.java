@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import io.vertx.core.Future;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +51,7 @@ import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.NotifyPeerRequest;
 import io.bosonnetwork.kademlia.protocol.NotifyValueRequest;
 import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
+import io.bosonnetwork.kademlia.rpc.CallRejectedException;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 
 class SubscriptionManagerTests {
@@ -59,6 +61,8 @@ class SubscriptionManagerTests {
 	private List<Runnable> timerActions;
 	private Map<Id, Value> values;
 	private Map<Id, List<PeerInfo>> peers;
+	// Decides, per call, whether the RPC server refuses it: null to send, a reason to refuse.
+	private Function<RpcCall, CallRejectedException.Reason> refuse;
 	private SubscriptionManager manager;
 
 	private final Id subscriber = Id.random();
@@ -74,6 +78,7 @@ class SubscriptionManagerTests {
 		timerActions = new ArrayList<>();
 		values = new HashMap<>();
 		peers = new HashMap<>();
+		refuse = call -> null;
 		owner = Signature.KeyPair.random();
 		valueId = Id.of(owner.publicKey().bytes());
 
@@ -86,7 +91,14 @@ class SubscriptionManagerTests {
 			@Override
 			public Future<RpcCall> send(RpcCall call) {
 				sent.add(call);
-				return Future.succeededFuture(call);
+				CallRejectedException.Reason reason = refuse.apply(call);
+				if (reason == null)
+					return Future.succeededFuture(call);
+
+				// As RpcServer.reject does it: the call fails first, synchronously, then the future.
+				CallRejectedException cause = new CallRejectedException(reason, "refused");
+				fail(call, cause);
+				return Future.failedFuture(cause);
 			}
 
 			@Override
@@ -476,6 +488,101 @@ class SubscriptionManagerTests {
 		int before = sent.size();
 		manager.subscribe(subscriber, address, SubscriptionKind.PEER, big.getId(), -1, -1);
 		assertEquals(before, sent.size(), "a renewal does not offer the oversized record again");
+	}
+
+	private Value valueOf(Signature.KeyPair key, int seq) throws Exception {
+		return Value.signedBuilder().key(key).sequenceNumber(seq).data(("v" + seq).getBytes()).build();
+	}
+
+	/**
+	 * A full call table is this node's own congestion. The subscriber is charged nothing, and pushing stops
+	 * for a while instead of every queued subscription finding the table full for itself.
+	 */
+	@Test
+	void testANodeWideRefusalPausesPushingAndChargesNoOne() throws Exception {
+		Signature.KeyPair otherOwner = Signature.KeyPair.random();
+		Id otherSubscriber = Id.random();
+		InetSocketAddress otherAddress = new InetSocketAddress("12.34.56.79", 39001);
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.subscribe(otherSubscriber, otherAddress, SubscriptionKind.VALUE, valueOf(otherOwner, 1).getId(), -1, -1);
+
+		refuse = call -> CallRejectedException.Reason.ACTIVE_CALLS;
+		manager.valueStored(value(1));
+		manager.valueStored(valueOf(otherOwner, 1));
+		assertEquals(1, sent.size(), "one refusal pauses everything; the second subscription is not tried");
+
+		SubscriptionManager.Subscription sub = manager.get(subscriber, SubscriptionKind.VALUE, valueId);
+		assertEquals(0, sub.failures);
+		assertFalse(sub.stalled);
+		assertFalse(sub.inFlight);
+
+		// Still full when the pause ends: refused again, and the pause doubles.
+		advance(SubscriptionManager.PAUSE_MIN);
+		assertEquals(2, sent.size());
+		advance(SubscriptionManager.PAUSE_MIN);
+		assertEquals(2, sent.size(), "the second pause is twice as long");
+
+		// Room again: both go out, the refused one first.
+		refuse = call -> null;
+		advance(SubscriptionManager.PAUSE_MIN);
+		assertEquals(4, sent.size());
+		assertEquals(subscriber, sent.get(2).getTargetId());
+		assertEquals(otherSubscriber, sent.get(3).getTargetId());
+		assertEquals(0, manager.get(subscriber, SubscriptionKind.VALUE, valueId).failures);
+	}
+
+	/**
+	 * The outbound throttle refuses on account of one host. Only that subscription waits; everyone else
+	 * carries on.
+	 */
+	@Test
+	void testAThrottleRefusalBacksOffOnlyThatSubscription() throws Exception {
+		Signature.KeyPair otherOwner = Signature.KeyPair.random();
+		Id otherSubscriber = Id.random();
+		InetSocketAddress otherAddress = new InetSocketAddress("12.34.56.79", 39001);
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		manager.subscribe(otherSubscriber, otherAddress, SubscriptionKind.VALUE, valueOf(otherOwner, 1).getId(), -1, -1);
+
+		refuse = call -> call.getTarget().getAddress().equals(address) ? CallRejectedException.Reason.OUTBOUND_THROTTLE : null;
+		manager.valueStored(value(1));
+		manager.valueStored(valueOf(otherOwner, 1));
+		assertEquals(2, sent.size());
+		assertEquals(otherSubscriber, last().getTargetId(), "the other subscriber is not held up");
+		assertEquals(0, manager.get(subscriber, SubscriptionKind.VALUE, valueId).failures);
+
+		refuse = call -> null;
+		advance(SubscriptionManager.THROTTLE_BACKOFF - 1);
+		assertEquals(2, sent.size());
+		advance(1);
+		assertEquals(3, sent.size());
+		assertEquals(subscriber, last().getTargetId());
+	}
+
+	/**
+	 * A peer subscription with several pending records tries one, is refused, and waits - the others do not
+	 * rediscover the throttle one after another, and the refusal does not recurse into the queue.
+	 */
+	@Test
+	void testAThrottledPeerSubscriptionTriesOneRecordAtATime() throws Exception {
+		Signature.KeyPair key = Signature.KeyPair.random();
+		List<PeerInfo> instances = new ArrayList<>();
+		for (int i = 0; i < 3; i++)
+			instances.add(PeerInfo.builder().key(key).fingerprint(100 + i).sequenceNumber(1)
+					.endpoint("tcp://203.0.113.10:" + (3000 + i)).build());
+		peers.put(instances.get(0).getId(), instances);
+
+		refuse = call -> CallRejectedException.Reason.OUTBOUND_THROTTLE;
+		manager.subscribe(subscriber, address, SubscriptionKind.PEER, instances.get(0).getId(), -1, -1);
+		assertEquals(1, sent.size());
+
+		advance(SubscriptionManager.THROTTLE_BACKOFF);
+		assertEquals(2, sent.size(), "one attempt per back-off while refused");
+
+		refuse = call -> null;
+		advance(SubscriptionManager.THROTTLE_BACKOFF);
+		for (int i = 0; i < 3; i++)
+			ack(last());
+		assertEquals(5, sent.size(), "then the three records go out, one in flight at a time");
 	}
 
 	@Test

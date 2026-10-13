@@ -1059,11 +1059,12 @@ public class RpcServer implements Measured {
 	 * </p>
 	 *
 	 * @param call    the call being refused
-	 * @param message which limit refused it
+	 * @param reason  which limit refused it
+	 * @param message a description of it, for diagnosis
 	 * @return a failed future carrying the same cause as the call
 	 */
-	private static Future<RpcCall> reject(RpcCall call, String message) {
-		CallRejectedException cause = new CallRejectedException(message);
+	private static Future<RpcCall> reject(RpcCall call, CallRejectedException.Reason reason, String message) {
+		CallRejectedException cause = new CallRejectedException(reason, message);
 		call.fail(cause);
 		return Future.failedFuture(cause);
 	}
@@ -1083,7 +1084,7 @@ public class RpcServer implements Measured {
 	public Future<RpcCall> sendCall(RpcCall call) {
 		if (call.isUnsolicited()) {
 			if (unsolicitedCalls >= maxUnsolicitedCalls)
-				return reject(call, "Unsolicited call budget exceeded");
+				return reject(call, CallRejectedException.Reason.UNSOLICITED_BUDGET, "Unsolicited call budget exceeded");
 
 			// Charged before the call reaches the throttle, so a parked call holds its slot while it
 			// waits. Parking is not admission: a reactive call the throttle delays is still one this node
@@ -1152,7 +1153,7 @@ public class RpcServer implements Measured {
 		// they were - a task keeps one of its alpha requests on a call that has not been sent - and leaving
 		// them out of the ceiling is what let the queue grow without one.
 		if (pendingCalls.size() + delayedCalls.size() >= maxActiveCalls)
-			return reject(call, "Maximum active calls exceeded");
+			return reject(call, CallRejectedException.Reason.ACTIVE_CALLS, "Maximum active calls exceeded");
 
 		int delay = outboundThrottle.incrementAndEstimateDelay(call.getTarget().getIpAddress());
 		if (delay > RPC_CALL_TIMEOUT_MAX) {
@@ -1168,7 +1169,8 @@ public class RpcServer implements Measured {
 			log.debug("Dropped the RPC call to remote peer {}@{}: the outbound throttle delay ({}ms) is past "
 					+ "the call horizon", call.getTargetId(), call.getTarget().getHost(), delay);
 
-			return reject(call, "Outbound throttle delay exceeds the call horizon");
+			return reject(call, CallRejectedException.Reason.OUTBOUND_THROTTLE,
+					"Outbound throttle delay exceeds the call horizon");
 		}
 
 		if (delay > 0) {

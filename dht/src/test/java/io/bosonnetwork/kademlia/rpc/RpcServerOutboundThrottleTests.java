@@ -150,9 +150,9 @@ public class RpcServerOutboundThrottleTests {
 
 				// The caller has to be able to tell this from the ceiling: one says the node is at its
 				// configured limit, the other says this particular target is.
-				assertInstanceOf(CallRejectedException.class, refusedCall.getCause());
-				assertTrue(refusedCall.getCause().getMessage().contains("horizon"),
-						"refused for the wrong reason: " + refusedCall.getCause().getMessage());
+				CallRejectedException rejected = assertInstanceOf(CallRejectedException.class, refusedCall.getCause());
+				assertEquals(CallRejectedException.Reason.OUTBOUND_THROTTLE, rejected.getReason(),
+						"refused for the wrong reason: " + rejected.getMessage());
 				assertEquals(RpcCall.State.ERROR, refusedCall.getState(),
 						"a refused call must reach its caller as an error, not sit unsent");
 				// One cause for both, so a task reading the call and a caller reading the future are told
@@ -295,9 +295,9 @@ public class RpcServerOutboundThrottleTests {
 				assertEquals(budget, server.unsolicitedCallCount(),
 						"the budget is not counting what it admitted");
 				assertTrue(refusal.failed(), "the budget admitted more than it holds");
-				assertInstanceOf(CallRejectedException.class, refused.getCause());
-				assertTrue(refused.getCause().getMessage().contains("Unsolicited"),
-						"refused for the wrong reason: " + refused.getCause().getMessage());
+				CallRejectedException rejected = assertInstanceOf(CallRejectedException.class, refused.getCause());
+				assertEquals(CallRejectedException.Reason.UNSOLICITED_BUDGET, rejected.getReason(),
+						"refused for the wrong reason: " + rejected.getMessage());
 				assertEquals(RpcCall.State.ERROR, refused.getState());
 				assertSame(refused.getCause(), refusal.cause(),
 						"the call and its future must fail with the same cause");

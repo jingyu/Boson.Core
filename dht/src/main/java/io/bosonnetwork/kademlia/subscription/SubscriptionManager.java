@@ -48,6 +48,7 @@ import io.bosonnetwork.kademlia.exceptions.SubscriptionRefusedException;
 import io.bosonnetwork.kademlia.exceptions.UnknownSubscriptionException;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.protocol.SubscriptionKind;
+import io.bosonnetwork.kademlia.rpc.CallRejectedException;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.kademlia.rpc.RpcCallListener;
 import io.bosonnetwork.kademlia.security.SourceKey;
@@ -112,6 +113,18 @@ public class SubscriptionManager {
 	 * milliseconds. Well above a round trip, so a push merely on its way is not sent twice.
 	 */
 	static final long RESEND_WHEN_HEARD_AFTER = 1000;
+	/**
+	 * How long pushing stops when the RPC server refuses one for want of a free call slot, in milliseconds:
+	 * the shortest pause, doubling while refusals continue, up to {@link #PAUSE_MAX}.
+	 */
+	static final long PAUSE_MIN = 250;
+	/** The longest pause after the RPC server refuses a push for want of a free call slot, in milliseconds. */
+	static final long PAUSE_MAX = 2000;
+	/**
+	 * How long one subscription waits after the outbound throttle refuses a push to its subscriber's host,
+	 * in milliseconds.
+	 */
+	static final long THROTTLE_BACKOFF = 1000;
 	/** Node-wide push rate, per second. */
 	public static final int PUSH_RATE = 200;
 	/** Node-wide push burst. */
@@ -180,6 +193,8 @@ public class SubscriptionManager {
 		InetAddress source;
 		long expiresAt;
 		long eligibleAt;
+		// Not before this, whatever is pending: set when the outbound throttle refuses a push to this host.
+		long backoffUntil;
 
 		// VALUE: the highest sequence number the subscriber holds, and the newer value waiting to go out.
 		int ackedSeq = -1;
@@ -244,12 +259,12 @@ public class SubscriptionManager {
 		 */
 		long nextEligible() {
 			if (key.kind() == SubscriptionKind.VALUE)
-				return valuePushedAt + PUSH_MIN_INTERVAL;
+				return Math.max(backoffUntil, valuePushedAt + PUSH_MIN_INTERVAL);
 
 			long next = Long.MAX_VALUE;
 			for (Long fingerprint : pendingPeers.keySet())
 				next = Math.min(next, peerPushedAt.getOrDefault(fingerprint, 0L) + PUSH_MIN_INTERVAL);
-			return next;
+			return Math.max(backoffUntil, next);
 		}
 
 		/**
@@ -298,6 +313,11 @@ public class SubscriptionManager {
 			refill(now);
 			return tokens >= 1 ? now : now + (long) Math.ceil((1 - tokens) / perMilli);
 		}
+
+		/** Gives back a token taken for something that did not happen. */
+		void refund() {
+			tokens = Math.min(capacity, tokens + 1);
+		}
 	}
 
 	private final Host host;
@@ -309,6 +329,11 @@ public class SubscriptionManager {
 	private final PriorityQueue<Subscription> waiting;
 	private final RateLimiter limiter;
 	private long armedAt = Long.MAX_VALUE;
+	// Pushing is paused until this, after the RPC server refused a push for want of a free call slot.
+	private long pausedUntil;
+	private long pauseBackoff = PAUSE_MIN;
+	// Set while pump() runs, so that a send failing synchronously cannot run it again from inside itself.
+	private boolean pumping;
 
 	private static final Logger log = LoggerFactory.getLogger(SubscriptionManager.class);
 
@@ -672,11 +697,32 @@ public class SubscriptionManager {
 	 * Sends what the rate allows, then arranges to be called again when more is due.
 	 */
 	void pump() {
+		// A send can fail synchronously, inside the loop below, and its handling schedules again. That must
+		// not start a second loop over the same queues: what it added is picked up by the loop running.
+		if (pumping)
+			return;
+
+		pumping = true;
+		try {
+			drain();
+		} finally {
+			pumping = false;
+		}
+
+		arm();
+	}
+
+	private void drain() {
 		long now = host.now();
 		while (!waiting.isEmpty() && waiting.peek().eligibleAt <= now)
 			ready.add(waiting.poll());
 
 		while (!ready.isEmpty()) {
+			// Checked on every turn: a refusal for want of a call slot, inside the push just made, pauses
+			// everything rather than letting each queued subscription find the node full for itself.
+			if (now < pausedUntil)
+				break;
+
 			Subscription sub = ready.peek();
 			if (!sub.canPush()) {
 				ready.poll().queued = false;
@@ -697,17 +743,15 @@ public class SubscriptionManager {
 			ready.poll().queued = false;
 			push(sub, now);
 		}
-
-		arm();
 	}
 
 	private void arm() {
 		long now = host.now();
 		long next = Long.MAX_VALUE;
 		if (!ready.isEmpty())
-			next = limiter.nextAvailableAt(now);
+			next = Math.max(limiter.nextAvailableAt(now), pausedUntil);
 		if (!waiting.isEmpty())
-			next = Math.min(next, waiting.peek().eligibleAt);
+			next = Math.min(next, Math.max(waiting.peek().eligibleAt, pausedUntil));
 
 		// One timer, for the earliest thing due. A later one already armed is left to fire harmlessly.
 		if (next == Long.MAX_VALUE || next >= armedAt)
@@ -725,15 +769,20 @@ public class SubscriptionManager {
 	private void push(Subscription sub, long now) {
 		Message request;
 		Object record;
+		// The stamp this push replaces, put back if the push is refused before it leaves: a push that was
+		// never sent must not hold its record to the interval as if it had been.
+		long previousStamp;
 		if (sub.key.kind() == SubscriptionKind.VALUE) {
 			record = sub.pendingValue;
 			request = Message.notifyValueRequest(sub.pendingValue);
+			previousStamp = sub.valuePushedAt;
 			sub.valuePushedAt = now;
 		} else {
 			PeerInfo peer = sub.eligiblePeer(now);
 			record = peer;
 			request = Message.notifyPeerRequest(peer);
-			sub.peerPushedAt.put(peer.getFingerprint(), now);
+			Long stamp = sub.peerPushedAt.put(peer.getFingerprint(), now);
+			previousStamp = stamp != null ? stamp : 0;
 		}
 
 		sub.inFlight = true;
@@ -781,6 +830,8 @@ public class SubscriptionManager {
 							remove(sub);
 						} else if (c.getCause() instanceof MessageTooBigException) {
 							undeliverable(sub, record);
+						} else if (c.getCause() instanceof CallRejectedException rejected) {
+							refused(sub, record, previousStamp, rejected.getReason());
 						} else {
 							failed(sub, to, String.valueOf(c.getCause()));
 						}
@@ -797,15 +848,73 @@ public class SubscriptionManager {
 					}
 				});
 
-		host.send(call).onFailure(e -> {
+		host.send(call).onSuccess(c -> pauseBackoff = PAUSE_MIN).onFailure(e -> {
 			if (!settled[0] && sub.generation == generation) {
 				settled[0] = true;
 				if (e instanceof MessageTooBigException)
 					undeliverable(sub, record);
+				else if (e instanceof CallRejectedException rejected)
+					refused(sub, record, previousStamp, rejected.getReason());
 				else
 					failed(sub, to, e.getMessage());
 			}
 		});
+	}
+
+	/**
+	 * Takes a push the RPC server refused to send because this node is at one of its own limits.
+	 * <p>
+	 * Nothing here is about the subscriber, so nothing is charged to it: the push never left. Counting it
+	 * as a failure would let our own congestion stall healthy subscriptions, and a stall is only lifted by
+	 * the subscriber's traffic or its renewal - so a busy minute here would become minutes of delay there.
+	 * </p>
+	 * <p>
+	 * What happens instead depends on which limit refused:
+	 * </p>
+	 * <ul>
+	 *   <li>A full active-call table is the whole node's congestion. Every other push would be refused just
+	 *       the same, so pushing stops for a while - {@link #PAUSE_MIN}, doubling while refusals continue,
+	 *       up to {@link #PAUSE_MAX} - and this subscription goes back to the front of the queue.</li>
+	 *   <li>The outbound throttle refuses on account of one destination: too much is queued for this
+	 *       subscriber's host. Only this subscription waits, {@link #THROTTLE_BACKOFF}, and every record of
+	 *       it, so that another pending peer record does not rediscover the same throttle at once. Pausing
+	 *       everything for one host would hold every other subscriber up behind it.</li>
+	 * </ul>
+	 * <p>
+	 * Either way the retry comes from a timer, never from here: a refusal arrives synchronously, inside the
+	 * send, and pushing again from inside it would recurse into the queue being drained.
+	 * </p>
+	 */
+	private void refused(Subscription sub, Object record, long previousStamp, CallRejectedException.Reason reason) {
+		sub.inFlight = false;
+		limiter.refund();
+		if (record instanceof Value)
+			sub.valuePushedAt = previousStamp;
+		else
+			sub.peerPushedAt.put(((PeerInfo) record).getFingerprint(), previousStamp);
+
+		if (sub.removed)
+			return;
+
+		long now = host.now();
+		if (reason == CallRejectedException.Reason.ACTIVE_CALLS) {
+			pausedUntil = now + pauseBackoff;
+			log.debug("No free call slot for a push to {}, pausing pushes for {}ms", sub.key.subscriber(), pauseBackoff);
+			pauseBackoff = Math.min(pauseBackoff * 2, PAUSE_MAX);
+			if (!sub.queued) {
+				sub.queued = true;
+				ready.addFirst(sub);
+			}
+		} else {
+			sub.backoffUntil = now + THROTTLE_BACKOFF;
+			log.debug("Push to {}@{} refused by the outbound throttle, retrying in {}ms", sub.key.subscriber(),
+					sub.address, THROTTLE_BACKOFF);
+			schedule(sub);
+		}
+
+		// The loop that sent it, if it is still running, arms on its way out; a refusal arriving later does it.
+		if (!pumping)
+			arm();
 	}
 
 	/**
