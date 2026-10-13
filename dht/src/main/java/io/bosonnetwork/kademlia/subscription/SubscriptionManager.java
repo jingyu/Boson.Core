@@ -845,6 +845,11 @@ public class SubscriptionManager {
 		schedule(sub);
 	}
 
+	/**
+	 * Takes a subscriber's answer to a push. It says the subscription exists and the notification arrived,
+	 * not that the record was accepted - the subscriber validates afterwards and discards a bad record
+	 * without saying so. So it settles one thing only: this version need not be pushed again.
+	 */
 	private void acknowledged(Subscription sub, Object record) {
 		log.debug("{} of {} acknowledged by {}", describe(record), sub.key.target(), sub.key.subscriber());
 		sub.inFlight = false;

@@ -490,8 +490,15 @@ Rules common to both notifications:
 - The subscriber **MUST** validate the record before using it, as for any other record, and deduplicates
   across the nodes it subscribed to: a value only when its `seq` rises, a peer record only when its
   fingerprint is new or its `seq` rises.
+- **What the response means.** An empty response says *this subscription exists and the notification
+  arrived* - nothing more. It is not a verdict on the record: the subscriber answers before validating it
+  (validation may take longer than the storing node should wait), and a record that then fails validation
+  is discarded, not reported back. So the storing node takes the response as "this version need not be sent
+  again", never as "this version was accepted", and a subscriber MUST NOT answer with an error for a record
+  it rejects - the storing node can do nothing useful with that, while the subscriber can stop trusting the
+  node that sent it.
 - A subscriber holding no matching subscription answers [Unknown Subscription](#error-codes), and the storing
-  node drops the subscription at once.
+  node drops the subscription at once. This is the only error a notification is answered with.
 - A storing node **SHOULD** coalesce: while a notification is outstanding, or shortly after one, a newer
   version of the same record replaces the pending one rather than queueing behind it.
 

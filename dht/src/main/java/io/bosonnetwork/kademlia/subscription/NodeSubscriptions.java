@@ -354,11 +354,10 @@ public class NodeSubscriptions {
 			if (closed)
 				return;
 
-			if (latest == null || value.getSequenceNumber() > latest.getSequenceNumber())
+			if (latest == null || value.getSequenceNumber() > latest.getSequenceNumber()) {
 				log.debug("Value {} seq {} is new to this node's listeners", value.getId(), value.getSequenceNumber());
-
-			if (latest == null || value.getSequenceNumber() > latest.getSequenceNumber())
 				latest = value;
+			}
 
 			for (Handle handle : List.copyOf(handles))
 				handle.offer(value);
