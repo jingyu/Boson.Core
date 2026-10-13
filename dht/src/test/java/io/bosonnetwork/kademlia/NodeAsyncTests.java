@@ -680,7 +680,7 @@ public class NodeAsyncTests {
 		// Nothing is stored yet: the storing nodes accept a subscription to a value that does not exist.
 		subscriber.subscribeValue(v1.getId(), listener).thenCompose(sub -> {
 			subscription[0] = sub;
-			context.verify(() -> assertTrue(sub.getSubscribedNodes() >= 1, "accepted by at least one node"));
+			context.verify(() -> assertFalse(sub.isCancelled()));
 			return writer.storeValue(v1);
 		}).thenCompose(r -> ContextualFuture.of(gotV1.future()))
 				.thenCompose(v -> writer.storeValue(v2))

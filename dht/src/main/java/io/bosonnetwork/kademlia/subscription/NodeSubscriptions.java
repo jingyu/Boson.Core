@@ -140,8 +140,10 @@ public class NodeSubscriptions {
 	 * @param target   the value id or peer id.
 	 * @param knownSeq values: the sequence number the listener already holds, or -1 for none.
 	 * @param listener the listener.
-	 * @return a future of the subscription, completing once a storing node on any family has accepted it,
-	 *         and failing if none did on any.
+	 * @return a future of the subscription, completing once a storing node on some family is watching, or
+	 *         once every family's first attempt has run its course without one - the subscription then goes
+	 *         on trying, and its count says when a node is watching. It fails only when no family can carry
+	 *         it at all: the node is not running.
 	 */
 	public Future<Subscription> subscribe(List<Family> families, SubscriptionKind kind, Id target, int knownSeq,
 			SubscriptionListener<?> listener) {
@@ -150,14 +152,19 @@ public class NodeSubscriptions {
 
 		Topic topic = new Topic(kind, target);
 		Hub hub = hubs.get(topic);
-		if (hub == null) {
+		boolean created = hub == null;
+		if (created) {
 			hub = new Hub(topic);
 			hubs.put(topic, hub);
-			hub.open(families);
 		}
 
+		// Joined before the hub opens: a family can fail synchronously while opening and close the hub, and a
+		// listener joining after that would wait on a future nothing completes.
 		Handle handle = new Handle(hub, listener, kind == SubscriptionKind.VALUE ? knownSeq : -1);
 		hub.join(handle);
+		if (created)
+			hub.open(families);
+
 		return handle.ready.future();
 	}
 
@@ -214,7 +221,8 @@ public class NodeSubscriptions {
 		private final Map<Family, Integer> status;
 		private final Map<Long, PeerInfo> peers;
 		private Value latest;
-		private int familiesFailed;
+		private int familiesSettled;
+		private int familiesGone;
 		private boolean ready;
 		private boolean closed;
 		private int reportedStatus;
@@ -272,7 +280,7 @@ public class NodeSubscriptions {
 
 				family.subscribe(topic.kind(), topic.target(), -1, sink).onComplete(ar -> host.runOnContext(() -> {
 					if (ar.failed()) {
-						familyFailed(ar.cause());
+						familyGone(ar.cause());
 						return;
 					}
 
@@ -285,15 +293,21 @@ public class NodeSubscriptions {
 					watches.put(family, watch);
 					watch.ready().onComplete(r -> host.runOnContext(() -> {
 						if (r.succeeded())
-							becomeReady();
+							familySettled();
 						else
-							familyFailed(r.cause());
+							familyGone(r.cause());
 					}));
 				}));
 			}
 		}
 
 		private void join(Handle handle) {
+			if (closed) {
+				handle.cancelled = true;
+				handle.ready.tryFail(new IllegalStateException("Subscription closed"));
+				return;
+			}
+
 			handles.add(handle);
 			if (ready)
 				handle.ready.tryComplete(handle);
@@ -320,17 +334,37 @@ public class NodeSubscriptions {
 				handle.ready.tryComplete(handle);
 		}
 
-		private void familyFailed(Throwable cause) {
+		/**
+		 * A family's first attempt has run its course - with a node watching, or with none and still trying.
+		 * Ready once every family's has: waiting longer would only keep the caller waiting on a network that
+		 * may not come back soon, and the status tells it when one does.
+		 */
+		private void familySettled() {
 			if (closed)
 				return;
 
-			if (++familiesFailed < families.size() || ready)
+			familiesSettled++;
+			if (familiesSettled + familiesGone >= families.size())
+				becomeReady();
+		}
+
+		/**
+		 * A family cannot carry the subscription at all - its DHT is not running, or stopped. Not a network
+		 * condition, which only ever changes the count: this is the node going away. With no family left the
+		 * subscription ends, and a listener still waiting is told why.
+		 */
+		private void familyGone(Throwable cause) {
+			if (closed)
 				return;
 
-			// No family has a node that took the subscription. Tell every waiting listener, and drop the
-			// target rather than retry behind their backs: they have been told it failed.
-			log.debug("{} subscription to {} failed on every address family", topic.kind(), topic.target(), cause);
-			close(cause);
+			familiesGone++;
+			if (familiesGone >= families.size()) {
+				log.debug("{} subscription to {} has no address family left to run on", topic.kind(), topic.target(),
+						cause);
+				close(cause);
+			} else if (familiesSettled + familiesGone >= families.size()) {
+				becomeReady();
+			}
 		}
 
 		private void close(Throwable cause) {
@@ -380,6 +414,10 @@ public class NodeSubscriptions {
 				return;
 
 			status.put(family, subscribedNodes);
+			// One family with a node watching is enough to be ready; the other may take longer, or never.
+			if (subscribedNodes > 0)
+				becomeReady();
+
 			int total = subscribedNodes();
 			if (total == reportedStatus)
 				return;

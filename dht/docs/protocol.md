@@ -466,6 +466,10 @@ Behaviour of the subscriber:
   SUBSCRIBE response cannot be used: it is bound to the old endpoint.
 - A node that predates subscriptions cannot parse SUBSCRIBE and does not answer; the subscriber treats a
   timeout on a first subscription as "not supported" and uses another node.
+- None of the above ends a subscription. Finding no node, every node refusing, nodes gone: the subscriber
+  keeps looking, backing off while it has fewer storing nodes than it wants, and looks again at once when its
+  own connectivity returns. A storing node that accepts late pushes what it holds, so nothing written in the
+  meantime is missed.
 
 ---
 

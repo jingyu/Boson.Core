@@ -192,16 +192,44 @@ class NodeSubscriptionsTests {
 		assertEquals(2, future.result().getSubscribedNodes(), "counted across families");
 	}
 
+	/**
+	 * Every family refusing is a network condition: the subscription is handed over with nothing watching
+	 * yet, and kept - not torn down for the caller to rebuild.
+	 */
 	@Test
-	void testFailsOnlyWhenEveryFamilyFails() throws Exception {
+	void testSettlesWithNothingWatchingWhenEveryFamilyIsRefused() throws Exception {
 		Future<Subscription> future = subscriptions.subscribe(List.of(v4, v6), SubscriptionKind.VALUE,
 				value(1).getId(), -1, v -> { });
 
 		v4.refuse();
 		assertTrue(!future.isComplete(), "one family is not all of them");
 		v6.refuse();
+		assertTrue(future.succeeded());
+		assertEquals(0, future.result().getSubscribedNodes());
+		assertEquals(1, subscriptions.size(), "kept, still trying");
+	}
+
+	/**
+	 * Only no family being able to run it at all - the node not running - fails a subscription.
+	 */
+	@Test
+	void testFailsWhenNoFamilyCanRunIt() throws Exception {
+		NodeSubscriptions.Family stopped = new NodeSubscriptions.Family() {
+			@Override
+			public Future<SubscriptionClient.Watch> subscribe(SubscriptionKind kind, Id target, int knownSeq,
+					SubscriptionClient.Sink sink) {
+				return Future.failedFuture(new IllegalStateException("DHT is not running"));
+			}
+
+			@Override
+			public void unsubscribe(SubscriptionClient.Watch watch) {
+			}
+		};
+
+		Future<Subscription> future = subscriptions.subscribe(List.of(stopped, stopped), SubscriptionKind.VALUE,
+				value(1).getId(), -1, v -> { });
 		assertTrue(future.failed());
-		assertEquals(0, subscriptions.size(), "a failed target is dropped, not retried behind the caller's back");
+		assertEquals(0, subscriptions.size());
 	}
 
 	@Test

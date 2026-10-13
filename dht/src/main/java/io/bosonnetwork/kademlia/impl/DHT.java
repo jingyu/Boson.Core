@@ -1686,6 +1686,10 @@ public class DHT extends BosonVerticle {
 
 		log.info("DHT {}:{} connection status changed from {} to {}", network, identity.getId(), old, status);
 
+		// Subscriptions made before bootstrap finished found nobody to subscribe to; now there is.
+		if (status == ConnectionStatus.Connected)
+			subscriptionClient.onConnected();
+
 		if (connectionStatusListener == null)
 			return;
 

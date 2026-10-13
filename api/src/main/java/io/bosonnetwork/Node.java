@@ -397,12 +397,20 @@ public interface Node extends Identity {
 	 * withhold a lookup answer. Notifications lost in transit are recovered on the next renewal, a few
 	 * minutes later at most.
 	 * </p>
+	 * <p>
+	 * It is a standing request, not a session. Network conditions - no node found yet, nodes refusing or
+	 * gone - change only how many storing nodes are watching, which {@link Subscription#getSubscribedNodes()}
+	 * and {@link SubscriptionListener#onStatusChange(int)} report; the node keeps trying until it succeeds.
+	 * Only {@link Subscription#cancel()} or this node stopping ends it. A value written while nobody was
+	 * watching is delivered once a node is.
+	 * </p>
 	 *
 	 * @param id                  the value id.
 	 * @param knownSequenceNumber the sequence number of the value the caller already holds, or -1 for none.
 	 * @param listener            receives each newer value.
-	 * @return a {@link CompletableFuture} of the subscription, completing once at least one storing node has
-	 *         accepted it, and failing if none did.
+	 * @return a {@link CompletableFuture} of the subscription, completing once a storing node is watching or
+	 *         the first attempt to find one has run its course - with {@code getSubscribedNodes() == 0} in
+	 *         the second case, and the node still trying. It fails only if this node is not running.
 	 */
 	default CompletableFuture<Subscription> subscribeValue(Id id, int knownSequenceNumber,
 			SubscriptionListener<Value> listener) {
@@ -416,11 +424,16 @@ public interface Node extends Identity {
 	 * service gaining an instance, or an instance moving endpoint. The records already stored are delivered
 	 * first. Removal is not reported: a record that is not re-announced simply ages out.
 	 * </p>
+	 * <p>
+	 * Like {@link #subscribeValue(Id, int, SubscriptionListener)}, a standing request that network conditions
+	 * never end.
+	 * </p>
 	 *
 	 * @param id       the peer id.
 	 * @param listener receives each new or changed record.
-	 * @return a {@link CompletableFuture} of the subscription, completing once at least one storing node has
-	 *         accepted it, and failing if none did.
+	 * @return a {@link CompletableFuture} of the subscription, completing once a storing node is watching or
+	 *         the first attempt to find one has run its course - with {@code getSubscribedNodes() == 0} in
+	 *         the second case, and the node still trying. It fails only if this node is not running.
 	 */
 	default CompletableFuture<Subscription> subscribePeer(Id id, SubscriptionListener<PeerInfo> listener) {
 		return CompletableFuture.failedFuture(new UnsupportedOperationException("Subscriptions not supported"));

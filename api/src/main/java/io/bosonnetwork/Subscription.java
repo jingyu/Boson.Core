@@ -46,7 +46,8 @@ public interface Subscription {
 	 * Returns how many storing nodes currently confirm they are watching for this node, across address
 	 * families.
 	 *
-	 * @return the number; 0 means no node is watching at the moment, and updates will be late until one is.
+	 * @return the number; 0 means no node is watching at the moment - whether none ever was or the ones that
+	 *         were have gone - and updates will be late until one is. The node keeps trying either way.
 	 */
 	int getSubscribedNodes();
 

@@ -312,18 +312,51 @@ class SubscriptionClientTests {
 		assertEquals(16, body(subscribes().get(5)).getToken());
 	}
 
+	/**
+	 * Nobody accepting is a network condition, not an end: the subscription settles with nothing watching,
+	 * keeps trying, and takes the first node that will have it.
+	 */
 	@Test
-	void testReadyFailsWhenNoNodeAccepts() {
+	void testWhenNoNodeAcceptsTheSubscriptionSettlesAndKeepsTrying() {
 		candidates.add(candidate("12.1.1.1", 11));
 		SubscriptionClient.Watch watch = client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
 		refuse(subscribes().get(0));
-		assertTrue(watch.ready().failed());
+
+		assertTrue(watch.ready().succeeded(), "settled, not failed");
+		assertEquals(0, watch.subscribedNodes());
+		assertEquals(1, client.size(), "and still there");
+
+		// A node that will have it turns up; the retry finds it.
+		candidates.add(candidate("12.1.1.2", 12));
+		advance(SubscriptionClient.UNDERFILLED_RETRY_MIN);
+		RpcCall second = subscribes().get(subscribes().size() - 1);
+		assertEquals(12, body(second).getToken());
+		accept(second, 5, 600);
+		assertEquals(1, watch.subscribedNodes());
 	}
 
+	/**
+	 * An empty lookup - a node subscribing before its bootstrap finished - backs off between retries, and
+	 * looks again at once when the DHT connects.
+	 */
 	@Test
-	void testReadyFailsWhenTheLookupFindsNothing() {
+	void testAnEmptyLookupBacksOffAndConnectingLooksAgainAtOnce() {
 		SubscriptionClient.Watch watch = client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
-		assertTrue(watch.ready().failed());
+		assertTrue(watch.ready().succeeded());
+		assertEquals(0, watch.subscribedNodes());
+		assertEquals(1, lookups);
+
+		advance(SubscriptionClient.UNDERFILLED_RETRY_MIN);
+		assertEquals(2, lookups);
+		advance(SubscriptionClient.UNDERFILLED_RETRY_MIN);
+		assertEquals(2, lookups, "the second wait is twice the first");
+		advance(SubscriptionClient.UNDERFILLED_RETRY_MIN);
+		assertEquals(3, lookups);
+
+		candidates.add(candidate("12.1.1.1", 11));
+		client.onConnected();
+		assertEquals(4, lookups, "connecting looks again at once, whatever the back-off says");
+		assertEquals(1, subscribes().size());
 	}
 
 	@Test
@@ -471,9 +504,10 @@ class SubscriptionClientTests {
 		pong(calls(Message.Method.PING).get(0), before);
 		assertTrue(calls(Message.Method.FIND_NODE).isEmpty());
 
-		// Seen at a new port: move.
-		int lookupsBefore = lookups;
+		// Seen at a new port: move. (One node of four, so retry lookups run meanwhile; only the move is
+		// measured.)
 		advance(SubscriptionClient.NAT_KEEPALIVE_INTERVAL);
+		int lookupsBefore = lookups;
 		pong(calls(Message.Method.PING).get(1), new InetSocketAddress("12.9.9.9", 40001));
 		List<RpcCall> tokenRequests = calls(Message.Method.FIND_NODE);
 		assertEquals(1, tokenRequests.size());
@@ -492,9 +526,9 @@ class SubscriptionClientTests {
 		candidates.add(a);
 		SubscriptionClient.Watch watch = client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
 		accept(subscribes().get(0), 5, 600);
-		int lookupsBefore = lookups;
 
 		advance(SubscriptionClient.RENEW_INTERVAL);
+		int lookupsBefore = lookups;
 		invoke(subscribes().get(1), "fail", Throwable.class, new InvalidTokenException("moved"));
 		assertTrue(watch.nodes().contains(a.node().getId()), "the node is kept");
 

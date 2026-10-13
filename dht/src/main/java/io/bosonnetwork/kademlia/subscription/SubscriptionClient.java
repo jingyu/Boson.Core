@@ -97,6 +97,16 @@ import io.bosonnetwork.kademlia.security.SourceKey;
  * when its fingerprint is new or its sequence number rises.
  * </p>
  * <p>
+ * <b>A standing request, not a session.</b> Network conditions change how many storing nodes are watching -
+ * from four down to none - but never end a subscription; only a cancel or the node stopping does. Not finding
+ * a node, every node refusing, nodes too old to know SUBSCRIBE: all of these pass, and the caller could do
+ * nothing about them but try again later, which is what happens here. While fewer than
+ * {@link #SUBSCRIBE_NODES} are watching, the target is looked up again with a back-off from
+ * {@link #UNDERFILLED_RETRY_MIN} to {@link #REHOME_INTERVAL}, and at once when this node's DHT connects - the
+ * case of a subscription made before bootstrap finished. Nothing is lost by establishing late: a storing node
+ * pushes what it holds on accepting.
+ * </p>
+ * <p>
  * Not thread-safe: owned by one DHT and driven from its event loop.
  * </p>
  */
@@ -123,6 +133,12 @@ public class SubscriptionClient {
 	public static final long NAT_KEEPALIVE_INTERVAL = 25 * 1000;
 	/** How often the closest nodes are looked up again, since the closest set drifts, in milliseconds. */
 	public static final long REHOME_INTERVAL = 15 * 60 * 1000;
+	/**
+	 * The first wait before looking a target up again while fewer than {@link #SUBSCRIBE_NODES} are watching,
+	 * in milliseconds. It doubles on each try, up to {@link #REHOME_INTERVAL}, and starts over when a new node
+	 * accepts.
+	 */
+	public static final long UNDERFILLED_RETRY_MIN = 30 * 1000;
 
 	/** Tokens from a lookup older than this are not presented; a new lookup is run instead. */
 	static final long CANDIDATES_FRESH = 4 * 60 * 1000;
@@ -273,6 +289,7 @@ public class SubscriptionClient {
 		private boolean lookupPending;
 		private long lookupTimer = -1;
 		private long rehomeTimer = -1;
+		private long retryDelay = UNDERFILLED_RETRY_MIN;
 		private int reportedStatus;
 		private boolean cancelled;
 
@@ -311,7 +328,10 @@ public class SubscriptionClient {
 		}
 
 		/**
-		 * Returns a future completing once one storing node has accepted, and failing if none did.
+		 * Returns a future completing once the first attempt has settled: a storing node accepted, or none
+		 * could be found or would accept, and the watch goes on trying. It fails only if the subscription is
+		 * cancelled, or the owning DHT stops, first - never for a network condition, which only changes how
+		 * many nodes are watching.
 		 *
 		 * @return the future.
 		 */
@@ -439,6 +459,23 @@ public class SubscriptionClient {
 				});
 
 		return true;
+	}
+
+	/**
+	 * Takes this node's DHT becoming connected: every subscription short of storing nodes looks again now,
+	 * rather than when its back-off says. The case it is for is a subscription made before bootstrap
+	 * finished, whose first lookup found nothing because there was nothing yet to find.
+	 */
+	public void onConnected() {
+		for (Watch watch : List.copyOf(watches.values())) {
+			if (watch.slots.size() >= SUBSCRIBE_NODES || watch.lookupPending)
+				continue;
+
+			watch.retryDelay = UNDERFILLED_RETRY_MIN;
+			cancelTimer(watch.lookupTimer);
+			watch.lookupTimer = -1;
+			lookup(watch);
+		}
 	}
 
 	/**
@@ -574,14 +611,32 @@ public class SubscriptionClient {
 			}
 		}
 
-		if (watch.slots.size() < SUBSCRIBE_NODES && !fresh)
-			requestLookup(watch);
+		if (watch.slots.size() < SUBSCRIBE_NODES && !watch.lookupPending) {
+			if (fresh)
+				retryLater(watch);   // this lookup's candidates are spent: look again, backing off
+			else
+				requestLookup(watch);    // its tokens have gone stale: look again soon
+		}
 
-		// Nothing accepted and nothing left to try from this lookup: the caller hears now rather than when
-		// some later lookup might succeed. A later one still can, and the watch keeps trying while it lives.
+		// The first attempt has run its course without a node. The caller hears now, with nothing watching
+		// yet - not as a failure: the watch keeps trying, and the count tells the caller when it succeeds.
 		if (watch.slots.isEmpty() && !watch.lookupPending)
-			watch.ready.tryFail(new IllegalStateException("No node accepted the " +
-					watch.topic.kind().name().toLowerCase() + " subscription to " + watch.topic.target()));
+			watch.ready.tryComplete();
+	}
+
+	/**
+	 * Looks the target up again after the back-off, then doubles it, up to {@link #REHOME_INTERVAL}.
+	 */
+	private void retryLater(Watch watch) {
+		if (watch.cancelled || watch.lookupTimer != -1)
+			return;
+
+		long delay = Math.max(watch.retryDelay, watch.lastLookupAt + RELOOKUP_MIN_INTERVAL - host.now());
+		watch.retryDelay = Math.min(watch.retryDelay * 2, REHOME_INTERVAL);
+		watch.lookupTimer = host.setTimer(delay, () -> {
+			watch.lookupTimer = -1;
+			lookup(watch);
+		});
 	}
 
 	private void replace(Watch watch) {
@@ -626,6 +681,11 @@ public class SubscriptionClient {
 
 		if (response != null && response.getToken() != 0)
 			slot.token = response.getToken();
+
+		// A node newly watching for us starts the back-off over; a renewal does not, or a target that can
+		// only ever find a few nodes would be looked up again every few minutes for as long as it lived.
+		if (!slot.confirmed)
+			watch.retryDelay = UNDERFILLED_RETRY_MIN;
 
 		slot.confirmed = true;
 		int lease = response != null && response.getLease() > 0 ? response.getLease() : REQUESTED_LEASE;
