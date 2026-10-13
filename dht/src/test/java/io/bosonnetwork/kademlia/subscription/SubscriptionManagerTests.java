@@ -585,6 +585,64 @@ class SubscriptionManagerTests {
 		assertEquals(5, sent.size(), "then the three records go out, one in flight at a time");
 	}
 
+	private List<PeerInfo> instances(int count) {
+		Signature.KeyPair key = Signature.KeyPair.random();
+		List<PeerInfo> list = new ArrayList<>();
+		for (int i = 0; i < count; i++)
+			list.add(PeerInfo.builder().key(key).fingerprint(1000 + i).sequenceNumber(1)
+					.endpoint("tcp://203.0.113.10:" + (2000 + i)).build());
+		return list;
+	}
+
+	/** Acknowledges each push as it goes out, until nothing more is sent. */
+	private void ackUntilQuiet() {
+		int acked = 0;
+		while (acked < sent.size()) {
+			RpcCall call = sent.get(acked++);
+			if (call.getState() == RpcCall.State.UNSENT)
+				ack(call);
+		}
+	}
+
+	/**
+	 * More records than the pending set holds: the ones turned away are picked up from storage as soon as the
+	 * set has drained, not at the next renewal.
+	 */
+	@Test
+	void testPeerRecordsDeferredByAFullPendingSetGoOutWithoutWaitingForRenewal() throws Exception {
+		int count = SubscriptionManager.MAX_TRACKED_PEERS + 6;
+		List<PeerInfo> list = instances(count);
+		peers.put(list.get(0).getId(), list);
+
+		manager.subscribe(subscriber, address, SubscriptionKind.PEER, list.get(0).getId(), -1, -1);
+		ackUntilQuiet();
+
+		assertEquals(count, sent.size(), "every record once, and none twice");
+		assertEquals(count, sent.stream()
+				.map(c -> c.getRequest().<NotifyPeerRequest>getBody().getPeer().getFingerprint()).distinct().count());
+	}
+
+	/**
+	 * Far more records than are tracked: a refill also re-offers records whose acknowledged state was
+	 * forgotten, so refills must not chain, or those would be pushed round and round for as long as the
+	 * subscription lived.
+	 */
+	@Test
+	void testRefillsDoNotChainOnAVeryLargeTarget() throws Exception {
+		List<PeerInfo> list = instances(SubscriptionManager.MAX_TRACKED_PEERS * 4);
+		peers.put(list.get(0).getId(), list);
+
+		manager.subscribe(subscriber, address, SubscriptionKind.PEER, list.get(0).getId(), -1, -1);
+		ackUntilQuiet();
+		int pushed = sent.size();
+		assertTrue(pushed <= list.size(), "pushed " + pushed + " for " + list.size() + " records");
+
+		// Nothing keeps going on its own; the rest waits for the renewal.
+		advance(60_000);
+		ackUntilQuiet();
+		assertEquals(pushed, sent.size());
+	}
+
 	@Test
 	void testSubscribersPerTargetAreCapped() throws Exception {
 		for (int i = 0; i < SubscriptionManager.MAX_SUBSCRIBERS_PER_TARGET; i++)

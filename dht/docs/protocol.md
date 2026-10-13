@@ -431,6 +431,13 @@ Behaviour of the storing node:
   `cas` (or if `cas` is absent and a value is stored); on creating a peer subscription it pushes the stored
   records. A lost notification is therefore late rather than lost: the next renewal carries the `seq` the
   subscriber holds.
+- **Why `cas` is for values only.** A value is one record with one `seq`, so one number says exactly what
+  the subscriber holds. A peer id holds a set of records, one per fingerprint, each with its own `seq` - and
+  a new instance usually starts at 0 - so no single number can describe it: "the highest `seq` held" would
+  hide a new instance with a lower one. A peer subscription is caught up instead from the storing node's own
+  record of what it has pushed and had acknowledged, which a renewal does not reset. That record is bounded,
+  so a storing node **MAY** push a peer record more than once - after it restarted, or for a target with
+  more instances than it tracks per subscription - and the subscriber **MUST** deduplicate (below).
 - Keep-alive re-announces that do not change a record's content are not notified.
 - It **MAY** refuse with [Subscription Refused](#error-codes) when a quota is reached. Recommended quotas,
   per node: subscriptions per [source unit](#source-units), subscribers per target, and a total; refusing
@@ -487,9 +494,10 @@ Rules common to both notifications:
 - **No token, no subscription id.** The transport authenticates the sender; the subscriber accepts a
   notification only when it holds a subscription of that kind, for the id the record carries, with that
   node. Nothing about the storing node's address needs proving.
-- The subscriber **MUST** validate the record before using it, as for any other record, and deduplicates
-  across the nodes it subscribed to: a value only when its `seq` rises, a peer record only when its
-  fingerprint is new or its `seq` rises.
+- The subscriber **MUST** validate the record before using it, as for any other record, and **MUST**
+  deduplicate: a value counts only when its `seq` rises, a peer record only when its fingerprint is new or its
+  `seq` rises. Duplicates are normal, not misbehavior - the same version arrives from each node subscribed
+  to, and one node may push a peer record again (see SUBSCRIBE).
 - **What the response means.** An empty response says *this subscription exists and the notification
   arrived* - nothing more. It is not a verdict on the record: the subscriber answers before validating it
   (validation may take longer than the storing node should wait), and a record that then fails validation

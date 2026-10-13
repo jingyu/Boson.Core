@@ -131,9 +131,21 @@ public class SubscriptionManager {
 	public static final int PUSH_BURST = 400;
 
 	/**
-	 * Peer fingerprints tracked per subscription, pending and acknowledged each. A target with more
-	 * instances than this is still served; beyond it, a record's acknowledged state may be forgotten and
-	 * pushed once more, and a pending record may wait for a slot.
+	 * Peer fingerprints tracked per subscription, pending and acknowledged each.
+	 * <p>
+	 * A target with more instances than this is still served, with two costs. Acknowledged state is kept for
+	 * the most recently used fingerprints only, so a record whose state was forgotten can be pushed once
+	 * more - harmless, since the subscriber deduplicates, but a wasted push. And at most this many records
+	 * wait to go out at once: a record arriving while the pending set is full is deferred, and picked up
+	 * from storage as soon as the set has drained to half rather than at the next renewal - once per
+	 * deferral, so on a target with many more instances than this, what one refill cannot fit still waits
+	 * for the renewal.
+	 * </p>
+	 * <p>
+	 * A bound on memory rather than a tuning knob: every subscription carries these maps, so the cap times
+	 * {@link #MAX_SUBSCRIPTIONS} is the worst case. Subscriptions are for watching a service, not for
+	 * enumerating a fleet - FIND_PEER itself returns at most eight records.
+	 * </p>
 	 */
 	static final int MAX_TRACKED_PEERS = 64;
 
@@ -227,6 +239,9 @@ public class SubscriptionManager {
 			}
 		};
 		long valuePushedAt;
+
+		// A record was turned away because the pending set was full; re-read storage once it drains.
+		boolean peersDeferred;
 
 		boolean inFlight;
 		long inFlightSince;
@@ -485,7 +500,7 @@ public class SubscriptionManager {
 			return;
 
 		for (Subscription sub : subs)
-			offer(sub, peer);
+			offer(sub, peer, true);
 	}
 
 	/**
@@ -628,6 +643,17 @@ public class SubscriptionManager {
 	}
 
 	private void resync(Subscription sub) {
+		resync(sub, true);
+	}
+
+	/**
+	 * Offers the subscription whatever storage holds for its target.
+	 *
+	 * @param sub      the subscription.
+	 * @param mayDefer whether peer records that find the pending set full arm a refill. Not for a refill's
+	 *                 own reading - see {@link #refillIfDeferred}.
+	 */
+	private void resync(Subscription sub, boolean mayDefer) {
 		if (sub.key.kind() == SubscriptionKind.VALUE) {
 			host.getValue(sub.key.target()).onSuccess(value -> {
 				if (value != null && !sub.removed)
@@ -636,7 +662,7 @@ public class SubscriptionManager {
 		} else {
 			host.getPeers(sub.key.target()).onSuccess(peers -> {
 				if (peers != null && !sub.removed)
-					peers.forEach(peer -> offer(sub, peer));
+					peers.forEach(peer -> offer(sub, peer, mayDefer));
 			}).onFailure(e -> log.warn("Can not read peers {} for a subscription", sub.key.target(), e));
 		}
 	}
@@ -653,7 +679,7 @@ public class SubscriptionManager {
 		schedule(sub);
 	}
 
-	private void offer(Subscription sub, PeerInfo peer) {
+	private void offer(Subscription sub, PeerInfo peer, boolean mayDefer) {
 		long fingerprint = peer.getFingerprint();
 		int seq = peer.getSequenceNumber();
 		Integer acked = sub.ackedPeers.get(fingerprint);
@@ -671,6 +697,8 @@ public class SubscriptionManager {
 		if (pending == null && sub.pendingPeers.size() >= MAX_TRACKED_PEERS) {
 			log.debug("Too many pending peer records for subscription to {} from {}, deferring {}",
 					sub.key.target(), sub.key.subscriber(), fingerprint);
+			if (mayDefer)
+				sub.peersDeferred = true;
 			return;
 		}
 
@@ -949,6 +977,7 @@ public class SubscriptionManager {
 			PeerInfo pending = sub.pendingPeers.get(fingerprint);
 			if (pending != null && pending.getSequenceNumber() <= peer.getSequenceNumber())
 				sub.pendingPeers.remove(fingerprint);
+			refillIfDeferred(sub);
 		}
 
 		schedule(sub);
@@ -973,9 +1002,29 @@ public class SubscriptionManager {
 			PeerInfo pending = sub.pendingPeers.get(fingerprint);
 			if (pending != null && pending.getSequenceNumber() <= seq)
 				sub.pendingPeers.remove(fingerprint);
+			refillIfDeferred(sub);
 		}
 
 		schedule(sub);
+	}
+
+	/**
+	 * Picks up the peer records turned away while the pending set was full, once it has drained to half -
+	 * from storage, which still holds them, so nothing had to be remembered beyond the fact. Without this
+	 * they would wait for the next renewal.
+	 * <p>
+	 * One refill per deferral, and records a refill itself cannot fit do not arm another. Storage is read
+	 * whole, so on a target with many more instances than {@link #MAX_TRACKED_PEERS} a refill also offers
+	 * records whose acknowledged state was forgotten; letting refills chain would push those again and
+	 * again, for as long as the subscription lived. What one refill leaves over waits for the renewal.
+	 * </p>
+	 */
+	private void refillIfDeferred(Subscription sub) {
+		if (!sub.peersDeferred || sub.pendingPeers.size() > MAX_TRACKED_PEERS / 2)
+			return;
+
+		sub.peersDeferred = false;
+		resync(sub, false);
 	}
 
 	private void failed(Subscription sub, InetSocketAddress to, String reason) {
