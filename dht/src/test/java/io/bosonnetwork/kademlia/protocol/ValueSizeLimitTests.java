@@ -77,6 +77,14 @@ class ValueSizeLimitTests {
 		int found = onWire(Message.findValueResponse(0x76543210L, value));
 		assertTrue(found <= budget, label + ": a FIND_VALUE response of " + found
 				+ " bytes exceeds the " + budget + "-byte IPv6 packet budget");
+
+		// And the third way: pushed to a subscriber. A value over the budget here is one no subscriber on
+		// this family can ever be told about.
+		int notified = onWire(Message.notifyValueRequest(value));
+		assertTrue(notified <= budget, label + ": a NOTIFY_VALUE of " + notified
+				+ " bytes exceeds the " + budget + "-byte IPv6 packet budget");
+		System.out.println(label + ": STORE_VALUE " + store + ", FIND_VALUE " + found + ", NOTIFY_VALUE "
+				+ notified + " of " + budget + " bytes");
 	}
 
 	private static Value maximalImmutable() {

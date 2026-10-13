@@ -43,6 +43,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.kademlia.exceptions.MessageTooBigException;
 import io.bosonnetwork.kademlia.exceptions.SubscriptionRefusedException;
 import io.bosonnetwork.kademlia.exceptions.UnknownSubscriptionException;
 import io.bosonnetwork.kademlia.protocol.Message;
@@ -192,6 +193,16 @@ public class SubscriptionManager {
 			}
 		};
 		final LinkedHashMap<Long, PeerInfo> pendingPeers = new LinkedHashMap<>();
+		// Records that do not fit one datagram on this node's address family, and so can never be pushed:
+		// the value's sequence number, and per fingerprint the peer's. Kept apart from what was acknowledged,
+		// which a renewal resets, so that no renewal offers them again. A newer version is tried as usual.
+		int undeliverableSeq = -1;
+		final Map<Long, Integer> undeliverablePeers = new LinkedHashMap<>(16, 0.75f, true) {
+			@Override
+			protected boolean removeEldestEntry(Map.Entry<Long, Integer> eldest) {
+				return size() > MAX_TRACKED_PEERS;
+			}
+		};
 		// When each fingerprint was last pushed: the damping interval is per record, not per subscription,
 		// so a target's other instances are not held up by one that just changed.
 		final Map<Long, Long> peerPushedAt = new LinkedHashMap<>(16, 0.75f, true) {
@@ -607,7 +618,7 @@ public class SubscriptionManager {
 
 	private void offer(Subscription sub, Value value) {
 		int seq = value.getSequenceNumber();
-		if (seq <= sub.ackedSeq)
+		if (seq <= sub.ackedSeq || seq == sub.undeliverableSeq)
 			return;
 
 		if (sub.pendingValue != null && sub.pendingValue.getSequenceNumber() >= seq)
@@ -622,6 +633,10 @@ public class SubscriptionManager {
 		int seq = peer.getSequenceNumber();
 		Integer acked = sub.ackedPeers.get(fingerprint);
 		if (acked != null && seq <= acked)
+			return;
+
+		Integer undeliverable = sub.undeliverablePeers.get(fingerprint);
+		if (undeliverable != null && seq <= undeliverable)
 			return;
 
 		PeerInfo pending = sub.pendingPeers.get(fingerprint);
@@ -764,6 +779,8 @@ public class SubscriptionManager {
 									sub.key.kind(), sub.key.target());
 							sub.inFlight = false;
 							remove(sub);
+						} else if (c.getCause() instanceof MessageTooBigException) {
+							undeliverable(sub, record);
 						} else {
 							failed(sub, to, String.valueOf(c.getCause()));
 						}
@@ -783,9 +800,49 @@ public class SubscriptionManager {
 		host.send(call).onFailure(e -> {
 			if (!settled[0] && sub.generation == generation) {
 				settled[0] = true;
-				failed(sub, to, e.getMessage());
+				if (e instanceof MessageTooBigException)
+					undeliverable(sub, record);
+				else
+					failed(sub, to, e.getMessage());
 			}
 		});
+	}
+
+	/**
+	 * Gives up on a record the RPC server refused to send because it does not fit one datagram.
+	 * <p>
+	 * Unlike every other failure this one is permanent: the same record is refused however often it is
+	 * tried. Counted as an ordinary failure it would stall the subscription, and the renewal that resumes
+	 * it would offer the record again - so one oversized record under a watched id would keep every
+	 * subscription to it stalled. It is dropped instead, remembered so that no renewal offers it again, and
+	 * the subscription carries on with whatever else is pending; a newer version is pushed as usual.
+	 * </p>
+	 * <p>
+	 * The limits on values and peer records are derived so that a notification always fits, so reaching
+	 * this means a record stored without passing them - one older than the limits, say - or a defect in
+	 * the derivation. Hence a warning.
+	 * </p>
+	 */
+	private void undeliverable(Subscription sub, Object record) {
+		sub.inFlight = false;
+		if (sub.removed)
+			return;
+
+		log.warn("{} of {} does not fit one datagram and cannot be pushed to {}, skipping it", describe(record),
+				sub.key.target(), sub.key.subscriber());
+		if (record instanceof Value value) {
+			sub.undeliverableSeq = value.getSequenceNumber();
+			if (sub.pendingValue != null && sub.pendingValue.getSequenceNumber() == value.getSequenceNumber())
+				sub.pendingValue = null;
+		} else if (record instanceof PeerInfo peer) {
+			long fingerprint = peer.getFingerprint();
+			sub.undeliverablePeers.merge(fingerprint, peer.getSequenceNumber(), Math::max);
+			PeerInfo pending = sub.pendingPeers.get(fingerprint);
+			if (pending != null && pending.getSequenceNumber() <= peer.getSequenceNumber())
+				sub.pendingPeers.remove(fingerprint);
+		}
+
+		schedule(sub);
 	}
 
 	private void acknowledged(Subscription sub, Object record) {

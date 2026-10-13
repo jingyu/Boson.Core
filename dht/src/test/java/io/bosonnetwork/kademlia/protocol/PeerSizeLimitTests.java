@@ -93,6 +93,13 @@ class PeerSizeLimitTests {
 		int found = onWire(Message.findPeerResponse(0x76543210L, List.of(peer)));
 		assertTrue(found <= budget, label + ": a FIND_PEER response of " + found
 				+ " bytes exceeds the " + budget + "-byte IPv6 packet budget");
+
+		// And the third way: pushed to a subscriber. A record over the budget here is one no subscriber on
+		// this family can ever be told about.
+		int notified = onWire(Message.notifyPeerRequest(peer));
+		assertTrue(notified <= budget, label + ": a NOTIFY_PEER of " + notified
+				+ " bytes exceeds the " + budget + "-byte IPv6 packet budget");
+		System.out.println(label + ": NOTIFY_PEER " + notified + " of " + budget + " bytes");
 	}
 
 	/**

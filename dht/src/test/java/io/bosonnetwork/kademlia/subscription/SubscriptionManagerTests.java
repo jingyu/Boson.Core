@@ -43,6 +43,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.Signature;
+import io.bosonnetwork.kademlia.exceptions.MessageTooBigException;
 import io.bosonnetwork.kademlia.exceptions.SubscriptionRefusedException;
 import io.bosonnetwork.kademlia.exceptions.UnknownSubscriptionException;
 import io.bosonnetwork.kademlia.protocol.Message;
@@ -427,6 +428,54 @@ class SubscriptionManagerTests {
 		manager.heardFrom(subscriber, address);
 		assertEquals(2, sent.size());
 		assertEquals(1, seqOf(last()));
+	}
+
+	/**
+	 * A record that does not fit one datagram is refused by the RPC server every time it is tried. Counted
+	 * as an ordinary failure it would stall the subscription, and the renewal that resumes it would offer the
+	 * record again, for ever. It is skipped instead, and stays skipped across renewals.
+	 */
+	@Test
+	void testAnOversizedRecordIsSkippedNotRetried() throws Exception {
+		values.put(valueId, value(1));
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		assertEquals(1, sent.size());
+		fail(last(), new MessageTooBigException("too big"));
+
+		SubscriptionManager.Subscription sub = manager.get(subscriber, SubscriptionKind.VALUE, valueId);
+		assertEquals(0, sub.failures, "not a failure of the subscriber");
+		assertFalse(sub.stalled);
+		assertNull(sub.pendingValue);
+
+		// A renewal says the subscriber holds nothing, and the store still holds the same value: not offered again.
+		advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		manager.subscribe(subscriber, address, SubscriptionKind.VALUE, valueId, -1, -1);
+		assertEquals(1, sent.size());
+
+		// A newer version is pushed as usual.
+		manager.valueStored(value(2));
+		assertEquals(2, sent.size());
+		assertEquals(2, seqOf(last()));
+	}
+
+	@Test
+	void testAnOversizedPeerRecordDoesNotHoldUpTheOthers() throws Exception {
+		Signature.KeyPair key = Signature.KeyPair.random();
+		PeerInfo big = PeerInfo.builder().key(key).fingerprint(1).sequenceNumber(1).endpoint("tcp://203.0.113.10:1").build();
+		PeerInfo other = PeerInfo.builder().key(key).fingerprint(2).sequenceNumber(1).endpoint("tcp://203.0.113.10:2").build();
+		peers.put(big.getId(), List.of(big, other));
+		manager.subscribe(subscriber, address, SubscriptionKind.PEER, big.getId(), -1, -1);
+
+		assertEquals(1, last().getRequest().<NotifyPeerRequest>getBody().getPeer().getFingerprint());
+		fail(last(), new MessageTooBigException("too big"));
+		assertEquals(2, last().getRequest().<NotifyPeerRequest>getBody().getPeer().getFingerprint(),
+				"the next record goes out at once");
+		ack(last());
+
+		advance(SubscriptionManager.PUSH_MIN_INTERVAL);
+		int before = sent.size();
+		manager.subscribe(subscriber, address, SubscriptionKind.PEER, big.getId(), -1, -1);
+		assertEquals(before, sent.size(), "a renewal does not offer the oversized record again");
 	}
 
 	@Test
