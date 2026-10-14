@@ -76,8 +76,10 @@ import io.bosonnetwork.kademlia.security.SourceKey;
  * token from the previous response stays valid. Separately, while this node may be behind NAT, every
  * storing node it depends on is pinged every {@link #NAT_KEEPALIVE_INTERVAL}: a mapping and its filter
  * belong to a pair of endpoints, so one packet per storing node keeps every subscription on it reachable,
- * however many there are. A mapping that lapses anyway costs latency, not data: the storing node stalls the
- * subscription, and the next renewal, which carries the sequence number held here, brings it up to date.
+ * however many there are. A mapping that lapses anyway costs latency, not data: the storing node's pushes
+ * fail until the next packet from here - the keepalive, at the latest - reopens the mapping, and that packet
+ * is also what tells it to push again. The renewal, which carries the sequence number held here, is the
+ * backstop.
  * </p>
  * <p>
  * <b>Rebinding.</b> A NAT that loses a mapping may open the next one on a different port, and the storing
@@ -388,7 +390,8 @@ public class SubscriptionClient {
 	 * @param target   the value id or peer id.
 	 * @param knownSeq values: the sequence number already held, or -1 for none.
 	 * @param sink     where deliveries go.
-	 * @return the subscription; its {@link Watch#ready()} future says whether any node accepted.
+	 * @return the subscription; its {@link Watch#ready()} future completes once the first attempt has settled,
+	 *         and {@link Watch#subscribedNodes()} says how many nodes are watching.
 	 * @throws IllegalStateException if this client already watches the target for that kind.
 	 */
 	public Watch subscribe(SubscriptionKind kind, Id target, int knownSeq, Sink sink) {

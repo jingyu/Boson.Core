@@ -62,16 +62,22 @@ import io.bosonnetwork.kademlia.security.SourceKey;
  * pushed then.
  * </p>
  * <p>
- * <b>Standalone.</b> The only inputs are the three request handlers the DHT forwards (subscribe, cancel)
- * and the storage change events; the only output is a notification call through {@link Host#send}. None of
- * it runs inside a lookup or announce task.
+ * <b>Standalone.</b> The only inputs are the requests the DHT forwards (subscribe, cancel), the storage
+ * change events, and word of any packet a subscriber sends ({@link #heardFrom}); the only output is a
+ * notification call through {@link Host#send}. None of it runs inside a lookup or announce task.
  * </p>
  * <p>
  * <b>A push failure degrades the subscription, never the node.</b> Notifications are sent
  * {@link RpcCall#setLivenessNeutral liveness-neutral}, so a subscriber whose NAT mapping has lapsed is not
  * demoted, and eventually evicted, from the routing table by its own subscriptions. After
  * {@link #MAX_CONSECUTIVE_FAILURES} unacknowledged pushes the subscription stalls: it keeps the latest
- * record pending and pushes nothing more until the subscriber's next renewal proves it reachable again.
+ * record pending and pushes nothing more until the subscriber proves itself reachable again - by any packet
+ * from the subscription's address, its keepalive usually, or else by its renewal.
+ * </p>
+ * <p>
+ * Only an unanswered push counts as a failure. A push this node's own RPC server refuses - its call table
+ * full, or its outbound throttle - never left, and is retried after a pause or a back-off; a record too big
+ * to send is skipped for good. Neither says anything about the subscriber.
  * </p>
  * <p>
  * <b>Bounded.</b> Three quotas, all of which refuse rather than evict - eviction would let a flood push
@@ -104,9 +110,15 @@ public class SubscriptionManager {
 	/** Subscriptions this node holds in total. */
 	public static final int MAX_SUBSCRIPTIONS = 8192;
 
-	/** Least time between two pushes to one subscription, in milliseconds. */
+	/**
+	 * Least time between two pushes of the same record - the value, or one peer instance - to one
+	 * subscription, in milliseconds. Different records of one subscription are not held up by each other.
+	 */
 	public static final long PUSH_MIN_INTERVAL = 1000;
-	/** Unacknowledged pushes in a row after which a subscription stalls until renewed. */
+	/**
+	 * Unacknowledged pushes in a row after which a subscription stalls, until the subscriber is heard from or
+	 * renews.
+	 */
 	public static final int MAX_CONSECUTIVE_FAILURES = 3;
 	/**
 	 * How long a push may go unanswered before a packet from the subscriber is taken to mean it was lost, in

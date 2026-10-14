@@ -443,8 +443,10 @@ Behaviour of the storing node:
   per node: subscriptions per [source unit](#source-units), subscribers per target, and a total; refusing
   rather than evicting, so that a flood cannot push established subscribers out.
 - A failed notification **MUST NOT** be taken as evidence about the subscriber's liveness: it most likely
-  means the subscriber's NAT mapping lapsed. It degrades the subscription - pushes stop until the next
-  renewal - and never the subscriber's standing in the routing table.
+  means the subscriber's NAT mapping lapsed. It degrades the subscription - after a few failures pushes
+  stop until the subscriber is heard from again or renews - and never the subscriber's standing in the
+  routing table. A notification the storing node's own limits refused, or one too big to send, never left
+  and is not a failure.
 - It **SHOULD** treat any packet from the subscriber, arriving from the subscription's address, as proof that
   the path back is open again: resume a subscription whose pushes had stopped, and resend a notification that
   has gone unanswered for longer than a round trip. A mapping that lapsed and reopened on the same port is

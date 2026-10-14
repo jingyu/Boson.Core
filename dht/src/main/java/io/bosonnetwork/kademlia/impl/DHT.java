@@ -2992,9 +2992,10 @@ public class DHT extends BosonVerticle {
 	 * @param target   the value id or peer id.
 	 * @param knownSeq values: the sequence number already held, or -1 for none.
 	 * @param sink     where deliveries go.
-	 * @return a future of the subscription as soon as it exists - whether a storing node has accepted it is
-	 *         its {@link SubscriptionClient.Watch#ready() ready} future. Handed over either way, so that the
-	 *         caller can always cancel it, and a subscription no node accepted yet keeps trying.
+	 * @return a future of the subscription as soon as it exists. Its {@link SubscriptionClient.Watch#ready()
+	 *         ready} future completes once the first attempt has settled, and how many nodes are watching is
+	 *         its count. Handed over at once so that the caller can always cancel it; a subscription no node
+	 *         has accepted yet keeps trying.
 	 */
 	public Future<SubscriptionClient.Watch> subscribe(SubscriptionKind kind, Id target, int knownSeq,
 			SubscriptionClient.Sink sink) {
