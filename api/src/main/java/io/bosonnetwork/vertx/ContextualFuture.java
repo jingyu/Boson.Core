@@ -252,6 +252,28 @@ public class ContextualFuture<T> extends CompletableFuture<T> implements java.ut
 	}
 
 	/**
+	 * Runs work that starts network I/O on a Vert.x thread: at once when the caller is on one, and
+	 * otherwise on the event loop context Vert.x gives that caller.
+	 * <p>
+	 * Vert.x 5.1 looks a request's host up on the thread that issues the request. With the JDK resolver,
+	 * which the {@code vertx.disableDnsResolver} property selects and Android apps need, that lookup
+	 * blocks, and on Android's main thread it is refused (NetworkOnMainThreadException). Issued from an
+	 * event loop, the lookup happens there, as it did in Vert.x 5.0.
+	 *
+	 * @param vertx the Vert.x instance the work runs on
+	 * @param work  the work, started on a Vert.x thread
+	 * @param <T>   the result type
+	 * @return the work's result, completed on the caller's context, or on the event loop context the work
+	 *         ran on when the caller has none
+	 */
+	public static <T> @NonNull Future<T> callOnVertxThread(@NonNull Vertx vertx, @NonNull Supplier<Future<T>> work) {
+		if (Vertx.currentContext() != null)
+			return work.get();
+
+		return callOnContext(vertx.getOrCreateContext(), work);
+	}
+
+	/**
 	 * Creates a failed ContextualFuture from a Throwable.
 	 *
 	 * @param cause the cause of the failure

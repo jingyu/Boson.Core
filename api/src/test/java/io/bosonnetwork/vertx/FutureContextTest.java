@@ -207,4 +207,43 @@ public class FutureContextTest {
 					}));
 				}));
 	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void testCallOnVertxThreadMovesWorkOffAPlainThread(Vertx vertx, VertxTestContext testContext) {
+		// Called from a thread that is not Vert.x's (the test's own, standing in for Android's main
+		// thread): the work starts on an event loop, and the answer comes back on that context.
+		Thread caller = Thread.currentThread();
+		Context[] ran = new Context[1];
+		ContextualFuture.callOnVertxThread(vertx, () -> {
+			ran[0] = Vertx.currentContext();
+			testContext.verify(() -> {
+				assertNotNull(ran[0], "the work did not run on a Vert.x context");
+				assertTrue(Context.isOnEventLoopThread(), "the work did not run on an event loop");
+				assertTrue(Thread.currentThread() != caller, "the work ran on the calling thread");
+			});
+			return Future.succeededFuture("done");
+		}).onComplete(ar -> testContext.verify(() -> {
+			assertSame(ran[0], Vertx.currentContext(), "the answer came back off the work's context");
+			testContext.completeNow();
+		}));
+	}
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	void testCallOnVertxThreadRunsAtOnceOnAVertxThread(Vertx vertx, VertxTestContext testContext) {
+		// Already on a Vert.x thread: the work runs right there, before the call returns.
+		Context context = vertx.getOrCreateContext();
+		context.runOnContext(v -> {
+			AtomicBoolean ran = new AtomicBoolean();
+			Thread caller = Thread.currentThread();
+			ContextualFuture.callOnVertxThread(vertx, () -> {
+				testContext.verify(() -> assertSame(caller, Thread.currentThread(), "the work moved off the caller's thread"));
+				ran.set(true);
+				return Future.succeededFuture("done");
+			});
+			testContext.verify(() -> assertTrue(ran.get(), "the work did not run before the call returned"));
+			testContext.completeNow();
+		});
+	}
 }
