@@ -61,6 +61,7 @@ The `dht` module implements a hardened Kademlia DHT node. It extends standard Ka
 - **Security blacklist** - misbehaving nodes are tracked and banned automatically.
 - **Dual-stack networking** - simultaneous IPv4 and IPv6 support on a single port.
 - **Dual serialization** - RPC messages support both JSON (text) and CBOR (binary) formats.
+- **Subscriptions** - a node can ask the nodes storing a value or peer records to push changes to it, instead of polling with lookups. This also works from behind NAT.
 
 **RPC protocol**
 
@@ -72,8 +73,51 @@ The `dht` module implements a hardened Kademlia DHT node. It extends standard Ka
 | `ANNOUNCE_PEER` | Publish a peer record to the network |
 | `FIND_VALUE` | Look up a signed or unsigned value by key |
 | `STORE_VALUE` | Publish a value to the network |
+| `SUBSCRIBE` | Ask a storing node to push changes of a value or peer records; renewed while wanted, cancelled with a zero lease |
+| `NOTIFY_VALUE` | Storing node to subscriber: a newer version of the watched value |
+| `NOTIFY_PEER` | Storing node to subscriber: a new or changed peer record under the watched ID |
 
 See [`dht/docs/protocol.md`](dht/docs/protocol.md) for the full protocol specification.
+
+**Subscriptions**
+
+Since 3.2.0, `Node` can watch a value or the peer records under an ID:
+
+```java
+Subscription sub = node.subscribeValue(valueId, value -> {
+    // A newer version, already validated; called on the node's context, so do not block here
+}).get();
+
+node.subscribePeer(peerId, peer -> {
+    // A new service instance, or one that moved endpoint
+});
+
+sub.cancel();
+```
+
+- The subscriber picks a few of the nodes closest to the target, each in a different network, and asks
+  them to watch it. It renews the subscription while it is wanted, and moves it to other nodes when those
+  fail or are no longer the closest.
+- Each value is delivered once, in increasing sequence number order. The current value, or the peer
+  records already stored, are delivered first. `subscribeValue(id, knownSequenceNumber, listener)`
+  skips what the caller already holds.
+- A subscription is a standing request, not a session. Network conditions, such as no node found yet or
+  nodes refusing or gone, only change how many nodes are watching: `Subscription.getSubscribedNodes()`
+  and `SubscriptionListener.onStatusChange(int)` report it, and the node keeps trying. Only `cancel()`
+  or the node stopping ends a subscription, and a change made while nobody was watching is delivered
+  once a node is.
+- It is best effort: a lost notification is recovered on the next renewal, a few minutes later at most.
+- A subscriber behind NAT keeps its mapping to each storing node open, and fetches a new token when the
+  NAT moves it to a new port.
+- Storing nodes cap subscriptions per source network, per target and per node, and rate limit their
+  pushes. A failed push is never counted against the subscriber's node.
+
+Nodes older than Orca 2 (version `Orca/2`) cannot parse `SUBSCRIBE` and do not answer it. In a network
+that still has them, a subscriber only asks nodes whose FIND_NODE replies carry Orca 2 or later. This
+rule is temporary, until subscriptions are widely deployed.
+
+The `boson-node shell` has `subscribe` and `unsubscribe` commands to try subscriptions out from the
+command line.
 
 ---
 
