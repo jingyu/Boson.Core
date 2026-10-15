@@ -70,7 +70,8 @@ class NodeSubscriptionsTests {
 
 				@Override
 				public Future<List<SubscriptionClient.Candidate>> lookup(Id target) {
-					return Future.succeededFuture(List.of(new SubscriptionClient.Candidate(node, 1)));
+					return Future.succeededFuture(List.of(new SubscriptionClient.Candidate(node, 1,
+							SubscriptionClient.SUBSCRIPTIONS_SINCE)));
 				}
 
 				@Override

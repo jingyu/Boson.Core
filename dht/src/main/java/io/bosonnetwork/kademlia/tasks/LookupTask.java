@@ -676,6 +676,7 @@ public abstract class LookupTask<R, S extends LookupTask<R, S>> extends Task<S> 
 		if (cn != null) {
 			cn.setReplied();
 			Message response = call.getResponse();
+			cn.setVersion(response.getVersion());
 			getLogger().debug("{}#{} received response for candidate {}, add it to closest", getName(), getId(), cn.getId());
 			// Only when one actually arrived. A response with no token is what a peer sends when it was
 			// not asked for one, and an announce that took it for a token would spend an RPC being

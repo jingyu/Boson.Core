@@ -108,7 +108,7 @@ public class KadNode extends BosonVerticle implements Node {
 	/**
 	 * The implementation version number.
 	 */
-	public static final int VERSION_NUMBER = 1;
+	public static final int VERSION_NUMBER = 2;
 	/**
 	 * The packed integer representation of the implementation version.
 	 */

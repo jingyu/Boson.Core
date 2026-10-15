@@ -57,6 +57,8 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 	 * </p>
 	 */
 	private int token;
+	/** The implementation version the node put on its reply, 0 until it has replied. */
+	private int version;
 
 	// /** Timeout for considering a request stale (5 seconds in nanoseconds). */
 	// private static final long TIMEOUT = 5_000_000_000L; // 5 seconds
@@ -129,6 +131,24 @@ public class CandidateNode extends NodeInfo implements CallTarget {
 	 */
 	public boolean isReplied() {
 		return lastReply != 0;
+	}
+
+	/**
+	 * Records the implementation version the node put on its reply.
+	 *
+	 * @param version the packed version from the response, see {@link io.bosonnetwork.Version}
+	 */
+	public void setVersion(int version) {
+		this.version = version;
+	}
+
+	/**
+	 * Returns the implementation version the node put on its reply.
+	 *
+	 * @return the packed version, or 0 if the node has not replied or sent none
+	 */
+	public int getVersion() {
+		return version;
 	}
 
 	/**

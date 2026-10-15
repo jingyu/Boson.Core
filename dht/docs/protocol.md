@@ -466,8 +466,11 @@ Behaviour of the subscriber:
   storing node is pushing to the old one. It then fetches a token for the new endpoint from that node - a
   `FIND_NODE` for the target with only `wantToken` set - and subscribes again. The token from the previous
   SUBSCRIBE response cannot be used: it is bound to the old endpoint.
-- A node that predates subscriptions cannot parse SUBSCRIBE and does not answer; the subscriber treats a
-  timeout on a first subscription as "not supported" and uses another node.
+- A node that predates subscriptions cannot parse SUBSCRIBE and does not answer. The subscriber therefore
+  sends SUBSCRIBE only to nodes whose software version - the top-level `v` on their FIND_NODE replies during
+  the lookup - says they hold subscriptions: for now, Orca 2 and later. This rule is transitional and goes
+  once every node in service holds subscriptions. A node that answers `204 Method Unknown` all the same is
+  left alone for an hour.
 - None of the above ends a subscription. Finding no node, every node refusing, nodes gone: the subscriber
   keeps looking, backing off while it has fewer storing nodes than it wants, and looks again at once when its
   own connectivity returns. A storing node that accepts late pushes what it holds, so nothing written in the

@@ -3070,7 +3070,7 @@ public class DHT extends BosonVerticle {
 					}
 
 					promise.tryComplete(closest.stream()
-							.map(cn -> new SubscriptionClient.Candidate(cn, cn.getToken()))
+							.map(cn -> new SubscriptionClient.Candidate(cn, cn.getToken(), cn.getVersion()))
 							.toList());
 				});
 

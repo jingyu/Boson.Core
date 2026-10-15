@@ -44,6 +44,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.Version;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.crypto.Signature;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
@@ -171,7 +172,12 @@ class SubscriptionClientTests {
 	}
 
 	private SubscriptionClient.Candidate candidate(String host, int token) {
-		return new SubscriptionClient.Candidate(NodeInfo.of(Id.random(), new InetSocketAddress(host, 39001)), token);
+		return candidate(host, token, SubscriptionClient.SUBSCRIPTIONS_SINCE);
+	}
+
+	private SubscriptionClient.Candidate candidate(String host, int token, int version) {
+		return new SubscriptionClient.Candidate(NodeInfo.of(Id.random(), new InetSocketAddress(host, 39001)), token,
+				version);
 	}
 
 	private static void invoke(RpcCall call, String name, Class<?> argType, Object arg) {
@@ -306,10 +312,29 @@ class SubscriptionClientTests {
 		assertEquals(5, subscribes().size());
 		assertEquals(15, body(subscribes().get(4)).getToken());
 
-		// A node that never answers - one predating subscriptions - is replaced too.
+		// A node that never answers is replaced too.
 		timeout(subscribes().get(1));
 		assertEquals(6, subscribes().size());
 		assertEquals(16, body(subscribes().get(5)).getToken());
+	}
+
+	/**
+	 * A node that predates subscriptions never answers SUBSCRIBE, so only the versions known to hold them
+	 * are asked.
+	 */
+	@Test
+	void testOnlyNodesThatHoldSubscriptionsAreAsked() {
+		SubscriptionClient.Candidate orca2 = candidate("12.1.1.4", 14, Version.build("OR", 2));
+		SubscriptionClient.Candidate orca3 = candidate("12.1.1.5", 15, Version.build("OR", 3));
+		candidates.add(candidate("12.1.1.1", 11, Version.build("OR", 1)));
+		candidates.add(candidate("12.1.1.2", 12, Version.build("MK", 2)));
+		candidates.add(candidate("12.1.1.3", 13, 0));
+		candidates.add(orca2);
+		candidates.add(orca3);
+
+		client.subscribe(SubscriptionKind.VALUE, Id.random(), -1, sink);
+		assertEquals(List.of(orca2.node().getId(), orca3.node().getId()),
+				subscribes().stream().map(RpcCall::getTargetId).toList());
 	}
 
 	/**

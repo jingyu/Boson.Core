@@ -32,7 +32,7 @@ import io.bosonnetwork.json.Json;
 
 public abstract class MessageTests {
 	protected static int TIMING_ITERATIONS = 1_000_000;
-	protected static String DEFAULT_VERSION_STR = "Orca/1";
+	protected static String DEFAULT_VERSION_STR = "Orca/2";
 
 	protected void printMessage(Message msg) throws IOException {
 		var cbor = msg.toBytes();

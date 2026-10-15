@@ -43,6 +43,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.PeerInfo;
 import io.bosonnetwork.Value;
+import io.bosonnetwork.Version;
 import io.bosonnetwork.kademlia.exceptions.InvalidTokenException;
 import io.bosonnetwork.kademlia.exceptions.KadException;
 import io.bosonnetwork.kademlia.impl.ErrorCode;
@@ -148,6 +149,15 @@ public class SubscriptionClient {
 	static final long RELOOKUP_MIN_INTERVAL = 30 * 1000;
 	/** How long a node that cannot hold subscriptions is left alone. */
 	static final long EXCLUDE_UNSUPPORTED = 60 * 60 * 1000;
+	/**
+	 * The first implementation version that holds subscriptions: Orca 2.
+	 * <p>
+	 * Temporary. A node that predates subscriptions cannot parse SUBSCRIBE and never answers it, so in a
+	 * network that mixes versions the subscriber asks only nodes that say they can. Once every node in
+	 * service holds subscriptions this rule, and the version carried by {@link Candidate}, can go.
+	 * </p>
+	 */
+	static final int SUBSCRIPTIONS_SINCE = Version.build("OR", 2);
 	/** How long a node that failed or refused a subscription is left alone. */
 	static final long EXCLUDE_FAILED = 5 * 60 * 1000;
 	/** Peer fingerprints remembered per target for deduplication. */
@@ -156,10 +166,25 @@ public class SubscriptionClient {
 	/**
 	 * A node found by a lookup, with the write token it issued for the target.
 	 *
-	 * @param node  the node.
-	 * @param token its write token for the target; 0 if it issued none.
+	 * @param node    the node.
+	 * @param token   its write token for the target; 0 if it issued none.
+	 * @param version the implementation version on its reply; see {@link #supportsSubscriptions(int)}.
 	 */
-	public record Candidate(NodeInfo node, int token) { }
+	public record Candidate(NodeInfo node, int token, int version) { }
+
+	/**
+	 * Returns whether a node of the given implementation version holds subscriptions.
+	 * <p>
+	 * Temporary, see {@link #SUBSCRIPTIONS_SINCE}: only Orca, from version 2.
+	 * </p>
+	 *
+	 * @param version the packed version a node put on the wire.
+	 * @return true if it can be asked to hold a subscription.
+	 */
+	static boolean supportsSubscriptions(int version) {
+		return (version & 0xFFFF0000) == (SUBSCRIPTIONS_SINCE & 0xFFFF0000) &&
+				(version & 0xFFFF) >= (SUBSCRIPTIONS_SINCE & 0xFFFF);
+	}
 
 	/**
 	 * What the client needs from the DHT that owns it.
@@ -601,7 +626,8 @@ public class SubscriptionClient {
 					break;
 
 				NodeInfo node = candidate.node();
-				if (candidate.token() == 0 || watch.slots.containsKey(node.getId()) ||
+				if (candidate.token() == 0 || !supportsSubscriptions(candidate.version()) ||
+						watch.slots.containsKey(node.getId()) ||
 						watch.excluded.containsKey(node.getId()) || node.getIpAddress() == null)
 					continue;
 
@@ -722,9 +748,6 @@ public class SubscriptionClient {
 			// Our token went stale, which says nothing against the node: try again with a fresh one.
 			exclude = 0;
 		} else if (cause instanceof KadException ke && ke.getCode() == ErrorCode.MethodUnknown.value()) {
-			exclude = EXCLUDE_UNSUPPORTED;
-		} else if (cause == null && !slot.confirmed) {
-			// A node that predates subscriptions cannot parse the request at all, so it never answers.
 			exclude = EXCLUDE_UNSUPPORTED;
 		} else {
 			exclude = EXCLUDE_FAILED;
