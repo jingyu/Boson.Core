@@ -31,14 +31,33 @@ import io.bosonnetwork.kademlia.impl.ErrorCode;
 public class UnknownSubscriptionException extends KadException {
 	private static final long serialVersionUID = 6243812070519870432L;
 
+	/**
+	 * Constructs a new exception indicating that a subscription was refused.
+	 * The detail message is null, and the cause is not initialized. The cause
+	 * may subsequently be initialized by a call to {@link #initCause}.
+	 */
 	public UnknownSubscriptionException() {
 		super(ErrorCode.UnknownSubscription.value());
 	}
 
+	/**
+	 * Constructs a new exception indicating that a subscription was refused.
+	 * The detail message is initialized with the specified message.
+	 *
+	 * @param message the detail message
+	 */
 	public UnknownSubscriptionException(String message) {
 		super(ErrorCode.UnknownSubscription.value(), message);
 	}
 
+	/**
+	 * Constructs a new exception indicating that a subscription was refused.
+	 * The detail message is initialized with the specified message and the
+	 * cause is initialized with the specified cause.
+	 *
+	 * @param message the detail message
+	 * @param cause the cause
+	 */
 	public UnknownSubscriptionException(String message, Throwable cause) {
 		super(ErrorCode.UnknownSubscription.value(), message, cause);
 	}

@@ -69,11 +69,20 @@ public final class KeyBackup {
 			this.groups = Collections.unmodifiableList(new ArrayList<>(groups));
 		}
 
-		/** The number of the row's first group, 1-based. */
+		/**
+		 * The number of the row's first group, 1-based.
+		 *
+		 * @return the number of the row's first group, 1-based
+		 */
 		public int getNumber() {
 			return number;
 		}
 
+		/**
+		 * Returns the groups of this row.
+		 *
+		 * @return the list of groups
+		 */
 		public List<String> getGroups() {
 			return groups;
 		}
@@ -102,17 +111,32 @@ public final class KeyBackup {
 		private final int first;
 		private final int second;
 
+		/**
+		 * Constructs a challenge that asks the user to confirm two different groups
+		 * of a saved key by their positions.
+		 *
+		 * @param first the first group asked for, 0-based
+		 * @param second the second group asked for, 0-based
+		 */
 		public Challenge(int first, int second) {
 			this.first = first;
 			this.second = second;
 		}
 
-		/** The first group asked for, 0-based. */
+		/**
+		 * The first group asked for, 0-based.
+		 *
+		 * @return the first group asked for, 0-based
+		 */
 		public int getFirst() {
 			return first;
 		}
 
-		/** The second group asked for, 0-based. */
+		/**
+		 * The second group asked for, 0-based.
+		 *
+		 * @return the second group asked for, 0-based
+		 */
 		public int getSecond() {
 			return second;
 		}
