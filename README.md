@@ -124,7 +124,7 @@ command line.
 ## Adding as a Dependency
 
 Boson Core is published to Maven Central under the group id `io.bosonnetwork`. The current release
-is **3.1.2** and requires Java 17 or later. Nothing here needs a native library.
+is **3.2.0** and requires Java 17 or later. Nothing here needs a native library.
 
 | Artifact | Provides |
 |---|---|
@@ -137,14 +137,14 @@ is **3.1.2** and requires Java 17 or later. Nothing here needs a native library.
 <dependency>
     <groupId>io.bosonnetwork</groupId>
     <artifactId>boson-dht</artifactId>
-    <version>3.1.2</version>
+    <version>3.2.0</version>
 </dependency>
 ```
 
 **Gradle (Kotlin DSL)**
 
 ```kotlin
-implementation("io.bosonnetwork:boson-dht:3.1.2")
+implementation("io.bosonnetwork:boson-dht:3.2.0")
 ```
 
 Using more than one Boson library, import the bill of materials once and leave the versions off the
@@ -156,7 +156,7 @@ dependencies themselves:
         <dependency>
             <groupId>io.bosonnetwork</groupId>
             <artifactId>boson-dependencies</artifactId>
-            <version>3.1.2</version>
+            <version>3.2.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -165,7 +165,7 @@ dependencies themselves:
 ```
 
 ```kotlin
-implementation(platform("io.bosonnetwork:boson-dependencies:3.1.2"))
+implementation(platform("io.bosonnetwork:boson-dependencies:3.2.0"))
 implementation("io.bosonnetwork:boson-dht")
 ```
 
