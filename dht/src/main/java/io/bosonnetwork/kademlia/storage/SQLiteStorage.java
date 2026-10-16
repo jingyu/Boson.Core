@@ -83,7 +83,7 @@ public class SQLiteStorage extends DatabaseStorage implements DataStorage {
 
 	@Override
 	protected Path getMigrationPath() {
-		URL migrationResource = getClass().getResource("/db/kadnode/sqlite");
+		URL migrationResource = getClass().getResource("/io/bosonnetwork/kademlia/db/sqlite");
 		if (migrationResource == null || migrationResource.getPath() == null)
 			throw new IllegalStateException("Migration path not exists");
 
