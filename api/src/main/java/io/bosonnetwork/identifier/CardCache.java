@@ -33,6 +33,7 @@ import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.identifier.Registry.ResolutionResult;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * The in-memory cache of a registry's resolutions: a bounded map that drops the least recently used card
@@ -62,7 +63,7 @@ final class CardCache {
 	 * @param ttl how long a card found answers, in milliseconds
 	 */
 	CardCache(int maxEntries, long ttl) {
-		this(maxEntries, ttl, System::currentTimeMillis);
+		this(maxEntries, ttl, MonotonicClock::elapsedMillis);
 	}
 
 	CardCache(int maxEntries, long ttl, LongSupplier clock) {

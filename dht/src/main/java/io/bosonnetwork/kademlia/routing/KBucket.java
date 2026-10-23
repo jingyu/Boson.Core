@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.kademlia.impl.KadConstants;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Represents a k-bucket in a Kademlia routing table.
@@ -85,7 +86,7 @@ public class KBucket implements Comparable<KBucket> {
 	private final List<KBucketEntry> replacements;
 
 	/**
-	 * The last time this bucket was refreshed by the ping path, in milliseconds since the epoch.
+	 * The last time this bucket was refreshed by the ping path, on {@link MonotonicClock#elapsedMillis()}.
 	 * <p>
 	 * Owned by routing-table maintenance, which repairs a bucket in place with a cheap
 	 * {@code PingRefreshTask}: it drives {@link #needsToBeRefreshed()} and
@@ -104,7 +105,8 @@ public class KBucket implements Comparable<KBucket> {
 	private long lastRefresh;
 
 	/**
-	 * The last time this bucket was targeted by a bucket-filling lookup, in milliseconds since the epoch.
+	 * The last time this bucket was targeted by a bucket-filling lookup, on
+	 * {@link MonotonicClock#elapsedMillis()}.
 	 * <p>
 	 * Owned by {@code DHT.fillBuckets()}, which acquires new contacts for a partially populated bucket
 	 * by running a full iterative lookup on a random id within its prefix. That is one to two orders of
@@ -348,7 +350,7 @@ public class KBucket implements Comparable<KBucket> {
 	 * Resets the last modified for this Bucket
 	 */
 	public void updateRefreshTime() {
-		updateRefreshTime(System.currentTimeMillis());
+		updateRefreshTime(MonotonicClock.elapsedMillis());
 	}
 
 	// for internal and testing
@@ -362,12 +364,12 @@ public class KBucket implements Comparable<KBucket> {
 	 * @return true if the bucket needs to be refreshed; false otherwise.
 	 */
 	public boolean needsToBeRefreshed() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		return now - lastRefresh > KadConstants.BUCKET_REFRESH_INTERVAL && anyMatch(KBucketEntry::needsPing);
 	}
 
 	/**
-	 * Returns the last time a ping refresh covered this bucket, in milliseconds since the epoch.
+	 * Returns the last time a ping refresh covered this bucket, on {@link MonotonicClock#elapsedMillis()}.
 	 * <p>
 	 * Zero means it has never been covered, which is also what a bucket read back by {@code load()}
 	 * reports - {@code load()} does not stamp what it reads. Callers that ration refreshes across
@@ -382,7 +384,8 @@ public class KBucket implements Comparable<KBucket> {
 	}
 
 	/**
-	 * Returns the last time a bucket-filling lookup targeted this bucket, in milliseconds since the epoch.
+	 * Returns the last time a bucket-filling lookup targeted this bucket, on
+	 * {@link MonotonicClock#elapsedMillis()}.
 	 *
 	 * @return the timestamp, zero if no such lookup has run.
 	 */
@@ -394,7 +397,7 @@ public class KBucket implements Comparable<KBucket> {
 	 * Marks this bucket as having been targeted by a bucket-filling lookup, as of now.
 	 */
 	public void updateLookupRefreshTime() {
-		updateLookupRefreshTime(System.currentTimeMillis());
+		updateLookupRefreshTime(MonotonicClock.elapsedMillis());
 	}
 
 	// for internal and testing
@@ -416,7 +419,7 @@ public class KBucket implements Comparable<KBucket> {
 	 * @return true if this bucket may be lookup-filled again; false otherwise.
 	 */
 	public boolean needsLookupRefresh() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		return now - lastLookupRefresh > KadConstants.BUCKET_REFRESH_INTERVAL;
 	}
 
@@ -426,7 +429,7 @@ public class KBucket implements Comparable<KBucket> {
 	 * @return true if a replacement entry should be pinged; false otherwise.
 	 */
 	public boolean needsReplacementPing() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		return now - lastRefresh > KadConstants.BUCKET_REPLACEMENT_PING_MIN_INTERVAL &&
 				(anyMatch(KBucketEntry::needsReplacement) || entries.size() < maxEntries) &&
 				anyMatchInReplacements(KBucketEntry::isNeverContacted);
@@ -950,8 +953,8 @@ public class KBucket implements Comparable<KBucket> {
 		if (isHomeBucket())
 			repr.append(" [Home]");
 		// Show the duration since the last refresh, not an absolute timestamp.
-		repr.append(", lastRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastRefresh)).append(" ago");
-		repr.append(", lastLookupRefresh: ").append(Duration.ofMillis(System.currentTimeMillis() - lastLookupRefresh)).append(" ago\n");
+		repr.append(", lastRefresh: ").append(Duration.ofMillis(MonotonicClock.elapsedMillis() - lastRefresh)).append(" ago");
+		repr.append(", lastLookupRefresh: ").append(Duration.ofMillis(MonotonicClock.elapsedMillis() - lastLookupRefresh)).append(" ago\n");
 
 		if (!entries.isEmpty()) {
 			repr.ensureCapacity(entries.size() * 100);
@@ -974,8 +977,8 @@ public class KBucket implements Comparable<KBucket> {
 			out.print(" [Home]");
 		// Show the duration since the last refresh, not an absolute timestamp.
 		out.printf(", lastRefresh: %s ago, lastLookupRefresh: %s ago\n",
-				Duration.ofMillis(System.currentTimeMillis() - lastRefresh),
-				Duration.ofMillis(System.currentTimeMillis() - lastLookupRefresh));
+				Duration.ofMillis(MonotonicClock.elapsedMillis() - lastRefresh),
+				Duration.ofMillis(MonotonicClock.elapsedMillis() - lastLookupRefresh));
 
 		if (!entries.isEmpty()) {
 			out.printf("  entries[%d]:\n", entries.size());

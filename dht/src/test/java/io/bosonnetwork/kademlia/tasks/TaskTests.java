@@ -29,6 +29,7 @@ import io.bosonnetwork.kademlia.impl.Network;
 import io.bosonnetwork.kademlia.impl.TestKadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
+import io.bosonnetwork.utils.MonotonicClock;
 import io.bosonnetwork.utils.Variable;
 
 public class TaskTests {
@@ -378,7 +379,7 @@ public class TaskTests {
 	 */
 	@Test
 	void testTheIdTieBreakIsTransitiveAcrossTheWholeIdRange() {
-		long createTime = System.currentTimeMillis();
+		long createTime = MonotonicClock.elapsedMillis();
 		Task<?> low = taskWith(createTime, 1L);
 		Task<?> mid = taskWith(createTime, 1L + Integer.MAX_VALUE);
 		Task<?> high = taskWith(createTime, 0xFFFFFFFFL);

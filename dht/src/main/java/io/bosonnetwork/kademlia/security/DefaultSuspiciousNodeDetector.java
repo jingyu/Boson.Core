@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Detects and manages suspicious nodes by monitoring inconsistent node IDs and malformed messages.
@@ -277,7 +278,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 		// Lazy expiry: a ban stops taking effect at its deadline regardless of when purge() runs,
 		// so ban accuracy does not depend on the purge interval. purge() only reclaims memory.
 		Long expiration = bannedNodes.get(SourceKey.of(host));
-		return expiration != null && System.currentTimeMillis() < expiration;
+		return expiration != null && MonotonicClock.elapsedMillis() < expiration;
 	}
 
 	/**
@@ -337,7 +338,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 		if (isBannedSource(source))
 			return;
 
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		observedNodes.compute(source, (unused, ob) -> {
 			if (ob == null) {
 				log.trace("New observation for {}: id={}, activity={}, proven={}", source, id, activity, proven);
@@ -409,7 +410,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 		// hits to the address it names rather than to its own. That is inherent to unproven accounting -
 		// malformedMessage and inconsistent share it - and is why this tier only ever suppresses briefly and
 		// recovers on its own.
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		observedNodes.compute(source, (unused, ob) -> {
 			if (ob == null)
 				ob = new ObservationRecord(now + observationPeriod);
@@ -428,7 +429,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 *
 	 * @param source the accountable source.
 	 * @param ob the source's observation record.
-	 * @param now the current time in milliseconds.
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}.
 	 * @param proven whether the source address was demonstrated by a completed round trip.
 	 * @param activity the activity being counted.
 	 */
@@ -466,7 +467,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 * </p>
 	 *
 	 * @param id the id observed.
-	 * @param now the current time in milliseconds.
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}.
 	 */
 	private void banSourcesClaiming(Id id, long now) {
 		List<String> sources = new ArrayList<>(SAME_ID_SOURCE_THRESHOLD);
@@ -489,7 +490,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 
 	private boolean isBannedSource(String source) {
 		Long expiration = bannedNodes.get(source);
-		return expiration != null && System.currentTimeMillis() < expiration;
+		return expiration != null && MonotonicClock.elapsedMillis() < expiration;
 	}
 
 	private void banSource(String source, long expirationTime) {
@@ -553,7 +554,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 	 */
 	@Override
 	public void purge() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 
 		// Remove expired observed entries
 		observedNodes.entrySet().removeIf(entry -> {
@@ -593,7 +594,7 @@ public class DefaultSuspiciousNodeDetector implements SuspiciousNodeDetector {
 		// duration; a banned line carries a source and a duration. The two were the wrong way round before -
 		// one byte per observed entry against 64 per banned one, where the observed line is the longer.
 		StringBuilder repr = new StringBuilder(64 * observedNodes.size() + 48 * bannedNodes.size() + 64);
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 
 		if (!observedNodes.isEmpty()) {
 			repr.append("Observed[").append(observedNodes.size()).append("]:\n");

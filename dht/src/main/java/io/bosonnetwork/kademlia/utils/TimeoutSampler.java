@@ -297,10 +297,10 @@ public class TimeoutSampler {
 	// - Consider time-based decay instead of update-based decay. For example, decay bins based on elapsed time
 	//   since the last snapshot (requires tracking timestamps).
 	/*
-	private long lastDecayTime = System.currentTimeMillis();
+	private long lastDecayTime = MonotonicClock.elapsedMillis();
 
 	protected void decay2() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		long elapsedMillis = Math.max(now - lastDecayTime, 0);
 
 		// Smooth exponential decay over time

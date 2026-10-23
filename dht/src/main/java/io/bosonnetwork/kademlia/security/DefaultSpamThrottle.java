@@ -30,6 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.bosonnetwork.utils.MonotonicClock;
+
 /**
  * A thread-safe Generic Cell Rate Algorithm style rate limiter that restricts requests per source
  * using a token bucket algorithm. It allows a specified number of requests per second with a
@@ -100,7 +102,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	/** The debt ceiling, past which debt stops accumulating. */
 	private final long debtCeiling;
 
-	/** Source key -> the instant that source is back to zero debt, on the {@link System#nanoTime} clock. */
+	/** Source key -> the instant that source is back to zero debt, on the {@link MonotonicClock#elapsedNanos()} clock. */
 	private final Map<String, Long> counter;
 
 	/** Held by whichever thread is walking a reclaim slice. */
@@ -147,7 +149,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	 * @return the source's new arrival time.
 	 */
 	private long charge(Long current, long now) {
-		// Differences rather than comparisons throughout: nanoTime has an arbitrary origin and wraps.
+		// Differences rather than comparisons throughout, as for any nanosecond clock reading.
 		long tat = (current == null || current - now < 0) ? now : current;
 		long charged = tat + emissionInterval;
 		long ceiling = now + debtCeiling;
@@ -194,7 +196,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	private boolean charged(String source) {
 		reclaim();
 
-		long now = System.nanoTime();
+		long now = MonotonicClock.elapsedNanos();
 		long tat = counter.compute(source, (a, t) -> charge(t, now));
 		// Strictly past the ceiling, so a burst of exactly burstCapacity packets is admitted rather than
 		// one short of it.
@@ -212,7 +214,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	public int incrementAndEstimateDelay(InetAddress addr) {
 		reclaim();
 
-		long now = System.nanoTime();
+		long now = MonotonicClock.elapsedNanos();
 		long tat = counter.compute(sourceKey(addr), (a, t) -> charge(t, now));
 
 		long over = (tat - now) - burstCeiling;
@@ -236,7 +238,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	 */
 	@Override
 	public void decrement(InetAddress addr) {
-		long now = System.nanoTime();
+		long now = MonotonicClock.elapsedNanos();
 		counter.computeIfPresent(sourceKey(addr), (a, t) -> {
 			long refunded = t - emissionInterval;
 			return refunded - now > 0 ? refunded : null;
@@ -272,7 +274,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 	 */
 	@Override
 	public boolean isLimitReached(InetAddress addr) {
-		long now = System.nanoTime();
+		long now = MonotonicClock.elapsedNanos();
 		return debt(counter.get(sourceKey(addr)), now) >= burstCeiling;
 	}
 
@@ -301,7 +303,7 @@ public class DefaultSpamThrottle implements SpamThrottle {
 			return;
 
 		try {
-			long now = System.nanoTime();
+			long now = MonotonicClock.elapsedNanos();
 			Iterator<Map.Entry<String, Long>> cursor = reclaimCursor;
 
 			for (int i = 0; i < RECLAIM_SLICE; i++) {

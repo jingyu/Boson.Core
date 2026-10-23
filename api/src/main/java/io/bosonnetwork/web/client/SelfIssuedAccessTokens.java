@@ -37,6 +37,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.AccessScope;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * The access tokens of a client that issues its own, signed with its own key, instead of obtaining
@@ -86,7 +87,7 @@ public final class SelfIssuedAccessTokens implements AccessTokenSource {
 	private final Logger log;
 
 	private final Object lock = new Object();
-	// All guarded by lock: the cached token, and when it expires by our clock in epoch milliseconds;
+	// All guarded by lock: the cached token, and when it expires on MonotonicClock.elapsedMillis();
 	// how far the node's clock is ahead of ours; and the token whose rejection last corrected that.
 	private @Nullable String token;
 	private long expiresAt;
@@ -121,12 +122,12 @@ public final class SelfIssuedAccessTokens implements AccessTokenSource {
 	// Returns the cached token, or a new one if it is about to expire.
 	private String current(Id audienceId) {
 		synchronized (lock) {
-			long now = System.currentTimeMillis();
+			long elapsedNow = MonotonicClock.elapsedMillis();
 			String current = token;
-			if (current != null && now < expiresAt - REFRESH_MARGIN)
+			if (current != null && elapsedNow < expiresAt - REFRESH_MARGIN)
 				return current;
 
-			long serviceNow = now + clockOffset;
+			long serviceNow = System.currentTimeMillis() + clockOffset;
 			SignedCwt.Builder builder = SignedCwt.builder(issuer)
 					.subject(subject)
 					.audience(audienceId)
@@ -139,7 +140,7 @@ public final class SelfIssuedAccessTokens implements AccessTokenSource {
 
 			current = builder.buildToString();
 			token = current;
-			expiresAt = now + lifetime;
+			expiresAt = elapsedNow + lifetime;
 			return current;
 		}
 	}

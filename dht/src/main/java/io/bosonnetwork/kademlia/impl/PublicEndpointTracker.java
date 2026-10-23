@@ -88,7 +88,7 @@ final class PublicEndpointTracker {
 	 *
 	 * @param from the endpoint before, or {@code null} if there was none.
 	 * @param to   the endpoint after, or {@code null} if it was lost.
-	 * @param at   when it changed, in epoch milliseconds.
+	 * @param at   when it changed, on the clock {@link #report} is given.
 	 */
 	record Change(@Nullable InetSocketAddress from, @Nullable InetSocketAddress to, long at) { }
 
@@ -150,7 +150,7 @@ final class PublicEndpointTracker {
 	 *
 	 * @param reporter the address of the node that replied.
 	 * @param observed the endpoint it says our request came from.
-	 * @param now      the current time, in epoch milliseconds.
+	 * @param now      the current time, in milliseconds on a monotonic clock.
 	 * @return what the report changed.
 	 */
 	Outcome report(InetSocketAddress reporter, InetSocketAddress observed, long now) {

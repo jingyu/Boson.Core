@@ -43,6 +43,7 @@ import io.bosonnetwork.kademlia.impl.KadContext;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.rpc.RpcCall;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Abstract base class for Kademlia tasks executed in a single-threaded Vert.x event loop.
@@ -109,7 +110,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 		// Initialize with small capacity for inFlight map to optimize memory
 		this.inFlight = new HashMap<>(8);
 
-		this.createTime = System.currentTimeMillis();
+		this.createTime = MonotonicClock.elapsedMillis();
 	}
 
 	/**
@@ -346,7 +347,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	public void start() {
 		if (setState(UNSTARTED_STATES, State.RUNNING)) {
 			getLogger().debug("{}#{} starting...", name, taskId);
-			startTime = System.currentTimeMillis();
+			startTime = MonotonicClock.elapsedMillis();
 
 			try {
 				prepare();
@@ -474,7 +475,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	@SuppressWarnings("unchecked")
 	public void cancel() {
 		if (setState(INCOMPLETE_STATES, State.CANCELED)) {
-			endTime = System.currentTimeMillis();
+			endTime = MonotonicClock.elapsedMillis();
 
 			if (nested != null)
 				nested.cancel();
@@ -513,7 +514,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	@SuppressWarnings("unchecked")
 	protected void complete() {
 		if (setState(INCOMPLETE_STATES, State.COMPLETED)) {
-			endTime = System.currentTimeMillis();
+			endTime = MonotonicClock.elapsedMillis();
 			getLogger().debug("{}#{} completed", name, taskId);
 
 			if (endHandler != null)
@@ -617,7 +618,7 @@ public abstract class Task<S extends Task<S>> implements Comparable<Task<S>> {
 	 * @return the age, or Duration.ZERO if not started
 	 */
 	public Duration age() {
-		return startTime == 0 ? Duration.ZERO : Duration.ofMillis(System.currentTimeMillis() - startTime);
+		return startTime == 0 ? Duration.ZERO : Duration.ofMillis(MonotonicClock.elapsedMillis() - startTime);
 	}
 
 	/**

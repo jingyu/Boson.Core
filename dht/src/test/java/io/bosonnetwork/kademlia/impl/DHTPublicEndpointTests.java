@@ -35,6 +35,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.NodeInfo;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.kademlia.security.Blacklist;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Covers what a DHT does with the endpoint replying nodes report seeing: what it calls itself, and what
@@ -146,7 +147,7 @@ public class DHTPublicEndpointTests {
 		// Peers learned us from our packets, which carried that endpoint all along - so the first agreement
 		// changes nothing for them, and must not spend the announcement budget.
 		DHT dht = dht("10.0.0.10", false);
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now), "no agreed endpoint to move from");
 
 		agreeOn(dht, PUBLIC);
@@ -164,7 +165,7 @@ public class DHTPublicEndpointTests {
 		assertEquals(ELSEWHERE, dht.getNodeInfo().getAddress());
 
 		// Moving back is a change like any other - held back only by the limit.
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now));
 		assertTrue(dht.shouldAnnounceEndpointChange(PUBLIC, now + KadConstants.BOOTSTRAP_INTERVAL + 1));
 	}
@@ -195,7 +196,7 @@ public class DHTPublicEndpointTests {
 
 		// Peers near our id may still hold the lost endpoint, so a new one is worth telling them about;
 		// the lost one agreed again is what they hold already.
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		assertTrue(dht.shouldAnnounceEndpointChange(ELSEWHERE, now));
 		assertFalse(dht.shouldAnnounceEndpointChange(PUBLIC, now));
 	}

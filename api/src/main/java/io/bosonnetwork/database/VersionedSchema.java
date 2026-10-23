@@ -51,6 +51,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.utils.Hex;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * A lightweight, file-based schema migration helper for Vert.x SQL clients.
@@ -642,6 +643,7 @@ public class VersionedSchema implements VertxDatabase {
 
 		String appliedBy = appliedByIdentifier();
 		long begin = System.currentTimeMillis();
+		long started = MonotonicClock.elapsedMillis();
 
 		// Parse the migration file off the event loop (blocking file I/O + lexing), then run the
 		// resulting statements within the schema transaction.
@@ -664,7 +666,7 @@ public class VersionedSchema implements VertxDatabase {
 				}
 
 				return chain.compose(vv -> {
-					long duration = System.currentTimeMillis() - begin;
+					long duration = MonotonicClock.elapsedMillis() - started;
 					log.info("Migration: applied migration file {} in {} ms", migration.fileName(), duration);
 					log.debug("Migration: updating schema version...");
 					SchemaVersion newVersion = new SchemaVersion(migration.version, migration.description,

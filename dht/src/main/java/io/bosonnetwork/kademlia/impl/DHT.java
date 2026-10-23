@@ -98,6 +98,7 @@ import io.bosonnetwork.kademlia.tasks.TaskManager;
 import io.bosonnetwork.kademlia.tasks.ValueAnnounceTask;
 import io.bosonnetwork.kademlia.tasks.ValueLookupTask;
 import io.bosonnetwork.utils.AddressUtils;
+import io.bosonnetwork.utils.MonotonicClock;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.BosonVerticle;
 
@@ -117,7 +118,7 @@ public class DHT extends BosonVerticle {
 	// Whether replies' reports of our endpoint are still taken; see onObservedEndpoint. Confined to this
 	// DHT's context.
 	private boolean trackingPublicEndpoint = true;
-	// When a change of public endpoint was last announced with a self-lookup, in epoch milliseconds;
+	// When a change of public endpoint was last announced with a self-lookup, on MonotonicClock.elapsedMillis();
 	// see announceEndpointChange. Confined to this DHT's context.
 	private long lastEndpointAnnouncement;
 	// The last public endpoint agreed on - kept when it is lost, since peers may still hold it; see
@@ -320,7 +321,7 @@ public class DHT extends BosonVerticle {
 		this.subscriptionManager = new SubscriptionManager(new SubscriptionManager.Host() {
 			@Override
 			public long now() {
-				return System.currentTimeMillis();
+				return MonotonicClock.elapsedMillis();
 			}
 
 			@Override
@@ -347,7 +348,7 @@ public class DHT extends BosonVerticle {
 		this.subscriptionClient = new SubscriptionClient(new SubscriptionClient.Host() {
 			@Override
 			public long now() {
-				return System.currentTimeMillis();
+				return MonotonicClock.elapsedMillis();
 			}
 
 			@Override
@@ -703,7 +704,7 @@ public class DHT extends BosonVerticle {
 
 		routingTableMaintenance();
 
-		switch (selectBootstrapTier(routingTable.getNumberOfEntries(), System.currentTimeMillis(),
+		switch (selectBootstrapTier(routingTable.getNumberOfEntries(), MonotonicClock.elapsedMillis(),
 				rpcServer.isReachable())) {
 			// Capped here and nowhere else: this is the attempt that repeats, every BOOTSTRAP_INTERVAL
 			// for as long as the node stays thin or deaf. See selectBootstrapNodes.
@@ -759,7 +760,7 @@ public class DHT extends BosonVerticle {
 	 * </p>
 	 *
 	 * @param entries the current number of routing table entries
-	 * @param now the current time, in milliseconds
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}
 	 * @param reachable whether the RPC server currently considers itself reachable
 	 * @return the tier to bootstrap from, or {@link BootstrapTier#NONE}
 	 */
@@ -774,7 +775,7 @@ public class DHT extends BosonVerticle {
 	}
 
 	private void routingTableMaintenance() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		if (now - lastMaintenance < KadConstants.ROUTING_TABLE_MAINTENANCE_INTERVAL)
 			return;
 
@@ -1219,7 +1220,7 @@ public class DHT extends BosonVerticle {
 		if (bootstrapping)
 			return Future.failedFuture(new IllegalStateException("DHT is bootstrapping"));
 
-		if (System.currentTimeMillis() - lastBootstrap < bootstrapInterval())
+		if (MonotonicClock.elapsedMillis() - lastBootstrap < bootstrapInterval())
 			return Future.succeededFuture();
 
 		if (bootstrapNodes.isEmpty() && routingTable.getNumberOfEntries() == 0) {
@@ -1264,7 +1265,7 @@ public class DHT extends BosonVerticle {
 			// Only the first bootstrap to get this far may preempt the queue; see initialBootstrap.
 			initialBootstrap = false;
 			bootstrapping = false;
-			lastBootstrap = System.currentTimeMillis();
+			lastBootstrap = MonotonicClock.elapsedMillis();
 			log.info("DHT {}:{} bootstrapping finished", network, identity.getId());
 		});
 	}
@@ -2347,7 +2348,7 @@ public class DHT extends BosonVerticle {
 		if (!trackingPublicEndpoint)
 			return;
 
-		switch (publicEndpoint.report(reporter, observed, System.currentTimeMillis())) {
+		switch (publicEndpoint.report(reporter, observed, MonotonicClock.elapsedMillis())) {
 			case CHANGED -> {
 				InetSocketAddress endpoint = publicEndpoint.current();
 				NodeInfo previous = nodeInfo;
@@ -2359,7 +2360,7 @@ public class DHT extends BosonVerticle {
 							AddressUtils.toString(endpoint), AddressUtils.toString(previous.getAddress()),
 							AddressUtils.toString(boundNodeInfo.getAddress()));
 
-					long now = System.currentTimeMillis();
+					long now = MonotonicClock.elapsedMillis();
 					if (shouldAnnounceEndpointChange(endpoint, now))
 						announceEndpointChange(now);
 					lastAgreedEndpoint = endpoint;
@@ -2395,7 +2396,7 @@ public class DHT extends BosonVerticle {
 	 * </p>
 	 *
 	 * @param endpoint the endpoint just agreed on.
-	 * @param now      the current time, in epoch milliseconds.
+	 * @param now      the current time, on {@link MonotonicClock#elapsedMillis()}.
 	 * @return true if the change should be announced.
 	 */
 	boolean shouldAnnounceEndpointChange(InetSocketAddress endpoint, long now) {
@@ -2421,7 +2422,7 @@ public class DHT extends BosonVerticle {
 	 * stamping it on completion.
 	 * </p>
 	 *
-	 * @param now the current time, in epoch milliseconds.
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}.
 	 */
 	private void announceEndpointChange(long now) {
 		// Stamped whether or not the task is queued: dispatchTask only refuses when this DHT is stopping,

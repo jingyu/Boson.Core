@@ -36,6 +36,7 @@ import io.bosonnetwork.kademlia.exceptions.ProtocolException;
 import io.bosonnetwork.kademlia.protocol.Error;
 import io.bosonnetwork.kademlia.protocol.Message;
 import io.bosonnetwork.kademlia.utils.Timer;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Represents an RPC call in a Kademlia Distributed Hash Table (DHT) system.
@@ -505,7 +506,7 @@ public class RpcCall {
 		if (state != State.SENT && state != State.STALLED)
 			return;
 
-		long elapsed = System.currentTimeMillis() - sentTime;
+		long elapsed = MonotonicClock.elapsedMillis() - sentTime;
 		long remaining = RpcServer.RPC_CALL_TIMEOUT_MAX - elapsed;
 		if (remaining > 0) {
 			updateState(State.STALLED);
@@ -525,7 +526,7 @@ public class RpcCall {
 		if (expectedRTT <= 0)
 			throw new IllegalStateException("no expected RTT");
 
-		sentTime = System.currentTimeMillis();
+		sentTime = MonotonicClock.elapsedMillis();
 		updateState(State.SENT);
 		setTimeoutTimer(expectedRTT);
 	}
@@ -538,7 +539,7 @@ public class RpcCall {
 	 * @throws NullPointerException if response is null
 	 */
 	protected void respond(Message response) {
-		responseTime = System.currentTimeMillis();
+		responseTime = MonotonicClock.elapsedMillis();
 		response.setAssociatedCall(this);
 		cancelTimeoutTimer();
 		this.response = response;

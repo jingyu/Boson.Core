@@ -38,6 +38,7 @@ import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.rpc.CallTarget;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
 import io.bosonnetwork.kademlia.utils.ExponentialWeightedMovingAverage;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Represents an entry in a Kademlia routing table bucket (KBucket).
@@ -118,7 +119,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 */
 	public KBucketEntry(Id id, InetSocketAddress addr) {
 		super(id, addr);
-		created = System.currentTimeMillis();
+		created = MonotonicClock.elapsedMillis();
 		lastSeen = created;
 		lastSend = 0;
 		reachable = false;
@@ -170,7 +171,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	/**
 	 * Returns the timestamp when this entry was created.
 	 *
-	 * @return Creation time in milliseconds since epoch.
+	 * @return Creation time on {@link MonotonicClock#elapsedMillis()}.
 	 */
 	public long creationTime() {
 		return created;
@@ -179,7 +180,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	/**
 	 * Returns the timestamp of the last successful interaction with this node.
 	 *
-	 * @return Last seen time in milliseconds since epoch.
+	 * @return Last seen time on {@link MonotonicClock#elapsedMillis()}.
 	 */
 	public long lastSeen() {
 		return lastSeen;
@@ -193,7 +194,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	/**
 	 * Returns the timestamp of the last outgoing request sent to this node.
 	 *
-	 * @return Last send time in milliseconds since epoch, or 0 if never sent.
+	 * @return Last send time on {@link MonotonicClock#elapsedMillis()}, or 0 if never sent.
 	 */
 	public long lastSend() {
 		return lastSend;
@@ -317,7 +318,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 * @return {@code true} if within backoff window; {@code false} otherwise.
 	 */
 	public boolean withinBackoffWindow() {
-		return withinBackoffWindow(System.currentTimeMillis());
+		return withinBackoffWindow(MonotonicClock.elapsedMillis());
 	}
 
 	/**
@@ -345,7 +346,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 * @return {@code true} if the node needs a ping; {@code false} otherwise.
 	 */
 	public boolean needsPing() {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 
 		// don't ping if recently seen to allow NAT entries to time out
 		// see https://arxiv.org/pdf/1605.05606v1.pdf for numbers
@@ -365,7 +366,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 */
 	public boolean oldAndStale() {
 		return failedRequests > OLD_AND_STALE_FAILURES &&
-				System.currentTimeMillis() - lastSeen > OLD_AND_STALE_TIME;
+				MonotonicClock.elapsedMillis() - lastSeen > OLD_AND_STALE_TIME;
 	}
 
 	/**
@@ -458,7 +459,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 */
 	/*
 	public void onIncomingRequest() {
-		lastSeen = System.currentTimeMillis();
+		lastSeen = MonotonicClock.elapsedMillis();
 
 		// need full proper query/response cycle to determine reachability
 		// if (!reachable)
@@ -470,7 +471,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 * Updates the lastSend timestamp to the current time when a request is sent to this node.
 	 */
 	public void onRequestSent() {
-		lastSend = System.currentTimeMillis();
+		lastSend = MonotonicClock.elapsedMillis();
 	}
 
 	/**
@@ -492,7 +493,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	 * @param rtt Round-trip time in milliseconds; -1 if unknown.
 	 */
 	public void onResponded(long rtt) {
-		lastSeen = System.currentTimeMillis();
+		lastSeen = MonotonicClock.elapsedMillis();
 		failedRequests = 0;
 		reachable = true;
 		if (rtt > 0)
@@ -522,21 +523,27 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 
 	/**
 	 * Serializes this KBucketEntry to a map for routing table persistence.
+	 * <p>
+	 * The times are written as wall-clock milliseconds since the epoch: the monotonic clock drifts from the
+	 * wall clock with every step the system clock takes, and means nothing to the next process.
+	 * </p>
 	 *
 	 * @return A map containing the serialized fields of this entry.
 	 */
 	Map<String, Object> toMap() {
 		Map<String, Object> map = new LinkedHashMap<>();
+		long now = MonotonicClock.elapsedMillis();
+		long wallNow = System.currentTimeMillis();
 
 		map.put("id", getId().bytesUnsafe());
 		map.put("addr", getIpAddress().getAddress());
 		map.put("port", getPort());
 		if (created > 0)
-			map.put("created", created);
+			map.put("created", wallNow - (now - created));
 		if (lastSeen > 0)
-			map.put("lastSeen", lastSeen);
+			map.put("lastSeen", wallNow - (now - lastSeen));
 		if (lastSend > 0)
-			map.put("lastSend", lastSend);
+			map.put("lastSend", wallNow - (now - lastSend));
 		if (failedRequests > 0)
 			map.put("failedRequests", failedRequests);
 		if (reachable)
@@ -550,7 +557,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	}
 
 	/**
-	 * Deserializes a KBucketEntry from a map.
+	 * Deserializes a KBucketEntry from a map, converting its wall-clock times back to the monotonic clock.
 	 *
 	 * @param map The map containing serialized entry data.
 	 * @return A new KBucketEntry instance or {@code null} if deserialization fails.
@@ -563,9 +570,14 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 
 			KBucketEntry entry = new KBucketEntry(id, new InetSocketAddress(addr, port));
 
-			entry.created = (long)map.getOrDefault("created", System.currentTimeMillis());
-			entry.lastSeen = (long)map.getOrDefault("lastSeen", entry.created);
-			entry.lastSend = (long)map.getOrDefault("lastSend", 0L);
+			long now = MonotonicClock.elapsedMillis();
+			long wallNow = System.currentTimeMillis();
+			long created = (long)map.getOrDefault("created", wallNow);
+			entry.created = fromWallClock(created, now, wallNow);
+			entry.lastSeen = fromWallClock((long)map.getOrDefault("lastSeen", created), now, wallNow);
+			long lastSend = (long)map.getOrDefault("lastSend", 0L);
+			if (lastSend > 0)
+				entry.lastSend = fromWallClock(lastSend, now, wallNow);
 			entry.failedRequests = (int)map.getOrDefault("failedRequests", 0);
 			entry.reachable = (boolean)map.getOrDefault("reachable", false);
 
@@ -579,6 +591,12 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 		} catch (Exception e) {
 			return null;
 		}
+	}
+
+	// A wall-clock time read back from a saved table, as the monotonic time it would have had. A time in the
+	// future is taken as now.
+	private static long fromWallClock(long wall, long now, long wallNow) {
+		return now - Math.max(0, wallNow - wall);
 	}
 
 	/**
@@ -662,7 +680,7 @@ public class KBucketEntry extends NodeInfo implements CallTarget {
 	@Override
 	public String toString() {
 		StringBuilder repr = new StringBuilder(128);
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 
 		repr.append(getId().toHexString()).append('/').append(getId())
 				.append('@').append(getHost()).append(':').append(getPort())

@@ -58,6 +58,7 @@ import io.bosonnetwork.kademlia.security.SpamThrottle;
 import io.bosonnetwork.kademlia.security.SuspiciousNodeDetector;
 import io.bosonnetwork.kademlia.utils.TimeoutSampler;
 import io.bosonnetwork.metrics.Measured;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Manages RPC communication for a Kademlia Distributed Hash Table (DHT) system.
@@ -243,14 +244,14 @@ public class RpcServer implements Measured {
 	/** Number of packets received at the last reachability check. */
 	private long receivedPacketsAtLastReachableCheck;
 	/**
-	 * Timestamp of the last request we sent, or 0 if we have never sent one.
+	 * Time of the last request we sent, on {@link MonotonicClock#elapsedMillis()}, or 0 if we have never sent one.
 	 * <p>
 	 * Requests only, never responses: this exists to answer "are we waiting for an answer that is not
 	 * coming", and a response we send is not something we expect a reply to.
 	 * </p>
 	 */
 	private long lastCallSent;
-	/** Timestamp of the last reachability check. */
+	/** Time of the last reachability check, on {@link MonotonicClock#elapsedMillis()}. */
 	private long lastReachableCheck;
 	/** Indicates whether the server is reachable. */
 	private boolean reachable;
@@ -277,7 +278,7 @@ public class RpcServer implements Measured {
 	 */
 	private BiConsumer<InetSocketAddress, InetSocketAddress> observedEndpointHandler;
 
-	/** Server start time in milliseconds, or -1 if not started. */
+	/** Server start time on {@link MonotonicClock#elapsedMillis()}, or -1 if not started. */
 	private long startTime;
 
 	/** Indicates whether the server is running. */
@@ -390,7 +391,7 @@ public class RpcServer implements Measured {
 	 * @param unusedTimerId the timer ID (unused)
 	 */
 	private void checkReachability(long unusedTimerId) {
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 
 		// Update reachability based on packet activity
 		if (receivedPackets != receivedPacketsAtLastReachableCheck) {
@@ -420,8 +421,8 @@ public class RpcServer implements Measured {
 	 * catch.
 	 * </p>
 	 *
-	 * @param now the current time, in milliseconds
-	 * @param lastReceived when a packet last arrived, in milliseconds
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}
+	 * @param lastReceived when a packet last arrived, on the same clock
 	 * @param lastRequestSent when we last sent a request, or 0 if we never have
 	 * @return true if the socket should be considered unreachable
 	 */
@@ -533,7 +534,7 @@ public class RpcServer implements Measured {
 		if(startTime == -1)
 			return Duration.ZERO;
 
-		return Duration.ofMillis(System.currentTimeMillis() - startTime);
+		return Duration.ofMillis(MonotonicClock.elapsedMillis() - startTime);
 	}
 
 	/**
@@ -642,7 +643,7 @@ public class RpcServer implements Measured {
 		// Bind the socket and start reachability checks
 		return socket.listen(port, host).andThen(ar -> {
 			if (ar.succeeded()) {
-				startTime = System.currentTimeMillis();
+				startTime = MonotonicClock.elapsedMillis();
 				running = true;
 
 				reachable = true;
@@ -1209,7 +1210,7 @@ public class RpcServer implements Measured {
 				if (!call.isLivenessNeutral()) {
 					// Feeds checkReachability: an unanswered request is the only evidence we have that the
 					// socket has gone deaf, as opposed to the network simply being quiet.
-					lastCallSent = System.currentTimeMillis();
+					lastCallSent = MonotonicClock.elapsedMillis();
 
 					if (callSentHandler != null)
 						callSentHandler.accept(call);

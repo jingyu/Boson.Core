@@ -32,6 +32,7 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.Hash;
 import io.bosonnetwork.crypto.Random;
 import io.bosonnetwork.utils.Bytes;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Issues and verifies the anti-spoofing token that gates STORE_VALUE and ANNOUNCE_PEER.
@@ -67,7 +68,7 @@ public class TokenManager {
 	public TokenManager() {
 		this.sessionSecret = new byte[32];
 		Random.secureRandom().nextBytes(sessionSecret);
-		long now = System.currentTimeMillis();
+		long now = MonotonicClock.elapsedMillis();
 		timestamp = new AtomicLong(now);
 		// Seeded to the current window rather than left at 0: the previous-window fallback derives a
 		// second acceptable token from this value, and until the first rotation that second token would
@@ -83,17 +84,17 @@ public class TokenManager {
 	}
 
 	public void updateTokenTimestamps() {
-		updateTokenTimestamps(System.currentTimeMillis());
+		updateTokenTimestamps(MonotonicClock.elapsedMillis());
 	}
 
 	/**
-	 * Rotates the token timestamps as of the given wall-clock time.
+	 * Rotates the token timestamps as of the given time on {@link MonotonicClock#elapsedMillis()}.
 	 * <p>
 	 * Package-private so a test can drive the rotation without waiting out {@link #TOKEN_TIMEOUT};
 	 * production code calls the no-argument form.
 	 * </p>
 	 *
-	 * @param now the current time in milliseconds.
+	 * @param now the current time, on {@link MonotonicClock#elapsedMillis()}.
 	 */
 	void updateTokenTimestamps(long now) {
 		long current = timestamp.get();

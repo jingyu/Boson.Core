@@ -467,9 +467,8 @@ public final class KadConstants {
 	// decided by the coarser intervals below. Changing the tick rate does not change how much
 	// maintenance traffic the node emits.
 	//
-	// CAUTION: these are all compared against System.currentTimeMillis(), which is not monotonic. A
-	// backwards clock step suppresses maintenance for the duration of the jump. See the review notes
-	// on moving elapsed-time decisions to System.nanoTime().
+	// These are all measured on MonotonicClock, never on System.currentTimeMillis(): a step of the
+	// system clock must neither suppress maintenance for the size of the step nor run it all at once.
 	// ---------------------------------------------------------------------------------------------
 
 	/**

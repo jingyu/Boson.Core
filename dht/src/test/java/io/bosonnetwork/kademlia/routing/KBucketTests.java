@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.kademlia.impl.KadConstants;
 import io.bosonnetwork.kademlia.rpc.RpcServer;
+import io.bosonnetwork.utils.MonotonicClock;
 
 public class KBucketTests {
 	private static final int TEST_MAX_ENTRIES = 32;
@@ -289,10 +290,10 @@ public class KBucketTests {
 		assertFalse(bucket.needsToBeRefreshed());
 
 		// mock last refresh time
-		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10000);
+		bucket.updateRefreshTime(MonotonicClock.elapsedMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10000);
 		// mark entry needs ping
 		entry.onTimeout();
-		entry.setLastSeen(System.currentTimeMillis() - 35_000);
+		entry.setLastSeen(MonotonicClock.elapsedMillis() - 35_000);
 		assertTrue(bucket.needsToBeRefreshed());
 
 		// manually force refresh trigger
@@ -309,7 +310,7 @@ public class KBucketTests {
 		List<KBucketEntry> entries = addEntries(TEST_MAX_ENTRIES);
 		// make the first entry needs ping
 		entries.get(0).onTimeout();
-		entries.get(0).setLastSeen(System.currentTimeMillis() - 35_000);
+		entries.get(0).setLastSeen(MonotonicClock.elapsedMillis() - 35_000);
 
 		assertFalse(bucket.needsToBeRefreshed());
 
@@ -332,10 +333,10 @@ public class KBucketTests {
 	void testLookupRefreshTimeIsIndependentOfPingRefreshTime() {
 		KBucketEntry entry = addEntry();
 		// Overdue on both clocks, with an entry that wants a ping so needsToBeRefreshed() can fire.
-		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
-		bucket.updateLookupRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateRefreshTime(MonotonicClock.elapsedMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateLookupRefreshTime(MonotonicClock.elapsedMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
 		entry.onTimeout();
-		entry.setLastSeen(System.currentTimeMillis() - 35_000);
+		entry.setLastSeen(MonotonicClock.elapsedMillis() - 35_000);
 
 		assertTrue(bucket.needsToBeRefreshed());
 		assertTrue(bucket.needsLookupRefresh());
@@ -346,8 +347,8 @@ public class KBucketTests {
 		assertTrue(bucket.needsToBeRefreshed(), "Lookup refresh must not stamp the ping refresh clock");
 
 		// And the reverse: a ping refresh does not spend the lookup budget for this bucket.
-		bucket.updateRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
-		bucket.updateLookupRefreshTime(System.currentTimeMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateRefreshTime(MonotonicClock.elapsedMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
+		bucket.updateLookupRefreshTime(MonotonicClock.elapsedMillis() - KadConstants.BUCKET_REFRESH_INTERVAL - 10_000);
 		bucket.updateRefreshTime();
 		assertFalse(bucket.needsToBeRefreshed());
 		assertTrue(bucket.needsLookupRefresh(), "Ping refresh must not stamp the lookup refresh clock");
@@ -539,12 +540,12 @@ public class KBucketTests {
 	void testPutEntryMerge() {
 		KBucketEntry entry = newEntry(bucket.prefix().createRandomId());
 		entry.setReachable(true);
-		entry.setLastSeen(System.currentTimeMillis() - 30_000);
+		entry.setLastSeen(MonotonicClock.elapsedMillis() - 30_000);
 		bucket.put(entry);
 
 		// update the entry with more recent seen
 		KBucketEntry recent = new KBucketEntry(entry.getId(), entry.getAddress());
-		long lastSeen = System.currentTimeMillis();
+		long lastSeen = MonotonicClock.elapsedMillis();
 		recent.setReachable(true);
 		recent.setLastSeen(lastSeen);
 		bucket.put(recent);

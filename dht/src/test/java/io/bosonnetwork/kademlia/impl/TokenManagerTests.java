@@ -36,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import io.bosonnetwork.Id;
+import io.bosonnetwork.utils.MonotonicClock;
 
 /**
  * Tests for the anti-spoofing token that gates STORE_VALUE and ANNOUNCE_PEER.
@@ -73,11 +74,11 @@ public class TokenManagerTests {
 
 	/**
 	 * A rotation boundary, expressed as a time far enough past the last one to cross it. The manager
-	 * stamps itself from the wall clock in its constructor, so the offsets are taken from now rather
-	 * than from a captured start value.
+	 * stamps itself from MonotonicClock.elapsedMillis() in its constructor, so the offsets are taken from now
+	 * rather than from a captured start value.
 	 */
 	private static long afterRotations(int rotations) {
-		return System.currentTimeMillis() + rotations * (TokenManager.TOKEN_TIMEOUT + 1000L);
+		return MonotonicClock.elapsedMillis() + rotations * (TokenManager.TOKEN_TIMEOUT + 1000L);
 	}
 
 	@Test
@@ -178,7 +179,7 @@ public class TokenManagerTests {
 	void noRotationInsideTimeout() {
 		int token = generate();
 
-		tokenManager.updateTokenTimestamps(System.currentTimeMillis());
+		tokenManager.updateTokenTimestamps(MonotonicClock.elapsedMillis());
 
 		// Same window, so the same token is still the one being issued.
 		assertEquals(token, generate());

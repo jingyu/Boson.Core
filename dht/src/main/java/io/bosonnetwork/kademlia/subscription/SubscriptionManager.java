@@ -167,9 +167,10 @@ public class SubscriptionManager {
 	 */
 	public interface Host {
 		/**
-		 * Returns the current time.
+		 * Returns the current time, on a clock for measuring intervals: one that the system clock being
+		 * set does not move.
 		 *
-		 * @return epoch milliseconds.
+		 * @return milliseconds; not a date.
 		 */
 		long now();
 
