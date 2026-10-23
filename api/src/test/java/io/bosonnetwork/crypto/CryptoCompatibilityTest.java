@@ -650,9 +650,11 @@ public class CryptoCompatibilityTest {
 		assertTrue(cert2.getNotAfter().getTime() <= notAfter.getTime(), "Cert NotAfter");
 		// Ed25519 certs are generated deterministically and back-to-back; ECDSA keygen is slow enough
 		// that the two providers' independent Instant.now() calls can drift past 1s, so only require the
-		// tight cross-cert timestamp match for the deterministic Ed25519 path.
+		// tight cross-cert timestamp match for the deterministic Ed25519 path. Tight is one second, not
+		// under one: X.509 times are whole seconds, so two calls a millisecond apart that straddle a second
+		// boundary come out exactly 1000 ms apart.
 		if (ed25519)
-			assertTrue(Math.abs(cert1.getNotAfter().getTime() - cert2.getNotAfter().getTime()) < 1000, "Cert NotAfter");
+			assertTrue(Math.abs(cert1.getNotAfter().getTime() - cert2.getNotAfter().getTime()) <= 1000, "Cert NotAfter");
 
 		assertTrue(cert1.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
 		assertTrue(cert2.getNotAfter().getTime() > Date.from(now.plus(3649, ChronoUnit.DAYS)).getTime(), "Cert NotAfter");
@@ -660,7 +662,7 @@ public class CryptoCompatibilityTest {
 		assertTrue(cert1.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
 		assertTrue(cert2.getNotBefore().getTime() <= notBefore.getTime(), "Cert NotBefore");
 		if (ed25519)
-			assertTrue(Math.abs(cert1.getNotBefore().getTime() - cert2.getNotBefore().getTime()) < 1000, "Cert NotBefore");
+			assertTrue(Math.abs(cert1.getNotBefore().getTime() - cert2.getNotBefore().getTime()) <= 1000, "Cert NotBefore");
 
 		assertTrue(cert1.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
 		assertTrue(cert2.getNotBefore().getTime() > Date.from(now.minus(11, ChronoUnit.MINUTES)).getTime(), "Cert NotBefore");
