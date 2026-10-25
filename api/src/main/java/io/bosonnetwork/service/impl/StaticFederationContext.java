@@ -20,25 +20,38 @@
  * SOFTWARE.
  */
 
+
 package io.bosonnetwork.service.impl;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Future;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.service.Admission;
+import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.FederationEvent;
+import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
+import io.bosonnetwork.service.Resolution;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.utils.Variable;
@@ -48,47 +61,83 @@ import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
- * The StaticFederationContext class provides an implementation of the FederationContext interface.
- * It handles the registration and management of federated nodes and their associated services
- * within a static federation context.
+ * An in-memory {@link FederationContext}, populated imperatively: for tests and bring-up.
  * <p>
- * This class is responsible for:
- * - Managing the lifecycle of nodes and their associated services within a federation.
- * - Providing mechanisms to add, remove, and query nodes and services.
- * - Authenticating nodes and services.
- * - Returning a web token authenticator for secure access.
- * - Local reporting of incidents related to nodes or services.
+ * It knows the nodes it is given, each with an {@link Admission.Reason admission reason} - a node added
+ * is {@link Admission.Reason#ACTIVE ACTIVE} until {@link #setAdmission(Id, Admission.Reason) told
+ * otherwise} - the services of those nodes, and their descriptors. A node it doesn't know is refused
+ * with {@link Admission.Reason#NO_RELATIONSHIP NO_RELATIONSHIP}, as on a node that federates only by
+ * agreement; a peer it doesn't know is {@link Admission.Reason#UNKNOWN_PEER UNKNOWN_PEER}. Nothing it
+ * answers may be cached ({@code maxAge} zero), and every change of admission is sent to the listeners.
+ * The outcomes services report are kept, for tests to {@linkplain #getReports() read}.
  * <p>
- * The class uses a thread-safe data structure to store the registry of nodes and their services.
+ * It also implements the first version of the interface, over the same registry. Thread-safe.
  */
+@SuppressWarnings("removal")
 public class StaticFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
-	private final Map<Id, SuperNodeAndServices> nodeServicesRegistry;
+	private final @Nullable Id servicePeerId;
+	private final Map<Id, NodeEntry> nodes;
+	private final Map<Id, NodeDescriptor> descriptors;
+	private final List<Consumer<FederationEvent>> listeners;
+	private final List<Report> reports;
 
-	private record SuperNodeAndServices(SuperNodeInfo superNodeInfo, List<ServiceInfo> services) {}
+	private static final Logger log = LoggerFactory.getLogger(StaticFederationContext.class);
 
-	/**
-	 * Constructs a new instance of the StaticFederationContext class with the specified node identity.
-	 *
-	 * @param nodeIdentity The {@link Identity} associated with this client context.
-	 *                     This identity is used for cryptographic operations and
-	 *                     represents the unique identifier of the node.
-	 */
-	public StaticFederationContext(Identity nodeIdentity) {
-		this.nodeIdentity = nodeIdentity;
-		this.nodeServicesRegistry = new ConcurrentHashMap<>();
+	private record NodeEntry(SuperNodeInfo superNodeInfo, Admission.Reason reason, List<FederatedService> services) {
+		NodeEntry withReason(Admission.Reason r) {
+			return new NodeEntry(superNodeInfo, r, services);
+		}
+
+		NodeEntry withServices(List<FederatedService> s) {
+			return new NodeEntry(superNodeInfo, reason, List.copyOf(s));
+		}
 	}
 
 	/**
-	 * Adds a new node to the federation context registry with the specified details.
+	 * An outcome a service reported.
 	 *
-	 * @param nodeId the unique identifier of the node to be added; cannot be null
-	 * @param host the hostname or IP address of the node; cannot be null
-	 * @param port the port number on which the node is accessible; must be in the range 1 to 65535
-	 * @param apiEndpoint the API endpoint URL for the node; can be null
-	 * @return true if the node was successfully added, false if a node with the specified ID already exists in the registry
-	 * @throws NullPointerException if nodeId or host is null
-	 * @throws IllegalArgumentException if the port number is invalid (not between 1 and 65535, inclusive)
+	 * @param nodeId  the other node
+	 * @param peerId  the other node's service
+	 * @param outcome the outcome
+	 * @param detail  the detail, or {@code null}
+	 */
+	public record Report(Id nodeId, Id peerId, Outcome outcome, @Nullable String detail) {}
+
+	/**
+	 * Creates a context whose web authenticator accepts tokens for any audience.
+	 *
+	 * @param nodeIdentity the identity of the local node
+	 */
+	public StaticFederationContext(Identity nodeIdentity) {
+		this(nodeIdentity, null);
+	}
+
+	/**
+	 * Creates a context for one service, whose web authenticator accepts only tokens addressed to it.
+	 *
+	 * @param nodeIdentity  the identity of the local node
+	 * @param servicePeerId the peer id of the service, or {@code null} to accept tokens for any audience
+	 */
+	public StaticFederationContext(Identity nodeIdentity, @Nullable Id servicePeerId) {
+		this.nodeIdentity = Objects.requireNonNull(nodeIdentity, "nodeIdentity");
+		this.servicePeerId = servicePeerId;
+		this.nodes = new ConcurrentHashMap<>();
+		this.descriptors = new ConcurrentHashMap<>();
+		this.listeners = new CopyOnWriteArrayList<>();
+		this.reports = new CopyOnWriteArrayList<>();
+	}
+
+	// ---- Population ----------------------------------------------------------------------------------
+
+	/**
+	 * Adds a node, {@link Admission.Reason#ACTIVE ACTIVE}.
+	 *
+	 * @param nodeId      the node's id
+	 * @param host        the node's host
+	 * @param port        the node's port, from 1 to 65535
+	 * @param apiEndpoint the node's API endpoint, or {@code null}
+	 * @return {@code true} if the node was added, {@code false} if it was already known
 	 */
 	public boolean addNode(Id nodeId, String host, int port, @Nullable String apiEndpoint) {
 		Objects.requireNonNull(nodeId);
@@ -96,261 +145,382 @@ public class StaticFederationContext implements FederationContext {
 		if (port <= 0 || port > 65535)
 			throw new IllegalArgumentException("Invalid port");
 
-		if (existsNodeSync(nodeId))
-			return false;
+		Variable<Boolean> added = Variable.of(false);
+		nodes.computeIfAbsent(nodeId, k -> {
+			added.set(true);
+			return new NodeEntry(new PlainSuperNodeInfo(nodeId, List.of(host + ":" + port), apiEndpoint),
+					Admission.Reason.ACTIVE, List.of());
+		});
 
-		nodeServicesRegistry.computeIfAbsent(nodeId, k ->
-				new SuperNodeAndServices(new PlainSuperNodeInfo(nodeId, List.of(host + ":" + port), apiEndpoint), List.of()));
-		return true;
+		if (added.get())
+			fire(nodeId, Admission.Reason.ACTIVE);
+		return added.get();
 	}
 
-
 	/**
-	 * Adds a new node to the federation context registry with the specified details.
+	 * Adds a node, {@link Admission.Reason#ACTIVE ACTIVE}, with no API endpoint.
 	 *
-	 * @param nodeId the unique identifier of the node to be added; cannot be null
-	 * @param host the hostname or IP address of the node; cannot be null
-	 * @param port the port number on which the node is accessible; must be in the range 1 to 65535
-	 * @return true if the node was successfully added, false if a node with the specified ID already exists in the registry
-	 * @throws NullPointerException if nodeId or host is null
-	 * @throws IllegalArgumentException if the port number is invalid (not between 1 and 65535, inclusive)
+	 * @param nodeId the node's id
+	 * @param host   the node's host
+	 * @param port   the node's port, from 1 to 65535
+	 * @return {@code true} if the node was added, {@code false} if it was already known
 	 */
 	public boolean addNode(Id nodeId, String host, int port) {
 		return addNode(nodeId, host, port, null);
 	}
 
 	/**
-	 * Retrieves a federated node from the registry synchronously based on the specified node identifier.
-	 * If the node is not found in the registry, this method returns an empty {@link Optional}.
+	 * Sets a known node's admission, and tells the listeners if it changed.
 	 *
-	 * @param nodeId the unique identifier of the node to retrieve; cannot be null
-	 * @return an {@link Optional} containing the {@link SuperNodeInfo} associated with the specified
-	 *         node ID, or an empty {@code Optional} if no such node exists
-	 * @throws NullPointerException if nodeId is null
+	 * @param nodeId the node's id
+	 * @param reason its new admission reason; not one about a peer
+	 * @throws IllegalArgumentException if the node is not known, or the reason is about a peer
+	 */
+	public void setAdmission(Id nodeId, Admission.Reason reason) {
+		Objects.requireNonNull(nodeId);
+		Objects.requireNonNull(reason);
+		if (reason == Admission.Reason.UNKNOWN_PEER || reason == Admission.Reason.UNVERIFIED_PEER)
+			throw new IllegalArgumentException(reason + " is about a peer, not a node");
+
+		Variable<Boolean> changed = Variable.of(false);
+		NodeEntry entry = nodes.computeIfPresent(nodeId, (k, v) -> {
+			if (v.reason == reason)
+				return v;
+			changed.set(true);
+			return v.withReason(reason);
+		});
+		if (entry == null)
+			throw new IllegalArgumentException("Node does not exist");
+
+		if (changed.get())
+			fire(nodeId, reason);
+	}
+
+	/**
+	 * Returns a known node.
+	 *
+	 * @param nodeId the node's id
+	 * @return an {@link Optional} with the node, or empty
 	 */
 	public Optional<SuperNodeInfo> getNodeSync(Id nodeId) {
 		Objects.requireNonNull(nodeId);
-		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
-		return sns == null ? Optional.empty() : Optional.of(sns.superNodeInfo);
+		NodeEntry entry = nodes.get(nodeId);
+		return entry == null ? Optional.empty() : Optional.of(entry.superNodeInfo);
 	}
 
 	/**
-	 * Checks if a node with the specified identifier exists in the federation context registry.
+	 * Tells whether a node is known.
 	 *
-	 * @param nodeId the unique identifier of the node to check for existence; cannot be null
-	 * @return true if the node exists in the registry, false otherwise
-	 * @throws NullPointerException if nodeId is null
+	 * @param nodeId the node's id
+	 * @return {@code true} if it is known
 	 */
 	public boolean existsNodeSync(Id nodeId) {
 		Objects.requireNonNull(nodeId);
-		return nodeServicesRegistry.containsKey(nodeId);
+		return nodes.containsKey(nodeId);
 	}
 
 	/**
-	 * Removes the node with the specified identifier from the federation context registry.
+	 * Removes a node, its services and its descriptor, and tells the listeners that it is no longer
+	 * admitted.
 	 *
-	 * @param nodeId the unique identifier of the node to be removed; cannot be null
-	 * @return true if the node was successfully removed, false if no node with the specified ID exists in the registry
-	 * @throws NullPointerException if nodeId is null
+	 * @param nodeId the node's id
+	 * @return {@code true} if the node was removed, {@code false} if it was not known
 	 */
 	public boolean removeNode(Id nodeId) {
 		Objects.requireNonNull(nodeId);
-		return nodeServicesRegistry.remove(nodeId) != null;
+		descriptors.remove(nodeId);
+		boolean removed = nodes.remove(nodeId) != null;
+		if (removed)
+			fire(nodeId, Admission.Reason.NO_RELATIONSHIP);
+		return removed;
 	}
 
 	/**
-	 * Adds a service to the specified node in the federation context registry.
+	 * Adds a service to a known node.
 	 *
-	 * @param nodeId the unique identifier of the node to which the service is to be added
-	 * @param peerId the unique identifier of the peer providing the service
-	 * @param fingerprint the fingerprint of the service to ensure uniqueness
-	 * @param endpoint the endpoint URL address of the service
-	 * @param serviceType the unique type identifier of the service
-	 * @param serviceName the name of the service
-	 * @return true if the service was successfully added, false if the service already exists for the given peer and node
-	 * @throws IllegalArgumentException if the specified node does not exist
-	 * @throws NullPointerException if nodeId or peerId is null
-	 * @throws IllegalStateException if the node registry is in an invalid state
+	 * @param service the service; its node must be known
+	 * @return {@code true} if the service was added, {@code false} if the node already had a service with
+	 *         that peer id and fingerprint
+	 * @throws IllegalArgumentException if the node is not known
 	 */
-	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint, @Nullable String serviceType, @Nullable String serviceName) {
-		Objects.requireNonNull(nodeId);
-		Objects.requireNonNull(peerId);
-		if (!existsNodeSync(nodeId))
+	public boolean addService(FederatedService service) {
+		Objects.requireNonNull(service);
+		Variable<Boolean> added = Variable.of(false);
+		NodeEntry entry = nodes.computeIfPresent(service.nodeId(), (k, v) -> {
+			boolean exists = v.services.stream().anyMatch(s ->
+					s.peerId().equals(service.peerId()) && s.fingerprint() == service.fingerprint());
+			if (exists)
+				return v;
+
+			List<FederatedService> services = new ArrayList<>(v.services);
+			services.add(service);
+			added.set(true);
+			return v.withServices(services);
+		});
+		if (entry == null)
 			throw new IllegalArgumentException("Node does not exist");
 
-		if (existsServiceSync(peerId, fingerprint, nodeId))
-			return false;
-
-		nodeServicesRegistry.compute(nodeId, (k, v) -> {
-			if (v == null)
-				throw new IllegalStateException("Node does not exist");
-
-			ServiceInfo newService = new PlainServiceInfo(peerId, fingerprint, nodeId, endpoint, serviceType, serviceName);
-			if (v.services.isEmpty()) {
-				return new SuperNodeAndServices(v.superNodeInfo, List.of(newService));
-			} else {
-				List<ServiceInfo> services = new ArrayList<>(v.services);
-				services.add(newService);
-				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
-			}
-		});
-
-		return true;
+		return added.get();
 	}
 
 	/**
-	 * Adds a service to the specified node in the federation context registry with default values for optional parameters.
+	 * Adds a service to a known node.
 	 *
-	 * @param nodeId the unique identifier of the node to which the service is to be added; cannot be null
-	 * @param peerId the unique identifier of the peer providing the service; cannot be null
-	 * @param fingerprint the fingerprint of the service to ensure uniqueness
-	 * @param endpoint the endpoint URL address of the service; can be null
-	 * @return true if the service was successfully added, false if the service already exists for the given peer and node
-	 * @throws IllegalArgumentException if the specified node does not exist
-	 * @throws NullPointerException if nodeId or peerId is null
-	 * @throws IllegalStateException if the node registry is in an invalid state
+	 * @param nodeId      the node's id
+	 * @param peerId      the service's peer id
+	 * @param fingerprint the fingerprint of its announcement
+	 * @param endpoint    its endpoint
+	 * @param serviceType its type, or {@code null}
+	 * @param serviceName its name, or {@code null}
+	 * @return {@code true} if the service was added, {@code false} if the node already had a service with
+	 *         that peer id and fingerprint
+	 * @throws IllegalArgumentException if the node is not known
+	 */
+	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint,
+							  @Nullable String serviceType, @Nullable String serviceName) {
+		Objects.requireNonNull(nodeId);
+		Objects.requireNonNull(peerId);
+		return addService(new FederatedService(peerId, nodeId, serviceType, serviceName, endpoint, Map.of(),
+				fingerprint, 0));
+	}
+
+	/**
+	 * Adds a service, with no type or name, to a known node.
+	 *
+	 * @param nodeId      the node's id
+	 * @param peerId      the service's peer id
+	 * @param fingerprint the fingerprint of its announcement
+	 * @param endpoint    its endpoint
+	 * @return {@code true} if the service was added, {@code false} if the node already had a service with
+	 *         that peer id and fingerprint
+	 * @throws IllegalArgumentException if the node is not known
 	 */
 	public boolean addService(Id nodeId, Id peerId, long fingerprint, String endpoint) {
 		return addService(nodeId, peerId, fingerprint, endpoint, null, null);
 	}
 
 	/**
-	 * Retrieves a {@link ServiceInfo} object associated with the specified peer, fingerprint,
-	 * and node synchronously. This method searches for a service in the registry identified
-	 * by the given parameters and returns the corresponding service information if found.
+	 * Returns a node's service with the given peer id and fingerprint.
 	 *
-	 * @param peerId the unique identifier of the peer providing the service; cannot be null
-	 * @param fingerprint the fingerprint of the service to ensure uniqueness
-	 * @param nodeId the unique identifier of the node where the service is registered; cannot be null
-	 * @return an {@link Optional} containing the {@link ServiceInfo} matching the given peer,
-	 *         fingerprint, and node, or an empty {@code Optional} if no such service exists
-	 * @throws NullPointerException if peerId or nodeId is null
+	 * @param peerId      the service's peer id
+	 * @param fingerprint the fingerprint of its announcement
+	 * @param nodeId      the node's id
+	 * @return an {@link Optional} with the service, or empty
 	 */
 	public Optional<ServiceInfo> getServiceSync(Id peerId, long fingerprint, Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 
-		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
-		return sns == null ? Optional.empty() : sns.services.stream()
-				.filter(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint)
+		NodeEntry entry = nodes.get(nodeId);
+		return entry == null ? Optional.empty() : entry.services.stream()
+				.filter(s -> s.peerId().equals(peerId) && s.fingerprint() == fingerprint)
+				.map(ServiceInfo.class::cast)
 				.findFirst();
 	}
 
 	/**
-	 * Checks if a service exists synchronously for the given peer, fingerprint, and node identifier.
+	 * Tells whether a node has a service with the given peer id and fingerprint.
 	 *
-	 * @param peerId The identifier of the peer. Must not be null.
-	 * @param fingerprint The fingerprint associated with the service.
-	 * @param nodeId The identifier of the node. Must not be null.
-	 * @return {@code true} if the service exists; {@code false} otherwise.
+	 * @param peerId      the service's peer id
+	 * @param fingerprint the fingerprint of its announcement
+	 * @param nodeId      the node's id
+	 * @return {@code true} if it has
 	 */
 	public boolean existsServiceSync(Id peerId, long fingerprint, Id nodeId) {
-		Objects.requireNonNull(peerId);
-		Objects.requireNonNull(nodeId);
 		return getServiceSync(peerId, fingerprint, nodeId).isPresent();
 	}
 
 	/**
-	 * Retrieves the list of services associated with a specified peer ID under a given node ID.
-	 * This method performs the search synchronously.
+	 * Returns a node's services with the given peer id.
 	 *
-	 * @param peerId the unique identifier of the peer whose services are to be retrieved; must not be null
-	 * @param nodeId the unique identifier of the node where the peer's services are registered; must not be null
-	 * @return a list of {@code ServiceInfo} objects corresponding to the services associated with the specified peer ID,
-	 * or an empty list if no matching services are found
+	 * @param peerId the service's peer id
+	 * @param nodeId the node's id
+	 * @return the services, possibly empty
 	 */
 	public List<ServiceInfo> getServicesSync(Id peerId, Id nodeId) {
 		Objects.requireNonNull(peerId);
 		Objects.requireNonNull(nodeId);
-		SuperNodeAndServices sns = nodeServicesRegistry.get(nodeId);
-		return sns == null ? List.of() : sns.services.stream()
-				.filter(s -> s.getPeerId().equals(peerId))
+		NodeEntry entry = nodes.get(nodeId);
+		return entry == null ? List.of() : entry.services.stream()
+				.filter(s -> s.peerId().equals(peerId))
 				.collect(Collectors.toUnmodifiableList());
 	}
 
 	/**
-	 * Determines if a service exists synchronously for the specified peer and node identifiers.
+	 * Tells whether a node has a service with the given peer id.
 	 *
-	 * @param peerId the unique identifier of the peer; must not be null.
-	 * @param nodeId the unique identifier of the node; must not be null.
-	 * @return true if at least one service exists for the specified peer and node identifiers, false otherwise.
+	 * @param peerId the service's peer id
+	 * @param nodeId the node's id
+	 * @return {@code true} if it has
 	 */
 	public boolean existsServiceSync(Id peerId, Id nodeId) {
-		Objects.requireNonNull(peerId);
-		Objects.requireNonNull(nodeId);
 		return !getServicesSync(peerId, nodeId).isEmpty();
 	}
 
 	/**
-	 * Retrieves a list of ServiceInfo objects associated with the specified peer ID.
+	 * Returns every known service with the given peer id, of any node.
 	 *
-	 * @param peerId the unique identifier of the peer whose services are to be retrieved; must not be null
-	 * @return a list of ServiceInfo objects that belong to the given peer ID
+	 * @param peerId the service's peer id
+	 * @return the services, possibly empty
 	 */
 	public List<ServiceInfo> getServicesSync(Id peerId) {
 		Objects.requireNonNull(peerId);
-		return nodeServicesRegistry.values().stream()
-				.flatMap(sns -> sns.services.stream())
-				.filter(s -> s.getPeerId().equals(peerId))
+		return nodes.values().stream()
+				.flatMap(e -> e.services.stream())
+				.filter(s -> s.peerId().equals(peerId))
 				.collect(Collectors.toUnmodifiableList());
 	}
 
 	/**
-	 * Removes the specified service associated with a peer and node in the federation context registry.
+	 * Removes a node's service with the given peer id and fingerprint.
 	 *
-	 * @param peerId the unique identifier of the peer providing the service; cannot be null
-	 * @param fingerprint the fingerprint of the service to ensure uniqueness
-	 * @param nodeId the unique identifier of the node from which the service is to be removed; cannot be null
-	 * @return true if the service was successfully removed, false if no matching service exists for the given peer and node
-	 * @throws NullPointerException if peerId or nodeId is null
+	 * @param peerId      the service's peer id
+	 * @param fingerprint the fingerprint of its announcement
+	 * @param nodeId      the node's id
+	 * @return {@code true} if a service was removed
 	 */
 	public boolean removeService(Id peerId, long fingerprint, Id nodeId) {
+		return removeServicesIf(nodeId, s -> s.peerId().equals(peerId) && s.fingerprint() == fingerprint);
+	}
+
+	/**
+	 * Removes a node's services with the given peer id.
+	 *
+	 * @param peerId the service's peer id
+	 * @param nodeId the node's id
+	 * @return {@code true} if at least one service was removed
+	 */
+	public boolean removeServices(Id peerId, Id nodeId) {
+		return removeServicesIf(nodeId, s -> s.peerId().equals(peerId));
+	}
+
+	private boolean removeServicesIf(Id nodeId, Predicate<FederatedService> filter) {
+		Objects.requireNonNull(nodeId);
 		Variable<Boolean> removed = Variable.of(false);
-		nodeServicesRegistry.computeIfPresent(nodeId, (k, v) -> {
-			if (v.services.isEmpty())
+		nodes.computeIfPresent(nodeId, (k, v) -> {
+			List<FederatedService> services = new ArrayList<>(v.services);
+			if (!services.removeIf(filter))
 				return v;
 
-			List<ServiceInfo> services = new ArrayList<>(v.services);
-			boolean rm = services.removeIf(s -> s.getPeerId().equals(peerId) && s.getFingerprint() == fingerprint);
-			if (rm) {
-				removed.set(true);
-				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
-			} else {
-				// no change
-				return v;
-			}
+			removed.set(true);
+			return v.withServices(services);
 		});
 
 		return removed.get();
 	}
 
 	/**
-	 * Removes all services associated with a specific peer and node in the federation context registry.
+	 * Sets the descriptor of a node, known or not, replacing any it had.
 	 *
-	 * @param peerId the unique identifier of the peer whose services are to be removed; cannot be null
-	 * @param nodeId the unique identifier of the node from which services are to be removed; cannot be null
-	 * @return true if at least one service was successfully removed, false if no services matching the peer and node exist
-	 * @throws NullPointerException if peerId or nodeId is null
+	 * @param descriptor the node's descriptor
 	 */
-	public boolean removeServices(Id peerId, Id nodeId) {
-		Variable<Boolean> removed = Variable.of(false);
-		nodeServicesRegistry.computeIfPresent(nodeId, (k, v) -> {
-			if (v.services.isEmpty())
-				return v;
-
-			List<ServiceInfo> services = new ArrayList<>(v.services);
-			boolean rm = services.removeIf(s -> s.getPeerId().equals(peerId));
-			if (rm) {
-				removed.set(true);
-				return new SuperNodeAndServices(v.superNodeInfo, List.copyOf(services));
-			} else {
-				// no change
-				return v;
-			}
-		});
-
-		return removed.get();
+	public void putDescriptor(NodeDescriptor descriptor) {
+		Objects.requireNonNull(descriptor);
+		descriptors.put(descriptor.getNodeId(), descriptor);
 	}
+
+	/**
+	 * Returns the outcomes services have reported, oldest first.
+	 *
+	 * @return an unmodifiable snapshot
+	 */
+	public List<Report> getReports() {
+		return List.copyOf(reports);
+	}
+
+	// ---- FederationContext ---------------------------------------------------------------------------
+
+	private static Admission admission(Admission.Reason reason) {
+		return new Admission(reason, Duration.ZERO);
+	}
+
+	private Admission.Reason reasonOf(Id nodeId) {
+		NodeEntry entry = nodes.get(nodeId);
+		return entry == null ? Admission.Reason.NO_RELATIONSHIP : entry.reason;
+	}
+
+	private Resolution resolveSync(Id peerId) {
+		// A peer belongs to one node; if it was registered under several, the newest announcement wins.
+		Optional<FederatedService> service = nodes.values().stream()
+				.flatMap(e -> e.services.stream())
+				.filter(s -> s.peerId().equals(peerId))
+				.max(Comparator.comparingInt(FederatedService::sequenceNumber)
+						.thenComparingLong(FederatedService::fingerprint));
+
+		return service.map(s -> new Resolution(s, admission(reasonOf(s.nodeId()))))
+				.orElseGet(() -> new Resolution(null, admission(Admission.Reason.UNKNOWN_PEER)));
+	}
+
+	@Override
+	public CompletableFuture<Resolution> resolve(Id peerId) {
+		Objects.requireNonNull(peerId);
+		return ContextualFuture.succeededFuture(resolveSync(peerId));
+	}
+
+	@Override
+	public CompletableFuture<Admission> admit(Id nodeId) {
+		Objects.requireNonNull(nodeId);
+		return ContextualFuture.succeededFuture(admission(reasonOf(nodeId)));
+	}
+
+	@Override
+	public CompletableFuture<Optional<NodeDescriptor>> describe(Id nodeId) {
+		Objects.requireNonNull(nodeId);
+		return ContextualFuture.succeededFuture(Optional.ofNullable(descriptors.get(nodeId)));
+	}
+
+	@Override
+	public void report(Id nodeId, Id peerId, Outcome outcome, @Nullable String detail) {
+		reports.add(new Report(nodeId, peerId, outcome, detail));
+	}
+
+	@Override
+	public Subscription onChange(Consumer<FederationEvent> listener) {
+		Objects.requireNonNull(listener);
+		listeners.add(listener);
+		return () -> listeners.remove(listener);
+	}
+
+	private void fire(Id nodeId, Admission.Reason reason) {
+		FederationEvent event = new FederationEvent(nodeId, admission(reason));
+		for (Consumer<FederationEvent> listener : listeners) {
+			try {
+				listener.accept(event);
+			} catch (RuntimeException e) {
+				log.error("Federation event listener failed on {}", event, e);
+			}
+		}
+	}
+
+	@Override
+	public CwtAuth getWebAuthenticator() {
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(nodeIdentity)
+				.setExpectedAudience(servicePeerId)
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<Optional<Principal>> getUser(Id nodeId) {
+						NodeEntry entry = nodes.get(nodeId);
+						if (entry == null || entry.reason.decision() != Admission.Decision.ALLOW)
+							return Future.succeededFuture(Optional.empty());
+						return Future.succeededFuture(Optional.of(entry.superNodeInfo));
+					}
+
+					@Override
+					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
+						// The calling service must be the token subject's, and its node admitted.
+						Resolution r = resolveSync(peerId);
+						FederatedService service = r.service();
+						if (service == null || !service.nodeId().equals(nodeId) || !r.allowed())
+							return Future.succeededFuture(Optional.empty());
+						return Future.succeededFuture(Optional.of(service));
+					}
+				});
+
+		return CwtAuth.create(options);
+	}
+
+	// ---- Version 1 -----------------------------------------------------------------------------------
 
 	@Override
 	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
@@ -400,32 +570,5 @@ public class StaticFederationContext implements FederationContext {
 				return ContextualFuture.succeededFuture(valid);
 			}
 		};
-	}
-
-	@Override
-	public CwtAuth getWebAuthenticator() {
-		if (nodeIdentity == null)
-			throw new IllegalStateException("Node identity is not set");
-
-		CwtAuthOptions options = new CwtAuthOptions()
-				.setIdentity(nodeIdentity)
-				.setClientProvider(new ClientProvider() {
-					@Override
-					public Future<Optional<Principal>> getUser(Id nodeId) {
-						Optional<Principal> principal = getNodeSync(nodeId).map(Principal.class::cast);
-						return Future.succeededFuture(principal);
-					}
-
-					@Override
-					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
-						Optional<Principal> principal = getServicesSync(peerId, nodeId)
-								.stream()
-								.findFirst()
-								.map(Principal.class::cast);
-						return Future.succeededFuture(principal);
-					}
-				});
-
-		return CwtAuth.create(options);
 	}
 }

@@ -47,7 +47,11 @@ import io.bosonnetwork.Id;
  *   <li>Exactly one of {@code nonce} / {@code signature} is null - caller bug; the implementation
  *       MUST return {@code false}.</li>
  * </ul>
+ *
+ * @deprecated the first version of federation; use {@link FederationContext#getWebAuthenticator()} for
+ *             requests, and {@link FederationContext#resolve(io.bosonnetwork.Id)} for admission
  */
+@Deprecated(forRemoval = true)
 public interface FederationAuthenticator {
 	/**
 	 * Authenticates a node in the federation. See the

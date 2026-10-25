@@ -84,7 +84,17 @@ public enum Claim {
 	/**
 	 * Session identifier - identifies THIS OAuth session within a user who may have multiple linked identities.
 	 */
-	SESSION_ID(13);
+	SESSION_ID(13),
+	/**
+	 * Purpose - the {@code boson:sig:} label of a signed statement, which says what kind of statement
+	 * it is. An access token never carries it, so a statement can't be presented as one, nor a token
+	 * as a statement.
+	 */
+	PURPOSE(14),
+	/**
+	 * Content - the body of a signed statement: a map with text keys, laid out by its purpose.
+	 */
+	CONTENT(15);
 
 	private final int value;
 
@@ -126,6 +136,8 @@ public enum Claim {
 			case 10 -> NONCE;
 			case 12 -> CLIENT_ID;
 			case 13 -> SESSION_ID;
+			case 14 -> PURPOSE;
+			case 15 -> CONTENT;
 			default -> APPLICATION_DEFINED;
 		};
 	}

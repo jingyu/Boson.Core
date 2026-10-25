@@ -20,20 +20,28 @@
  * SOFTWARE.
  */
 
+
 package io.bosonnetwork.service.impl;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import io.vertx.core.Future;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoIdentity;
+import io.bosonnetwork.service.Admission;
 import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.FederationEvent;
+import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
+import io.bosonnetwork.service.Resolution;
 import io.bosonnetwork.service.ServiceInfo;
 import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -42,19 +50,67 @@ import io.bosonnetwork.web.CwtAuth;
 import io.bosonnetwork.web.CwtAuthOptions;
 
 /**
- * A no-op implementation of the {@link FederationContext} interface, intended to be used
- * in scenarios where federation functionalities are disabled or not required. This
- * implementation returns default, non-functional values for all operations.
+ * The {@link FederationContext} of a host where federation is turned off.
  * <p>
- * All methods in this class are implemented to return default responses such as
- * - Null values for objects
- * - False for boolean results
- * - Empty lists for collections
- * <p>
- * This class is useful when a FederationContext is required by the system, but federation
- * interactions are explicitly disabled or not supported.
+ * Every peer and every node is refused with {@link Admission.Reason#DISABLED DISABLED}, no descriptor is
+ * found, reports are dropped, no admission ever changes, and the web authenticator accepts no token.
  */
+@SuppressWarnings("removal")
 public class DisabledFederationContext implements FederationContext {
+	// Turning federation on is a restart, so a refusal holds for as long as the caller likes.
+	private static final Admission DISABLED = new Admission(Admission.Reason.DISABLED, Duration.ofDays(1));
+
+	@Override
+	public CompletableFuture<Resolution> resolve(Id peerId) {
+		Objects.requireNonNull(peerId);
+		return ContextualFuture.succeededFuture(new Resolution(null, DISABLED));
+	}
+
+	@Override
+	public CompletableFuture<Admission> admit(Id nodeId) {
+		Objects.requireNonNull(nodeId);
+		return ContextualFuture.succeededFuture(DISABLED);
+	}
+
+	@Override
+	public CompletableFuture<Optional<NodeDescriptor>> describe(Id nodeId) {
+		Objects.requireNonNull(nodeId);
+		return ContextualFuture.succeededFuture(Optional.empty());
+	}
+
+	@Override
+	public void report(Id nodeId, Id peerId, Outcome outcome, @Nullable String detail) {
+		// dropped
+	}
+
+	@Override
+	public Subscription onChange(Consumer<FederationEvent> listener) {
+		Objects.requireNonNull(listener);
+		// No admission ever changes.
+		return () -> {};
+	}
+
+	@Override
+	public CwtAuth getWebAuthenticator() {
+		CwtAuthOptions options = new CwtAuthOptions()
+				.setIdentity(new CryptoIdentity())
+				.setClientProvider(new ClientProvider() {
+					@Override
+					public Future<Optional<Principal>> getUser(Id nodeId) {
+						return Future.succeededFuture(Optional.empty());
+					}
+
+					@Override
+					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
+						return Future.succeededFuture(Optional.empty());
+					}
+				});
+
+		return CwtAuth.create(options);
+	}
+
+	// ---- Version 1 -----------------------------------------------------------------------------------
+
 	@Override
 	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
 		return ContextualFuture.succeededFuture(Optional.empty());
@@ -93,24 +149,5 @@ public class DisabledFederationContext implements FederationContext {
 				return ContextualFuture.succeededFuture(false);
 			}
 		};
-	}
-
-	@Override
-	public CwtAuth getWebAuthenticator() {
-		CwtAuthOptions options = new CwtAuthOptions()
-				.setIdentity(new CryptoIdentity())
-				.setClientProvider(new ClientProvider() {
-					@Override
-					public Future<Optional<Principal>> getUser(Id nodeId) {
-						return Future.succeededFuture(Optional.empty());
-					}
-
-					@Override
-					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
-						return Future.succeededFuture(Optional.empty());
-					}
-				});
-
-		return CwtAuth.create(options);
 	}
 }

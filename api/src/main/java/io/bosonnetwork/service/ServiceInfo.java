@@ -32,7 +32,11 @@ import io.bosonnetwork.Id;
  * <p>
  * This interface encapsulates details about where a service is running (host, port),
  * its identity (peer ID, node ID), and identifiers for the service itself.
+ *
+ * @deprecated the first version of federation; use {@link FederatedService}, from
+ *             {@link FederationContext#resolve(io.bosonnetwork.Id)}
  */
+@Deprecated(forRemoval = true)
 public non-sealed interface ServiceInfo extends Principal {
 	/**
 	 * Gets the unique peer identifier associated with the service.

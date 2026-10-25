@@ -181,6 +181,12 @@ public class CwtAuth implements AuthenticationProvider {
 						maxSelfIssuedLifetime + " seconds"));
 		}
 
+		// A signed statement (a federation proposal, a node descriptor, ...) is not an access token, even
+		// when its issuer would be acceptable as a client: it was signed for another purpose.
+		if (cwt.containsClaim(Claim.PURPOSE.getValue()))
+			return Future.failedFuture(new InvalidClaimException(
+					"Invalid authorization token: a signed statement is not an access token"));
+
 		final String scope = cwt.getClaimAsString(Claim.SCOPE.getValue());
 
 		Future<Principal> getClient;
@@ -213,6 +219,8 @@ public class CwtAuth implements AuthenticationProvider {
 		return ContextualFuture.onCaller(getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken())));
 	}
 
+	// The v1 federation principals stay until v1 is removed; FederatedService is one of them meanwhile.
+	@SuppressWarnings("removal")
 	private User createUser(Principal client, @Nullable String scope, SignedCwt cwt, String accessToken) {
 		final Id userId;
 		final Id clientId;

@@ -61,13 +61,17 @@
  *       plus a {@link io.bosonnetwork.service.ClientAuthenticator} for verifying who they are and
  *       a {@link io.bosonnetwork.service.ClientAuthorizer} for deciding what they can do.</li>
  *   <li><strong>Federation side</strong> ({@link io.bosonnetwork.service.FederationContext}) -
- *       lookup/probe of {@link io.bosonnetwork.service.SuperNodeInfo} /
- *       {@link io.bosonnetwork.service.ServiceInfo}, plus a
- *       {@link io.bosonnetwork.service.FederationAuthenticator} for verifying peer node/service
- *       identity.</li>
+ *       {@linkplain io.bosonnetwork.service.FederationContext#resolve resolving} another node's
+ *       service to a verified {@link io.bosonnetwork.service.FederatedService} and its node's
+ *       {@link io.bosonnetwork.service.Admission}, a node's signed
+ *       {@link io.bosonnetwork.service.NodeDescriptor}, admission change events, and a web
+ *       authenticator for requests from other nodes' services. Nodes sign what they say to each other
+ *       as {@link io.bosonnetwork.service.FederationStatement}s.</li>
  * </ul>
- * Both authenticator interfaces share a "nonce/signature contract" (see their interface Javadoc):
- * non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null => caller bug.
+ * {@link io.bosonnetwork.service.ClientAuthenticator} has a "nonce/signature contract" (see its
+ * Javadoc): non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null =>
+ * caller bug. The first version of the federation side, {@code FederationAuthenticator},
+ * {@code SuperNodeInfo} and {@code ServiceInfo}, is deprecated.
  *
  * <h2>Identity and access scopes</h2>
  * Principal entitlements are exposed through {@link io.bosonnetwork.service.Role} (server-derived

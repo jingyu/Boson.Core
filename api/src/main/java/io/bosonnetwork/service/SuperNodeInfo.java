@@ -32,7 +32,11 @@ import io.bosonnetwork.Id;
  * <p>
  * This interface provides access to the properties of a federated node, including its identity,
  * connection details, software information, and metadata such as trust status and reputation.
+ *
+ * @deprecated the first version of federation; use {@link FederationContext#admit(io.bosonnetwork.Id)}
+ *             and {@link NodeDescriptor}
  */
+@Deprecated(forRemoval = true)
 public non-sealed interface SuperNodeInfo extends Principal {
 	/**
 	 * Gets the unique identifier of the federated node.
