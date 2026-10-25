@@ -39,9 +39,14 @@ import io.bosonnetwork.identifier.CardBuilder;
 import io.bosonnetwork.identifier.Credential;
 
 /**
- * Represents a profile for a super node in the Boson network.
- * A super node profile includes information such as name, logo, website, and contact info,
- * as well as the various services it provides (API, Web Gateway, Ion Store, etc.).
+ * Represents a profile for a super node in the Boson network: who runs it, for people - its name, logo,
+ * website and contact - published as the node's card in the DHT.
+ * <p>
+ * The card says nothing about the node's services. A card is a mutable DHT value, limited to 896 bytes,
+ * and a node with all its services needs more; it is also meant to be stable, while services and their
+ * endpoints change with every redeployment. What a node runs is its signed {@link NodeDescriptor}, and
+ * where to reach each service is the service's own peer announcement. The service methods remain only
+ * until the services stop reading them.
  */
 public class SuperNodeProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
@@ -160,7 +165,10 @@ public class SuperNodeProfile {
 	 * @param servicePeerId the peer id of the service
 	 * @return an {@link Optional} with the service, or empty if not found
 	 * @throws NullPointerException if servicePeerId is null
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public Optional<Card.Service> getService(Id servicePeerId) {
 		Objects.requireNonNull(servicePeerId);
 		return card.getService(servicePeerId.toBase58String());
@@ -172,7 +180,10 @@ public class SuperNodeProfile {
 	 * @param type the service type to filter by
 	 * @return a list of services, never null
 	 * @throws NullPointerException if type is null
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getServices(String type) {
 		Objects.requireNonNull(type);
 		return card.getServices(type);
@@ -182,7 +193,10 @@ public class SuperNodeProfile {
 	 * Returns an unmodifiable list of all services associated with this profile.
 	 *
 	 * @return list of services
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getServices() {
 		return card.getServices();
 	}
@@ -191,7 +205,10 @@ public class SuperNodeProfile {
 	 * Returns the API service for this super node.
 	 *
 	 * @return an {@link Optional} with the API service, or empty if not found
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public Optional<Card.Service> getApiService() {
 		// The API service for a super node is identified by the same ID as the node's unique identifier.
 		return card.getService(nodeId.toBase58String());
@@ -201,7 +218,10 @@ public class SuperNodeProfile {
 	 * Returns the list of Web Gateway services provided by this super node.
 	 *
 	 * @return list of web gateway services
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getWebGatewayServices() {
 		return card.getServices(WEB_GATEWAY_SERVICE_TYPE);
 	}
@@ -210,7 +230,10 @@ public class SuperNodeProfile {
 	 * Returns the list of Ion Store services provided by this super node.
 	 *
 	 * @return list of ion store services
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getIonStoreServices() {
 		return card.getServices(ION_STORE_SERVICE_TYPE);
 	}
@@ -219,7 +242,10 @@ public class SuperNodeProfile {
 	 * Returns the list of Photon Messaging services provided by this super node.
 	 *
 	 * @return list of photon messaging services
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getPhotonMessagingServices() {
 		return card.getServices(PHOTON_MESSAGING_SERVICE_TYPE);
 	}
@@ -228,7 +254,10 @@ public class SuperNodeProfile {
 	 * Returns the list of Active Proxy services provided by this super node.
 	 *
 	 * @return list of active proxy services
+	 * @deprecated a super node card carries no services: they belong to the node's {@link NodeDescriptor},
+	 *             and where to reach each is its own peer announcement
 	 */
+	@Deprecated(forRemoval = true)
 	public List<Card.Service> getActiveProxyServices() {
 		return card.getServices(ACTIVE_PROXY_SERVICE_TYPE);
 	}
@@ -351,7 +380,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if the endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder apiService(URI endpoint) {
 			Objects.requireNonNull(endpoint);
 			validateHttpEndpoint(endpoint);
@@ -366,7 +398,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URL
 		 * @return the builder instance
 		 * @throws NullPointerException if the endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder apiService(String endpoint) {
 			Objects.requireNonNull(endpoint);
 			try {
@@ -384,7 +419,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder webGatewayService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
@@ -400,7 +438,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder ionStoreService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
@@ -416,7 +457,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder photonMessagingService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
@@ -432,7 +476,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder activeProxyService(Id peerId, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(endpoint);
@@ -449,7 +496,10 @@ public class SuperNodeProfile {
 		 * @param endpoint the service endpoint URI
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId, type, or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder service(Id peerId, String type, URI endpoint) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(type);
@@ -468,7 +518,10 @@ public class SuperNodeProfile {
 		 * @param properties a map of additional service properties
 		 * @return the builder instance
 		 * @throws NullPointerException if peerId, type, or endpoint is null
+		 * @deprecated a super node card carries no services: they belong to the node's
+		 *             {@link NodeDescriptor}
 		 */
+		@Deprecated(forRemoval = true)
 		public Builder service(Id peerId, String type, URI endpoint, Map<String, Object> properties) {
 			Objects.requireNonNull(peerId);
 			Objects.requireNonNull(type);

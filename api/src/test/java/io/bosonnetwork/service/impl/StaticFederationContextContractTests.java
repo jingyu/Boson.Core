@@ -73,12 +73,12 @@ class StaticFederationContextContractTests extends FederationContextContract {
 	}
 
 	@Override
-	protected void announced(FederatedService service) {
-		context.addService(service);
+	protected void announced(Identity service, Identity node, FederatedService announcement) {
+		context.addService(announcement);
 	}
 
 	@Override
-	protected void described(NodeDescriptor descriptor) {
+	protected void described(Identity node, NodeDescriptor descriptor) {
 		context.putDescriptor(descriptor);
 	}
 }

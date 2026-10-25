@@ -72,11 +72,14 @@ public abstract class FederationContextContract {
 	/** Makes an admitted node refused, for a node reason: {@code SUSPENDED}, {@code BLOCKED}, ... */
 	protected abstract void refused(Id nodeId, Admission.Reason reason);
 
-	/** Announces a service of a node made {@link #admitted(Id) admitted} before. */
-	protected abstract void announced(FederatedService service);
+	/**
+	 * Announces a service of a node made {@link #admitted(Id) admitted} before: the announcement says
+	 * what {@code announcement} says, signed by the service and attested by the node, as a real one is.
+	 */
+	protected abstract void announced(Identity service, Identity node, FederatedService announcement);
 
-	/** Publishes a node's descriptor. */
-	protected abstract void described(NodeDescriptor descriptor);
+	/** Publishes a node's descriptor, signed by the node, where the node publishes it. */
+	protected abstract void described(Identity node, NodeDescriptor descriptor);
 
 	private final Identity remoteNode = new CryptoIdentity();
 	private final Identity remoteService = new CryptoIdentity();
@@ -122,7 +125,7 @@ public abstract class FederationContextContract {
 	@Test
 	void anAnnouncedServiceOfAnAdmittedNodeResolvesAndIsAllowed() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		Resolution r = await(context().resolve(remoteService.getId()));
 		assertTrue(r.allowed(), r.toString());
@@ -138,7 +141,7 @@ public abstract class FederationContextContract {
 	@Test
 	void aServiceOfARefusedNodeResolvesWithTheRefusal() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		for (Admission.Reason reason : List.of(Admission.Reason.SUSPENDED, Admission.Reason.BLOCKED)) {
 			refused(remoteNode.getId(), reason);
@@ -173,7 +176,7 @@ public abstract class FederationContextContract {
 				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
 						"https://remote.example:9000", true, Map.of()))
 				.sign(remoteNode);
-		described(d);
+		described(remoteNode, d);
 
 		NodeDescriptor found = await(context().describe(remoteNode.getId())).orElseThrow();
 		assertEquals(remoteNode.getId(), found.getNodeId());
@@ -213,7 +216,7 @@ public abstract class FederationContextContract {
 	@Test
 	void aTokenFromAnAdmittedServiceAuthenticatesAsThatService() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		User user = authenticate(tokenFrom(remoteService, remoteNode.getId(), localService()));
 		assertEquals(remoteNode.getId().toString(), user.subject());
@@ -228,7 +231,7 @@ public abstract class FederationContextContract {
 	@Test
 	void aTokenForAnotherServiceIsRefused() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		assertRefused(tokenFrom(remoteService, remoteNode.getId(), Id.random()));
 	}
@@ -240,7 +243,7 @@ public abstract class FederationContextContract {
 		Identity otherNode = new CryptoIdentity();
 		admitted(remoteNode.getId());
 		admitted(otherNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		assertRefused(tokenFrom(remoteService, otherNode.getId(), localService()));
 	}
@@ -255,7 +258,7 @@ public abstract class FederationContextContract {
 	@Test
 	void aTokenFromARefusedNodesServiceIsRefused() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 		refused(remoteNode.getId(), Admission.Reason.BLOCKED);
 
 		assertRefused(tokenFrom(remoteService, remoteNode.getId(), localService()));
@@ -264,7 +267,7 @@ public abstract class FederationContextContract {
 	@Test
 	void aSignedStatementIsNotAnAccessToken() throws Exception {
 		admitted(remoteNode.getId());
-		announced(remote());
+		announced(remoteService, remoteNode, remote());
 
 		// Signed by the admitted service itself and addressed to the local one, but a statement.
 		byte[] statement = FederationStatement.builder(remoteService, FederationStatement.Purpose.PROPOSE)
