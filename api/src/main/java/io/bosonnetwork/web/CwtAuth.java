@@ -50,10 +50,9 @@ import io.bosonnetwork.cwt.InvalidClaimException;
 import io.bosonnetwork.cwt.SignedCwt;
 import io.bosonnetwork.service.ClientDevice;
 import io.bosonnetwork.service.ClientUser;
+import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Role;
-import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.vertx.ContextualFuture;
 
 /**
@@ -219,8 +218,6 @@ public class CwtAuth implements AuthenticationProvider {
 		return ContextualFuture.onCaller(getClient.map(client -> createUser(client, scope, cwt, authInfo.getToken())));
 	}
 
-	// The v1 federation principals stay until v1 is removed; FederatedService is one of them meanwhile.
-	@SuppressWarnings("removal")
 	private User createUser(Principal client, @Nullable String scope, SignedCwt cwt, String accessToken) {
 		final Id userId;
 		final Id clientId;
@@ -238,13 +235,9 @@ public class CwtAuth implements AuthenticationProvider {
 			authorizations.add(RoleBasedAuthorization.create(Role.CLIENT.toString()));
 			if (d.isAdmin())
 				authorizations.add(RoleBasedAuthorization.create(Role.ADMIN.toString()));
-		} else if (client instanceof SuperNodeInfo n) {
-			userId = n.getId();
-			clientId = null;
-			authorizations.add(RoleBasedAuthorization.create(Role.FEDERATION.toString()));
-		} else if (client instanceof ServiceInfo s) {
-			userId = s.getNodeId();
-			clientId = s.getPeerId();
+		} else if (client instanceof FederatedService s) {
+			userId = s.nodeId();
+			clientId = s.peerId();
 			authorizations.add(RoleBasedAuthorization.create(Role.FEDERATION.toString()));
 		} else {
 			throw new IllegalStateException("Invalid client type: " + client.getClass().getName());

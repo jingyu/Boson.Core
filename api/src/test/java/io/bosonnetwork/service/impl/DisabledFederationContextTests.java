@@ -14,20 +14,7 @@ import io.bosonnetwork.service.Admission;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.Resolution;
 
-@SuppressWarnings("removal")
 public class DisabledFederationContextTests {
-	@Test
-	public void testNoOpBehavior() throws ExecutionException, InterruptedException {
-		DisabledFederationContext context = new DisabledFederationContext();
-
-		assertFalse(context.existsNode(Id.random()).get());
-		assertTrue(context.getNode(Id.random(), false).get().isEmpty());
-		assertTrue(context.getServices(Id.random(), Id.random()).get().isEmpty());
-		assertTrue(context.getServices(Id.random()).get().isEmpty());
-		assertFalse(context.getAuthenticator().authenticateNode(Id.random()).get());
-		assertFalse(context.getAuthenticator().authenticatePeer(Id.random(), Id.random()).get());
-	}
-
 	@Test
 	public void everythingIsRefusedAsDisabled() throws ExecutionException, InterruptedException {
 		DisabledFederationContext context = new DisabledFederationContext();

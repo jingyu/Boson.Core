@@ -34,24 +34,23 @@ import io.bosonnetwork.service.Principal;
  */
 public interface ClientProvider {
 	/**
-	 * Retrieves the user or federated node by ID.
+	 * Retrieves the user by ID: the subject of a token that names no client.
 	 *
-	 * @param userId the user ID or node ID
+	 * @param userId the user ID
 	 * @return a {@link Future} that completes with the resolved {@link Principal}
-	 *         (a {@link io.bosonnetwork.service.ClientUser ClientUser} or
-	 *         {@link io.bosonnetwork.service.SuperNodeInfo SuperNodeInfo}), or
-	 *         {@link Optional#empty()} if no such principal exists
+	 *         (a {@link io.bosonnetwork.service.ClientUser ClientUser}), or {@link Optional#empty()} if no
+	 *         such principal exists
 	 */
 	Future<Optional<Principal>> getUser(Id userId);
 
 	/**
-	 * Retrieves the client (device or service) by ID.
+	 * Retrieves the client (a device, or another node's service) by ID.
 	 *
 	 * @param userId   the ID of the user or node that owns the client
 	 * @param clientId the client ID (device ID or service peer ID)
 	 * @return a {@link Future} that completes with the resolved {@link Principal}
 	 *         (a {@link io.bosonnetwork.service.ClientDevice ClientDevice} or
-	 *         {@link io.bosonnetwork.service.ServiceInfo ServiceInfo}), or
+	 *         {@link io.bosonnetwork.service.FederatedService FederatedService}), or
 	 *         {@link Optional#empty()} if no such principal exists
 	 */
 	Future<Optional<Principal>> getClient(Id userId, Id clientId);

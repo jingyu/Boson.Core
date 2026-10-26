@@ -70,8 +70,7 @@
  * </ul>
  * {@link io.bosonnetwork.service.ClientAuthenticator} has a "nonce/signature contract" (see its
  * Javadoc): non-null nonce+signature => verify; both null => pre-authenticated mode; exactly one null =>
- * caller bug. The first version of the federation side, {@code FederationAuthenticator},
- * {@code SuperNodeInfo} and {@code ServiceInfo}, is deprecated.
+ * caller bug.
  *
  * <h2>Identity and access scopes</h2>
  * Principal entitlements are exposed through {@link io.bosonnetwork.service.Role} (server-derived
@@ -85,6 +84,7 @@
  * {@link io.bosonnetwork.service.ClientContext#allowAll(io.bosonnetwork.Identity) allowAll},
  * {@link io.bosonnetwork.service.ClientContext#staticContext(io.bosonnetwork.Identity) staticContext},
  * {@link io.bosonnetwork.service.FederationContext#disabled() disabled},
+ * {@link io.bosonnetwork.service.FederationContext#open(io.bosonnetwork.Node, io.bosonnetwork.Id) open},
  * {@link io.bosonnetwork.service.FederationContext#allowAll(io.bosonnetwork.Identity) allowAll},
  * and {@link io.bosonnetwork.service.FederationContext#staticContext(io.bosonnetwork.Identity) staticContext}.
  *

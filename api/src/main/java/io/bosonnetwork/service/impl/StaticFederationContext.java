@@ -46,14 +46,11 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.Admission;
 import io.bosonnetwork.service.FederatedService;
-import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationEvent;
 import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Resolution;
-import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.utils.Variable;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
@@ -69,11 +66,8 @@ import io.bosonnetwork.web.CwtAuthOptions;
  * with {@link Admission.Reason#NO_RELATIONSHIP NO_RELATIONSHIP}, as on a node that federates only by
  * agreement; a peer it doesn't know is {@link Admission.Reason#UNKNOWN_PEER UNKNOWN_PEER}. Nothing it
  * answers may be cached ({@code maxAge} zero), and every change of admission is sent to the listeners.
- * The outcomes services report are kept, for tests to {@linkplain #getReports() read}.
- * <p>
- * It also implements the first version of the interface, over the same registry. Thread-safe.
+ * The outcomes services report are kept, for tests to {@linkplain #getReports() read}. Thread-safe.
  */
-@SuppressWarnings("removal")
 public class StaticFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
 	private final @Nullable Id servicePeerId;
@@ -84,13 +78,13 @@ public class StaticFederationContext implements FederationContext {
 
 	private static final Logger log = LoggerFactory.getLogger(StaticFederationContext.class);
 
-	private record NodeEntry(SuperNodeInfo superNodeInfo, Admission.Reason reason, List<FederatedService> services) {
+	private record NodeEntry(Admission.Reason reason, List<FederatedService> services) {
 		NodeEntry withReason(Admission.Reason r) {
-			return new NodeEntry(superNodeInfo, r, services);
+			return new NodeEntry(r, services);
 		}
 
 		NodeEntry withServices(List<FederatedService> s) {
-			return new NodeEntry(superNodeInfo, reason, List.copyOf(s));
+			return new NodeEntry(reason, List.copyOf(s));
 		}
 	}
 
@@ -131,7 +125,8 @@ public class StaticFederationContext implements FederationContext {
 	// ---- Population ----------------------------------------------------------------------------------
 
 	/**
-	 * Adds a node, {@link Admission.Reason#ACTIVE ACTIVE}.
+	 * Adds a node, {@link Admission.Reason#ACTIVE ACTIVE}. The host, port and API endpoint are checked and
+	 * otherwise unused: where a node's services are reached is their own announcements.
 	 *
 	 * @param nodeId      the node's id
 	 * @param host        the node's host
@@ -148,8 +143,7 @@ public class StaticFederationContext implements FederationContext {
 		Variable<Boolean> added = Variable.of(false);
 		nodes.computeIfAbsent(nodeId, k -> {
 			added.set(true);
-			return new NodeEntry(new PlainSuperNodeInfo(nodeId, List.of(host + ":" + port), apiEndpoint),
-					Admission.Reason.ACTIVE, List.of());
+			return new NodeEntry(Admission.Reason.ACTIVE, List.of());
 		});
 
 		if (added.get())
@@ -194,18 +188,6 @@ public class StaticFederationContext implements FederationContext {
 
 		if (changed.get())
 			fire(nodeId, reason);
-	}
-
-	/**
-	 * Returns a known node.
-	 *
-	 * @param nodeId the node's id
-	 * @return an {@link Optional} with the node, or empty
-	 */
-	public Optional<SuperNodeInfo> getNodeSync(Id nodeId) {
-		Objects.requireNonNull(nodeId);
-		NodeEntry entry = nodes.get(nodeId);
-		return entry == null ? Optional.empty() : Optional.of(entry.superNodeInfo);
 	}
 
 	/**
@@ -307,14 +289,13 @@ public class StaticFederationContext implements FederationContext {
 	 * @param nodeId      the node's id
 	 * @return an {@link Optional} with the service, or empty
 	 */
-	public Optional<ServiceInfo> getServiceSync(Id peerId, long fingerprint, Id nodeId) {
+	public Optional<FederatedService> getServiceSync(Id peerId, long fingerprint, Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		Objects.requireNonNull(peerId);
 
 		NodeEntry entry = nodes.get(nodeId);
 		return entry == null ? Optional.empty() : entry.services.stream()
 				.filter(s -> s.peerId().equals(peerId) && s.fingerprint() == fingerprint)
-				.map(ServiceInfo.class::cast)
 				.findFirst();
 	}
 
@@ -337,7 +318,7 @@ public class StaticFederationContext implements FederationContext {
 	 * @param nodeId the node's id
 	 * @return the services, possibly empty
 	 */
-	public List<ServiceInfo> getServicesSync(Id peerId, Id nodeId) {
+	public List<FederatedService> getServicesSync(Id peerId, Id nodeId) {
 		Objects.requireNonNull(peerId);
 		Objects.requireNonNull(nodeId);
 		NodeEntry entry = nodes.get(nodeId);
@@ -363,7 +344,7 @@ public class StaticFederationContext implements FederationContext {
 	 * @param peerId the service's peer id
 	 * @return the services, possibly empty
 	 */
-	public List<ServiceInfo> getServicesSync(Id peerId) {
+	public List<FederatedService> getServicesSync(Id peerId) {
 		Objects.requireNonNull(peerId);
 		return nodes.values().stream()
 				.flatMap(e -> e.services.stream())
@@ -498,12 +479,10 @@ public class StaticFederationContext implements FederationContext {
 				.setIdentity(nodeIdentity)
 				.setExpectedAudience(servicePeerId)
 				.setClientProvider(new ClientProvider() {
+					// A federation token always names the calling service as its client.
 					@Override
 					public Future<Optional<Principal>> getUser(Id nodeId) {
-						NodeEntry entry = nodes.get(nodeId);
-						if (entry == null || entry.reason.decision() != Admission.Decision.ALLOW)
-							return Future.succeededFuture(Optional.empty());
-						return Future.succeededFuture(Optional.of(entry.superNodeInfo));
+						return Future.succeededFuture(Optional.empty());
 					}
 
 					@Override
@@ -518,57 +497,5 @@ public class StaticFederationContext implements FederationContext {
 				});
 
 		return CwtAuth.create(options);
-	}
-
-	// ---- Version 1 -----------------------------------------------------------------------------------
-
-	@Override
-	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(getNodeSync(nodeId));
-	}
-
-	@Override
-	public CompletableFuture<Boolean> existsNode(Id nodeId) {
-		return ContextualFuture.succeededFuture(existsNodeSync(nodeId));
-	}
-
-	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId) {
-		return ContextualFuture.succeededFuture(getServicesSync(peerId, nodeId));
-	}
-
-	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(getServicesSync(peerId));
-	}
-
-	@Override
-	public CompletableFuture<Void> reportIncident(Id nodeId, Id peerId, IncidentType incident, String details) {
-		return ContextualFuture.succeededFuture();
-	}
-
-	@Override
-	public FederationAuthenticator getAuthenticator() {
-		return new FederationAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature) {
-				if (!existsNodeSync(nodeId))
-					return ContextualFuture.succeededFuture(false);
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature) {
-				if (!existsServiceSync(peerId, nodeId))
-					return ContextualFuture.succeededFuture(false);
-
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-		};
 	}
 }

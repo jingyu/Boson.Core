@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.bosonnetwork.AnnounceResult;
@@ -47,8 +48,10 @@ import io.bosonnetwork.crypto.CryptoIdentity;
  * gateway or a super node keeps a publication persistently) and what the rest of the network has
  * ({@link #network}, where another publisher of the same owner may have stored a newer version).
  */
-class InMemoryNode implements Node {
+public class InMemoryNode implements Node {
 	private final Identity identity = new CryptoIdentity();
+	// Announcements, by peer id: what a lookup of a peer finds.
+	final Map<Id, List<PeerInfo>> peers = new ConcurrentHashMap<>();
 	final Map<Id, Value> kept = new ConcurrentHashMap<>();
 	final Map<Id, Value> network = new ConcurrentHashMap<>();
 	/** When set, lookups in the network fail, as with no connection. */
@@ -186,7 +189,16 @@ class InMemoryNode implements Node {
 
 	@Override
 	public CompletableFuture<List<PeerInfo>> findPeer(Id id, int expectedSequenceNumber, int expectedCount, LookupOption option) {
-		return CompletableFuture.completedFuture(List.of());
+		return CompletableFuture.completedFuture(List.copyOf(peers.getOrDefault(id, List.of())));
+	}
+
+	/**
+	 * Adds an announcement of a peer, beside any it already has.
+	 *
+	 * @param peer the announcement
+	 */
+	public void addPeer(PeerInfo peer) {
+		peers.computeIfAbsent(peer.getId(), k -> new CopyOnWriteArrayList<>()).add(peer);
 	}
 
 	@Override

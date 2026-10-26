@@ -22,7 +22,6 @@
 
 package io.bosonnetwork.service;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -31,8 +30,10 @@ import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.Node;
 import io.bosonnetwork.service.impl.AllowAllFederationContext;
 import io.bosonnetwork.service.impl.DisabledFederationContext;
+import io.bosonnetwork.service.impl.OpenFederationContext;
 import io.bosonnetwork.service.impl.StaticFederationContext;
 import io.bosonnetwork.web.CwtAuth;
 
@@ -63,11 +64,6 @@ import io.bosonnetwork.web.CwtAuth;
  * The context holds no service key and signs nothing. {@link FederatedService#trustManager()} and
  * {@link FederatedService#accessTokens(Identity, Id)} give a service what it needs to call another
  * one with its own identity.
- *
- * <h2>Version 1</h2>
- * The methods that return {@link SuperNodeInfo} and {@link ServiceInfo}, {@link #reportIncident} and
- * {@link #getAuthenticator()} are the first version of this interface. They are deprecated and will be
- * removed once every service has moved to the methods above.
  */
 public interface FederationContext {
 	/**
@@ -167,124 +163,6 @@ public interface FederationContext {
 	 */
 	CwtAuth getWebAuthenticator();
 
-	// ---- Version 1 ------------------------------------------------------------------------------------
-
-	/**
-	 * Represents the type of incident that can occur within the federation.
-	 *
-	 * @deprecated use {@link Outcome} with {@link #report(Id, Id, Outcome, String)}
-	 */
-	@Deprecated(forRemoval = true)
-	enum IncidentType {
-		/** Indicates a complete failure or unavailability of a service. */
-		SERVICE_OUTAGE,
-		/** Indicates a service encountering an operation failure or error. */
-		SERVICE_ERROR,
-		/** Indicates a poorly formed or invalid request received. */
-		MALFORMED_REQUEST,
-		/** Indicates an invalid or improperly constructed response sent. */
-		MALFORMED_RESPONSE
-	}
-
-	/**
-	 * Retrieves a federated node by its ID.
-	 *
-	 * @param nodeId                 the unique identifier of the node to retrieve
-	 * @param tryFederateIfNotExists if {@code true}, attempts to add the node to the federation if it is not already known
-	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} if found, or
-	 *         {@link Optional#empty()} if the node cannot be found or federated
-	 * @deprecated use {@link #admit(Id)} and {@link #describe(Id)}
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists);
-
-	/**
-	 * Retrieves a federated node by its ID, without trying to federate.
-	 *
-	 * @param nodeId the unique identifier of the node to retrieve
-	 * @return a {@link CompletableFuture} that completes with the {@link SuperNodeInfo} if found, or
-	 *         {@link Optional#empty()} if the node is not part of the federation
-	 * @deprecated use {@link #admit(Id)} and {@link #describe(Id)}
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	default CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId) {
-		return getNode(nodeId, false);
-	}
-
-	/**
-	 * Checks if a node with the specified ID exists in the federation.
-	 *
-	 * @param nodeId the unique identifier of the node to check
-	 * @return a {@link CompletableFuture} that completes with {@code true} if the node exists
-	 * @deprecated use {@link #admit(Id)}
-	 */
-	@Deprecated(forRemoval = true)
-	CompletableFuture<Boolean> existsNode(Id nodeId);
-
-	/**
-	 * Retrieves the services hosted by a specific federated node for the given peer.
-	 *
-	 * @param peerId the unique identifier of the service peer
-	 * @param nodeId the unique identifier of the federated node hosting the service
-	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo}
-	 * @deprecated use {@link #resolve(Id)}
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId);
-
-	/**
-	 * Retrieves the services associated with a peer, trying to federate with its node if asked.
-	 *
-	 * @param peerId                 the unique identifier of the peer whose services are to be queried
-	 * @param tryFederateIfNotExists whether to attempt federating with the node hosting the peer
-	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo}
-	 * @deprecated use {@link #resolve(Id)}, which never starts a handshake
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists);
-
-	/**
-	 * Retrieves the services associated with a peer, without trying to federate.
-	 *
-	 * @param peerId the unique identifier of the peer whose services are to be queried
-	 * @return a {@link CompletableFuture} that completes with the list of {@link ServiceInfo}
-	 * @deprecated use {@link #resolve(Id)}
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	default CompletableFuture<List<ServiceInfo>> getServices(Id peerId) {
-		return getServices(peerId, false);
-	}
-
-	/**
-	 * Reports an incident associated with a specific federated node and peer.
-	 *
-	 * @param nodeId   the unique identifier of the federated node where the incident occurred
-	 * @param peerId   the unique identifier of the peer involved in the incident
-	 * @param incident the type of incident being reported
-	 * @param details  a detailed description of the incident
-	 * @return a {@link CompletableFuture} that completes when the incident has been reported
-	 * @deprecated use {@link #report(Id, Id, Outcome, String)}
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	CompletableFuture<Void> reportIncident(Id nodeId, Id peerId, IncidentType incident, String details);
-
-	/**
-	 * Retrieves the {@link FederationAuthenticator} of this federation.
-	 *
-	 * @return the authenticator
-	 * @deprecated use {@link #getWebAuthenticator()} for requests, and {@link #resolve(Id)} or
-	 *             {@link #admit(Id)} for admission
-	 */
-	@Deprecated(forRemoval = true)
-	@SuppressWarnings("removal")
-	FederationAuthenticator getAuthenticator();
-
 	// ---- In-memory contexts ---------------------------------------------------------------------------
 
 	/**
@@ -310,6 +188,20 @@ public interface FederationContext {
 	 */
 	static FederationContext allowAll(Identity nodeIdentity) {
 		return new AllowAllFederationContext(nodeIdentity);
+	}
+
+	/**
+	 * Returns a context that federates openly through a node's DHT, with no host to decide: a peer
+	 * resolves to the service its attested announcements show, and every node is admitted with
+	 * {@link Admission.Reason#OPEN OPEN}. For tests, development, and services run without a Director.
+	 *
+	 * @param node          the local node, whose DHT is searched
+	 * @param servicePeerId the peer id of the service the context is for: the audience its web
+	 *                      authenticator expects, or {@code null} to accept tokens for any audience
+	 * @return an open {@link FederationContext}
+	 */
+	static FederationContext open(Node node, @Nullable Id servicePeerId) {
+		return new OpenFederationContext(node, servicePeerId);
 	}
 
 	/**

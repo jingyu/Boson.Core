@@ -25,12 +25,11 @@ package io.bosonnetwork.service;
 /**
  * A resolved principal returned by a {@link io.bosonnetwork.web.ClientProvider} lookup.
  * <p>
- * A principal is one of the four authenticatable entities Boson super-node services deal with: an
+ * A principal is one of the three authenticatable entities Boson super-node services deal with: an
  * end user ({@link ClientUser}) or one of its devices ({@link ClientDevice}) on the client side, and
- * a federated super node ({@link SuperNodeInfo}) or one of the services it hosts ({@link ServiceInfo})
- * on the federation side. This sealed type lets callers dispatch on the concrete kind exhaustively
- * (for example with a {@code switch} over the permitted subtypes) instead of testing an untyped
- * {@code Object}.
+ * another node's service ({@link FederatedService}) on the federation side. This sealed type lets
+ * callers dispatch on the concrete kind exhaustively (for example with a {@code switch} over the
+ * permitted subtypes) instead of testing an untyped {@code Object}.
  */
-public sealed interface Principal permits ClientUser, ClientDevice, SuperNodeInfo, ServiceInfo {
+public sealed interface Principal permits ClientUser, ClientDevice, FederatedService {
 }

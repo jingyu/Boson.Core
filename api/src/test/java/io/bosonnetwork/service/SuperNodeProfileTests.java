@@ -1,15 +1,14 @@
 package io.bosonnetwork.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-
-import java.net.URI;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
+import io.bosonnetwork.Value;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.identifier.Card;
 import io.bosonnetwork.identifier.DIDDocument;
@@ -19,27 +18,12 @@ public class SuperNodeProfileTests {
 	@Test
 	void testBuilderAndFromCard() throws Exception {
 		Identity identity = new CryptoIdentity();
-		URI apiEndpoint = new URI("https://api.bosonnetwork.io");
-		URI webGatewayEndpoint = new URI("https://gateway.bosonnetwork.io");
-		URI ionStoreEndpoint = new URI("https://store.bosonnetwork.io");
-		URI photonMessagingEndpoint = new URI("mqtts://messaging.bosonnetwork.io");
-		URI activeProxyEndpoint = new URI("tcp://proxy.bosonnetwork.io");
-
-		Id webGatewayPeer = Id.random();
-		Id ionStorePeer = Id.random();
-		Id photonMessagingPeer = Id.random();
-		Id activeProxyPeer = Id.random();
 
 		SuperNodeProfile profile = SuperNodeProfile.builder(identity)
 				.name("SuperNode 1")
 				.logo("https://bosonnetwork.io/logo.png")
 				.website("https://bosonnetwork.io")
 				.contact("contact@bosonnetwork.io")
-				.apiService(apiEndpoint)
-				.webGatewayService(webGatewayPeer, webGatewayEndpoint)
-				.ionStoreService(ionStorePeer, ionStoreEndpoint)
-				.photonMessagingService(photonMessagingPeer, photonMessagingEndpoint)
-				.activeProxyService(activeProxyPeer, activeProxyEndpoint)
 				.build();
 
 		assertNotNull(profile);
@@ -49,25 +33,10 @@ public class SuperNodeProfileTests {
 		assertEquals("https://bosonnetwork.io", profile.getWebsite().orElseThrow());
 		assertEquals("contact@bosonnetwork.io", profile.getContact().orElseThrow());
 
-		// Verify services
-		assertNotNull(profile.getApiService());
-		assertEquals(apiEndpoint.toString(), profile.getApiService().orElseThrow().getEndpoint());
-
-		assertEquals(1, profile.getWebGatewayServices().size());
-		assertEquals(webGatewayEndpoint.toString(), profile.getWebGatewayServices().get(0).getEndpoint());
-
-		assertEquals(1, profile.getIonStoreServices().size());
-		assertEquals(ionStoreEndpoint.toString(), profile.getIonStoreServices().get(0).getEndpoint());
-
-		assertEquals(1, profile.getPhotonMessagingServices().size());
-		assertEquals(photonMessagingEndpoint.toString(), profile.getPhotonMessagingServices().get(0).getEndpoint());
-
-		assertEquals(1, profile.getActiveProxyServices().size());
-		assertEquals(activeProxyEndpoint.toString(), profile.getActiveProxyServices().get(0).getEndpoint());
-
-		// Test fromCard
+		// The card carries the profile and nothing about services.
 		Card card = profile.getCard();
 		assertNotNull(card);
+		assertTrue(card.getServices().isEmpty());
 		System.out.println(Json.toPrettyString(card));
 		System.out.println("\n================\n");
 		System.out.println(Json.toPrettyString(DIDDocument.fromCard(card)));
@@ -80,12 +49,22 @@ public class SuperNodeProfileTests {
 		assertEquals(profile.getLogo(), profile2.getLogo());
 		assertEquals(profile.getWebsite(), profile2.getWebsite());
 		assertEquals(profile.getContact(), profile2.getContact());
-		assertEquals(profile.getApiService(), profile2.getApiService());
-		assertEquals(profile.getWebGatewayServices(), profile2.getWebGatewayServices());
-		assertEquals(profile.getIonStoreServices(), profile2.getIonStoreServices());
-		assertEquals(profile.getPhotonMessagingServices(), profile2.getPhotonMessagingServices());
-		assertEquals(profile.getActiveProxyServices(), profile2.getActiveProxyServices());
+	}
 
-		assertFalse(profile2.getService(Id.random()).isPresent());
+	@Test
+	void aProfileFitsInAMutableValue() {
+		SuperNodeProfile profile = SuperNodeProfile.builder(new CryptoIdentity())
+				.name("A node with a long display name, to be safe about the size")
+				.logo("https://a-rather-long-host-name.example.com/images/the-logo-of-the-node.png")
+				.website("https://a-rather-long-host-name.example.com/about/the-node")
+				.contact("the-administrator-of-the-node@a-rather-long-host-name.example.com")
+				.build();
+		assertTrue(profile.getCard().toBytes().length <= Value.MAX_MUTABLE_DATA_BYTES,
+				"card of " + profile.getCard().toBytes().length + " bytes");
+	}
+
+	@Test
+	void aNameIsRequired() {
+		assertThrows(IllegalStateException.class, () -> SuperNodeProfile.builder(new CryptoIdentity()).build());
 	}
 }

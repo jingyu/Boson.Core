@@ -24,7 +24,6 @@
 package io.bosonnetwork.service.impl;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,14 +37,11 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.Admission;
 import io.bosonnetwork.service.FederatedService;
-import io.bosonnetwork.service.FederationAuthenticator;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationEvent;
 import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Resolution;
-import io.bosonnetwork.service.ServiceInfo;
-import io.bosonnetwork.service.SuperNodeInfo;
 import io.bosonnetwork.vertx.ContextualFuture;
 import io.bosonnetwork.web.ClientProvider;
 import io.bosonnetwork.web.CwtAuth;
@@ -61,7 +57,6 @@ import io.bosonnetwork.web.CwtAuthOptions;
  * token, and its principal is a service of the token's subject. No descriptor is found, reports are
  * dropped, and no admission ever changes.
  */
-@SuppressWarnings("removal")
 public class AllowAllFederationContext implements FederationContext {
 	/** The endpoint of every synthesized service: a placeholder, not an address. */
 	public static final String PLACEHOLDER_ENDPOINT = "boson://localhost:65532";
@@ -77,10 +72,6 @@ public class AllowAllFederationContext implements FederationContext {
 	 */
 	public AllowAllFederationContext(Identity nodeIdentity) {
 		this.nodeIdentity = nodeIdentity;
-	}
-
-	private static SuperNodeInfo node(Id nodeId) {
-		return new PlainSuperNodeInfo(nodeId, "localhost", 65535);
 	}
 
 	private static FederatedService service(Id peerId, Id nodeId) {
@@ -126,9 +117,10 @@ public class AllowAllFederationContext implements FederationContext {
 		CwtAuthOptions options = new CwtAuthOptions()
 				.setIdentity(nodeIdentity)
 				.setClientProvider(new ClientProvider() {
+					// A federation token always names the calling service as its client.
 					@Override
 					public Future<Optional<Principal>> getUser(Id nodeId) {
-						return Future.succeededFuture(Optional.of(node(nodeId)));
+						return Future.succeededFuture(Optional.empty());
 					}
 
 					@Override
@@ -138,51 +130,5 @@ public class AllowAllFederationContext implements FederationContext {
 				});
 
 		return CwtAuth.create(options);
-	}
-
-	// ---- Version 1 -----------------------------------------------------------------------------------
-
-	@Override
-	public CompletableFuture<Optional<SuperNodeInfo>> getNode(Id nodeId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(Optional.of(node(nodeId)));
-	}
-
-	@Override
-	public CompletableFuture<Boolean> existsNode(Id nodeId) {
-		return ContextualFuture.succeededFuture(true);
-	}
-
-	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, Id nodeId) {
-		return ContextualFuture.succeededFuture(List.of(service(peerId, nodeId)));
-	}
-
-	@Override
-	public CompletableFuture<List<ServiceInfo>> getServices(Id peerId, boolean tryFederateIfNotExists) {
-		return ContextualFuture.succeededFuture(List.of());
-	}
-
-	@Override
-	public CompletableFuture<Void> reportIncident(Id nodeId, Id peerId, IncidentType incident, String details) {
-		return ContextualFuture.succeededFuture();
-	}
-
-	@Override
-	public FederationAuthenticator getAuthenticator() {
-		return new FederationAuthenticator() {
-			@Override
-			public CompletableFuture<Boolean> authenticateNode(Id nodeId, byte @Nullable [] nonce, byte @Nullable [] signature) {
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && nodeId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-
-			@Override
-			public CompletableFuture<Boolean> authenticatePeer(Id nodeId, Id peerId, byte @Nullable [] nonce, byte @Nullable [] signature) {
-				boolean valid = (nonce == null && signature == null) ||
-						(nonce != null && signature != null && peerId.toSignatureKey().verify(nonce, signature));
-				return ContextualFuture.succeededFuture(valid);
-			}
-		};
 	}
 }

@@ -23,6 +23,7 @@
 
 package io.bosonnetwork.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -57,12 +58,9 @@ import io.bosonnetwork.web.client.SelfIssuedAccessTokens;
  * @param fingerprint    the fingerprint of the announcement
  * @param sequenceNumber the sequence number of the announcement
  */
-// It implements the v1 ServiceInfo only so that services written against v1 keep working with the
-// contexts that already answer with it; that goes when v1 does.
-@SuppressWarnings("removal")
 public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceType, @Nullable String serviceName,
 							   String endpoint, Map<String, Object> extra, long fingerprint, int sequenceNumber)
-		implements ServiceInfo {
+		implements Principal {
 	/**
 	 * Creates a service.
 	 *
@@ -112,6 +110,36 @@ public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceTyp
 	}
 
 	/**
+	 * Returns the service that one peer's announcements show: only announcements that carry a node's
+	 * attestation count, and the newest of them wins. If they name different nodes, none is believed.
+	 *
+	 * @param announcements the peer's announcements, as a DHT lookup returns them
+	 * @return the service, or empty if no announcement is attested or they disagree on the node; tell
+	 *         {@link Admission.Reason#UNKNOWN_PEER UNKNOWN_PEER} (no announcements) from
+	 *         {@link Admission.Reason#UNVERIFIED_PEER UNVERIFIED_PEER} by whether there were any
+	 */
+	public static Optional<FederatedService> fromAnnouncements(List<PeerInfo> announcements) {
+		Objects.requireNonNull(announcements, "announcements");
+
+		PeerInfo newest = null;
+		Id nodeId = null;
+		for (PeerInfo p : announcements) {
+			if (!p.isAuthenticated() || !p.isValid())
+				continue;
+
+			if (nodeId == null)
+				nodeId = p.getNodeId();
+			else if (!nodeId.equals(p.getNodeId()))
+				return Optional.empty();
+
+			if (newest == null || p.getSequenceNumber() > newest.getSequenceNumber())
+				newest = p;
+		}
+
+		return newest == null ? Optional.empty() : Optional.of(of(newest, null, null));
+	}
+
+	/**
 	 * Returns a trust manager that accepts this service's TLS certificate: a self-signed one only if it is
 	 * bound to the service's peer id, any other as the platform verifies it.
 	 *
@@ -136,57 +164,5 @@ public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceTyp
 				.clientId(localService.getId())
 				.scope(AccessScope.FEDERATION)
 				.audience(peerId);
-	}
-
-	// The v1 ServiceInfo view.
-
-	@Override
-	public Id getPeerId() {
-		return peerId;
-	}
-
-	@Override
-	public long getFingerprint() {
-		return fingerprint;
-	}
-
-	@Override
-	public Id getNodeId() {
-		return nodeId;
-	}
-
-	@Override
-	public String getEndpoint() {
-		return endpoint;
-	}
-
-	@Override
-	public boolean hasExtra() {
-		return !extra.isEmpty();
-	}
-
-	@Override
-	public Optional<byte[]> getExtraData() {
-		return extra.isEmpty() ? Optional.empty() : Optional.of(Json.toBytes(extra));
-	}
-
-	@Override
-	public Map<String, Object> getExtra() {
-		return extra;
-	}
-
-	@Override
-	public String getServiceType() {
-		return serviceType != null ? serviceType : "";
-	}
-
-	@Override
-	public String getServiceName() {
-		return serviceName != null ? serviceName : "";
-	}
-
-	@Override
-	public boolean isFederationEnabled() {
-		return true;
 	}
 }
