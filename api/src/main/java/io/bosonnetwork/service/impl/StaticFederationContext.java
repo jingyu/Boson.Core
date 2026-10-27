@@ -38,6 +38,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import io.vertx.core.Future;
+import io.vertx.ext.web.handler.HttpException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -487,11 +488,14 @@ public class StaticFederationContext implements FederationContext {
 
 					@Override
 					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
-						// The calling service must be the token subject's, and its node admitted.
+						// The calling service must be the token subject's, and its node admitted: refused, as a
+						// host refuses it, with 403.
 						Resolution r = resolveSync(peerId);
 						FederatedService service = r.service();
-						if (service == null || !service.nodeId().equals(nodeId) || !r.allowed())
+						if (service == null || !service.nodeId().equals(nodeId))
 							return Future.succeededFuture(Optional.empty());
+						if (!r.allowed())
+							return Future.failedFuture(new HttpException(403, "Not admitted: " + r.admission().reason()));
 						return Future.succeededFuture(Optional.of(service));
 					}
 				});

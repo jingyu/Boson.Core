@@ -116,6 +116,22 @@ public interface FederationContext {
 	CompletableFuture<Resolution> resolve(Id peerId);
 
 	/**
+	 * Finds a peer, verified as {@link #resolve(Id)} verifies it, and tells only this node's own admission
+	 * of its node: nothing about whether the other node takes this one's traffic, and nothing looked into
+	 * or proposed in the background. For a service whose requests to other nodes ask nothing of them, such
+	 * as fetching content anyone may fetch, which decides for itself what of the admission applies.
+	 * <p>
+	 * A context with nothing to start in the background answers as {@link #resolve(Id)} does.
+	 *
+	 * @param peerId the peer to find
+	 * @return a {@link CompletableFuture} that completes with the resolution; it completes exceptionally
+	 *         only on an unexpected error
+	 */
+	default CompletableFuture<Resolution> find(Id peerId) {
+		return resolve(peerId);
+	}
+
+	/**
 	 * Resolves a node's service of a type, for a caller that knows the node but not the service's peer
 	 * id: the peer id from the node's {@linkplain #describe(Id) descriptor}, then the peer
 	 * {@linkplain #resolve(Id) resolved} as any other, so that its own attested announcement still decides
