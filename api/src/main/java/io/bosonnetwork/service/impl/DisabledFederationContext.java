@@ -62,6 +62,13 @@ public class DisabledFederationContext implements FederationContext {
 	}
 
 	@Override
+	public CompletableFuture<Resolution> resolve(Id nodeId, String serviceType) {
+		Objects.requireNonNull(nodeId);
+		Objects.requireNonNull(serviceType);
+		return ContextualFuture.succeededFuture(new Resolution(null, DISABLED));
+	}
+
+	@Override
 	public CompletableFuture<Admission> admit(Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		return ContextualFuture.succeededFuture(DISABLED);

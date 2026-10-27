@@ -22,6 +22,7 @@
 
 package io.bosonnetwork.service;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -50,7 +51,7 @@ import io.bosonnetwork.web.CwtAuth;
  *       carry its node's attestation, and the admission of that node. Nearly all traffic needs only this:
  *       a caller always knows the peer it is about to talk to.</li>
  *   <li><b>By node</b> - {@link #describe(Id)}: the node's signed {@link NodeDescriptor}, which lists
- *       every service it runs.</li>
+ *       every service it runs; {@link #resolve(Id, String)} resolves one of them.</li>
  * </ul>
  * A refusal always comes with its reason ({@link Admission.Reason}), so a service never has to drop
  * traffic without being able to say why.
@@ -99,17 +100,62 @@ public interface FederationContext {
 	}
 
 	/**
-	 * Resolves a peer: finds its announcement, verifies that it carries its node's attestation, and tells
-	 * whether that node is admitted for this service.
+	 * Resolves a peer this service is about to reach: finds its announcement, verifies that it carries its
+	 * node's attestation, and tells whether traffic to it may go - whether its node is admitted here, and
+	 * whether it can be expected to accept this node's traffic.
 	 * <p>
-	 * It never starts a federation handshake and never waits on another node; what it can't establish
-	 * from what is known it reports as a reason.
+	 * It never waits on another node; what it can't establish from what is known it reports as a reason.
+	 * A host may look into the other node, or propose a relationship to it, in the background: it then
+	 * answers {@link Admission.Reason#PENDING PENDING}, and tells the outcome through
+	 * {@link #onChange(Consumer)}.
 	 *
 	 * @param peerId the peer to resolve
 	 * @return a {@link CompletableFuture} that completes with the resolution; it completes exceptionally
 	 *         only on an unexpected error
 	 */
 	CompletableFuture<Resolution> resolve(Id peerId);
+
+	/**
+	 * Resolves a node's service of a type, for a caller that knows the node but not the service's peer
+	 * id: the peer id from the node's {@linkplain #describe(Id) descriptor}, then the peer
+	 * {@linkplain #resolve(Id) resolved} as any other, so that its own attested announcement still decides
+	 * where it is and whose it is.
+	 * <p>
+	 * Unlike {@link #resolve(Id)}, it may wait on the other node, for its descriptor.
+	 *
+	 * @param nodeId      the node
+	 * @param serviceType the service type id ({@code io.bosonnetwork.photonmessaging}, ...)
+	 * @return a {@link CompletableFuture} that completes with the resolution:
+	 *         {@link Admission.Reason#UNKNOWN_PEER UNKNOWN_PEER} if the node or its descriptor can't be
+	 *         found, or the descriptor lists no such service;
+	 *         {@link Admission.Reason#NOT_FEDERATING NOT_FEDERATING} if the node doesn't federate it; it
+	 *         completes exceptionally only on an unexpected error
+	 */
+	default CompletableFuture<Resolution> resolve(Id nodeId, String serviceType) {
+		return describe(nodeId).thenCompose(descriptor -> {
+			NodeDescriptor.Service listed = null;
+			if (descriptor.isPresent()) {
+				for (NodeDescriptor.Service s : descriptor.get().getServices(serviceType)) {
+					if (listed == null || (s.federation() && !listed.federation()))
+						listed = s;
+				}
+			}
+			if (listed == null)
+				return CompletableFuture.completedFuture(new Resolution(null,
+						new Admission(Admission.Reason.UNKNOWN_PEER, Duration.ofMinutes(1))));
+
+			boolean federated = listed.federation();
+			return resolve(listed.peerId()).thenApply(r -> {
+				FederatedService service = r.service();
+				// The descriptor named a peer that belongs to another node: no service of this one.
+				if (service != null && !service.nodeId().equals(nodeId))
+					return new Resolution(null, new Admission(Admission.Reason.UNVERIFIED_PEER, Duration.ofMinutes(1)));
+				if (service != null && !federated && r.admission().decision() != Admission.Decision.DENY)
+					return new Resolution(service, new Admission(Admission.Reason.NOT_FEDERATING, r.admission().maxAge()));
+				return r;
+			});
+		});
+	}
 
 	/**
 	 * Tells whether a node is admitted for this service.
@@ -155,7 +201,10 @@ public interface FederationContext {
 	 * <p>
 	 * It accepts a self-issued token whose issuer is the calling service, whose client id is the calling
 	 * service's peer id, whose subject is that service's node, and whose audience is this service; the
-	 * calling service must {@linkplain #resolve(Id) resolve} to that node, and the node must be admitted.
+	 * calling service's announcement must be attested by that node, and the node must be admitted. A host
+	 * may also verify a node it doesn't know before admitting it, and answer {@code 503} with
+	 * {@code Retry-After} while it can't. A token that doesn't verify fails with {@code 401}; a node not
+	 * admitted, with {@code 403}.
 	 * The authenticated user's principal is the calling {@link FederatedService}, with the
 	 * {@link Role#FEDERATION federation} role.
 	 *

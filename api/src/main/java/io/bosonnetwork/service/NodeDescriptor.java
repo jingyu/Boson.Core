@@ -358,7 +358,13 @@ public final class NodeDescriptor {
 	 */
 	public List<Service> getServices(String type) {
 		Objects.requireNonNull(type, "type");
-		return services.stream().filter(s -> s.type().equals(type)).toList();
+		// Not Stream.toList(): core/api runs on Android API 33, which lacks it.
+		List<Service> matching = new ArrayList<>();
+		for (Service s : services) {
+			if (s.type().equals(type))
+				matching.add(s);
+		}
+		return List.copyOf(matching);
 	}
 
 	/**
@@ -565,7 +571,10 @@ public final class NodeDescriptor {
 				content.put("protocols", List.copyOf(protocols));
 			if (!capabilities.isEmpty())
 				content.put("capabilities", List.copyOf(capabilities));
-			content.put("services", services.stream().map(Service::toContent).toList());
+			List<Map<String, Object>> listed = new ArrayList<>(services.size());
+			for (Service s : services)
+				listed.add(s.toContent());
+			content.put("services", listed);
 
 			byte[] encoded = FederationStatement.builder(node, FederationStatement.Purpose.NODE_DESCRIPTOR)
 					.lifetime(lifetime)

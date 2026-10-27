@@ -104,9 +104,18 @@ public class CwtAuthHandler extends HTTPAuthorizationHandler<CwtAuth> implements
 			final SecurityAudit audit = ((RoutingContextInternal) context).securityAudit();
 			audit.credentials(credentials);
 
+			// A provider that says how to answer - 403 for a caller it knows and refuses, 503 for one it
+			// can't decide about yet - is answered so; anything else is a token that doesn't verify.
 			return authProvider.authenticate(credentials)
 					.andThen(op -> audit.audit(Marker.AUTHENTICATION, op.succeeded()))
-					.recover(err -> Future.failedFuture(new HttpException(401, "Unauthorized", err)));
+					.recover(err -> {
+						if (err instanceof RetryLaterException retry) {
+							context.response().putHeader("Retry-After", Long.toString(retry.retryAfterSeconds()));
+							return Future.failedFuture(new HttpException(503, retry.getMessage(), retry));
+						}
+						return Future.failedFuture(err instanceof HttpException ? err :
+								new HttpException(401, "Unauthorized", err));
+					});
 		});
 	}
 

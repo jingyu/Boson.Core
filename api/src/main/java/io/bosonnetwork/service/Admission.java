@@ -27,7 +27,9 @@ import java.time.Duration;
 import java.util.Objects;
 
 /**
- * Whether this node accepts traffic from another node for the service asking, and why.
+ * Whether this node accepts traffic from another node for the service asking, and why. For a peer this
+ * node is about to reach ({@link FederationContext#resolve(io.bosonnetwork.Id)}), it also says whether the
+ * other node can be expected to accept this one's.
  * <p>
  * The decision follows from the reason, so the two can't disagree. An admission may be relied on for
  * {@link #maxAge()}; after that, or as soon as a {@link FederationEvent} says the node's admission has
@@ -57,12 +59,23 @@ public record Admission(Reason reason, Duration maxAge) {
 		OPEN(Decision.ALLOW),
 		/** The two nodes have an active relationship. */
 		ACTIVE(Decision.ALLOW),
-		/** A relationship has been proposed and not yet answered. */
+		/**
+		 * Not yet: a relationship has been proposed and not yet answered, or the other node is still being
+		 * looked into.
+		 */
 		PENDING(Decision.PENDING),
-		/** This node federates only by agreement or by list, and has no relationship with the other one. */
+		/**
+		 * The two nodes have no relationship, and need one: this node federates only by agreement or by
+		 * list, or the other node federates by agreement and no proposal could be made.
+		 */
 		NO_RELATIONSHIP(Decision.DENY),
 		/** A proposal between the two nodes was declined. */
 		DECLINED(Decision.DENY),
+		/**
+		 * The other node doesn't federate with this one: its federation is turned off, its descriptor
+		 * doesn't verify, or it doesn't federate the service.
+		 */
+		NOT_FEDERATING(Decision.DENY),
 		/** The relationship has been suspended, by either side. */
 		SUSPENDED(Decision.DENY),
 		/** This node's operator has blocked the other one. */

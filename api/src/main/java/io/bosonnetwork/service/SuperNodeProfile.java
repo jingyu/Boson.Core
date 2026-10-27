@@ -48,7 +48,6 @@ public class SuperNodeProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
 	private static final String DEFAULT_PROFILE_CREDENTIAL_TYPE = "SuperNodeProfile";
 
-
 	private final Id nodeId;
 	private final @Nullable String name;
 	private final @Nullable String logo;
@@ -259,6 +258,5 @@ public class SuperNodeProfile {
 
 			return new SuperNodeProfile(identity.getId(), name, logo, website, contact, card);
 		}
-
 	}
 }

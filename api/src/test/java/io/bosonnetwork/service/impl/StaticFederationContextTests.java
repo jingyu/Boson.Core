@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -18,6 +19,8 @@ import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.service.Admission;
 import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationContext;
+import io.bosonnetwork.service.FederationMode;
+import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Resolution;
 
 // How the static context is populated; what it answers is the contract's (StaticFederationContextContractTests).
@@ -117,5 +120,33 @@ public class StaticFederationContextTests {
 		context.report(nodeId, peerId, FederationContext.Outcome.TIMEOUT, "slow");
 		assertEquals(List.of(new StaticFederationContext.Report(nodeId, peerId, FederationContext.Outcome.TIMEOUT, "slow")),
 				context.getReports());
+	}
+
+	@Test
+	public void aNodesServiceResolvesByItsType() throws ExecutionException, InterruptedException {
+		CryptoIdentity node = new CryptoIdentity();
+		Id open = Id.random();
+		Id closed = Id.random();
+		context.addNode(node.getId(), "localhost", 8080);
+		context.addService(node.getId(), open, 1L, "https://svc/open");
+		context.addService(node.getId(), closed, 2L, "https://svc/closed");
+		context.putDescriptor(NodeDescriptor.builder()
+				.software("Boson Director", "test")
+				.mode(FederationMode.OPEN)
+				.service(new NodeDescriptor.Service("io.test.open", null, open, "https://svc/open", true, Map.of()))
+				.service(new NodeDescriptor.Service("io.test.closed", null, closed, "https://svc/closed", false, Map.of()))
+				.sign(node));
+
+		Resolution r = context.resolve(node.getId(), "io.test.open").get();
+		assertTrue(r.allowed());
+		assertEquals(open, r.findService().orElseThrow().peerId());
+
+		// Listed, but not for other nodes.
+		r = context.resolve(node.getId(), "io.test.closed").get();
+		assertEquals(Admission.Reason.NOT_FEDERATING, r.admission().reason());
+		assertEquals(closed, r.findService().orElseThrow().peerId());
+
+		assertEquals(Admission.Reason.UNKNOWN_PEER, context.resolve(node.getId(), "io.test.none").get().admission().reason());
+		assertEquals(Admission.Reason.UNKNOWN_PEER, context.resolve(Id.random(), "io.test.open").get().admission().reason());
 	}
 }
