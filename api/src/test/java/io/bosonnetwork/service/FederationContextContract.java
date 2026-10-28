@@ -154,6 +154,44 @@ public abstract class FederationContextContract {
 		}
 	}
 
+	// ---- find ----------------------------------------------------------------------------------------
+
+	@Test
+	void findGivesTheServiceWithThisNodesOwnAdmission() throws Exception {
+		admitted(remoteNode.getId());
+		announced(remoteService, remoteNode, remote());
+
+		Resolution r = await(context().find(remoteService.getId()));
+		assertTrue(r.allowed());
+		assertEquals(remoteNode.getId(), r.findService().orElseThrow().nodeId());
+
+		refused(remoteNode.getId(), Admission.Reason.SUSPENDED);
+		r = await(context().find(remoteService.getId()));
+		assertEquals(Admission.Reason.SUSPENDED, r.admission().reason());
+		assertEquals(remoteNode.getId(), r.findService().orElseThrow().nodeId());
+
+		assertEquals(Admission.Reason.UNKNOWN_PEER, await(context().find(Id.random())).admission().reason());
+	}
+
+	// ---- resolve by node -----------------------------------------------------------------------------
+
+	@Test
+	void aNodesServiceResolvesByItsType() throws Exception {
+		admitted(remoteNode.getId());
+		announced(remoteService, remoteNode, remote());
+		described(remoteNode, NodeDescriptor.builder().name("Remote")
+				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
+						"https://remote.example:9000", true, Map.of()))
+				.sign(remoteNode));
+
+		Resolution r = await(context().resolve(remoteNode.getId(), "io.bosonnetwork.test"));
+		assertTrue(r.allowed());
+		assertEquals(remoteService.getId(), r.findService().orElseThrow().peerId());
+
+		assertEquals(Admission.Reason.UNKNOWN_PEER,
+				await(context().resolve(remoteNode.getId(), "io.bosonnetwork.other")).admission().reason());
+	}
+
 	// ---- admit ---------------------------------------------------------------------------------------
 
 	@Test

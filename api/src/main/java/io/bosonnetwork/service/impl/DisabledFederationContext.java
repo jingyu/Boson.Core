@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import io.vertx.core.Future;
+import io.vertx.ext.web.handler.HttpException;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
@@ -104,7 +105,8 @@ public class DisabledFederationContext implements FederationContext {
 
 					@Override
 					public Future<Optional<Principal>> getClient(Id nodeId, Id peerId) {
-						return Future.succeededFuture(Optional.empty());
+						// Every node is refused, as a host refuses a node it doesn't admit.
+						return Future.failedFuture(new HttpException(403, "Federation is disabled on this node"));
 					}
 				});
 

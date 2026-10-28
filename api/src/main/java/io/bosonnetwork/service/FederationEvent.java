@@ -28,9 +28,14 @@ import java.util.Objects;
 import io.bosonnetwork.Id;
 
 /**
- * A change in whether a node is admitted, sent to the {@link FederationContext#onChange listeners} of
- * each service: drop whatever was cached about the node and act on the new admission, for example by
- * closing its sessions when it is refused.
+ * A change about a node, sent to the {@link FederationContext#onChange listeners} of each service: its
+ * admission, its relationship with this node, or what this node has learned of it. Drop whatever was
+ * cached about the node, for example its sessions.
+ * <p>
+ * The admission it carries is this node's admission of the other one, as
+ * {@link FederationContext#admit(io.bosonnetwork.Id)} gives it. It doesn't say whether traffic to the
+ * node may go now - the other node may not take it yet - so a service that has something to send
+ * {@linkplain FederationContext#resolve(io.bosonnetwork.Id) resolves} the peer again, and acts on that.
  *
  * @param nodeId    the node whose admission changed
  * @param admission its admission now
@@ -40,7 +45,7 @@ public record FederationEvent(Id nodeId, Admission admission) {
 	 * Creates an event.
 	 *
 	 * @param nodeId    the node whose admission changed
-	 * @param admission its admission now
+	 * @param admission this node's admission of it now
 	 */
 	public FederationEvent {
 		Objects.requireNonNull(nodeId, "nodeId");
