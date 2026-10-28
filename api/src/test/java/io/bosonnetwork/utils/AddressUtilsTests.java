@@ -92,6 +92,16 @@ public class AddressUtilsTests {
 	}
 
 	@Test
+	public void aNat64AddressIsJudgedByTheIPv4AddressItEmbeds() throws Exception {
+		assertFalse(AddressUtils.isBogon(InetAddress.getByName("64:ff9b::808:808")), "NAT64 of 8.8.8.8");
+		assertTrue(AddressUtils.isBogon(InetAddress.getByName("64:ff9b::7f00:1")), "NAT64 of 127.0.0.1");
+		assertTrue(AddressUtils.isBogon(InetAddress.getByName("64:ff9b::a00:1")), "NAT64 of 10.0.0.1");
+		assertTrue(AddressUtils.isBogon(InetAddress.getByName("64:ff9b::c0a8:101")), "NAT64 of 192.168.1.1");
+		// The local-use prefix embeds the address where its operator chooses: never public.
+		assertTrue(AddressUtils.isBogon(InetAddress.getByName("64:ff9b:1::808:808")), "local-use NAT64");
+	}
+
+	@Test
 	public void testIsBogon() throws Exception {
 		// IPv4 addresses
 		assertFalse(AddressUtils.isBogon(InetAddress.getByName("8.8.8.8")), "Public IPv4 should not be Bogon");

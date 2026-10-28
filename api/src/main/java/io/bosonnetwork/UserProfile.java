@@ -38,6 +38,10 @@ import io.bosonnetwork.identifier.Credential;
  * A profile encapsulates user identity information such as name, avatar, bio,
  * and associated service endpoints like home nodes and messaging peers.
  * It is backed by a {@link Card} (DID Document).
+ * <p>
+ * A messaging channel publishes its profile the same way, marked as a channel ({@link #isChannel()}): a
+ * channel's host delivers its members' messages to other nodes, which accept them from it as from no other
+ * peer.
  */
 public class UserProfile {
 	private static final String DEFAULT_PROFILE_CREDENTIAL_ID = "profile";
@@ -48,6 +52,8 @@ public class UserProfile {
 	private static final String BIO = "bio";
 	private static final String HOME_NODE = "homeNode";
 	private static final String MESSAGING_HOME_PEER = "messagingHomePeer";
+	private static final String KIND = "kind";
+	private static final String KIND_CHANNEL = "channel";
 
 	private final Id id;
 	private final @Nullable String name;
@@ -55,6 +61,7 @@ public class UserProfile {
 	private final @Nullable String bio;
 	private final @Nullable Id homeNode;
 	private final @Nullable Id messagingHomePeer;
+	private final boolean channel;
 
 	private final Card card;
 
@@ -67,16 +74,18 @@ public class UserProfile {
 	 * @param bio the user's biography
 	 * @param homeNode the user's home node identifier
 	 * @param messagingHomePeer the user's messaging home peer identifier
+	 * @param channel whether the profile is a messaging channel's
 	 * @param card the underlying card object
 	 */
 	private UserProfile(Id id, @Nullable String name, @Nullable String avatar, @Nullable String bio,
-	                    @Nullable Id homeNode, @Nullable Id messagingHomePeer, Card card) {
+	                    @Nullable Id homeNode, @Nullable Id messagingHomePeer, boolean channel, Card card) {
 		this.id = id;
 		this.name = name;
 		this.avatar = avatar;
 		this.bio = bio;
 		this.homeNode = homeNode;
 		this.messagingHomePeer = messagingHomePeer;
+		this.channel = channel;
 		this.card = card;
 	}
 
@@ -97,6 +106,7 @@ public class UserProfile {
 		String bio = null;
 		Id homeNode = null;
 		Id messagingHomePeer = null;
+		boolean channel = false;
 		Credential profile = card.getCredential(DEFAULT_PROFILE_CREDENTIAL_ID).orElse(null);
 		if (profile != null && profile.getTypes().contains(DEFAULT_PROFILE_CREDENTIAL_TYPE)) {
 			Map<String, Object> claims = profile.getSubject().getClaims();
@@ -118,9 +128,10 @@ public class UserProfile {
 				} catch (Exception ignored) {
 				}
 			}
+			channel = KIND_CHANNEL.equals(claims.get(KIND));
 		}
 
-		return new UserProfile(id, name, avatar, bio, homeNode, messagingHomePeer, card);
+		return new UserProfile(id, name, avatar, bio, homeNode, messagingHomePeer, channel, card);
 	}
 
 	/**
@@ -178,6 +189,15 @@ public class UserProfile {
 	}
 
 	/**
+	 * Tells whether the profile is a messaging channel's rather than a user's.
+	 *
+	 * @return {@code true} for a channel
+	 */
+	public boolean isChannel() {
+		return channel;
+	}
+
+	/**
 	 * Returns the underlying {@link Card} representing this profile.
 	 *
 	 * @return the card
@@ -207,6 +227,7 @@ public class UserProfile {
 		private @Nullable String bio;
 		private @Nullable Id homeNode;
 		private @Nullable Id messagingHomePeer;
+		private boolean channel;
 		private @Nullable Card card;
 
 		private Builder(Identity identity) {
@@ -269,6 +290,16 @@ public class UserProfile {
 		}
 
 		/**
+		 * Marks the profile as a messaging channel's.
+		 *
+		 * @return the builder instance
+		 */
+		public Builder channel() {
+			this.channel = true;
+			return this;
+		}
+
+		/**
 		 * Builds a {@link UserProfile} instance based on the provided data.
 		 *
 		 * @return a new user profile
@@ -286,6 +317,8 @@ public class UserProfile {
 				claims.put(HOME_NODE, homeNode.toString());
 			if (messagingHomePeer != null)
 				claims.put(MESSAGING_HOME_PEER, messagingHomePeer.toString());
+			if (channel)
+				claims.put(KIND, KIND_CHANNEL);
 
 			if (claims.isEmpty())
 				throw new IllegalStateException("No profile data provided");
@@ -295,7 +328,7 @@ public class UserProfile {
 				builder.addCredential(DEFAULT_PROFILE_CREDENTIAL_ID, DEFAULT_PROFILE_CREDENTIAL_TYPE, claims);
 
 			Card card = builder.build();
-			return new UserProfile(identity.getId(), name, avatar, bio, homeNode, messagingHomePeer, card);
+			return new UserProfile(identity.getId(), name, avatar, bio, homeNode, messagingHomePeer, channel, card);
 		}
 	}
 }

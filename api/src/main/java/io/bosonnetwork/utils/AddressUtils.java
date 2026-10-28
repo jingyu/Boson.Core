@@ -97,6 +97,7 @@ public final class AddressUtils {
 	private static final String[] IPV6_BOGON_RANGES = {
 			"::/8",                 // Reserved
 			"::ffff:0:0/96",        // IPv4-mapped address
+			"64:ff9b:1::/48",       // IPv4/IPv6 translation, local use (RFC 8215)
 			"100::/64",             // Discarded
 			"2001::/23",            // IETF Protocol Assignments
 			"2001::/32",            // Teredo (RFC 4380)
@@ -301,6 +302,12 @@ public final class AddressUtils {
 		if (isSpecialUseAddress(addr))
 			return true;
 
+		// A NAT64 address of the well-known prefix (64:ff9b::/96) is what a translator turns into the IPv4
+		// address it embeds, and only that decides: an IPv6-only host with DNS64 reaches every IPv4 host
+		// through one, so the prefix itself, within ::/8, doesn't make it a bogon.
+		InetAddress nat64 = unmapNat64(addr);
+		if (nat64 != null)
+			return isBogon(nat64);
 		// Handle IPv4-mapped addresses (::ffff:0:0/96) - check the embedded IPv4 surface too
 		InetAddress unmapped = unmapIPv4MappedIPv6(addr);
 		if (unmapped != null) {
@@ -373,6 +380,30 @@ public final class AddressUtils {
 		}
 		if (bytes[10] != (byte) 0xff || bytes[11] != (byte) 0xff)
 			return null;
+		try {
+			byte[] ipv4 = new byte[4];
+			System.arraycopy(bytes, 12, ipv4, 0, 4);
+			return InetAddress.getByAddress(ipv4);
+		} catch (UnknownHostException e) {
+			return null; // Should not happen
+		}
+	}
+
+	/**
+	 * If {@code addr} is a NAT64 address of the well-known prefix ({@code 64:ff9b::/96}, RFC 6052),
+	 * returns the IPv4 address it embeds; otherwise returns {@code null}.
+	 */
+	private static @Nullable InetAddress unmapNat64(InetAddress addr) {
+		if (!(addr instanceof Inet6Address))
+			return null;
+		byte[] bytes = addr.getAddress();
+		if (bytes.length != 16 || bytes[0] != 0x00 || bytes[1] != 0x64 || bytes[2] != (byte) 0xff ||
+				bytes[3] != (byte) 0x9b)
+			return null;
+		for (int i = 4; i < 12; i++) {
+			if (bytes[i] != 0)
+				return null;
+		}
 		try {
 			byte[] ipv4 = new byte[4];
 			System.arraycopy(bytes, 12, ipv4, 0, 4);

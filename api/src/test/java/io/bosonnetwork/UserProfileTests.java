@@ -1,6 +1,8 @@
 package io.bosonnetwork;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.Test;
@@ -48,5 +50,17 @@ public class UserProfileTests {
 		assertEquals(profile.getBio(), profile2.getBio());
 		assertEquals(profile.getHomeNode(), profile2.getHomeNode());
 		assertEquals(profile.getMessagingHomePeer(), profile2.getMessagingHomePeer());
+	}
+
+	@Test
+	void aChannelsProfileSaysItIsAChannel() {
+		Identity channel = new CryptoIdentity();
+		UserProfile profile = UserProfile.builder(channel).name("Channel").messagingHomePeer(Id.random()).channel().build();
+		assertTrue(profile.isChannel());
+		assertTrue(UserProfile.fromCard(profile.getCard()).isChannel());
+
+		UserProfile user = UserProfile.builder(new CryptoIdentity()).name("User").build();
+		assertFalse(user.isChannel());
+		assertFalse(UserProfile.fromCard(user.getCard()).isChannel());
 	}
 }
