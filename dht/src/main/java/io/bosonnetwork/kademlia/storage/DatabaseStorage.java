@@ -93,7 +93,7 @@ public abstract class DatabaseStorage implements DataStorage, VertxDatabase {
 	public Future<Void> purge() {
 		long now = System.currentTimeMillis();
 
-		getLogger().info("Purging expired values and peers...");
+		getLogger().trace("Purging expired values and peers...");
 		return withTransaction(c ->
 				SqlTemplate.forUpdate(c, getDialect().deleteNonPersistentValuesAnnouncedBefore())
 						.execute(Map.of("updatedBefore", now - valueExpiration))

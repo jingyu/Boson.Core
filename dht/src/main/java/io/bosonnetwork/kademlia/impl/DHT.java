@@ -700,7 +700,7 @@ public class DHT extends BosonVerticle {
 		if (!running)
 			return;
 
-		log.info("Periodic: DHT update...");
+		log.trace("Periodic: DHT update...");
 
 		routingTableMaintenance();
 
@@ -779,7 +779,7 @@ public class DHT extends BosonVerticle {
 		if (now - lastMaintenance < KadConstants.ROUTING_TABLE_MAINTENANCE_INTERVAL)
 			return;
 
-		log.info("Routing table maintenance ...");
+		log.trace("Routing table maintenance ...");
 		lastMaintenance = now;
 
 		// Deliberately not gated on reachability, unlike the other periodic work. A maintenance pass is
@@ -901,12 +901,12 @@ public class DHT extends BosonVerticle {
 
 	private void randomLookup(long unusedTimerId) {
 		if (rpcServer.isReachable()) {
-			log.info("Periodic: random lookup ...");
+			log.trace("Periodic: random lookup ...");
 			NodeLookupTask task = new NodeLookupTask(kadContext, Id.random())
 					.setName("Periodic: random node Lookup");
 			dispatchTask(task);
 		} else {
-			log.info("Periodic: not performing random lookup, node is unreachable.");
+			log.debug("Periodic: not performing random lookup, node is unreachable.");
 		}
 	}
 
@@ -922,7 +922,7 @@ public class DHT extends BosonVerticle {
 	 */
 	private void randomPing(long unusedTimerId) {
 		if (!rpcServer.hasPendingCalls()) {
-			log.info("Periodic: random ping...");
+			log.trace("Periodic: random ping...");
 			KBucketEntry entry = routingTable.getRandomEntry();
 			if (entry != null) {
 				Message request = Message.pingRequest();
@@ -930,7 +930,7 @@ public class DHT extends BosonVerticle {
 				sendCallInternal(c);
 			}
 		} else {
-			log.info("Periodic: random ping - skip due to node has pending calls.");
+			log.debug("Periodic: random ping - skip due to node has pending calls.");
 		}
 	}
 
@@ -941,7 +941,7 @@ public class DHT extends BosonVerticle {
 	 * @param unusedTimerId the periodic timer id, unused.
 	 */
 	private void persistRoutingTable(long unusedTimerId) {
-		log.info("Periodic: persisting routing table ...");
+		log.trace("Periodic: persisting routing table ...");
 		saveRoutingTable().onFailure(cause -> log.error("Can not save the routing table: {}", cause.getMessage(), cause));
 	}
 

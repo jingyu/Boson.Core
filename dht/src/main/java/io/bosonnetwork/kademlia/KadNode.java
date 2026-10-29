@@ -1179,7 +1179,7 @@ public class KadNode extends BosonVerticle implements Node {
 			return;
 		}
 
-		log.info("Re-announce the persistent values and peers...");
+		log.trace("Re-announce the persistent values and peers...");
 
 		long valuesBefore = System.currentTimeMillis() - MAX_VALUE_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
 		long peersBefore = System.currentTimeMillis() - MAX_PEER_AGE + KadConstants.RE_ANNOUNCE_INTERVAL * 2;
