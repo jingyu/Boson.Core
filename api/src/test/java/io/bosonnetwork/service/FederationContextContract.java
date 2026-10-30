@@ -179,10 +179,10 @@ public abstract class FederationContextContract {
 	void aNodesServiceResolvesByItsType() throws Exception {
 		admitted(remoteNode.getId());
 		announced(remoteService, remoteNode, remote());
-		described(remoteNode, NodeDescriptor.builder().name("Remote")
+		described(remoteNode, NodeDescriptor.builder().nodeId(remoteNode.getId()).name("Remote")
 				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
 						"https://remote.example:9000", true, Map.of()))
-				.sign(remoteNode));
+				.build());
 
 		Resolution r = await(context().resolve(remoteNode.getId(), "io.bosonnetwork.test"));
 		assertTrue(r.allowed());
@@ -210,10 +210,10 @@ public abstract class FederationContextContract {
 
 	@Test
 	void aPublishedDescriptorIsFoundAndAnUnknownOneIsNot() throws Exception {
-		NodeDescriptor d = NodeDescriptor.builder().name("Remote")
+		NodeDescriptor d = NodeDescriptor.builder().nodeId(remoteNode.getId()).name("Remote")
 				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
 						"https://remote.example:9000", true, Map.of()))
-				.sign(remoteNode);
+				.build();
 		described(remoteNode, d);
 
 		NodeDescriptor found = await(context().describe(remoteNode.getId())).orElseThrow();

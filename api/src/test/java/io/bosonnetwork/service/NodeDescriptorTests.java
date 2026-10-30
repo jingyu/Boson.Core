@@ -23,13 +23,14 @@
 
 package io.bosonnetwork.service;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,6 +55,7 @@ class NodeDescriptorTests {
 
 	private NodeDescriptor full() {
 		return NodeDescriptor.builder()
+				.nodeId(node.getId())
 				.software("Boson Super Node", "3.2.1")
 				.name("Whisper").logo("https://whisper.example/logo.png").website("https://whisper.example")
 				.contact("admin@whisper.example")
@@ -65,12 +67,13 @@ class NodeDescriptorTests {
 						Map.of("federationEndpoint", "https://whisper.example:9084")))
 				.service(new NodeDescriptor.Service(ION_STORE, null, ionStorePeer, "https://whisper.example:9002",
 						false, Map.of()))
-				.sign(node);
+				.build();
 	}
 
 	@Test
 	void aSignedDescriptorVerifiesWithEverythingItSays() throws Exception {
-		NodeDescriptor d = NodeDescriptor.verify(full().getEncoded(), node.getId());
+		byte[] s = FederationStatement.nodeDescriptor(node, full());
+		NodeDescriptor d = FederationStatement.asDescriptor(s, node.getId());
 
 		assertEquals(node.getId(), d.getNodeId());
 		assertEquals(Optional.of("Boson Super Node"), d.getSoftware());
@@ -102,14 +105,10 @@ class NodeDescriptorTests {
 	}
 
 	@Test
-	void whatIsPassedOnIsWhatWasSigned() throws Exception {
-		NodeDescriptor d = full();
-		assertArrayEquals(d.getEncoded(), NodeDescriptor.verify(d.getEncoded(), node.getId()).getEncoded());
-	}
-
-	@Test
 	void aMinimalDescriptorListsNoServicesAndIsOpen() throws Exception {
-		NodeDescriptor d = NodeDescriptor.verify(NodeDescriptor.builder().sign(node).getEncoded(), node.getId());
+		byte[] s = FederationStatement.nodeDescriptor(node,
+				NodeDescriptor.builder().nodeId(node.getId()).build());
+		NodeDescriptor d = FederationStatement.asDescriptor(s, node.getId());
 		assertEquals(List.of(), d.getServices());
 		assertEquals(Optional.of(FederationMode.OPEN), d.getMode());
 		assertTrue(d.getName().isEmpty());
@@ -118,21 +117,21 @@ class NodeDescriptorTests {
 
 	@Test
 	void aDescriptorFromAnotherNodeIsRefused() {
-		byte[] encoded = full().getEncoded();
-		assertThrows(InvalidClaimException.class, () -> NodeDescriptor.verify(encoded, Id.random()));
+		byte[] encoded = FederationStatement.nodeDescriptor(node, full());
+		assertThrows(InvalidClaimException.class, () -> FederationStatement.asDescriptor(encoded, Id.random()));
 	}
 
 	@Test
 	void aTamperedDescriptorIsRefused() {
-		byte[] encoded = full().getEncoded();
+		byte[] encoded = FederationStatement.nodeDescriptor(node, full());
 		encoded[encoded.length - 1] ^= 1;
-		assertThrows(InvalidSignatureException.class, () -> NodeDescriptor.verify(encoded, node.getId()));
+		assertThrows(InvalidSignatureException.class, () -> FederationStatement.asDescriptor(encoded, node.getId()));
 	}
 
 	@Test
 	void anotherStatementIsNotADescriptor() {
-		byte[] proposal = FederationStatement.builder(node, Purpose.PROPOSE).audience(Id.random()).build();
-		assertThrows(InvalidClaimException.class, () -> NodeDescriptor.verify(proposal, node.getId()));
+		byte[] proposal = FederationStatement.propose(node, Id.random(), null);
+		assertThrows(InvalidClaimException.class, () -> FederationStatement.asDescriptor(proposal, node.getId()));
 	}
 
 	private byte[] withContent(Map<String, Object> content) {
@@ -141,39 +140,79 @@ class NodeDescriptorTests {
 
 	@Test
 	void aDescriptorMustListItsServicesWellFormed() {
-		assertThrows(InvalidClaimException.class, () -> NodeDescriptor.verify(withContent(Map.of()), node.getId()));
+		assertThrows(InvalidClaimException.class, () -> FederationStatement.asDescriptor(withContent(Map.of()), node.getId()));
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", "none")), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", "none")), node.getId()));
 
 		Map<String, Object> noType = Map.of("peerId", Id.random().getBytes(), "endpoint", "https://x");
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", List.of(noType))), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", List.of(noType))), node.getId()));
 
 		Map<String, Object> shortPeer = Map.of("type", MESSAGING, "peerId", new byte[8], "endpoint", "https://x");
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", List.of(shortPeer))), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", List.of(shortPeer))), node.getId()));
 
 		Map<String, Object> noEndpoint = Map.of("type", MESSAGING, "peerId", Id.random().getBytes());
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", List.of(noEndpoint))), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", List.of(noEndpoint))), node.getId()));
 
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", List.of(), "name", 7)), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", List.of(), "name", 7)), node.getId()));
 		assertThrows(InvalidClaimException.class, () ->
-				NodeDescriptor.verify(withContent(Map.of("services", List.of(), "protocols", List.of(1))), node.getId()));
+				FederationStatement.asDescriptor(withContent(Map.of("services", List.of(), "protocols", List.of(1))), node.getId()));
 	}
 
 	@Test
 	void unknownKeysAndModesAreIgnored() throws Exception {
 		Map<String, Object> service = Map.of("type", MESSAGING, "peerId", messagingPeer.getBytes(),
 				"endpoint", "https://x", "future", "field");
-		NodeDescriptor d = NodeDescriptor.verify(withContent(Map.of("services", List.of(service),
+		NodeDescriptor d = FederationStatement.asDescriptor(withContent(Map.of("services", List.of(service),
 				"mode", "federated-by-carrier-pigeon", "future", 42)), node.getId());
 
+		// A newer version's mode: as if the node said none, not a malformed descriptor.
 		assertTrue(d.getMode().isEmpty());
 		assertEquals(messagingPeer, d.getServices().get(0).peerId());
 		// A service that doesn't say whether other nodes may use it is not offered to them.
 		assertFalse(d.getServices().get(0).federation());
+	}
+
+	@Test
+	void aModeIsReadByItsWireNameAndOneNotTextIsIgnored() throws Exception {
+		assertEquals(Optional.of(FederationMode.ALLOWLIST), FederationStatement.asDescriptor(
+				withContent(Map.of("services", List.of(), "mode", "allowlist")), node.getId()).getMode());
+		assertTrue(FederationStatement.asDescriptor(
+				withContent(Map.of("services", List.of(), "mode", 2)), node.getId()).getMode().isEmpty());
+		assertTrue(FederationStatement.asDescriptor(
+				withContent(Map.of("services", List.of())), node.getId()).getMode().isEmpty());
+	}
+
+	@Test
+	void aBuiltDescriptorIsDatedByItsOwnLifetimeAndSigningByTheStatements() throws Exception {
+		Instant before = Instant.now();
+		NodeDescriptor forever = NodeDescriptor.builder().nodeId(node.getId()).build();
+		assertFalse(forever.getIssuedAt().isBefore(before.truncatedTo(ChronoUnit.MILLIS)));
+		assertTrue(forever.getExpiresAt().isAfter(Instant.parse("9999-12-31T23:59:59Z")));
+
+		NodeDescriptor hour = NodeDescriptor.builder().nodeId(node.getId()).lifetime(Duration.ofHours(1)).build();
+		assertEquals(Duration.ofHours(1), Duration.between(hour.getIssuedAt(), hour.getExpiresAt()));
+
+		// The statement's lifetime is the signer's, not the builder's.
+		NodeDescriptor signed = FederationStatement.asDescriptor(
+				FederationStatement.nodeDescriptor(node, hour, Duration.ofMinutes(10)), node.getId());
+		assertEquals(Duration.ofMinutes(10), Duration.between(signed.getIssuedAt(), signed.getExpiresAt()));
+	}
+
+	@Test
+	void aNodeSignsOnlyItsOwnDescriptor() {
+		NodeDescriptor other = NodeDescriptor.builder().nodeId(Id.random()).build();
+		assertThrows(IllegalArgumentException.class, () -> FederationStatement.nodeDescriptor(node, other));
+		assertThrows(IllegalStateException.class, () -> NodeDescriptor.builder().build());
+
+		NodeDescriptor own = NodeDescriptor.builder().nodeId(node.getId()).build();
+		assertThrows(IllegalArgumentException.class, () ->
+				FederationStatement.nodeDescriptor(node, own, Duration.ofDays(2)));
+		assertThrows(IllegalArgumentException.class, () ->
+				FederationStatement.nodeDescriptor(node, own, Duration.ZERO));
 	}
 
 	@Test

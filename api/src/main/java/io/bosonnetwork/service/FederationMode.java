@@ -24,8 +24,7 @@
 package io.bosonnetwork.service;
 
 import java.util.Locale;
-
-import org.jspecify.annotations.Nullable;
+import java.util.Objects;
 
 /**
  * How a node decides which other nodes it federates with.
@@ -55,20 +54,25 @@ public enum FederationMode {
 	}
 
 	/**
-	 * Returns the mode with the given wire name, ignoring case.
+	 * Returns the mode with the given wire name, ignoring case and surrounding white space.
+	 * <p>
+	 * Unknown names are refused rather than mapped to a default. Where the name comes from another node,
+	 * which may run a newer version with modes this one doesn't know, the caller decides what an unknown
+	 * mode means: a {@link NodeDescriptor} leaves it out.
 	 *
 	 * @param name the wire name
-	 * @return the mode, or {@code null} if no mode has that name
+	 * @return the mode
+	 * @throws NullPointerException     if the name is {@code null}
+	 * @throws IllegalArgumentException if no mode has that name
 	 */
-	public static @Nullable FederationMode ofWireName(@Nullable String name) {
-		if (name == null)
-			return null;
+	public static FederationMode ofWireName(String name) {
+		Objects.requireNonNull(name);
 
 		for (FederationMode m : values()) {
 			if (m.name().equalsIgnoreCase(name.trim()))
 				return m;
 		}
 
-		return null;
+		throw new IllegalArgumentException("No federation mode with wire name " + name);
 	}
 }

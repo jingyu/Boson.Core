@@ -129,7 +129,7 @@ class FederationStatementTests {
 		byte[] token = proposal();
 		InvalidClaimException e = assertThrows(InvalidClaimException.class, () ->
 				FederationStatement.verifier(Purpose.ACCEPT).audience(bob.getId()).verify(token));
-		assertTrue(e.getMessage().contains("Not a ACCEPT statement"), e.getMessage());
+		assertTrue(e.getMessage().contains("Not ACCEPT statement"), e.getMessage());
 	}
 
 	@Test
@@ -256,5 +256,108 @@ class FederationStatementTests {
 	void contentMustBeAMap() {
 		byte[] notAMap = handMade(Purpose.NODE_DESCRIPTOR, 60).claim(Claim.CONTENT.getValue(), List.of("x")).build();
 		assertThrows(InvalidClaimException.class, () -> FederationStatement.verifier(Purpose.NODE_DESCRIPTOR).verify(notAMap));
+	}
+
+	@Test
+	void theFactoriesSayWhatTheirPurposeNeeds() throws Exception {
+		FederationStatement.Verifier v = FederationStatement.verifier(Purpose.PROPOSE, Purpose.ACCEPT,
+				Purpose.DECLINE, Purpose.REVOKE).audience(bob.getId());
+
+		FederationStatement proposal = v.verify(FederationStatement.propose(alice, bob.getId(), "hello"));
+		assertEquals(Purpose.PROPOSE, proposal.getPurpose());
+		assertEquals(bob.getId(), proposal.getAudience());
+		assertEquals("hello", proposal.note());
+		assertNull(proposal.inReplyTo());
+		assertNull(v.verify(FederationStatement.propose(alice, bob.getId(), null)).note());
+
+		byte[] cti = Random.randomBytes(FederationStatement.TOKEN_ID_BYTES);
+		FederationStatement accept = v.verify(FederationStatement.accept(alice, bob.getId(), cti));
+		assertEquals(Purpose.ACCEPT, accept.getPurpose());
+		assertArrayEquals(cti, accept.inReplyTo());
+		assertNull(accept.note());
+
+		FederationStatement decline = v.verify(FederationStatement.decline(alice, bob.getId(), cti));
+		assertEquals(Purpose.DECLINE, decline.getPurpose());
+		assertArrayEquals(cti, decline.inReplyTo());
+
+		FederationStatement revoke = v.verify(FederationStatement.revoke(alice, bob.getId()));
+		assertEquals(Purpose.REVOKE, revoke.getPurpose());
+		assertEquals(Map.of(), revoke.getContent());
+	}
+
+	@Test
+	void inReplyToIsACopy() throws Exception {
+		byte[] cti = Random.randomBytes(FederationStatement.TOKEN_ID_BYTES);
+		FederationStatement accept = FederationStatement.verifier(Purpose.ACCEPT).audience(bob.getId())
+				.verify(FederationStatement.accept(alice, bob.getId(), cti));
+		byte[] got = accept.inReplyTo();
+		assertNotNull(got);
+		got[0] ^= 1;
+		assertArrayEquals(cti, accept.inReplyTo());
+	}
+
+	@Test
+	void aNoteIsShortAndNotBlank() throws Exception {
+		String longest = "n".repeat(FederationStatement.MAX_NOTE_LENGTH);
+		FederationStatement.Verifier v = FederationStatement.verifier(Purpose.PROPOSE).audience(bob.getId());
+		assertEquals(longest, v.verify(FederationStatement.propose(alice, bob.getId(), longest)).note());
+		assertThrows(IllegalArgumentException.class, () -> FederationStatement.propose(alice, bob.getId(), longest + "n"));
+
+		// What another node sends is read leniently: a note that isn't one is no note.
+		for (Object note : List.of(" ", longest + "n", 7)) {
+			byte[] token = FederationStatement.builder(alice, Purpose.PROPOSE).audience(bob.getId())
+					.content(Map.of("note", note)).build();
+			assertNull(v.verify(token).note(), String.valueOf(note));
+		}
+	}
+
+	@Test
+	void aVerifierOfSeveralPurposesTakesAnyOfThemOnly() throws Exception {
+		byte[] cti = Random.randomBytes(FederationStatement.TOKEN_ID_BYTES);
+		FederationStatement.Verifier answers = FederationStatement.verifier(Purpose.ACCEPT, Purpose.DECLINE)
+				.audience(bob.getId());
+		assertEquals(Purpose.ACCEPT, answers.verify(FederationStatement.accept(alice, bob.getId(), cti)).getPurpose());
+		assertEquals(Purpose.DECLINE, answers.verify(FederationStatement.decline(alice, bob.getId(), cti)).getPurpose());
+
+		InvalidClaimException e = assertThrows(InvalidClaimException.class, () -> answers.verify(proposal()));
+		assertTrue(e.getMessage().contains("Not ACCEPT or DECLINE statement"), e.getMessage());
+
+		assertThrows(IllegalArgumentException.class, () -> FederationStatement.verifier());
+	}
+
+	@Test
+	void aVerifierMissingItsAudienceFailsWhateverTheStatement() {
+		// A descriptor needs no audience, but the verifier also takes proposals: it is misconfigured.
+		byte[] descriptor = FederationStatement.builder(alice, Purpose.NODE_DESCRIPTOR).build();
+		assertThrows(IllegalStateException.class, () ->
+				FederationStatement.verifier(Purpose.NODE_DESCRIPTOR, Purpose.PROPOSE).verify(descriptor));
+		// Before reading it: even garbage shows the mistake.
+		assertThrows(IllegalStateException.class, () ->
+				FederationStatement.verifier(Purpose.PROPOSE).verify(new byte[] { 1, 2, 3 }));
+	}
+
+	@Test
+	void aStatementForAnyoneVerifiesWhenTheVerifierKnowsWhoWeAre() throws Exception {
+		byte[] descriptor = FederationStatement.builder(alice, Purpose.NODE_DESCRIPTOR).build();
+		FederationStatement s = FederationStatement.verifier(Purpose.NODE_DESCRIPTOR, Purpose.PROPOSE)
+				.audience(bob.getId()).verify(descriptor);
+		assertEquals(Purpose.NODE_DESCRIPTOR, s.getPurpose());
+		assertNull(s.getAudience());
+	}
+
+	@Test
+	void anAddressedStatementWithoutOrWithAMalformedAudienceIsRefused() {
+		FederationStatement.Verifier v = FederationStatement.verifier(Purpose.PROPOSE).audience(bob.getId());
+
+		byte[] none = handMade(Purpose.PROPOSE, 60).tokenId(Random.randomBytes(16)).build();
+		assertThrows(InvalidClaimException.class, () -> v.verify(none));
+
+		byte[] shortId = handMade(Purpose.PROPOSE, 60).claim(Claim.AUDIENCE.getValue(), new byte[5])
+				.tokenId(Random.randomBytes(16)).build();
+		assertThrows(InvalidClaimException.class, () -> v.verify(shortId));
+
+		byte[] notAnId = handMade(Purpose.PROPOSE, 60).claim(Claim.AUDIENCE.getValue(), 42)
+				.tokenId(Random.randomBytes(16)).build();
+		assertThrows(InvalidClaimException.class, () -> v.verify(notAnId));
 	}
 }

@@ -24,11 +24,16 @@ package io.bosonnetwork.service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
 
@@ -64,7 +69,15 @@ public final class FederationStatement {
 	/** The clock skew a verifier tolerates by default, in seconds. */
 	public static final int DEFAULT_LEEWAY = 120;
 
+	/** The longest note a proposal may carry, in characters. */
+	public static final int MAX_NOTE_LENGTH = 256;
+	/** The largest statement a node sends or accepts, in bytes; a descriptor with every service fits. */
+	public static final int MAX_STATEMENT_BYTES = 8 * 1024;
+
 	private static final String LABEL_PREFIX = "boson:sig:1:";
+
+	private static final String NOTE = "note";
+	private static final String IN_REPLY_TO = "inReplyTo";
 
 	/**
 	 * What a statement is. Each purpose has its own label, maximum lifetime, and whether it is
@@ -213,6 +226,26 @@ public final class FederationStatement {
 	}
 
 	/**
+	 * Returns the note a proposal carries, for the other node's operator.
+	 *
+	 * @return the note, or {@code null} if the statement has none, or one that is blank, too long, or not
+	 *         text
+	 */
+	public @Nullable String note() {
+		Object note = content.get(NOTE);
+		return note instanceof String n && !n.isBlank() && n.length() <= MAX_NOTE_LENGTH ? n : null;
+	}
+
+	/**
+	 * Returns the "CWT ID" (cti) of the proposal an answer replies to.
+	 *
+	 * @return a copy of the id, or {@code null} if the statement names none
+	 */
+	public byte @Nullable [] inReplyTo() {
+		return content.get(IN_REPLY_TO) instanceof byte[] b ? b.clone() : null;
+	}
+
+	/**
 	 * Starts a statement of the given purpose, made by the given node.
 	 *
 	 * @param issuer  the node's identity, which signs the statement
@@ -224,13 +257,214 @@ public final class FederationStatement {
 	}
 
 	/**
-	 * Starts a verifier that accepts statements of the given purpose only.
+	 * Starts a verifier that accepts statements of the given purposes only.
 	 *
-	 * @param purpose the purpose to accept
+	 * @param purposes the purposes to accept, at least one
 	 * @return a new verifier
+	 * @throws IllegalArgumentException if no purpose is given
 	 */
-	public static Verifier verifier(Purpose purpose) {
-		return new Verifier(purpose);
+	public static Verifier verifier(Purpose... purposes) {
+		return new Verifier(purposes);
+	}
+
+	/**
+	 * Builds a propose federation statement issued by the given node and addressed to the given node.
+	 * If a note is provided, it is included in the statement content.
+	 *
+	 * @param node the identity of the node issuing and signing the propose statement
+	 * @param toNodeId the identifier of the node the propose statement is addressed to
+	 * @param note the optional note to include in the statement, or null for no note
+	 * @return the signed propose federation statement as a byte array
+	 */
+	public static byte[] propose(Identity node, Id toNodeId, @Nullable String note) {
+		Objects.requireNonNull(node, "node");
+		Objects.requireNonNull(toNodeId, "toNodeId");
+		if (note != null && note.length() > MAX_NOTE_LENGTH)
+			throw new IllegalArgumentException("Note longer than " + MAX_NOTE_LENGTH + " characters");
+
+		Map<String, Object> content = note != null ? Map.of(NOTE, note) : Map.of();
+		return FederationStatement.builder(node, Purpose.PROPOSE).audience(toNodeId).content(content).build();
+	}
+
+	/**
+	 * Builds an acceptance federation statement issued by the given node, addressed to the given node, and referencing the statement being accepted.
+	 *
+	 * @param node the identity of the node issuing and signing the acceptance statement
+	 * @param toNodeId the identifier of the node the acceptance statement is addressed to
+	 * @param inReplyTo the identifier of the statement being accepted
+	 * @return the signed acceptance federation statement as a byte array
+	 */
+	public static byte[] accept(Identity node, Id toNodeId, byte[] inReplyTo) {
+		Objects.requireNonNull(node, "node");
+		Objects.requireNonNull(toNodeId, "toNodeId");
+		Objects.requireNonNull(inReplyTo, "inReplyTo");
+
+		Map<String, Object> content = Map.of(IN_REPLY_TO, inReplyTo);
+		return FederationStatement.builder(node, Purpose.ACCEPT).audience(toNodeId).content(content).build();
+	}
+
+	/**
+	 * Builds a decline federation statement issued by the given node, addressed to the given node, and referencing the statement being declined.
+	 *
+	 * @param node the identity of the node issuing and signing the decline statement
+	 * @param toNodeId the identifier of the node the decline statement is addressed to
+	 * @param inReplyTo the identifier of the statement being declined
+	 * @return the signed decline federation statement as a byte array
+	 */
+	public static byte[] decline(Identity node, Id toNodeId, byte[] inReplyTo) {
+		Objects.requireNonNull(node, "node");
+		Objects.requireNonNull(toNodeId, "toNodeId");
+		Objects.requireNonNull(inReplyTo, "inReplyTo");
+
+		Map<String, Object> content = Map.of(IN_REPLY_TO, inReplyTo);
+		return FederationStatement.builder(node, Purpose.DECLINE).audience(toNodeId).content(content).build();
+	}
+
+	/**
+	 * Builds a revoke federation statement issued by the given node and addressed to the given node.
+	 *
+	 * @param node the identity of the node issuing and signing the revoke statement
+	 * @param toNodeId the identifier of the node the revoke statement is addressed to
+	 * @return the signed revoke federation statement as a byte array
+	 */
+	public static byte[] revoke(Identity node, Id toNodeId) {
+		Objects.requireNonNull(node, "node");
+		Objects.requireNonNull(toNodeId, "toNodeId");
+
+		return FederationStatement.builder(node, Purpose.REVOKE).audience(toNodeId).build();
+	}
+
+	/**
+	 * Signs this node descriptor into a node descriptor federation statement.
+	 * The statement contains the descriptor content, the given lifetime or the default maximum lifetime, and is signed by the given identity.
+	 *
+	 * @param node the signing identity; its identifier must match the descriptor's node identifier
+	 * @param descriptor the node descriptor content
+	 * @param lifetime the statement lifetime, or null to use the maximum allowed lifetime
+	 * @return the signed federation statement as a byte array
+	 * @throws NullPointerException if node is null
+	 * @throws IllegalArgumentException if the node identifier does not match the descriptor's node identifier, or if lifetime is negative, zero, or exceeds the maximum allowed lifetime
+	 */
+	public static byte[] nodeDescriptor(Identity node, NodeDescriptor descriptor, @Nullable Duration lifetime) {
+		Objects.requireNonNull(node, "node");
+		Objects.requireNonNull(descriptor, "descriptor");
+		if (!node.getId().equals(descriptor.getNodeId()))
+			throw new IllegalArgumentException("Node identifier must be equal to the descriptor's node identifier");
+		if (lifetime != null) {
+			if (lifetime.isNegative() || lifetime.isZero() ||
+					lifetime.compareTo(FederationStatement.Purpose.NODE_DESCRIPTOR.maxLifetime()) > 0)
+				throw new IllegalArgumentException("Invalid descriptor lifetime: " + lifetime);
+		} else {
+			lifetime = Purpose.NODE_DESCRIPTOR.maxLifetime();
+		}
+
+		Map<String, Object> content = new LinkedHashMap<>();
+		descriptor.getSoftware().ifPresent(s -> content.put("software", s));
+		descriptor.getVersion().ifPresent(v -> content.put("version", v));
+		descriptor.getName().ifPresent(n -> content.put("name", n));
+		descriptor.getLogo().ifPresent(l -> content.put("logo", l));
+		descriptor.getWebsite().ifPresent(w -> content.put("website", w));
+		descriptor.getContact().ifPresent(c -> content.put("contact", c));
+		descriptor.getMode().ifPresent(m -> content.put("mode", m.wireName()));
+		if (!descriptor.getProtocols().isEmpty())
+			content.put("protocols", List.copyOf(descriptor.getProtocols()));
+		if (!descriptor.getCapabilities().isEmpty())
+			content.put("capabilities", List.copyOf(descriptor.getCapabilities()));
+		List<Map<String, Object>> listed = new ArrayList<>(descriptor.getServices().size());
+		for (NodeDescriptor.Service s : descriptor.getServices())
+			listed.add(s.toMap());
+		content.put("services", listed);
+
+		return FederationStatement.builder(node, Purpose.NODE_DESCRIPTOR)
+				.lifetime(lifetime)
+				.content(content)
+				.build();
+	}
+
+	/**
+	 * Signs the given node descriptor into a node descriptor federation statement using the default maximum lifetime.
+	 * The statement contains the descriptor content and is signed by the given identity.
+	 *
+	 * @param node the signing identity; its identifier must match the descriptor's node identifier
+	 * @param descriptor the node descriptor to sign
+	 * @return the signed federation statement as a byte array
+	 */
+	public static byte[] nodeDescriptor(Identity node, NodeDescriptor descriptor) {
+		return nodeDescriptor(node, descriptor, null);
+	}
+
+	/**
+	 * Verifies and decodes a signed descriptor.
+	 * <p>
+	 * Readers ignore what they don't know: keys this version doesn't read are skipped, and a mode it
+	 * doesn't know - one a newer version added - is left out, as if the node said none. Everything it does
+	 * read must be well formed.
+	 *
+	 * @param encoded        the descriptor as served
+	 * @param expectedNodeId the node it must be from
+	 * @return the verified descriptor, dated as signed
+	 * @throws CwtException if the descriptor is invalid, expired, malformed or from another node
+	 */
+	public static NodeDescriptor asDescriptor(byte[] encoded, Id expectedNodeId) throws CwtException {
+		Objects.requireNonNull(encoded, "encoded");
+		Objects.requireNonNull(expectedNodeId, "nodeId");
+
+		FederationStatement statement = FederationStatement.verifier(FederationStatement.Purpose.NODE_DESCRIPTOR)
+				.issuer(expectedNodeId)
+				.verify(encoded);
+
+		Map<String, Object> c = statement.getContent();
+
+		List<String> protocols = textList(c.get("protocols"), "protocols");
+		Set<String> capabilities = new LinkedHashSet<>(textList(c.get("capabilities"), "capabilities"));
+
+		if (!(c.get("services") instanceof List<?> list))
+			throw new InvalidClaimException("A node descriptor must list its services");
+		List<NodeDescriptor.Service> services = new ArrayList<>(list.size());
+		for (Object entry : list) {
+			if (!(entry instanceof Map<?, ?> m))
+				throw new InvalidClaimException("Invalid service entry");
+
+			services.add(NodeDescriptor.Service.fromMap(m));
+		}
+
+		FederationMode mode = null;
+		if (c.get("mode") instanceof String m) {
+			try {
+				mode = FederationMode.ofWireName(m);
+			} catch (IllegalArgumentException ignore) {
+				// A mode this version doesn't know.
+			}
+		}
+
+		return new NodeDescriptor(statement.getIssuer(), text(c, "software"), text(c, "version"), text(c, "name"),
+				text(c, "logo"), text(c, "website"), text(c, "contact"),
+				mode, protocols, capabilities, services,
+				statement.getIssuedAt().toEpochMilli(), statement.getExpiresAt().toEpochMilli());
+	}
+
+	private static @Nullable String text(Map<String, Object> content, String key) throws InvalidClaimException {
+		Object value = content.get(key);
+		if (value == null)
+			return null;
+		if (!(value instanceof String s))
+			throw new InvalidClaimException("Invalid " + key);
+		return s;
+	}
+
+	private static List<String> textList(@Nullable Object value, String key) throws InvalidClaimException {
+		if (value == null)
+			return List.of();
+		if (!(value instanceof List<?> list))
+			throw new InvalidClaimException("Invalid " + key);
+
+		List<String> result = new ArrayList<>(list.size());
+		for (Object o : list) {
+			if (!(o instanceof String s))
+				throw new InvalidClaimException("Invalid " + key);
+			result.add(s);
+		}
+		return result;
 	}
 
 	/**
@@ -319,17 +553,22 @@ public final class FederationStatement {
 	}
 
 	/**
-	 * Verifies statements of one purpose.
+	 * Verifies statements of one or more purposes. The statement's own label says which it is, so it is
+	 * parsed once whatever the number of purposes.
 	 */
 	public static final class Verifier {
-		private final Purpose purpose;
+		private final List<Purpose> purposes;
 		private @Nullable Id expectedIssuer;
 		private @Nullable Id expectedAudience;
 		private @Nullable ReplayCache replayCache;
 		private int leeway = DEFAULT_LEEWAY;
 
-		private Verifier(Purpose purpose) {
-			this.purpose = Objects.requireNonNull(purpose, "purpose");
+		private Verifier(Purpose... purposes) {
+			Objects.requireNonNull(purposes, "purposes");
+			if (purposes.length == 0)
+				throw new IllegalArgumentException("No purpose to verify");
+
+			this.purposes = List.of(purposes);
 		}
 
 		/**
@@ -344,8 +583,8 @@ public final class FederationStatement {
 		}
 
 		/**
-		 * Sets this node's id, which an addressed statement must carry as its audience. Required to verify
-		 * an addressed purpose.
+		 * Sets this node's id, which an addressed statement must carry as its audience. Required if any of
+		 * the purposes is addressed; a statement of a purpose that is not must carry no audience at all.
 		 *
 		 * @param audience this node's id
 		 * @return this verifier
@@ -386,20 +625,25 @@ public final class FederationStatement {
 		 *
 		 * @param statement the statement, a COSE_Sign1 CWT
 		 * @return the verified statement
-		 * @throws CwtException if the statement is invalid, expired, not of this purpose, not for this node,
-		 *                      not from the expected node, or already seen
-		 * @throws IllegalStateException if the purpose is addressed and no audience was set
+		 * @throws CwtException if the statement is invalid, expired, of none of the purposes, not for this
+		 *                      node, not from the expected node, or already seen
+		 * @throws IllegalStateException if a purpose is addressed and no audience was set, whatever the
+		 *                               statement
 		 */
 		public FederationStatement verify(byte[] statement) throws CwtException {
 			Objects.requireNonNull(statement, "statement");
-			if (purpose.addressed && expectedAudience == null)
-				throw new IllegalStateException("Verifying " + purpose + " statements needs this node's id as the audience");
+			// A mistake in the verifier, not in the statement: refused before reading it, so that it shows
+			// whatever the statement turns out to be.
+			if (expectedAudience == null) {
+				for (Purpose p : purposes) {
+					if (p.addressed)
+						throw new IllegalStateException("Verifying " + p + " statements needs this node's id as the audience");
+				}
+			}
 
 			SignedCwt.Parser parser = SignedCwt.parser().setLeeway(leeway);
 			if (expectedIssuer != null)
 				parser.requireIssuer(expectedIssuer);
-			if (expectedAudience != null && purpose.addressed)
-				parser.requireAudience(expectedAudience);
 
 			SignedCwt cwt = parser.parse(statement);
 
@@ -417,8 +661,11 @@ public final class FederationStatement {
 				throw new InvalidClaimException("A statement's subject must be its issuer");
 
 			String label = cwt.getClaimAsString(Claim.PURPOSE.getValue());
-			if (Purpose.ofLabel(label) != purpose)
-				throw new InvalidClaimException("Not a " + purpose + " statement: " + label);
+
+			Purpose purpose = Purpose.ofLabel(label);
+			if (purpose == null || !purposes.contains(purpose))
+				throw new InvalidClaimException("Not " + purposes.stream().map(Purpose::name)
+						.collect(Collectors.joining(" or ")) + " statement: " + label);
 
 			Number iat = cwt.getClaim(Claim.ISSUED_AT.getValue());
 			Number exp = cwt.getClaim(Claim.EXPIRATION.getValue());
@@ -430,8 +677,14 @@ public final class FederationStatement {
 			Id audience = null;
 			byte[] tokenId = null;
 			if (purpose.addressed) {
-				// The parser has checked the audience against this node's id; it is present.
-				audience = cwt.getClaimAsId(Claim.AUDIENCE.getValue());
+				try {
+					audience = cwt.getClaimAsId(Claim.AUDIENCE.getValue());
+				} catch (Exception e) {
+					throw new InvalidClaimException("Invalid audience", e);
+				}
+				// Checked up front: an addressed purpose has an expected audience.
+				if (!Objects.requireNonNull(expectedAudience).equals(audience))
+					throw new InvalidClaimException("Audience mismatch: expected " + expectedAudience + ", got " + audience);
 
 				Object cti = cwt.getClaim(Claim.CWT_ID.getValue());
 				if (!(cti instanceof byte[] b) || b.length != TOKEN_ID_BYTES)

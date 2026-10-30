@@ -37,20 +37,20 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
-import io.bosonnetwork.Identity;
-import io.bosonnetwork.cwt.CwtException;
 import io.bosonnetwork.cwt.InvalidClaimException;
 
 /**
- * What a node says about itself and the services it runs, signed by the node: its catalog.
+ * What a node says about itself and the services it runs: its catalog.
  * <p>
  * The descriptor answers "what does node N run, and what does it speak" for anyone who asks - other
- * nodes, clients, administrators - with or without a federation relationship. It is a
- * {@link FederationStatement} of purpose {@link FederationStatement.Purpose#NODE_DESCRIPTOR
- * NODE_DESCRIPTOR}, served by the node over HTTPS rather than stored in the DHT, which could not hold it:
- * a mutable DHT value is limited to 896 bytes, and a node with all its services needs more. Since the
- * signature travels with it, a verified descriptor may be cached and served again by anyone, and checked
- * by whoever receives it; {@link #getEncoded()} is what to pass on.
+ * nodes, clients, administrators - with or without a federation relationship. This class is the plain
+ * value; what travels is the node's signed {@link FederationStatement} of purpose
+ * {@link FederationStatement.Purpose#NODE_DESCRIPTOR NODE_DESCRIPTOR}, made by
+ * {@link FederationStatement#nodeDescriptor(io.bosonnetwork.Identity, NodeDescriptor) nodeDescriptor}
+ * and read back by {@link FederationStatement#asDescriptor(byte[], Id) asDescriptor}. The node serves the
+ * statement over HTTPS rather than storing it in the DHT, which could not hold it: a mutable DHT value is
+ * limited to 896 bytes, and a node with all its services needs more. Since the signature travels with
+ * the statement, it may be cached and served again by anyone, and checked by whoever receives it.
  * <p>
  * A service is the node's if its descriptor lists it. Where to reach it is the service's own
  * announcement in the DHT, which is fresher; the endpoint listed here is a hint, safe to use directly
@@ -58,7 +58,7 @@ import io.bosonnetwork.cwt.InvalidClaimException;
  *
  * <h2>Content</h2>
  * The statement's content is a map with these text keys, every one optional except {@code services};
- * readers ignore keys they don't know:
+ * readers ignore keys they don't know, and a mode they don't know:
  * <ul>
  *   <li>{@code software}, {@code version}: what the node runs;</li>
  *   <li>{@code name}, {@code logo}, {@code website}, {@code contact}: who runs it;</li>
@@ -82,9 +82,8 @@ public final class NodeDescriptor {
 	private final List<String> protocols;
 	private final Set<String> capabilities;
 	private final List<Service> services;
-	private final Instant issuedAt;
-	private final Instant expiresAt;
-	private final byte[] encoded;
+	private final long issuedAt;
+	private final long expiresAt;
 
 	/**
 	 * A service the node lists.
@@ -117,7 +116,7 @@ public final class NodeDescriptor {
 			extra = Map.copyOf(Objects.requireNonNull(extra, "extra"));
 		}
 
-		private Map<String, Object> toContent() {
+		Map<String, Object> toMap() {
 			Map<String, Object> map = new LinkedHashMap<>();
 			map.put("type", type);
 			if (name != null)
@@ -130,10 +129,7 @@ public final class NodeDescriptor {
 			return map;
 		}
 
-		private static Service fromContent(Object value) throws InvalidClaimException {
-			if (!(value instanceof Map<?, ?> m))
-				throw new InvalidClaimException("Invalid service entry");
-
+		static Service fromMap(Map<?, ?> m) throws InvalidClaimException {
 			if (!(m.get("type") instanceof String type) || type.isEmpty())
 				throw new InvalidClaimException("Invalid service type");
 			if (!(m.get("peerId") instanceof byte[] peerId) || peerId.length != Id.BYTES)
@@ -159,12 +155,22 @@ public final class NodeDescriptor {
 
 			return new Service(type, (String) name, Id.of(peerId), endpoint, Boolean.TRUE.equals(federation), extra);
 		}
+
+		private static Map<String, Object> textKeys(Map<?, ?> map) throws InvalidClaimException {
+			Map<String, Object> result = new LinkedHashMap<>(map.size());
+			for (Map.Entry<?, ?> e : map.entrySet()) {
+				if (!(e.getKey() instanceof String key) || e.getValue() == null)
+					throw new InvalidClaimException("Invalid extra data");
+				result.put(key, e.getValue());
+			}
+			return result;
+		}
 	}
 
-	private NodeDescriptor(Id nodeId, @Nullable String software, @Nullable String version, @Nullable String name,
-						   @Nullable String logo, @Nullable String website, @Nullable String contact,
-						   @Nullable FederationMode mode, List<String> protocols, Set<String> capabilities,
-						   List<Service> services, Instant issuedAt, Instant expiresAt, byte[] encoded) {
+	NodeDescriptor(Id nodeId, @Nullable String software, @Nullable String version, @Nullable String name,
+				   @Nullable String logo, @Nullable String website, @Nullable String contact,
+				   @Nullable FederationMode mode, List<String> protocols, Set<String> capabilities,
+				   List<Service> services, long issuedAt, long expiresAt) {
 		this.nodeId = nodeId;
 		this.software = software;
 		this.version = version;
@@ -178,77 +184,6 @@ public final class NodeDescriptor {
 		this.services = List.copyOf(services);
 		this.issuedAt = issuedAt;
 		this.expiresAt = expiresAt;
-		this.encoded = encoded;
-	}
-
-	/**
-	 * Verifies a signed descriptor.
-	 *
-	 * @param encoded the descriptor as served
-	 * @param nodeId  the node it must be from
-	 * @return the verified descriptor
-	 * @throws CwtException if the descriptor is invalid, expired, malformed or from another node
-	 */
-	public static NodeDescriptor verify(byte[] encoded, Id nodeId) throws CwtException {
-		Objects.requireNonNull(encoded, "encoded");
-		Objects.requireNonNull(nodeId, "nodeId");
-
-		FederationStatement statement = FederationStatement.verifier(FederationStatement.Purpose.NODE_DESCRIPTOR)
-				.issuer(nodeId)
-				.verify(encoded);
-		return fromStatement(statement, encoded.clone());
-	}
-
-	private static NodeDescriptor fromStatement(FederationStatement statement, byte[] encoded) throws InvalidClaimException {
-		Map<String, Object> c = statement.getContent();
-
-		List<String> protocols = textList(c.get("protocols"), "protocols");
-		Set<String> capabilities = new LinkedHashSet<>(textList(c.get("capabilities"), "capabilities"));
-
-		if (!(c.get("services") instanceof List<?> list))
-			throw new InvalidClaimException("A node descriptor must list its services");
-		List<Service> services = new ArrayList<>(list.size());
-		for (Object entry : list)
-			services.add(Service.fromContent(entry));
-
-		return new NodeDescriptor(statement.getIssuer(), text(c, "software"), text(c, "version"), text(c, "name"),
-				text(c, "logo"), text(c, "website"), text(c, "contact"),
-				FederationMode.ofWireName(text(c, "mode")), protocols, capabilities, services,
-				statement.getIssuedAt(), statement.getExpiresAt(), encoded);
-	}
-
-	private static @Nullable String text(Map<String, Object> content, String key) throws InvalidClaimException {
-		Object value = content.get(key);
-		if (value == null)
-			return null;
-		if (!(value instanceof String s))
-			throw new InvalidClaimException("Invalid " + key);
-		return s;
-	}
-
-	private static List<String> textList(@Nullable Object value, String key) throws InvalidClaimException {
-		if (value == null)
-			return List.of();
-		if (!(value instanceof List<?> list))
-			throw new InvalidClaimException("Invalid " + key);
-
-		List<String> result = new ArrayList<>(list.size());
-		for (Object o : list) {
-			if (!(o instanceof String s))
-				throw new InvalidClaimException("Invalid " + key);
-			result.add(s);
-		}
-		return result;
-	}
-
-	private static Map<String, Object> textKeys(Map<?, ?> map) throws InvalidClaimException {
-		Map<String, Object> result = new LinkedHashMap<>(map.size());
-		for (Map.Entry<?, ?> e : map.entrySet()) {
-			if (!(e.getKey() instanceof String key) || e.getValue() == null)
-				throw new InvalidClaimException("Invalid extra data");
-			result.put(key, e.getValue());
-		}
-		return result;
 	}
 
 	/**
@@ -379,30 +314,24 @@ public final class NodeDescriptor {
 	}
 
 	/**
-	 * Returns when the node signed the descriptor, by its clock.
+	 * Returns when the descriptor was made: for one read from a statement, when the node signed it, by its
+	 * clock; for one built here, when it was built.
 	 *
 	 * @return the issue date
 	 */
 	public Instant getIssuedAt() {
-		return issuedAt;
+		return Instant.ofEpochMilli(issuedAt);
 	}
 
 	/**
-	 * Returns when the descriptor expires, by the node's clock.
+	 * Returns when the descriptor expires: for one read from a statement, when the statement does, by the
+	 * node's clock; for one built here, at the end of the builder's {@linkplain Builder#lifetime lifetime},
+	 * or in the far future if it set none.
 	 *
 	 * @return the expiration date
 	 */
 	public Instant getExpiresAt() {
-		return expiresAt;
-	}
-
-	/**
-	 * Returns the signed descriptor, to serve or pass on.
-	 *
-	 * @return a copy of the encoded descriptor
-	 */
-	public byte[] getEncoded() {
-		return encoded.clone();
+		return Instant.ofEpochMilli(expiresAt);
 	}
 
 	/**
@@ -415,9 +344,11 @@ public final class NodeDescriptor {
 	}
 
 	/**
-	 * Builds and signs a descriptor.
+	 * Builds a descriptor, unsigned; {@link FederationStatement#nodeDescriptor(io.bosonnetwork.Identity,
+	 * NodeDescriptor) FederationStatement.nodeDescriptor} signs it.
 	 */
 	public static final class Builder {
+		private @Nullable Id nodeId;
 		private @Nullable String software;
 		private @Nullable String version;
 		private @Nullable String name;
@@ -428,9 +359,20 @@ public final class NodeDescriptor {
 		private final List<String> protocols = new ArrayList<>();
 		private final Set<String> capabilities = new LinkedHashSet<>();
 		private final List<Service> services = new ArrayList<>();
-		private Duration lifetime = FederationStatement.Purpose.NODE_DESCRIPTOR.maxLifetime();
+		private Duration lifetime = Duration.ZERO;
 
 		private Builder() {
+		}
+
+		/**
+		 * Sets the node identifier.
+		 *
+		 * @param nodeId the node identifier
+		 * @return this builder
+		 */
+		public Builder nodeId(Id nodeId) {
+			this.nodeId = Objects.requireNonNull(nodeId, "nodeId");
+			return this;
 		}
 
 		/**
@@ -513,6 +455,17 @@ public final class NodeDescriptor {
 		}
 
 		/**
+		 * Adds federation protocols the node speaks.
+		 *
+		 * @param protocols the protocols to add
+		 * @return this builder
+		 */
+		public Builder protocols(List<String> protocols) {
+			Objects.requireNonNull(protocols, "protocols").forEach(this::protocol);
+			return this;
+		}
+
+		/**
 		 * Adds a capability.
 		 *
 		 * @param capability the capability
@@ -535,9 +488,24 @@ public final class NodeDescriptor {
 		}
 
 		/**
-		 * Sets how long the descriptor lives. Defaults to, and may not exceed, a day.
+		 * Adds the given services.
 		 *
-		 * @param lifetime the lifetime
+		 * @param services the services to add
+		 * @return this builder
+		 */
+		public Builder services(List<Service> services) {
+			Objects.requireNonNull(services).forEach(this::service);
+			return this;
+		}
+
+		/**
+		 * Sets how long the built descriptor is good for, which sets its {@linkplain #getExpiresAt()
+		 * expiration date}; without one, it doesn't expire. It may not exceed what a signed descriptor may
+		 * live, a day. Signing doesn't read it: the statement's lifetime is given to
+		 * {@link FederationStatement#nodeDescriptor(io.bosonnetwork.Identity, NodeDescriptor, Duration)
+		 * nodeDescriptor}.
+		 *
+		 * @param lifetime the lifetime, positive
 		 * @return this builder
 		 */
 		public Builder lifetime(Duration lifetime) {
@@ -551,46 +519,20 @@ public final class NodeDescriptor {
 		}
 
 		/**
-		 * Signs the descriptor.
+		 * Builds the descriptor, issued now and expiring at the end of its {@linkplain #lifetime lifetime},
+		 * or in the far future if none was set.
 		 *
-		 * @param node the node's identity
-		 * @return the signed descriptor
+		 * @return the descriptor
+		 * @throws IllegalStateException if the node identifier has not been set
 		 */
-		public NodeDescriptor sign(Identity node) {
-			Objects.requireNonNull(node, "node");
+		public NodeDescriptor build() {
+			if (nodeId == null)
+				throw new IllegalStateException("Node identifier not set");
 
-			Map<String, Object> content = new LinkedHashMap<>();
-			putIfPresent(content, "software", software);
-			putIfPresent(content, "version", version);
-			putIfPresent(content, "name", name);
-			putIfPresent(content, "logo", logo);
-			putIfPresent(content, "website", website);
-			putIfPresent(content, "contact", contact);
-			content.put("mode", mode.wireName());
-			if (!protocols.isEmpty())
-				content.put("protocols", List.copyOf(protocols));
-			if (!capabilities.isEmpty())
-				content.put("capabilities", List.copyOf(capabilities));
-			List<Map<String, Object>> listed = new ArrayList<>(services.size());
-			for (Service s : services)
-				listed.add(s.toContent());
-			content.put("services", listed);
-
-			byte[] encoded = FederationStatement.builder(node, FederationStatement.Purpose.NODE_DESCRIPTOR)
-					.lifetime(lifetime)
-					.content(content)
-					.build();
-
-			try {
-				return verify(encoded, node.getId());
-			} catch (CwtException e) {
-				throw new IllegalStateException("INTERNAL ERROR: a descriptor just signed does not verify", e);
-			}
-		}
-
-		private static void putIfPresent(Map<String, Object> map, String key, @Nullable String value) {
-			if (value != null)
-				map.put(key, value);
+			Instant now = Instant.now();
+			return new NodeDescriptor(nodeId, software, version, name, logo, website, contact, mode,
+					protocols, capabilities, services, now.toEpochMilli(),
+					Duration.ZERO.equals(lifetime) ? Long.MAX_VALUE : now.plus(lifetime).toEpochMilli());
 		}
 	}
 }

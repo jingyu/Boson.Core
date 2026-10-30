@@ -29,6 +29,10 @@ package io.bosonnetwork.web;
 public class RetryLaterException extends RuntimeException {
 	private static final long serialVersionUID = -4212870458113394527L;
 
+	/**
+	 * The number of seconds to wait before retrying the request.
+	 * The value is at least one second.
+	 */
 	private final long retryAfterSeconds;
 
 	/**
