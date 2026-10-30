@@ -36,10 +36,10 @@ import org.jspecify.annotations.Nullable;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.Admission;
+import io.bosonnetwork.service.FederatedNodeDescriptor;
 import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationEvent;
-import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Resolution;
 import io.bosonnetwork.vertx.ContextualFuture;
@@ -91,7 +91,7 @@ public class AllowAllFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<Optional<NodeDescriptor>> describe(Id nodeId) {
+	public CompletableFuture<Optional<FederatedNodeDescriptor>> describe(Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		return ContextualFuture.succeededFuture(Optional.empty());
 	}

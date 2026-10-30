@@ -50,7 +50,7 @@ import io.bosonnetwork.web.CwtAuth;
  *   <li><b>By peer id</b> - {@link #resolve(Id)}: the service's announcement in the DHT, verified to
  *       carry its node's attestation, and the admission of that node. Nearly all traffic needs only this:
  *       a caller always knows the peer it is about to talk to.</li>
- *   <li><b>By node</b> - {@link #describe(Id)}: the node's signed {@link NodeDescriptor}, which lists
+ *   <li><b>By node</b> - {@link #describe(Id)}: the node's signed {@link FederatedNodeDescriptor}, which lists
  *       every service it runs; {@link #resolve(Id, String)} resolves one of them.</li>
  * </ul>
  * A refusal always comes with its reason ({@link Admission.Reason}), so a service never has to drop
@@ -149,10 +149,10 @@ public interface FederationContext {
 	 */
 	default CompletableFuture<Resolution> resolve(Id nodeId, String serviceType) {
 		return describe(nodeId).thenCompose(descriptor -> {
-			NodeDescriptor.Service listed = null;
+			FederatedNodeDescriptor.Service listed = null;
 			if (descriptor.isPresent()) {
-				for (NodeDescriptor.Service s : descriptor.get().getServices(serviceType)) {
-					if (listed == null || (s.federation() && !listed.federation()))
+				for (FederatedNodeDescriptor.Service s : descriptor.get().getServices(serviceType)) {
+					if (listed == null || (s.isFederation() && !listed.isFederation()))
 						listed = s;
 				}
 			}
@@ -160,8 +160,8 @@ public interface FederationContext {
 				return CompletableFuture.completedFuture(new Resolution(null,
 						new Admission(Admission.Reason.UNKNOWN_PEER, Duration.ofMinutes(1))));
 
-			boolean federated = listed.federation();
-			return resolve(listed.peerId()).thenApply(r -> {
+			boolean federated = listed.isFederation();
+			return resolve(listed.getPeerId()).thenApply(r -> {
 				FederatedService service = r.service();
 				// The descriptor named a peer that belongs to another node: no service of this one.
 				if (service != null && !service.nodeId().equals(nodeId))
@@ -190,7 +190,7 @@ public interface FederationContext {
 	 *         {@link Optional#empty()} if the node or its descriptor can't be reached or verified; it
 	 *         completes exceptionally only on an unexpected error
 	 */
-	CompletableFuture<Optional<NodeDescriptor>> describe(Id nodeId);
+	CompletableFuture<Optional<FederatedNodeDescriptor>> describe(Id nodeId);
 
 	/**
 	 * Reports the outcome of an exchange with another node's service. Never blocks and never fails.

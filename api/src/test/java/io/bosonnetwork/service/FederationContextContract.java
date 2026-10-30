@@ -79,7 +79,7 @@ public abstract class FederationContextContract {
 	protected abstract void announced(Identity service, Identity node, FederatedService announcement);
 
 	/** Publishes a node's descriptor, signed by the node, where the node publishes it. */
-	protected abstract void described(Identity node, NodeDescriptor descriptor);
+	protected abstract void described(Identity node, FederatedNodeDescriptor descriptor);
 
 	private final Identity remoteNode = new CryptoIdentity();
 	private final Identity remoteService = new CryptoIdentity();
@@ -179,8 +179,8 @@ public abstract class FederationContextContract {
 	void aNodesServiceResolvesByItsType() throws Exception {
 		admitted(remoteNode.getId());
 		announced(remoteService, remoteNode, remote());
-		described(remoteNode, NodeDescriptor.builder().nodeId(remoteNode.getId()).name("Remote")
-				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
+		described(remoteNode, FederatedNodeDescriptor.builder(remoteNode.getId()).name("Remote")
+				.service(new FederatedNodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
 						"https://remote.example:9000", true, Map.of()))
 				.build());
 
@@ -210,15 +210,15 @@ public abstract class FederationContextContract {
 
 	@Test
 	void aPublishedDescriptorIsFoundAndAnUnknownOneIsNot() throws Exception {
-		NodeDescriptor d = NodeDescriptor.builder().nodeId(remoteNode.getId()).name("Remote")
-				.service(new NodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
+		FederatedNodeDescriptor d = FederatedNodeDescriptor.builder(remoteNode.getId()).name("Remote")
+				.service(new FederatedNodeDescriptor.Service("io.bosonnetwork.test", null, remoteService.getId(),
 						"https://remote.example:9000", true, Map.of()))
 				.build();
 		described(remoteNode, d);
 
-		NodeDescriptor found = await(context().describe(remoteNode.getId())).orElseThrow();
+		FederatedNodeDescriptor found = await(context().describe(remoteNode.getId())).orElseThrow();
 		assertEquals(remoteNode.getId(), found.getNodeId());
-		assertEquals(remoteService.getId(), found.getServices().get(0).peerId());
+		assertEquals(remoteService.getId(), found.getServices().get(0).getPeerId());
 
 		assertTrue(await(context().describe(Id.random())).isEmpty());
 	}

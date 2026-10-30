@@ -29,10 +29,10 @@ import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.service.Admission;
+import io.bosonnetwork.service.FederatedNodeDescriptor;
 import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationContextContract;
-import io.bosonnetwork.service.NodeDescriptor;
 
 class StaticFederationContextContractTests extends FederationContextContract {
 	private Identity localNode;
@@ -78,7 +78,7 @@ class StaticFederationContextContractTests extends FederationContextContract {
 	}
 
 	@Override
-	protected void described(Identity node, NodeDescriptor descriptor) {
+	protected void described(Identity node, FederatedNodeDescriptor descriptor) {
 		context.putDescriptor(descriptor);
 	}
 }

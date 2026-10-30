@@ -43,7 +43,7 @@ import io.bosonnetwork.web.client.SelfIssuedAccessTokens;
  * service belongs to {@link #nodeId()} as surely as the node's own signature can say.
  * <p>
  * The endpoint and the extra data are the service's own, from its announcement, and the freshest there
- * are. The type and the name come from the node's {@link NodeDescriptor descriptor}, and are absent when
+ * are. The type and the name come from the node's {@link FederatedNodeDescriptor descriptor}, and are absent when
  * the descriptor wasn't consulted or doesn't list the service.
  * <p>
  * It is also the principal of a request authenticated through

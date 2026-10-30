@@ -64,7 +64,7 @@
  *       {@linkplain io.bosonnetwork.service.FederationContext#resolve resolving} another node's
  *       service to a verified {@link io.bosonnetwork.service.FederatedService} and its node's
  *       {@link io.bosonnetwork.service.Admission}, a node's signed
- *       {@link io.bosonnetwork.service.NodeDescriptor}, admission change events, and a web
+ *       {@link io.bosonnetwork.service.FederatedNodeDescriptor}, admission change events, and a web
  *       authenticator for requests from other nodes' services. Nodes sign what they say to each other
  *       as {@link io.bosonnetwork.service.FederationStatement}s.</li>
  * </ul>

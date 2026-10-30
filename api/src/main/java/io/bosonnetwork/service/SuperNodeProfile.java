@@ -41,7 +41,7 @@ import io.bosonnetwork.identifier.Credential;
  * <p>
  * The card says nothing about the node's services. A card is a mutable DHT value, limited to 896 bytes,
  * and a node with all its services needs more; it is also meant to be stable, while services and their
- * endpoints change with every redeployment. What a node runs is its signed {@link NodeDescriptor}, and
+ * endpoints change with every redeployment. What a node runs is its signed {@link FederatedNodeDescriptor}, and
  * where to reach each service is the service's own peer announcement.
  */
 public class SuperNodeProfile {

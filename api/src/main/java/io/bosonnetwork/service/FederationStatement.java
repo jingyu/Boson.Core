@@ -22,19 +22,22 @@
 
 package io.bosonnetwork.service;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import org.jspecify.annotations.Nullable;
 
 import io.bosonnetwork.Id;
@@ -45,10 +48,11 @@ import io.bosonnetwork.cwt.CwtException;
 import io.bosonnetwork.cwt.InvalidClaimException;
 import io.bosonnetwork.cwt.ReplayCache;
 import io.bosonnetwork.cwt.SignedCwt;
+import io.bosonnetwork.json.Json;
 
 /**
  * A statement a node signs about itself for another node or for anyone: a proposal, an answer, a
- * revocation, or the node's {@link NodeDescriptor descriptor}.
+ * revocation, or the node's {@link FederatedNodeDescriptor descriptor}.
  * <p>
  * A statement is a CWT whose issuer and subject are the node, and whose {@link Claim#PURPOSE purpose}
  * claim is the label of what it is ({@code boson:sig:1:federation-propose}, ...). The label is inside
@@ -75,6 +79,8 @@ public final class FederationStatement {
 	public static final int MAX_STATEMENT_BYTES = 8 * 1024;
 
 	private static final String LABEL_PREFIX = "boson:sig:1:";
+
+	private static final ObjectReader DESCRIPTOR_READER = descriptorReader();
 
 	private static final String NOTE = "note";
 	private static final String IN_REPLY_TO = "inReplyTo";
@@ -335,136 +341,89 @@ public final class FederationStatement {
 	}
 
 	/**
-	 * Signs this node descriptor into a node descriptor federation statement.
-	 * The statement contains the descriptor content, the given lifetime or the default maximum lifetime, and is signed by the given identity.
+	 * Signs a node's descriptor into a statement of purpose {@link Purpose#NODE_DESCRIPTOR NODE_DESCRIPTOR}.
+	 * The content is the descriptor's serialized form in CBOR, without its node id - the issuer is the node -
+	 * and without dates, which are the statement's own.
 	 *
-	 * @param node the signing identity; its identifier must match the descriptor's node identifier
-	 * @param descriptor the node descriptor content
-	 * @param lifetime the statement lifetime, or null to use the maximum allowed lifetime
-	 * @return the signed federation statement as a byte array
-	 * @throws NullPointerException if node is null
-	 * @throws IllegalArgumentException if the node identifier does not match the descriptor's node identifier, or if lifetime is negative, zero, or exceeds the maximum allowed lifetime
+	 * @param node       the node's identity, which signs; it must be the node the descriptor describes
+	 * @param descriptor the descriptor
+	 * @param lifetime   how long the statement lives, or {@code null} for the most it may, a day
+	 * @return the signed statement
+	 * @throws IllegalArgumentException if the descriptor describes another node, or the lifetime is not
+	 *                                  positive or longer than a day
 	 */
-	public static byte[] nodeDescriptor(Identity node, NodeDescriptor descriptor, @Nullable Duration lifetime) {
+	public static byte[] nodeDescriptor(Identity node, FederatedNodeDescriptor descriptor, @Nullable Duration lifetime) {
 		Objects.requireNonNull(node, "node");
 		Objects.requireNonNull(descriptor, "descriptor");
 		if (!node.getId().equals(descriptor.getNodeId()))
 			throw new IllegalArgumentException("Node identifier must be equal to the descriptor's node identifier");
-		if (lifetime != null) {
-			if (lifetime.isNegative() || lifetime.isZero() ||
-					lifetime.compareTo(FederationStatement.Purpose.NODE_DESCRIPTOR.maxLifetime()) > 0)
-				throw new IllegalArgumentException("Invalid descriptor lifetime: " + lifetime);
-		} else {
-			lifetime = Purpose.NODE_DESCRIPTOR.maxLifetime();
-		}
 
-		Map<String, Object> content = new LinkedHashMap<>();
-		descriptor.getSoftware().ifPresent(s -> content.put("software", s));
-		descriptor.getVersion().ifPresent(v -> content.put("version", v));
-		descriptor.getName().ifPresent(n -> content.put("name", n));
-		descriptor.getLogo().ifPresent(l -> content.put("logo", l));
-		descriptor.getWebsite().ifPresent(w -> content.put("website", w));
-		descriptor.getContact().ifPresent(c -> content.put("contact", c));
-		descriptor.getMode().ifPresent(m -> content.put("mode", m.wireName()));
-		if (!descriptor.getProtocols().isEmpty())
-			content.put("protocols", List.copyOf(descriptor.getProtocols()));
-		if (!descriptor.getCapabilities().isEmpty())
-			content.put("capabilities", List.copyOf(descriptor.getCapabilities()));
-		List<Map<String, Object>> listed = new ArrayList<>(descriptor.getServices().size());
-		for (NodeDescriptor.Service s : descriptor.getServices())
-			listed.add(s.toMap());
-		content.put("services", listed);
+		Map<String, Object> content = new LinkedHashMap<>(Json.parse(Json.toBytes(descriptor)));
+		content.remove(FederatedNodeDescriptor.NODE_ID);
+		content.remove(FederatedNodeDescriptor.ISSUED_AT);
+		content.remove(FederatedNodeDescriptor.EXPIRES_AT);
 
-		return FederationStatement.builder(node, Purpose.NODE_DESCRIPTOR)
-				.lifetime(lifetime)
-				.content(content)
-				.build();
+		Builder builder = FederationStatement.builder(node, Purpose.NODE_DESCRIPTOR).content(content);
+		if (lifetime != null)
+			builder.lifetime(lifetime);
+		return builder.build();
 	}
 
 	/**
-	 * Signs the given node descriptor into a node descriptor federation statement using the default maximum lifetime.
-	 * The statement contains the descriptor content and is signed by the given identity.
+	 * Signs a node's descriptor into a statement that lives a day, the most it may.
 	 *
-	 * @param node the signing identity; its identifier must match the descriptor's node identifier
-	 * @param descriptor the node descriptor to sign
-	 * @return the signed federation statement as a byte array
+	 * @param node       the node's identity, which signs; it must be the node the descriptor describes
+	 * @param descriptor the descriptor
+	 * @return the signed statement
+	 * @throws IllegalArgumentException if the descriptor describes another node
 	 */
-	public static byte[] nodeDescriptor(Identity node, NodeDescriptor descriptor) {
+	public static byte[] nodeDescriptor(Identity node, FederatedNodeDescriptor descriptor) {
 		return nodeDescriptor(node, descriptor, null);
 	}
 
 	/**
-	 * Verifies and decodes a signed descriptor.
+	 * Verifies and decodes a signed descriptor. The descriptor's node is the statement's issuer, and its
+	 * dates the statement's: content can't claim others.
 	 * <p>
 	 * Readers ignore what they don't know: keys this version doesn't read are skipped, and a mode it
 	 * doesn't know - one a newer version added - is left out, as if the node said none. Everything it does
-	 * read must be well formed.
+	 * read must be well formed, of its own type: no text for a boolean, no number for text.
 	 *
 	 * @param encoded        the descriptor as served
 	 * @param expectedNodeId the node it must be from
 	 * @return the verified descriptor, dated as signed
 	 * @throws CwtException if the descriptor is invalid, expired, malformed or from another node
 	 */
-	public static NodeDescriptor asDescriptor(byte[] encoded, Id expectedNodeId) throws CwtException {
+	public static FederatedNodeDescriptor asDescriptor(byte[] encoded, Id expectedNodeId) throws CwtException {
 		Objects.requireNonNull(encoded, "encoded");
-		Objects.requireNonNull(expectedNodeId, "nodeId");
+		Objects.requireNonNull(expectedNodeId, "expectedNodeId");
 
-		FederationStatement statement = FederationStatement.verifier(FederationStatement.Purpose.NODE_DESCRIPTOR)
+		FederationStatement statement = FederationStatement.verifier(Purpose.NODE_DESCRIPTOR)
 				.issuer(expectedNodeId)
 				.verify(encoded);
 
-		Map<String, Object> c = statement.getContent();
-
-		List<String> protocols = textList(c.get("protocols"), "protocols");
-		Set<String> capabilities = new LinkedHashSet<>(textList(c.get("capabilities"), "capabilities"));
-
-		if (!(c.get("services") instanceof List<?> list))
-			throw new InvalidClaimException("A node descriptor must list its services");
-		List<NodeDescriptor.Service> services = new ArrayList<>(list.size());
-		for (Object entry : list) {
-			if (!(entry instanceof Map<?, ?> m))
-				throw new InvalidClaimException("Invalid service entry");
-
-			services.add(NodeDescriptor.Service.fromMap(m));
+		Map<String, Object> content = new LinkedHashMap<>(statement.getContent());
+		content.put(FederatedNodeDescriptor.NODE_ID, statement.getIssuer().getBytes());
+		content.put(FederatedNodeDescriptor.ISSUED_AT, statement.getIssuedAt().toEpochMilli());
+		content.put(FederatedNodeDescriptor.EXPIRES_AT, statement.getExpiresAt().toEpochMilli());
+		try {
+			return DESCRIPTOR_READER.readValue(Json.toBytes(content));
+		} catch (IOException | IllegalArgumentException e) {
+			throw new InvalidClaimException("Invalid node descriptor: " + e.getMessage(), e);
 		}
-
-		FederationMode mode = null;
-		if (c.get("mode") instanceof String m) {
-			try {
-				mode = FederationMode.ofWireName(m);
-			} catch (IllegalArgumentException ignore) {
-				// A mode this version doesn't know.
-			}
-		}
-
-		return new NodeDescriptor(statement.getIssuer(), text(c, "software"), text(c, "version"), text(c, "name"),
-				text(c, "logo"), text(c, "website"), text(c, "contact"),
-				mode, protocols, capabilities, services,
-				statement.getIssuedAt().toEpochMilli(), statement.getExpiresAt().toEpochMilli());
 	}
 
-	private static @Nullable String text(Map<String, Object> content, String key) throws InvalidClaimException {
-		Object value = content.get(key);
-		if (value == null)
-			return null;
-		if (!(value instanceof String s))
-			throw new InvalidClaimException("Invalid " + key);
-		return s;
-	}
-
-	private static List<String> textList(@Nullable Object value, String key) throws InvalidClaimException {
-		if (value == null)
-			return List.of();
-		if (!(value instanceof List<?> list))
-			throw new InvalidClaimException("Invalid " + key);
-
-		List<String> result = new ArrayList<>(list.size());
-		for (Object o : list) {
-			if (!(o instanceof String s))
-				throw new InvalidClaimException("Invalid " + key);
-			result.add(s);
-		}
-		return result;
+	// Reads a descriptor's content as it is: a value of another type is malformed, not converted.
+	private static ObjectReader descriptorReader() {
+		ObjectMapper mapper = Json.cborMapper().copy();
+		mapper.coercionConfigFor(LogicalType.Textual)
+				.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+				.setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+				.setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail);
+		mapper.coercionConfigFor(LogicalType.Boolean)
+				.setCoercion(CoercionInputShape.String, CoercionAction.Fail)
+				.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail);
+		return mapper.readerFor(FederatedNodeDescriptor.class);
 	}
 
 	/**

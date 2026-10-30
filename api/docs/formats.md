@@ -67,7 +67,7 @@ against codes offline.
 | `boson:certbind:1` | Prefixed to what a `certbind` signature covers. | `CertUtil` |
 | `boson:sig:1:enroll-claim` | Prefixed to what the user key and the device key each sign to claim an enrollment request: then the node id, the request id and the signer's id (32 bytes each), then the claim's nonce. | `EnrollmentCode` (Java), `EnrollmentRequest` (Director) |
 | `boson:sig:1:federation-propose`, `-accept`, `-decline`, `-revoke` | The purpose claim (CWT claim 14) of a statement a node signs for another node: a proposal of a federation relationship, the answers to it, and its revocation. Addressed: the audience is the other node, the lifetime at most 5 minutes, and a 16-byte CWT ID makes each one usable once. | `FederationStatement` |
-| `boson:sig:1:node-descriptor` | The purpose claim (CWT claim 14) of a node's signed descriptor: what it runs and what it speaks, for anyone. No audience, at most a day. | `FederationStatement`, `NodeDescriptor` |
+| `boson:sig:1:node-descriptor` | The purpose claim (CWT claim 14) of a node's signed descriptor: what it runs and what it speaks, for anyone. No audience, at most a day. | `FederationStatement`, `FederatedNodeDescriptor` |
 
 A CWT that carries a purpose claim is a statement, never an access token: `CwtAuth` refuses it.
 

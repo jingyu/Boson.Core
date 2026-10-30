@@ -58,7 +58,7 @@ public enum FederationMode {
 	 * <p>
 	 * Unknown names are refused rather than mapped to a default. Where the name comes from another node,
 	 * which may run a newer version with modes this one doesn't know, the caller decides what an unknown
-	 * mode means: a {@link NodeDescriptor} leaves it out.
+	 * mode means: a {@link FederatedNodeDescriptor} leaves it out, and the node is taken not to federate.
 	 *
 	 * @param name the wire name
 	 * @return the mode

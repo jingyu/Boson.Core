@@ -46,10 +46,10 @@ import org.slf4j.LoggerFactory;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.Identity;
 import io.bosonnetwork.service.Admission;
+import io.bosonnetwork.service.FederatedNodeDescriptor;
 import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationEvent;
-import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Principal;
 import io.bosonnetwork.service.Resolution;
 import io.bosonnetwork.utils.Variable;
@@ -73,7 +73,7 @@ public class StaticFederationContext implements FederationContext {
 	private final Identity nodeIdentity;
 	private final @Nullable Id servicePeerId;
 	private final Map<Id, NodeEntry> nodes;
-	private final Map<Id, NodeDescriptor> descriptors;
+	private final Map<Id, FederatedNodeDescriptor> descriptors;
 	private final List<Consumer<FederationEvent>> listeners;
 	private final List<Report> reports;
 
@@ -396,7 +396,7 @@ public class StaticFederationContext implements FederationContext {
 	 *
 	 * @param descriptor the node's descriptor
 	 */
-	public void putDescriptor(NodeDescriptor descriptor) {
+	public void putDescriptor(FederatedNodeDescriptor descriptor) {
 		Objects.requireNonNull(descriptor);
 		descriptors.put(descriptor.getNodeId(), descriptor);
 	}
@@ -446,7 +446,7 @@ public class StaticFederationContext implements FederationContext {
 	}
 
 	@Override
-	public CompletableFuture<Optional<NodeDescriptor>> describe(Id nodeId) {
+	public CompletableFuture<Optional<FederatedNodeDescriptor>> describe(Id nodeId) {
 		Objects.requireNonNull(nodeId);
 		return ContextualFuture.succeededFuture(Optional.ofNullable(descriptors.get(nodeId)));
 	}

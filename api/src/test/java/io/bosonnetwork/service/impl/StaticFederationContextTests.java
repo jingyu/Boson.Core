@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,10 +17,10 @@ import org.junit.jupiter.api.Test;
 import io.bosonnetwork.Id;
 import io.bosonnetwork.crypto.CryptoIdentity;
 import io.bosonnetwork.service.Admission;
+import io.bosonnetwork.service.FederatedNodeDescriptor;
 import io.bosonnetwork.service.FederatedService;
 import io.bosonnetwork.service.FederationContext;
 import io.bosonnetwork.service.FederationMode;
-import io.bosonnetwork.service.NodeDescriptor;
 import io.bosonnetwork.service.Resolution;
 
 // How the static context is populated; what it answers is the contract's (StaticFederationContextContractTests).
@@ -131,13 +130,11 @@ public class StaticFederationContextTests {
 		context.addNode(node.getId(), "localhost", 8080);
 		context.addService(node.getId(), open, 1L, "https://svc/open");
 		context.addService(node.getId(), closed, 2L, "https://svc/closed");
-		context.putDescriptor(NodeDescriptor.builder()
-				.nodeId(node.getId())
+		context.putDescriptor(FederatedNodeDescriptor.builder(node.getId())
 				.software("Boson Director", "test")
 				.mode(FederationMode.OPEN)
-				.service(new NodeDescriptor.Service("io.test.open", null, open, "https://svc/open", true, Map.of()))
-				.service(new NodeDescriptor.Service("io.test.closed", null, closed, "https://svc/closed", false, Map.of()))
-				.lifetime(Duration.ofHours(6))
+				.service(new FederatedNodeDescriptor.Service("io.test.open", null, open, "https://svc/open", true, Map.of()))
+				.service(new FederatedNodeDescriptor.Service("io.test.closed", null, closed, "https://svc/closed", false, Map.of()))
 				.build());
 
 		Resolution r = context.resolve(node.getId(), "io.test.open").get();
