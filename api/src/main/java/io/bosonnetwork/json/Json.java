@@ -30,6 +30,8 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -207,7 +209,7 @@ public final class Json {
 				.disable(MapperFeature.AUTO_DETECT_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_SETTERS)
-				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.enable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
 				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
@@ -226,7 +228,7 @@ public final class Json {
 				.disable(MapperFeature.AUTO_DETECT_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_SETTERS)
-				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.enable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
 				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
@@ -249,7 +251,7 @@ public final class Json {
 				.disable(MapperFeature.AUTO_DETECT_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_IS_GETTERS)
 				.disable(MapperFeature.AUTO_DETECT_SETTERS)
-				.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+				.enable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
 				.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
 				.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
@@ -761,9 +763,13 @@ public final class Json {
 	 * {@link DatabindCodec} mapper.
 	 * <p>
 	 * <b>Process-global side effect:</b> this mutates the singleton {@code DatabindCodec.mapper()}
-	 * shared by all Vert.x JSON handling in the JVM - it registers the Boson type module and enables
-	 * {@link DeserializationFeature#USE_BIG_DECIMAL_FOR_FLOATS} for every Vert.x JSON operation in
-	 * the process, not just Boson code. Call it once during application startup.
+	 * shared by all Vert.x JSON handling in the JVM - it registers the Boson type module, enables
+	 * {@link DeserializationFeature#USE_BIG_DECIMAL_FOR_FLOATS} and turns off the auto-detection of
+	 * creators, fields, getters and setters for every Vert.x JSON operation in the process, not just
+	 * Boson code. A type written or read through the Vert.x codec then needs explicit Jackson
+	 * annotations, as with this class's own mappers: an unannotated record is written as {@code {}},
+	 * and an unannotated bean fails. Call it once during application startup, before any Vert.x JSON
+	 * operation, since serializers Jackson has already built keep the old settings.
 	 * <p>
 	 * The method is idempotent and synchronized: the module is registered at most once even under
 	 * concurrent calls.
@@ -774,6 +780,8 @@ public final class Json {
 			return; // already registered
 
 		DatabindCodec.mapper().registerModule(bosonJsonModule());
-		DatabindCodec.mapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+		DatabindCodec.mapper()
+				.enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+				.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
 	}
 }

@@ -2,7 +2,9 @@ package io.bosonnetwork.json;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -15,6 +17,10 @@ import java.util.TimeZone;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.databind.exc.InvalidDefinitionException;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.json.jackson.DatabindCodec;
 
 import org.junit.jupiter.api.Test;
 
@@ -276,5 +282,98 @@ public class JsonTests {
 		byte[] convertedCbor = Json.jsonToCbor(json);
 		convertedJson = Json.cborToJson(convertedCbor);
 		assertEquals(json, convertedJson);
+	}
+
+	static class FooBarWithoutAnnotation {
+		private int foo;
+		private String bar;
+
+		public FooBarWithoutAnnotation(int foo, String bar) {
+			this.foo = foo;
+			this.bar = bar;
+		}
+
+		public int getFoo() {
+			return foo;
+		}
+
+		public void setFoo(int foo) {
+			this.foo = foo;
+		}
+
+		public String getBar() {
+			return bar;
+		}
+
+		public void setBar(String bar) {
+			this.bar = bar;
+		}
+
+		@Override
+		public String toString() {
+			return "FooBarWithoutAnnotation [foo=" + foo + ", bar=" + bar + "]";
+		}
+	}
+
+	@JsonPropertyOrder({"foo", "bar"})
+	static class FooBarWithAnnotation {
+		@JsonProperty("foo")
+		private int foo;
+		@JsonProperty("bar")
+		private String bar;
+
+		@JsonCreator
+		public FooBarWithAnnotation(@JsonProperty(value = "foo") int foo, @JsonProperty(value = "bar") String bar) {
+			this.foo = foo;
+			this.bar = bar;
+		}
+
+		public int getFoo() {
+			return foo;
+		}
+
+		public void setFoo(int foo) {
+			this.foo = foo;
+		}
+
+		public String getBar() {
+			return bar;
+		}
+
+		public void setBar(String bar) {
+			this.bar = bar;
+		}
+
+		@Override
+		public String toString() {
+			return "FooBarWithAnnotation [foo=" + foo + ", bar=" + bar + "]";
+		}
+	}
+
+	@Test
+	void testMapper() {
+		FooBarWithoutAnnotation fooBar = new FooBarWithoutAnnotation(1, "bar");
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> Json.toString(fooBar));
+		assertInstanceOf(InvalidDefinitionException.class, ex.getCause());
+
+		FooBarWithAnnotation fooBarWithAnnotation = new FooBarWithAnnotation(1, "bar");
+		String json = Json.toString(fooBarWithAnnotation);
+		assertEquals("{\"foo\":1,\"bar\":\"bar\"}", json);
+	}
+
+	@Test
+	void testVertxCodec() throws Exception {
+		Json.initializeBosonJsonModule();
+
+		FooBarWithoutAnnotation fooBar = new FooBarWithoutAnnotation(1, "bar");
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> JsonObject.mapFrom(fooBar));
+		assertInstanceOf(InvalidDefinitionException.class, ex.getCause());
+		assertThrows(InvalidDefinitionException.class, () -> DatabindCodec.mapper().writeValueAsString(fooBar));
+
+		FooBarWithAnnotation fooBarWithAnnotation = new FooBarWithAnnotation(1, "bar");
+		String json = JsonObject.mapFrom(fooBarWithAnnotation).toString();
+		assertEquals("{\"foo\":1,\"bar\":\"bar\"}", json);
+		json = DatabindCodec.mapper().writeValueAsString(fooBarWithAnnotation);
+		assertEquals("{\"foo\":1,\"bar\":\"bar\"}", json);
 	}
 }

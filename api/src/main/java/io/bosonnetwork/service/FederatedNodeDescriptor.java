@@ -32,7 +32,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -83,8 +82,6 @@ import io.bosonnetwork.Id;
  * Immutable.
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.NONE, getterVisibility = JsonAutoDetect.Visibility.NONE,
-		isGetterVisibility = JsonAutoDetect.Visibility.NONE, setterVisibility = JsonAutoDetect.Visibility.NONE)
 @JsonPropertyOrder({"nodeId", "software", "version", "name", "logo", "website", "contact", "mode", "protocols",
 		"capabilities", "services", "issuedAt", "expiresAt"})
 public final class FederatedNodeDescriptor {
@@ -130,8 +127,6 @@ public final class FederatedNodeDescriptor {
 	 * the DHT.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_EMPTY)
-	@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.NONE, getterVisibility = JsonAutoDetect.Visibility.NONE,
-			isGetterVisibility = JsonAutoDetect.Visibility.NONE, setterVisibility = JsonAutoDetect.Visibility.NONE)
 	@JsonPropertyOrder({"type", "name", "peerId", "endpoint", "federation", "extra"})
 	public static final class Service {
 		@JsonProperty("type")
