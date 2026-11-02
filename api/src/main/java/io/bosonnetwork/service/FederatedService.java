@@ -83,18 +83,26 @@ public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceTyp
 	/**
 	 * Creates the service a peer announcement describes.
 	 *
-	 * @param peer        the announcement; must carry its node's attestation
+	 * @param peer        the announcement; must be valid and carry its node's attestation
 	 * @param serviceType the service type id, if known
 	 * @param serviceName the service's display name, if known
 	 * @return the service
-	 * @throws IllegalArgumentException if the announcement carries no node attestation
+	 * @throws IllegalArgumentException if the announcement carries no node attestation or is invalid
 	 */
 	public static FederatedService of(PeerInfo peer, @Nullable String serviceType, @Nullable String serviceName) {
 		Objects.requireNonNull(peer, "peer");
 		Id nodeId = peer.getNodeId();
 		if (nodeId == null || !peer.isAuthenticated())
 			throw new IllegalArgumentException("Peer " + peer.getId() + " is not attested by a node");
+		if (!peer.isValid())
+			throw new IllegalArgumentException("Peer " + peer.getId() + " has an invalid announcement");
 
+		return fromVerifiedAnnouncement(peer, serviceType, serviceName);
+	}
+
+	// Both callers have checked the attestation and validity; do not verify the signatures twice.
+	private static FederatedService fromVerifiedAnnouncement(PeerInfo peer, @Nullable String serviceType,
+			@Nullable String serviceName) {
 		Map<String, Object> extra = Map.of();
 		byte[] data = peer.getExtraData();
 		if (data != null && data.length > 0) {
@@ -105,8 +113,8 @@ public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceTyp
 			}
 		}
 
-		return new FederatedService(peer.getId(), nodeId, serviceType, serviceName, peer.getEndpoint(), extra,
-				peer.getFingerprint(), peer.getSequenceNumber());
+		return new FederatedService(peer.getId(), Objects.requireNonNull(peer.getNodeId()), serviceType, serviceName,
+				peer.getEndpoint(), extra, peer.getFingerprint(), peer.getSequenceNumber());
 	}
 
 	/**
@@ -136,7 +144,7 @@ public record FederatedService(Id peerId, Id nodeId, @Nullable String serviceTyp
 				newest = p;
 		}
 
-		return newest == null ? Optional.empty() : Optional.of(of(newest, null, null));
+		return newest == null ? Optional.empty() : Optional.of(fromVerifiedAnnouncement(newest, null, null));
 	}
 
 	/**
