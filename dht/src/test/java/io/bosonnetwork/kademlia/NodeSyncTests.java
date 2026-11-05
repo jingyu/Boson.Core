@@ -67,7 +67,7 @@ public class NodeSyncTests {
 	private static final List<KadNode> testNodes = new ArrayList<>(TEST_NODES);
 
 	private static void startBootstrap() throws Exception {
-		System.out.println("\n\n\007🟢 Starting the bootstrap node ...");
+		System.out.println("\n\n🟢 Starting the bootstrap node ...");
 
 		var config = NodeConfiguration.builder()
 				.vertx(vertx)
@@ -84,13 +84,13 @@ public class NodeSyncTests {
 	}
 
 	private static void stopBootstrap() throws Exception {
-		System.out.println("\n\n\007🟢 Stopping the bootstrap node ...\n");
+		System.out.println("\n\n🟢 Stopping the bootstrap node ...\n");
 		bootstrap.stop().get();
 	}
 
 	private static void startTestNodes() throws Exception {
 		for (int i = 0; i < TEST_NODES; i++) {
-			System.out.format("\n\n\007🟢 Starting the node %d ...\n", i);
+			System.out.format("\n\n🟢 Starting the node %d ...\n", i);
 
 			var config = NodeConfiguration.builder()
 					.vertx(vertx)
@@ -118,24 +118,24 @@ public class NodeSyncTests {
 			node.start().get();
 			testNodes.add(node);
 
-			System.out.printf("\n\n\007⌛ Wainting for the test node %d - %s ready ...\n", i, node.getId());
+			System.out.printf("\n\n⌛ Wainting for the test node %d - %s ready ...\n", i, node.getId());
 			future.get();
-			System.out.printf("\007🟢 The node %d - %s is ready ...\n", i, node.getId());
+			System.out.printf("🟢 The node %d - %s is ready ...\n", i, node.getId());
 		}
 
-		System.out.println("\n\n\007⌛ Wainting for all the nodes ready ...");
+		System.out.println("\n\n⌛ Wainting for all the nodes ready ...");
 		TimeUnit.SECONDS.sleep(5);
 	}
 
 	private static void stopTestNodes() throws Exception {
-		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
+		System.out.println("\n\n🟢 Stopping all the nodes ...\n");
 
 		for (var node : testNodes)
 			node.stop().get();
 	}
 
 	private static void dumpRoutingTables() throws Exception {
-		System.out.format("\007🟢 Dumping the routing table of bootstrap node %s ...\n", bootstrap.getId());
+		System.out.format("🟢 Dumping the routing table of bootstrap node %s ...\n", bootstrap.getId());
 		var file = testDir.resolve("nodes" + File.separator + "node-bootstrap" + File.separator + "routingtable");
 		try (var out = new PrintStream(Files.newOutputStream(file))) {
 			bootstrap.dumpRoutingTable(StandardProtocolFamily.INET, out).get();
@@ -143,7 +143,7 @@ public class NodeSyncTests {
 
 		for (int i = 0; i < testNodes.size(); i++) {
 			var node = testNodes.get(i);
-			System.out.format("\007🟢 Dumping the routing table of node %s ...\n", node.getId());
+			System.out.format("🟢 Dumping the routing table of node %s ...\n", node.getId());
 			//noinspection SpellCheckingInspection
 			file = testDir.resolve("nodes"  + File.separator + "node-" + i + File.separator + "routingtable");
 			try (var out = new PrintStream(Files.newOutputStream(file))) {
@@ -176,7 +176,7 @@ public class NodeSyncTests {
 		startBootstrap();
 		startTestNodes();
 
-		System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
+		System.out.println("\n\n🟢 All the nodes are ready!!! starting to run the test cases");
 	}
 
 	@AfterAll
@@ -216,13 +216,13 @@ public class NodeSyncTests {
 	void testFindNode() throws Exception {
 		for (int i = 0; i < TEST_NODES; i++) {
 			var target = testNodes.get(i);
-			System.out.format("\n\n\007🟢 %d Looking up node %s ...\n", i, target.getId());
+			System.out.format("\n\n🟢 %d Looking up node %s ...\n", i, target.getId());
 
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %d:%d %s looking up node %s ...\n", i, j, node.getId(), target.getId());
+				System.out.format("\n\n⌛ %d:%d %s looking up node %s ...\n", i, j, node.getId(), target.getId());
 				var ni = node.findNode(target.getId()).get();
-				System.out.format("\007🟢 %s lookup node %s finished\n", node.getId(), target.getId());
+				System.out.format("🟢 %s lookup node %s finished\n", node.getId(), target.getId());
 
 				assertFalse(ni.isEmpty());
 				assertEquals(target.getNodeInfo(), ni);
@@ -303,15 +303,15 @@ public class NodeSyncTests {
 					.build();
 			peers.add(p);
 
-			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
+			System.out.format("\n\n🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			announcer.announcePeer(p).get();
 
-			System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+			System.out.format("\n\n🟢 Looking up peer %s ...\n", p.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+				System.out.format("\n\n⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 				var result = node.findPeer(p.getId(), 0).get().orElse(null);
-				System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
+				System.out.format("🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
 				assertEquals(p, result);
@@ -325,15 +325,15 @@ public class NodeSyncTests {
 			var p = peers.get(i);
 			p = p.update().node(announcer).endpoint(faker.internet().url()).build();
 
-			System.out.format("\n\n\007🟢 %s update peer %s ...\n", announcer.getId(), p.getId());
+			System.out.format("\n\n🟢 %s update peer %s ...\n", announcer.getId(), p.getId());
 			announcer.announcePeer(p).get();
 
-			System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+			System.out.format("\n\n🟢 Looking up peer %s ...\n", p.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+				System.out.format("\n\n⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 				var result = node.findPeer(p.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), p.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), p.getId());
 
 				assertNotNull(result);
 				assertEquals(p, result);
@@ -348,15 +348,15 @@ public class NodeSyncTests {
 			var announcer = testNodes.get(i);
 			var v = Value.immutableBuilder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
 
-			System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+			System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+				System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 				var result = node.findValue(v.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
 				assertEquals(v, result);
@@ -376,15 +376,15 @@ public class NodeSyncTests {
 			var v = Value.signedBuilder().keepPrivateKey().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).build();
 			values.add(v);
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
 
-			System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+			System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+				System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 				var result = node.findValue(v.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
 				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
@@ -401,15 +401,15 @@ public class NodeSyncTests {
 			v = v.update().data(("Updated value from " + announcer.getId()).getBytes()).build();
 			values.set(i, v);
 
-			System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
 
-			System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+			System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+				System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 				var result = node.findValue(v.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
 				assertTrue(v.isMutable());
@@ -436,15 +436,15 @@ public class NodeSyncTests {
 			var v = Value.encryptedBuilder().keepPrivateKey().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).build();
 			values.add(v);
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
 
-			System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+			System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+				System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 				var result = node.findValue(v.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
 				assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
@@ -468,15 +468,15 @@ public class NodeSyncTests {
 			v = v.update().data(data).build();
 			values.set(i, v);
 
-			System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 			announcer.storeValue(v).get();
 
-			System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+			System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 			for (int j = 0; j < TEST_NODES; j++) {
 				var node = testNodes.get(j);
-				System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+				System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 				var result = node.findValue(v.getId()).get().orElse(null);
-				System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+				System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 
 				assertNotNull(result);
 				assertTrue(v.isMutable());

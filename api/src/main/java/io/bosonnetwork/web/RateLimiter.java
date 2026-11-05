@@ -420,8 +420,15 @@ public class RateLimiter implements AutoCloseable {
 
 		try {
 			byte[] bytes = InetAddress.getByName(address).getAddress();
-			if (bytes.length != 16)
+			if (bytes.length == 4) {
+				if (bytes[0] == 0 && bytes[1] == 0) {
+					// some proxy tools like Proxifier maybe return non-standard or
+					// special-use/bogon space for unresolvable hostname
+					return "raw:" + address;
+				}
+
 				return "v4:" + address;
+			}
 
 			int keepBytes = Math.min(16, Math.max(0, ipv6PrefixBits) / 8);
 			StringBuilder sb = new StringBuilder(3 + keepBytes * 2).append("v6:");

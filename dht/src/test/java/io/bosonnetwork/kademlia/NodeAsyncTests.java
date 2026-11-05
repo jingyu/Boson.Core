@@ -87,7 +87,7 @@ public class NodeAsyncTests {
 	private static final List<KadNode> testNodes = new ArrayList<>(TEST_NODES);
 
 	private static ContextualFuture<Void> startBootstrap() {
-		System.out.println("\n\n\007🟢 Starting the bootstrap node ...");
+		System.out.println("\n\n🟢 Starting the bootstrap node ...");
 
 		var config = NodeConfiguration.builder()
 				.vertx(testingVertx)
@@ -104,7 +104,7 @@ public class NodeAsyncTests {
 	}
 
 	private static ContextualFuture<Void> stopBootstrap() {
-		System.out.println("\n\n\007🟢 Stopping the bootstrap nodes ...\n");
+		System.out.println("\n\n🟢 Stopping the bootstrap nodes ...\n");
 		return bootstrap.stop();
 	}
 
@@ -141,7 +141,7 @@ public class NodeAsyncTests {
 	}
 
 	private static ContextualFuture<KadNode> createTestNode(int index) {
-		System.out.format("\n\n\007🟢 Starting the node %d ...\n", index);
+		System.out.format("\n\n🟢 Starting the node %d ...\n", index);
 
 		var config = NodeConfiguration.builder()
 				.vertx(testingVertx)
@@ -161,7 +161,7 @@ public class NodeAsyncTests {
 		node.addConnectionStatusListener(new ConnectionStatusListener() {
 			@Override
 			public void connected() {
-				System.out.printf("\007🟢 The node %d - %s is ready ...\n", index, node.getId());
+				System.out.printf("🟢 The node %d - %s is ready ...\n", index, node.getId());
 				promise.complete();
 			}
 		});
@@ -181,9 +181,9 @@ public class NodeAsyncTests {
 		return executeSequentially(TEST_NODES, NodeAsyncTests::createTestNode)
 				.whenComplete((v, e) -> {
 					if (e == null)
-						System.out.println("\n\n\007🟢 All the nodes are ready!!!");
+						System.out.println("\n\n🟢 All the nodes are ready!!!");
 					else
-						System.out.println("\n\n\007⛔ Some nodes start failed!!!");
+						System.out.println("\n\n⛔ Some nodes start failed!!!");
 				});
 	}
 
@@ -198,27 +198,27 @@ public class NodeAsyncTests {
 	 * node anyway, and iterative routing - not full tables - is what makes a target findable.
 	 */
 	private static ContextualFuture<Void> awaitConvergence() {
-		System.out.println("\n\n\007⌛ Converging the network via self-lookups ...");
+		System.out.println("\n\n⌛ Converging the network via self-lookups ...");
 		List<ContextualFuture<?>> lookups = new ArrayList<>(testNodes.size());
 		for (var node : testNodes)
 			// Result is irrelevant; the lookup's side effect (announce + bucket fill) is what converges.
 			lookups.add((ContextualFuture<?>) node.findNode(node.getId()));
 
 		return ContextualFuture.allOf(lookups)
-				.whenComplete((v, e) -> System.out.println("\007🟢 Network converged via self-lookups"));
+				.whenComplete((v, e) -> System.out.println("🟢 Network converged via self-lookups"));
 	}
 
 	private static ContextualFuture<Void> stopTestNodes() {
-		System.out.println("\n\n\007🟢 Stopping all the nodes ...\n");
+		System.out.println("\n\n🟢 Stopping all the nodes ...\n");
 		// cannot stop all the nodes in parallel, it will cause vertx internal error.
 		return executeSequentially(testNodes, n -> {
-			System.out.format("\n\n\007🟢 Stopping the node %s ...\n", n.getId());
+			System.out.format("\n\n🟢 Stopping the node %s ...\n", n.getId());
 			return n.stop();
 		});
 	}
 
 	private static ContextualFuture<Void> dumpRoutingTable(String name, KadNode node) {
-		System.out.format("\007🟢 Dumping the routing table of %s %s ...\n", name, node.getId());
+		System.out.format("🟢 Dumping the routing table of %s %s ...\n", name, node.getId());
 		var file = testDir.resolve("nodes" + File.separator + name + File.separator + "routingtable");
 		try {
 			var out = new PrintStream(Files.newOutputStream(file));
@@ -254,7 +254,7 @@ public class NodeAsyncTests {
 				.thenCompose(v -> awaitConvergence())
 				.whenComplete((v, e) -> {
 					if (e == null) {
-						System.out.println("\n\n\007🟢 All the nodes are ready!!! starting to run the test cases");
+						System.out.println("\n\n🟢 All the nodes are ready!!! starting to run the test cases");
 						context.completeNow();
 					} else {
 						context.failNow(e);
@@ -275,7 +275,7 @@ public class NodeAsyncTests {
 					}
 				}).whenComplete((v, e) -> {
 					if (e == null) {
-						System.out.format("\n\n\007🟢 Test cases finished\n");
+						System.out.format("\n\n🟢 Test cases finished\n");
 						context.completeNow();
 					} else {
 						context.failNow(e);
@@ -307,13 +307,13 @@ public class NodeAsyncTests {
 	@Timeout(value = TEST_NODES, timeUnit = TimeUnit.MINUTES)
 	void testFindNode(VertxTestContext context) {
 		executeSequentially(testNodes, target -> {
-			System.out.format("\n\n\007🟢 Looking up node %s ...\n", target.getId());
+			System.out.format("\n\n🟢 Looking up node %s ...\n", target.getId());
 
 			return executeSequentially(testNodes, node -> {
-				System.out.format("\n\n\007⌛ %s looking up node %s ...\n", node.getId(), target.getId());
+				System.out.format("\n\n⌛ %s looking up node %s ...\n", node.getId(), target.getId());
 				var future = (ContextualFuture<Optional<NodeInfo>>) node.findNode(target.getId());
 				return future.thenAccept(ni -> {
-					System.out.format("\007🟢 %s lookup node %s finished\n", node.getId(), target.getId());
+					System.out.format("🟢 %s lookup node %s finished\n", node.getId(), target.getId());
 					context.verify(() -> {
 						assertFalse(ni.isEmpty());
 						assertEquals(target.getNodeInfo(), ni);
@@ -404,15 +404,15 @@ public class NodeAsyncTests {
 					.build();
 			peers.add(p);
 
-			System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
+			System.out.format("\n\n🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 			return ((ContextualFuture<AnnounceResult>)announcer.announcePeer(p)).thenCompose(v -> {
-				System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+				System.out.format("\n\n🟢 Looking up peer %s ...\n", p.getId());
 
 				return executeSequentially(testNodes, node -> {
-					System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+					System.out.format("\n\n⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 					var future = ((ContextualFuture<Optional<PeerInfo>>) node.findPeer(p.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
-						System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
+						System.out.format("🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 						context.verify(() -> {
 							assertNotNull(result);
 							assertEquals(p, result);
@@ -426,15 +426,15 @@ public class NodeAsyncTests {
 				KadNode announcer = testNodes.get(index);
 				final PeerInfo p = peers.get(index).update().node(announcer).endpoint(faker.internet().url()).build();
 
-				System.out.format("\n\n\007🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
+				System.out.format("\n\n🟢 %s announce peer %s ...\n", announcer.getId(), p.getId());
 				return ((ContextualFuture<AnnounceResult>) announcer.announcePeer(p)).thenCompose(v -> {
-					System.out.format("\n\n\007🟢 Looking up peer %s ...\n", p.getId());
+					System.out.format("\n\n🟢 Looking up peer %s ...\n", p.getId());
 
 					return executeSequentially(testNodes, node -> {
-						System.out.format("\n\n\007⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
+						System.out.format("\n\n⌛ %s looking up peer %s ...\n", node.getId(), p.getId());
 						var future = ((ContextualFuture<Optional<PeerInfo>>) node.findPeer(p.getId())).thenApply(o -> o.orElse(null));
 						return future.thenAccept(result -> {
-							System.out.format("\007🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
+							System.out.format("🟢 %s lookup peer %s finished\n", node.getId(), p.getId());
 							context.verify(() -> {
 								assertNotNull(result);
 								assertEquals(p, result);
@@ -493,15 +493,15 @@ public class NodeAsyncTests {
 		executeSequentially(testNodes, announcer -> {
 			var v = Value.immutableBuilder().data(("Hello from " + announcer.getId()).getBytes()).build();
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 
 			return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(na -> {
-				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+				System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
-					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+					System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					var future = ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
-						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+						System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
 							assertEquals(v, result);
@@ -523,14 +523,14 @@ public class NodeAsyncTests {
 			final Value v = Value.signedBuilder().keepPrivateKey().key(keyPair).data(("Hello from " + announcer.getId()).getBytes()).build();
 			values.add(v);
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((ContextualFuture<AnnounceResult>)announcer.storeValue(v)).thenCompose(na -> {
-				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+				System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
-					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+					System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					var future = ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null));
 					return future.thenAccept(result -> {
-						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+						System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
 							assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
@@ -554,13 +554,13 @@ public class NodeAsyncTests {
 					return ContextualFuture.failedFuture(e); // make compiler happy
 				}
 
-				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
+				System.out.format("\n\n🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 				return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused1 -> {
-					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+					System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
-						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+						System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 						return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
-							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+							System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 							context.verify(() -> {
 								assertNotNull(result);
 								assertTrue(v.isMutable());
@@ -590,13 +590,13 @@ public class NodeAsyncTests {
 			final Value v  = Value.encryptedBuilder().keepPrivateKey().key(keyPair).recipient(Id.of(recipient.publicKey().bytes())).data(data).build();
 			values.add(v);
 
-			System.out.format("\n\n\007🟢 %s store value %s ...\n", announcer.getId(), v.getId());
+			System.out.format("\n\n🟢 %s store value %s ...\n", announcer.getId(), v.getId());
 			return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused -> {
-				System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+				System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 				return executeSequentially(testNodes, node -> {
-					System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+					System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 					return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
-						System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+						System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 						context.verify(() -> {
 							assertNotNull(result);
 							assertArrayEquals(keyPair.publicKey().bytes(), v.getPublicKey().bytesUnsafe());
@@ -626,13 +626,13 @@ public class NodeAsyncTests {
 					return ContextualFuture.failedFuture(e);
 				}
 
-				System.out.format("\n\n\007🟢 %s update value %s ...\n", announcer.getId(), v.getId());
+				System.out.format("\n\n🟢 %s update value %s ...\n", announcer.getId(), v.getId());
 				return ((ContextualFuture<AnnounceResult>) announcer.storeValue(v)).thenCompose(unused1 -> {
-					System.out.format("\n\n\007🟢 Looking up value %s ...\n", v.getId());
+					System.out.format("\n\n🟢 Looking up value %s ...\n", v.getId());
 					return executeSequentially(testNodes, node -> {
-						System.out.format("\n\n\007⌛ %s looking up value %s ...\n", node.getId(), v.getId());
+						System.out.format("\n\n⌛ %s looking up value %s ...\n", node.getId(), v.getId());
 						return ((ContextualFuture<Optional<Value>>) node.findValue(v.getId())).thenApply(o -> o.orElse(null)).thenAccept(result -> {
-							System.out.format("\007🟢 %s lookup value %s finished\n", node.getId(), v.getId());
+							System.out.format("🟢 %s lookup value %s finished\n", node.getId(), v.getId());
 							context.verify(() -> {
 								assertNotNull(result);
 								assertTrue(v.isMutable());
